@@ -43,12 +43,12 @@ export default async function RoomResultPage({
         ) : (
           standings.map((row, index) => (
             <Panel key={row.userId} className="flex items-center justify-between py-3">
-              <div className="flex items-center gap-3">
-                <span className="w-7 text-center text-lg font-black text-muted">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <span className="w-7 shrink-0 text-center text-lg font-black text-muted">
                   {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                 </span>
-                <div>
-                  <p className="font-bold">{row.displayName}</p>
+                <div className="min-w-0">
+                  <p className="truncate font-bold">{row.displayName}</p>
                   <p className="text-xs text-muted">
                     {row.wins}승 · 바이인 {row.buyInTotal.toLocaleString()} · 잔액{' '}
                     {row.balance.toLocaleString()}
@@ -56,7 +56,7 @@ export default async function RoomResultPage({
                 </div>
               </div>
               <p
-                className={`text-xl font-black tabular-nums ${
+                className={`ml-3 shrink-0 text-xl font-black tabular-nums ${
                   row.net > 0 ? 'text-win' : row.net < 0 ? 'text-accent' : 'text-muted'
                 }`}
               >

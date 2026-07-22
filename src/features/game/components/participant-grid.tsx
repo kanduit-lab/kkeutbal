@@ -46,11 +46,15 @@ export function ParticipantGrid({
                 )}
                 title={isOnline ? '접속 중' : '오프라인'}
               />
-              <p className="truncate font-bold leading-tight">
+              <p className="min-w-0 flex-1 truncate font-bold leading-tight">
                 {member.displayName}
                 {isSelf ? <span className="ml-1 text-xs font-medium text-gold">나</span> : null}
               </p>
-              {roleLabel ? <Badge tone="accent">{roleLabel}</Badge> : null}
+              {roleLabel ? (
+                <span className="shrink-0">
+                  <Badge tone="accent">{roleLabel}</Badge>
+                </span>
+              ) : null}
             </div>
             <p
               className={clsx(

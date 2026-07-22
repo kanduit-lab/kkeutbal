@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { ToastProvider } from '@/components/ui'
+import { I18nProvider } from '@/lib/i18n/client'
+import { getDict } from '@/lib/i18n/server'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -14,11 +16,14 @@ export const viewport: Viewport = {
   themeColor: '#0b0b0f',
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const { locale, d } = await getDict()
   return (
-    <html lang="ko">
+    <html lang={locale}>
       <body>
-        <ToastProvider>{children}</ToastProvider>
+        <I18nProvider locale={locale} dict={d}>
+          <ToastProvider>{children}</ToastProvider>
+        </I18nProvider>
       </body>
     </html>
   )

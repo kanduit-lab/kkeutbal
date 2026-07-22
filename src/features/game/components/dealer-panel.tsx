@@ -125,10 +125,10 @@ export function DealerPanel({
                 key={member.userId}
                 size="sm"
                 variant={winnerId === member.userId ? 'win' : 'surface'}
-                className={winnerId === member.userId ? '' : 'border border-white/10'}
+                className={winnerId === member.userId ? 'max-w-full' : 'max-w-full border border-white/10'}
                 onClick={() => setWinnerId(member.userId)}
               >
-                {member.displayName}
+                <span className="truncate">{member.displayName}</span>
               </Button>
             ))}
           </div>
