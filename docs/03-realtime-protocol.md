@@ -4,176 +4,187 @@
 |-------|-------|
 | Type | technical-design |
 | Audience | engineering / reviewers |
-| Status | draft |
-| Source of truth | this document (채널·이벤트·동기화 규약) |
+| Status | active |
+| Source of truth | this document (채널·이벤트·동기화 규약) — 구현은 `src/lib/realtime/events.ts`, `src/lib/realtime/client.ts` |
 | Last reviewed | 2026-07-22 |
-
-구현은 `src/lib/realtime/events.ts` (zod 스키마)와 각 도메인 훅이 반영한다.
 
 ## Context
 
-참가자 전원의 화면이 같은 판 상태를 보여야 한다. 전용 서버가 없으므로 Supabase Realtime을 쓰되,
-**전달 보장이 없는 pub/sub** 위에서 일관성을 만들어야 한다.
+참가자 전원의 화면이 같은 판 상태를 보여야 한다. 전용 서버가 없으므로 Supabase Realtime Broadcast를
+쓰되, **전달 보장이 없는 pub/sub** 위에서 일관성을 만들어야 한다. 이 문서가 규정하는 것은 채널·이벤트
+모양·동기화 순서다. 데이터 확정 경로(칩 원장, RLS)는 `02-data-model.md`.
 
 ## 채널
 
-방 하나당 채널 하나. 토픽 이름이 곧 권한 경계다.
-
-```
-room:{room_id}      Broadcast + Presence. private: true 로 구독
-```
+방 하나당 채널 하나. **공개 채널**이다 — `private: true`를 쓰지 않고 anon key로 구독한다.
 
 ```ts
-const channel = supabase.channel(`room:${roomId}`, {
+// src/lib/realtime/client.ts — createRoomChannel
+supabase.channel(`room:${roomId}`, {
   config: {
-    private: true,                      // realtime.messages RLS 검사
-    broadcast: { self: false, ack: true },
+    broadcast: { self: false },
     presence: { key: userId },
   },
 })
 ```
 
-- `private: true` — 구독 시점에 `realtime.messages` RLS 정책으로 "이 방 참가자인가"를 검사한다.
-  통과 후 커넥션 수명 동안 캐시되므로 메시지마다 DB를 치지 않는다.
-- `self: false` — 자기 액션은 낙관적 UI로 이미 반영했으므로 되받지 않는다.
-- `ack: true` — 서버 수신 확인. 재전송 판단에 쓴다.
-
-**개인 채널은 만들지 않는다.** 내 손패처럼 나만 볼 정보는 브로드캐스트하지 않고 로컬 상태와
-Postgres에만 둔다. 전파할 필요가 없는 데이터를 채널에 올리지 않는 것이 가장 확실한 격리다.
+- `self: false` — 자기 액션은 낙관적 refetch로 이미 반영했으므로 되받지 않는다.
+- `ack` 옵션은 쓰지 않는다.
+- 채널 구독 자체에는 인가 검사가 없다. **payload를 신뢰하지 않는 것**과 **모든 쓰기를 Server
+  Action이 권한 검사 후 수행하는 것**으로 방어한다 (아래 보안 경계).
+- 개인 채널은 만들지 않는다. 손패처럼 나만 볼 정보는 애초에 브로드캐스트하지 않고 서버 응답으로만
+  받는다.
 
 ## 이벤트
 
-모든 payload는 공통 봉투(envelope)를 가진다.
+모든 payload는 공통 봉투(envelope)를 가진다 (`envelopeSchema`, `src/lib/realtime/events.ts`).
 
 ```ts
-type Envelope<T> = {
-  v: 1                  // 프로토콜 버전
-  id: string            // 멱등키 (클라이언트 생성 UUID)
-  roomId: string
-  actorId: string       // 발신 사용자
-  at: string            // ISO8601, 발신 시각
-  payload: T
+type Envelope = {
+  v: 1              // PROTOCOL_VERSION
+  id: string        // uuid, 멱등키
+  roomId: string     // uuid
+  actorId: string    // uuid, 발신 사용자
+  at: string          // ISO8601 datetime
 }
 ```
 
-`v`를 두는 이유: 이벤트 모양이 바뀌어도 구버전 클라이언트가 조용히 오작동하지 않고
-"지원하지 않는 버전"으로 명시적으로 무시할 수 있다.
+`parseEvent(name, raw)`가 이벤트 이름 + envelope + payload를 한 번에 zod로 검증한다. 실패하면
+`null`을 반환하고 `onRoomEvent`의 구독 콜백은 아무것도 하지 않는다 — 파싱 실패 payload는 조용히
+버려진다. 상태는 어차피 refetch로 복구되므로, 검증되지 않은 값을 반영하는 것보다 버리는 편이 안전
+하다.
 
-### 이벤트 목록
+### 이벤트 목록과 실제 사용처
 
-| 이벤트 | 발신자 | 의미 | 확정 경로 |
-|--------|--------|------|-----------|
-| `member.joined` | 서버 | 참가자 입장 | Postgres |
-| `member.role_changed` | host | 역할 변경 | Postgres |
-| `round.started` | dealer | 새 판 시작 (`seq` 포함) | Postgres |
-| `round.ended` | dealer | 판 종료 (승자·팟) | Postgres |
-| `bet.placed` | player | 베팅 액션 제출 | Postgres |
-| `bet.approved` | dealer | 승인 모드에서 수락 | Postgres |
-| `bet.rejected` | dealer | 거절 (사유 포함) | Postgres |
-| `bet.reverted` | dealer/host | 정정 (원장에 반대 행 추가) | Postgres |
-| `chips.updated` | 서버 | 확정 잔액 델타 통지 | Postgres |
-| `state.snapshot` | 서버 | 방 상태 전량 스냅샷 | — |
-| `state.request` | 클라이언트 | 스냅샷 요청 | — |
+`eventPayloads`에 정의된 이벤트는 9개, 그중 실제로 send되는 것은 7개다.
 
-`state.snapshot` / `state.request`가 이 프로토콜의 안전망이다. Broadcast는 전달을 보장하지
-않으므로, 클라이언트는 불일치를 감지하면 스냅샷을 요청해 상태를 통째로 재수립한다.
+| 이벤트 | 발신 위치 | `room-client.tsx` 수신 처리 |
+|--------|-----------|------------------------------|
+| `round.started` | `dealer-panel.tsx` | 토스트("N번째 판 시작") + refetch |
+| `round.ended` | `dealer-panel.tsx` | 토스트(승자·팟) + refetch |
+| `bet.placed` | `action-bar.tsx`, `dealer-panel.tsx` | refetch만 |
+| `bet.approved` | `dealer-panel.tsx` | refetch만 |
+| `bet.rejected` | `dealer-panel.tsx` | 자기 액션이면 토스트(거절 사유) + refetch |
+| `bet.reverted` | `dealer-panel.tsx` | refetch만 |
+| `member.role_changed` | `dealer-panel.tsx` | refetch만 |
+| `state.snapshot` | `room-client.tsx` (모든 성공적 mutation 뒤) | refetch만 |
+| `member.joined` | 스키마만 존재, 어디서도 send 안 함 | — |
+| `state.request` | 스키마만 존재, 어디서도 send 안 함 | — |
+| `chips.updated` | 스키마만 존재, 어디서도 send 안 함 | — |
+
+`bet.rejected` / `round.started` / `round.ended`만 payload 내용을 UI에 직접 반영한다(토스트 문구).
+나머지 이벤트는 **"뭔가 바뀌었다" 신호일 뿐**이고, 실제 화면 갱신은 전부 `refreshRoom` 스냅샷
+refetch가 담당한다.
 
 ### payload 예시
 
 ```ts
 // bet.placed
 {
-  actionId: string      // = envelope.id. bet_actions PK 로 그대로 사용
+  actionId: string      // = envelope.id
   roundId: string
   action: 'check' | 'call' | 'raise' | 'fold' | 'allin'
-  amount: number        // 정수 칩. check/fold 는 0
-  seq: number           // 판 내 액션 순번 (클라이언트 추정치)
+  amount: number         // 정수, nonnegative
+  seq: number             // 클라이언트 추정 순번. 표시용, 진실 아님
 }
 
-// chips.updated
+// bet.rejected
 {
-  roundId: string | null
-  deltas: Array<{ userId: string; delta: number; balance: number }>
-  reason: 'bet' | 'pot_win' | 'buy_in' | 'correction' | 'settlement'
+  actionId: string
+  rejectedBy: string
+  reason: string          // 1~200자, 필수
+}
+
+// state.snapshot
+{
+  roomStatus: 'waiting' | 'playing' | 'settled' | 'closed'
+  currentRound: { roundId: string; seq: number; pot: number } | null
+  balances: Array<{ userId: string; balance: number }>
 }
 ```
 
-모든 수신 payload는 zod로 파싱한다. 실패하면 **적용하지 않고 경고만 남긴다** (요구 R2.2).
-신뢰할 수 없는 입력을 상태에 반영하는 것보다 한 이벤트를 버리는 편이 안전하다 —
-어차피 스냅샷으로 복구된다.
+## 발신 모델 — 행동한 클라이언트가 직접 send
 
-## 동기화 모델
+서버는 이벤트를 발신하지 않는다. `member.joined`, `chips.updated`가 스키마상 "서버" 발신으로
+설계되었으나 실제 서버 발신 경로는 없다 — 미채택.
 
 ```
 사용자 탭
   │
-  ├─(1) 로컬 상태 즉시 반영 (optimistic, actionId 부여)
-  ├─(2) channel.send('bet.placed')        → 다른 참가자 화면 갱신 (체감 속도)
-  └─(3) Server Action 호출                → 권한·규칙·불변식 검증 후 Postgres 커밋
-            │
-            └─(4) 서버가 'chips.updated' 브로드캐스트 → 전원 상태를 서버 값으로 정합
+  ├─(1) Server Action 호출 (베팅 제출, 판 시작 등)
+  │       → 권한·규칙·불변식 검증 후 Postgres 커밋
+  │
+  ├─(2) 성공 시 refetch(refreshRoom) 로 자기 화면 먼저 갱신
+  │
+  └─(3) 성공 시 channel.send(event)  ← 행동한 본인이 직접 브로드캐스트
+          + 뒤이어 state.snapshot 도 함께 send (afterMutation, room-client.tsx)
+              │
+              └─(4) 다른 참가자 수신 → 250ms 디바운스 refetch로 자기 화면 갱신
 ```
 
-**충돌 시 항상 서버 값이 이긴다.** (2)는 표시용, (3)이 진실이다.
-(3)이 실패하면 클라이언트는 낙관적 반영을 롤백하고 사유를 토스트로 보여준다.
+실패한 Server Action은 아무것도 브로드캐스트하지 않는다 — 실패는 호출자 화면에 토스트로만
+보인다 (`runAction`, `room-client.tsx`).
+
+## 스냅샷 refetch 전략 — 진실의 원천
+
+이벤트 payload는 힌트다. **진실은 항상 `refreshRoom(roomId)`가 반환하는 Postgres 스냅샷.**
+`room-client.tsx`는 다음 4개 트리거로 refetch한다.
+
+| 트리거 | 지연 |
+|--------|------|
+| 임의 Broadcast 이벤트 수신 | 250ms 디바운스 (`debouncedRefetch`) |
+| Presence `sync` (참가자 입장/이탈 감지) | 250ms 디바운스 |
+| 채널 `SUBSCRIBED` 전이 (최초 구독·재연결) | 즉시 |
+| `visibilitychange`로 탭 복귀 + 20초 폴링 인터벌 | 즉시 / 20초 주기 |
+
+`refreshRoom` 결과 `room.status`가 `settled`/`closed`면 결과 페이지로 라우팅한다. 별도의
+"재연결 후 로컬 큐 재전송" 로직은 없다 — 클라이언트는 액션을 큐잉하지 않는다. Server Action 자체가
+요청/응답이므로 실패하면 그 자리에서 사용자에게 보이고, 성공은 이미 Postgres에 반영된 뒤다.
 
 ### 멱등성
 
-`actionId`(UUID)를 클라이언트가 만들고, `bet_actions.id`의 PK로 그대로 쓴다.
-재연결 후 큐를 재전송해도 두 번째 INSERT는 충돌로 무시된다 (요구 R2.3).
+`actionId`(UUID, envelope.id와 동일)를 클라이언트가 만들고 해당 테이블의 PK로 그대로 쓴다. 같은
+행동이 중복 전송돼도 두 번째 INSERT는 PK 충돌로 걸러진다.
 
 ### 순서
 
-Broadcast는 전역 순서를 보장하지 않는다. 순서가 의미를 갖는 것은 **판 단위**뿐이므로:
-
-- `rounds.seq`가 판 순서의 진실이다.
-- 판 내 액션 순서는 서버가 커밋 시점에 `bet_actions.seq`를 확정한다. 클라이언트가 보낸 `seq`는
-  추정치이며 표시용이다.
-- 클라이언트가 자기 `seq`와 서버 `seq`가 어긋난 것을 발견하면 `state.request`를 보낸다.
-
-### 재연결 복원
-
-```
-소켓 끊김 감지
-  → 로컬 액션 큐 보존 (전송 실패분)
-  → 재구독 (RLS 재검사)
-  → Postgres 에서 방 상태 전량 로드 (rooms, room_members, 현재 round, 잔액 집계)
-  → 큐에 남은 액션 재전송 (멱등키로 중복 흡수)
-  → 로컬 상태 = 서버 상태로 치환
-```
-
-Postgres에서 복원하는 이유: Broadcast는 과거 메시지를 재생하지 않는다. 확정 상태의 소유자는
-언제나 DB다 (`02-data-model.md`).
+Broadcast는 전역 순서를 보장하지 않는다. 순서가 의미를 갖는 판·액션 순번은 서버가 커밋 시점에
+확정하며, 클라이언트가 이벤트에 실어 보내는 `seq`는 표시용 추정치일 뿐이다. 어긋남은 방치한다 —
+다음 refetch가 서버 값으로 덮어쓴다.
 
 ## Presence
 
-접속자 표시에만 쓴다. 게임 상태를 Presence에 싣지 않는다 — Presence는 연결 상태에 따라
-자동으로 사라지므로 게임 진실의 저장소로 부적절하다.
+접속자 표시에만 쓴다. 게임 상태는 Presence에 싣지 않는다.
 
 ```ts
-channel.track({ userId, displayName, seatNo, joinedAt })
+channel.track({ userId, displayName })
 ```
 
-`sync` / `join` / `leave` 이벤트로 참가자 목록 UI를 갱신한다.
-딜러가 일정 시간 이상 `leave` 상태면 host에게 역할 재위임을 제안한다 (Edge Case 대응).
-
-## 지연 목표와 측정
-
-- 목표: 액션 발신 → 타 참가자 화면 반영 **p95 300ms**.
-- 측정: envelope의 `at`과 수신 시각 차이를 개발 모드에서 기록. E2E에서 2개 브라우저 컨텍스트로 검증.
-- 열화 시 점검 순서: ① 채널 구독 상태 ② RLS 정책 복잡도(구독 지연) ③ 네트워크 ④ payload 크기.
-
-RLS 정책에 조인·함수 호출이 많거나 인덱스가 없으면 **구독·첫 메시지 지연**이 크게 늘어난다.
-`is_room_member`가 `room_members(room_id, user_id)` 인덱스를 타는지 유지 확인할 것.
+`sync` 이벤트에서 `presenceState()`의 키 집합을 온라인 사용자 셋으로 교체하고, 동시에
+`debouncedRefetch()`를 호출한다(새 참가자 입장 감지 용도). `join`/`leave` 개별 이벤트는 구독하지
+않는다. 딜러 이탈 시 자동 재위임 로직은 없다.
 
 ## 보안 경계
 
-- 클라이언트가 보낸 값 중 **신뢰하는 것은 없다.** `actorId`조차 서버에서 세션과 대조한다.
-- 채널 구독 권한은 애플리케이션이 아니라 `realtime.messages` RLS가 강제한다.
-- 칩 증감은 Broadcast로 확정되지 않는다. Server Action + service role 경로만 원장에 쓴다.
-- 손패(`hand_records`)는 판 종료 전까지 브로드캐스트하지 않는다.
+- 채널이 공개이므로 payload의 `actorId`를 포함해 **클라이언트가 보낸 값은 아무것도 신뢰하지
+  않는다.** 화면 표시(토스트 문구 등)에만 쓰고, 권한·잔액 판단에는 절대 쓰지 않는다.
+- 칩 증감은 Broadcast로 확정되지 않는다. 쓰기는 Server Action → `kkeutbal_app` 롤 경로만 원장에
+  반영한다 (`02-data-model.md`).
+- Broadcast로 확정되지 않는 값이 궁극적으로 화면에 반영되는 유일한 경로는 refetch다. 따라서 payload
+  검증 실패·위조·유실 어느 쪽이든 최종 상태는 다음 refetch에서 정합된다.
+
+## 미채택 대안
+
+- **`private: true` 채널 + `realtime.messages` RLS 정책**: 마이그레이션(`0001_init_rls.sql`)에
+  정책은 존재하지만 클라이언트는 공개 채널로 구독한다. 구독 인가를 DB RLS로 강제하는 대신, 쓰기
+  경로(Server Action)만 신뢰하는 모델을 택했다.
+- **서버 발신 이벤트(`member.joined`, `chips.updated`)**: 스키마는 남아 있으나 발신 주체가 없다.
+  Postgres 트리거나 Edge Function으로 서버발 브로드캐스트를 추가하지 않는 한 죽은 스키마다.
+- **`state.request`/유실 감지 후 명시적 재요청**: 스키마만 있고 send하는 코드가 없다. 실제로는
+  모든 이벤트가 정밀한 재요청 대신 "일단 refetch"로 뭉뚱그려 처리된다.
 
 ## Open Questions
 
-- [ ] `state.snapshot` 주기적 발신 간격(예: 15초) 도입 여부 — 유실 감지 지연과 트래픽의 트레이드오프.
-- [ ] 액션 큐의 로컬 영속화 위치(메모리 vs `sessionStorage`) — 탭 새로고침 시 유실 허용 여부에 달림.
+- [ ] `member.joined`/`chips.updated`/`state.request` 스키마를 실사용에 맞춰 제거할지, 향후 서버
+      발신 경로(Edge Function) 도입 시까지 유지할지.
+- [ ] 20초 폴링 + 250ms 디바운스 조합의 실사용 지연 측정 — 별도 계측 없음, p95 목표치 미설정.

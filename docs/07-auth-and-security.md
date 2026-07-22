@@ -4,49 +4,71 @@
 |-------|-------|
 | Type | technical-design |
 | Audience | engineering / operators / reviewers |
-| Status | draft |
+| Status | active |
 | Source of truth | this document (인증 흐름·역할 권한·보안 경계) |
 | Last reviewed | 2026-07-22 |
 
 ## Context
 
-전체 로그인이 전제다. 운영자가 **Authentik**을 이미 운영 중이므로 신원을 그쪽으로 일원화한다.
-동시에 데이터 격리는 애플리케이션이 아니라 **DB(RLS)**에서 강제한다.
+전체 로그인이 전제다. 운영자가 Authentik을 운영 중이면 그쪽으로 신원을 일원화하되, 개발·초기 배포
+환경에서는 이름만으로 로그인하는 게스트 경로를 둔다. 인가는 DB 레벨 RLS가 아니라 **Server Action이
+매 호출마다 재검사**하는 방식으로 강제한다 — 이유는 아래 "DB 접근 경로" 참조.
 
 ## 인증 흐름
 
+두 provider가 조건부로 공존한다. 활성화 여부는 env 값 존재로 결정되고, `src/lib/auth.ts`가
+런타임에 provider 배열을 구성한다.
+
+```
+AUTH_AUTHENTIK_ID + AUTH_AUTHENTIK_SECRET + AUTH_AUTHENTIK_ISSUER 모두 설정
+  → Authentik OIDC provider 활성 (hasAuthentik())
+
+AUTH_DEV_LOGIN=true
+  → dev-login Credentials provider 활성 (hasDevLogin())
+  → 이름(1~20자)만 입력 → sub = `dev:{name.toLowerCase()}`
+  → 같은 이름 = 같은 계정 (기기를 바꿔도 전적 유지)
+```
+
+두 provider는 동시에 켤 수 있다. 로그인 화면은 활성 provider만 노출한다.
+
 ```
 브라우저 ──► Next.js (Auth.js v5)
-                 │  OIDC Authorization Code + PKCE
-                 ▼
-            Authentik  (사용자 자체 운영 IdP)
-                 │  id_token (sub, name, email, picture)
-                 ▼
-         Auth.js 세션 쿠키 (httpOnly, secure, sameSite=lax)
                  │
-                 ├─► users 테이블 upsert (authentik_sub 기준)
-                 └─► Supabase 접근용 단명 JWT 발급 → Realtime/RLS
+      ┌──────────┴───────────┐
+      ▼                      ▼
+  Authentik OIDC        dev-login (Credentials)
+  (Authorization Code)  (이름만 입력, 서명 없음)
+      │                      │
+      └──────────┬───────────┘
+                 ▼
+         jwt 콜백 (src/lib/auth.ts)
+                 │  최초 로그인(user && account 존재)에만 실행
+                 ▼
+      public.users upsert (authentik_sub 기준 onConflict)
+                 │
+                 ▼
+         Auth.js 세션 쿠키 (JWT, maxAge 3일)
+                 │  token.uid = users.id
+                 ▼
+         session.user.id 로 노출 (authConfigBase.callbacks.session)
 ```
 
-### Auth.js 설정 요지
+증거: `src/lib/auth.ts`, `src/lib/auth-config.ts`.
 
-```ts
-// src/lib/auth.ts
-import NextAuth from 'next-auth'
-import Authentik from 'next-auth/providers/authentik'
+### 설정 파일이 둘로 나뉜 이유
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  providers: [Authentik],   // AUTH_AUTHENTIK_ID / _SECRET / _ISSUER 자동 인식
-  session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 3 },
-  callbacks: { /* sub → users.id 매핑, 세션에 userId 주입 */ },
-})
-```
+- `src/lib/auth-config.ts` — edge-safe. provider 없이 세션 옵션·`session` 콜백만 가진다.
+  `src/middleware.ts`가 이 파일만 import한다.
+- `src/lib/auth.ts` — 전체 설정. `db`(postgres 커넥션)를 물기 때문에 edge 런타임(미들웨어)에
+  들어가면 안 된다. provider 목록 구성과 `jwt` 콜백(사용자 upsert)이 여기 있다.
 
-환경변수는 `AUTH_` 접두사 규약을 따르므로 provider에 값을 직접 넣지 않는다 (`.env.example` 참조).
-`AUTH_AUTHENTIK_ISSUER`는 Authentik 애플리케이션의 OIDC issuer URL이며 **끝 슬래시를 포함**한다.
+이 분리를 깨고 미들웨어에서 `auth.ts`를 import하면 postgres 클라이언트가 edge 번들에 들어가
+빌드가 깨지거나 커넥션이 예기치 않게 늘어난다.
 
-세션 수명을 3일로 잡은 이유: MT 같은 1~3일 이벤트 도중 재로그인이 뜨면 최악의 UX다.
-IdP가 잠시 불통이어도 진행 중인 판이 끊기지 않는다 (`01-architecture.md` 리스크 표).
+### 세션 수명
+
+`session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 3 }` — 3일. MT 같은 1~3일 이벤트 도중
+재로그인 프롬프트가 뜨는 것을 막기 위한 값이다 (`01-architecture.md` 리스크 표).
 
 ### Authentik 쪽 설정
 
@@ -55,102 +77,204 @@ IdP가 잠시 불통이어도 진행 중인 판이 끊기지 않는다 (`01-arch
 | Provider 종류 | OAuth2 / OpenID Provider |
 | Client type | Confidential |
 | Redirect URI | `{APP_URL}/api/auth/callback/authentik` |
-| Scopes | `openid`, `profile`, `email` |
-| Subject mode | 안정적인 `sub` (사용자 UUID) |
+| Subject mode | 안정적인 `sub` |
 
-`sub`가 바뀌면 기존 전적과 연결이 끊긴다. Authentik에서 subject mode를 변경하지 말 것.
+`sub`가 바뀌면 `users.authentikSub` 매칭이 끊겨 기존 전적과 분리된 새 계정이 생긴다. Authentik에서
+subject mode를 바꾸지 말 것.
 
-### 대체 경로 (Authentik 불가 환경)
+**미구현**: Authentik 실등록은 아직 없다. 현재 배포 가능한 유일한 로그인 경로는 dev-login이다.
 
-Supabase Auth를 대신 쓸 수 있다. 이 경우 `users.authentik_sub` 대신 Supabase `auth.uid()`를
-직접 쓰고 JWT 브리지 계층이 통째로 빠진다. 구성은 단순해지지만 사용자의 SSO 일원화가 깨진다.
-초기 선택에서 기각한 이유는 `01-architecture.md` Alternatives D 참조.
+### AUTH_DEV_LOGIN — 프로덕션 금지
 
-## Supabase RLS 브리지
-
-문제: RLS 정책은 `auth.uid()`를 본다. 그런데 신원의 소유자는 Authentik이고 세션은 Auth.js가 쥔다.
-
-해결: 서버가 **단명 JWT를 발급**해 클라이언트에 내려주고, Supabase 클라이언트가 그 토큰으로
-Realtime·PostgREST에 접속한다.
-
-```
-Server Action: 세션 검증 → users.id 확인
-             → SUPABASE_JWT_SECRET 으로 { sub: users.id, role: 'authenticated', exp } 서명
-             → 클라이언트에 전달 (수명 짧게, 만료 전 갱신)
+```ts
+// src/lib/env.ts
+AUTH_DEV_LOGIN: z.enum(['true', 'false']).default('false').transform(v => v === 'true'),
 ```
 
-- 토큰 수명은 짧게 두고 클라이언트가 만료 전에 재발급받는다.
-- `SUPABASE_JWT_SECRET`은 **서버 전용**이다. 클라이언트 번들에 절대 포함되지 않아야 한다.
-- 이 브리지가 실패하면 Realtime 구독이 거부된다 — 조용히 실패하지 않고 재인증을 유도한다.
+이름 입력만으로 임의 사용자를 자칭할 수 있다. 비밀번호도, 소유권 증명도 없다. `sub`가
+`dev:{이름소문자}`로 결정되므로 **아무나 다른 사람의 표시 이름을 입력하면 그 계정으로 로그인된다.**
+Authentik 없이도 앱을 굴리기 위한 개발·데모 전용 경로다.
 
-> 미확정: Supabase의 third-party auth 설정으로 이 브리지를 대체할 수 있는지 검토 필요
-> (`01-architecture.md` Open Questions).
+- 프로덕션 env에 `AUTH_DEV_LOGIN=true`가 남아 있으면 인증이 사실상 없는 것과 같다.
+- 배포 전 체크리스트에 필수 항목으로 넣는다: `AUTH_DEV_LOGIN` 미설정 또는 `false` 확인.
+
+## 미들웨어 — UX 게이트일 뿐
+
+`src/middleware.ts`는 `authConfigBase`로 JWT 쿠키를 해독해 로그인 여부만 본다. 결과로 하는 일은
+리다이렉트뿐이다:
+
+- 미로그인 + 비공개 경로 → `/login`으로 리다이렉트 (`next` 쿼리로 원래 경로 보존)
+- 로그인 + `/login` 접근 → `/`로 리다이렉트
+- 공개 경로: `/login`, `/api/auth`, `/api/health`
+
+**역할·방 소속 검사는 하지 않는다.** 여기를 통과했다고 해서 어떤 Server Action도 자동으로
+허용되지 않는다 — 각 Server Action이 세션에서 `userId`를 다시 뽑고, DB에서 방 멤버십과 역할을
+다시 조회한다. 미들웨어를 우회하는 직접 API 호출(curl 등)에도 동일한 방어가 걸리는 이유다.
+
+## DB 접근 경로
+
+**중요한 사실: 이 앱에는 Supabase JWT 브리지가 없다.** 예전 설계 초안(브라우저 세션을 Supabase
+JWT로 서명해 내려주는 방식)은 구현되지 않았다. 실제 경로는 다음 두 갈래로 완전히 분리된다.
+
+| 경로 | 클라이언트 | 인증 방식 | 용도 |
+|------|-----------|----------|------|
+| DB 읽기/쓰기 | `src/lib/db.ts` (drizzle + postgres-js, 서버 전용) | 전용 롤 `kkeutbal_app` (`bypassrls`), Supabase pooler session mode | 모든 테이블 CRUD |
+| Realtime | `src/lib/supabase/client.ts` (브라우저) | `NEXT_PUBLIC_SUPABASE_ANON_KEY`, 로그인 세션과 무관 | Broadcast·Presence만 |
+
+`kkeutbal_app`은 `bypassrls` 롤이므로 RLS 정책과 무관하게 모든 행에 접근한다. **인가는 RLS가
+아니라 Server Action의 명시적 검사가 담당한다.** 패턴은 두 곳에 반복된다:
+
+```ts
+// src/features/game/actions.ts, src/features/betting/actions.ts 공통 패턴
+async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
+  const [member] = await tx.select({ role: roomMembers.role })
+    .from(roomMembers)
+    .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
+    .limit(1)
+  return member ? roles.includes(member.role) : false
+}
+```
+
+방 단위 쓰기는 `pg_advisory_xact_lock(hashtextextended(roomId, 42))`로 트랜잭션 내 직렬화한
+뒤 역할을 재확인한다 — 동시 요청으로 두 딜러가 같은 승인을 중복 처리하는 경쟁을 막는다.
+
+### RLS는 방어층이지 인가 경로가 아니다
+
+`supabase/migrations/0001_init_rls.sql`은 `authenticated` 롤 기준으로 `auth.uid()`를 쓰는
+정책을 전 테이블에 걸어 두었다. 이 정책들은 다음 상황에서만 의미가 있다:
+
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`가 유출되어 누군가 PostgREST를 직접 두드리는 경우
+- 향후 브라우저에서 Supabase 클라이언트로 직접 테이블을 조회하는 코드가 추가되는 경우
+
+앱의 정상 동작 경로(Server Action → `kkeutbal_app`)는 이 정책들을 아예 거치지 않는다.
+`auth.uid()`는 Supabase Auth 세션이 있을 때만 값이 나오는데, 이 앱은 Supabase Auth를 쓰지
+않으므로 `authenticated` 롤로 접속하는 경로 자체가 없다. **정책은 문서화된 방어선이지 실제로
+평가되는 코드 경로가 아니다.** 이 사실이 바뀌면(예: 브라우저에서 PostgREST 직접 호출을 추가하면)
+이 문서와 `0001_init_rls.sql`을 함께 갱신할 것.
+
+### 칩 원장 불변성
+
+`chip_ledger`는 `BEFORE UPDATE OR DELETE` 트리거(`chip_ledger_is_append_only`)로 수정 자체를
+막는다. `kkeutbal_app`이 `bypassrls`라도 이 트리거는 우회하지 못한다 — 트리거는 RLS가 아니라
+테이블 제약이다. 정정은 항상 `reverted_of`로 원본을 가리키는 반대 부호 새 행 INSERT로 한다
+(`revertBet`, `voidRound` in `src/features/betting/actions.ts`, `src/features/game/actions.ts`).
+
+## Realtime — 공개 채널, payload는 힌트일 뿐
+
+`src/lib/realtime/client.ts`의 `createRoomChannel`은 `private: true`를 지정하지 않는다 —
+**공개(public) Broadcast 채널**이며 anon key로 접속한다. 토픽은 `room:{roomId}` (UUID).
+
+`0001_init_rls.sql`의 `realtime_room_read` / `realtime_room_write` 정책(`realtime.messages`,
+`to authenticated`)은 **현재 경로에서 평가되지 않는다.** 앱이 Supabase Auth로 인증하지
+않으므로 브라우저 클라이언트는 `authenticated`가 아니라 `anon` 롤로 붙고, 공개 채널은애초에
+`realtime.messages` RLS를 타지 않는다. 정책은 private 채널로 전환할 경우를 대비해 마이그레이션에
+남아 있을 뿐 미사용이다.
+
+이 경계가 안전한 이유는 채널 자체의 인증이 아니라 **payload를 신뢰하지 않는 설계**에 있다
+(`03-realtime-protocol.md`):
+
+- 이벤트는 행동한 클라이언트가 Server Action 성공 뒤 직접 보낸다 — 서버가 검증한 결과의 사후
+  통지일 뿐, payload 자체가 권위 있는 상태가 아니다.
+- 수신자는 payload를 "다시 조회하라"는 힌트로만 쓰고, 실제 상태는 `refreshRoom` Server Action
+  스냅샷 refetch로 확정한다 (250ms 디바운스 + 20초 폴링 + `visibilitychange`).
+- 즉 토픽 UUID를 추측하거나 위조 payload를 보내도, 상태 변경은 여전히 `refreshRoom`이 다시
+  검증한 결과로만 반영된다. 최악의 경우 화면에 잘못된 힌트가 잠깐 보였다가 다음 refetch에서
+  정정된다 — 원장이나 역할이 실제로 바뀌지는 않는다.
+
+이 설계를 바꾸려면(예: private 채널 + `authenticated` 롤 도입) `03-realtime-protocol.md`와
+이 문서를 함께 갱신한다.
 
 ## 역할 · 권한
 
-방 단위 역할이다. 전역 관리자 역할은 두지 않는다.
+방 단위 역할이다. 전역 관리자 역할은 없다. 값은 `room_members.role`:
+`host` / `dealer` / `player` / `observer`.
 
-| 권한 | host | dealer | player | observer |
-|------|:----:|:------:|:------:|:--------:|
-| 방 설정 변경 (룰·입력 모드) | ✅ | — | — | — |
-| 역할 위임 | ✅ | — | — | — |
-| 방 종료 · 정산 확정 | ✅ | — | — | — |
-| 판 시작 / 종료 | ✅ | ✅ | — | — |
-| 액션 승인 · 거절 | ✅ | ✅ | — | — |
-| 액션 정정 (revert) | ✅ | ✅ | — | — |
-| 대리 입력 | ✅ | ✅ | — | — |
-| 본인 액션 제출 | ✅ | ✅ | ✅ | — |
-| 바이인 추가 | ✅ | ✅ | ✅(본인) | — |
-| 방 상태 조회 | ✅ | ✅ | ✅ | ✅ |
-| 타인 손패 조회 (판 종료 전) | — | — | — | — |
+| 권한 | host | dealer | player | observer | Server Action |
+|------|:----:|:------:|:------:|:--------:|------|
+| 방 생성 | ✅ | — | — | — | `createRoom` |
+| 방 입장 | ✅ | ✅ | ✅ | ✅ | `joinRoom` (신규 참가자는 `player`로 배정) |
+| 역할 변경 (host 자신 제외) | ✅ | — | — | — | `setMemberRole` |
+| 방 정산 확정 (`closeRoom`) | ✅ | — | — | — | `closeRoom` |
+| 판 시작 (`startRound`) | ✅ | ✅ | — | — | `startRound` |
+| 판 종료 (`endRound`) | ✅ | ✅ | — | — | `endRound` |
+| 판 무효화 (`voidRound`) | ✅ | ✅ | — | — | `voidRound` |
+| 베팅 승인 · 거절 (`approveBet`/`rejectBet`) | ✅ | ✅ | — | — | `betting/actions.ts` |
+| 확정 베팅 정정 (`revertBet`) | ✅ | ✅ | — | — | `betting/actions.ts` |
+| 대리 입력 (타인 대신 `placeBet`) | ✅ | ✅ | — | — | `placeBet` (`isProxy && isDealer`) |
+| 본인 베팅 제출 (`placeBet`) | ✅ | ✅ | ✅ | — (거부) | `placeBet` (`targetRole !== 'observer'`) |
+| 타인 바이인 추가 (`addBuyIn`) | ✅ | ✅ | — | — | `addBuyIn` |
+| 본인 바이인 추가 (`addBuyIn`) | ✅ | ✅ | ✅ | — (참가자만 가능, observer 불허 안 됨*) | `addBuyIn` |
+| 방 스냅샷 조회 (`refreshRoom`) | ✅ | ✅ | ✅ | ✅ | 참가자 여부만 확인, 역할 무관 |
 
-- `host`는 방 생성자. 이탈 시 다른 참가자에게 위임할 수 있다.
-- `dealer`는 여러 명일 수 있다. 인원이 많은 방에서 승인 병목을 줄인다.
-- **타인 손패는 누구도 판 종료 전에 볼 수 없다.** host·dealer도 예외가 아니다.
+\* `addBuyIn`은 대상이 방 참가자인지만 확인하고 `observer` 역할을 명시적으로 막지 않는다
+(`src/features/budget/actions.ts`). observer가 바이인을 넣는 것을 금지하려면 이 Server Action에
+`memberRole !== 'observer'` 체크를 추가해야 한다 — 현재 코드 기준의 사실이며, 의도적 설계인지
+누락인지는 확인 필요.
 
-권한 검사는 **UI 게이팅과 서버 검증 양쪽**에서 한다. UI에서 버튼을 숨기는 것은 편의이지 보안이
-아니다. 모든 Server Action은 세션 → 역할 → 대상 방 소속을 다시 확인한다.
+공통 규칙:
+
+- `host`는 방 생성자. `setMemberRole`로는 `host` 역할 자체를 바꿀 수 없다(`target.role === 'host'`
+  이면 거부) — host 위임 경로는 코드에 없다.
+- `dealer`는 여러 명일 수 있다. 승인 요청 시 처리한 딜러가 먼저 락을 잡으면 나머지는
+  "이미 처리된 액션입니다"로 실패한다(`approveBet`의 락 후 재조회).
+- 손패 비공개 정책(타인 손패는 판 종료 전 조회 불가)은 `hand_records` 테이블 RLS 정책으로
+  설계되어 있으나(`0001_init_rls.sql`), **`hand_records` 저장 자체가 구현되어 있지 않다**
+  (jokbo-advisor는 인식 결과를 저장하지 않고 화면에만 프리필한다). 이 정책은 현재 죽은 코드다.
+
+권한 검사는 **UI 게이팅과 Server Action 양쪽**에서 한다. UI에서 버튼을 숨기는 것은 편의이지
+보안이 아니다. 위 표의 모든 항목은 대응하는 Server Action이 세션 → 방 소속 → 역할 순으로
+재확인한다(예시는 위 "DB 접근 경로"의 `requireRole` 패턴).
 
 ## 보안 경계
 
-| 경계 | 규칙 |
-|------|------|
-| 클라이언트 입력 | 전부 불신. zod 검증 후에만 사용. `actorId`도 세션과 대조 |
-| Realtime payload | 신뢰 경계 밖. 스키마 불일치 시 폐기 (`03-realtime-protocol.md`) |
-| Vision 모델 출력 | 신뢰 경계 밖. 파싱 실패 시 부분 반영 금지 (`05-jokbo-advisor.md`) |
-| 칩 원장 쓰기 | service role 서버 경로만. 클라이언트 INSERT 불가 |
-| 비밀값 | `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`, `ANTHROPIC_API_KEY`, `AUTH_SECRET`은 서버 전용 |
-| 데이터 격리 | 전 테이블 RLS. 앱 버그가 있어도 방 밖으로 안 샘 |
+| 경계 | 규칙 | 근거 |
+|------|------|------|
+| 클라이언트 입력 | 전부 불신. zod 스키마 통과 후에만 사용 | 모든 Server Action 상단 `parsed = schema.safeParse(input)` |
+| Realtime payload | 신뢰 경계 밖. 힌트로만 쓰고 진실은 `refreshRoom` refetch | `03-realtime-protocol.md`, 위 "Realtime" 절 |
+| Vision 모델 출력 | 신뢰 경계 밖. zod 파싱 실패 시 부분 반영 없이 실패 반환 | `src/features/jokbo-advisor/vision/actions.ts` |
+| 칩 원장 쓰기 | append-only 트리거로 UPDATE/DELETE 자체가 불가. 정정은 반대 부호 INSERT | `chip_ledger_is_append_only` 트리거 |
+| 비밀값 | `DATABASE_URL`, `AUTH_SECRET`, `AUTH_AUTHENTIK_SECRET`, `ANTHROPIC_API_KEY`는 서버 전용 (`serverEnv()`) | `src/lib/env.ts` — `NEXT_PUBLIC_` 접두사만 클라이언트 노출 |
+| DB 접근 | 서버(drizzle)만 `kkeutbal_app`으로 접속. 브라우저는 DB에 직접 붙지 않는다 | `src/lib/db.ts` |
+| 데이터 격리 | RLS는 전 테이블에 활성화되어 있으나 정상 경로에서 평가되지 않음(위 "RLS는 방어층" 절). 실질 격리는 Server Action의 방 소속 검사 | `requireRole` / `memberRole` 패턴 |
 
-### 체크리스트 (커밋 전)
+Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/png/webp)이 있다.
+**호출 빈도 상한(rate limit)은 코드에 없다** — 로그인 사용자면 누구나 반복 호출로
+`ANTHROPIC_API_KEY` 사용량을 소모시킬 수 있다. 현재 미구현.
+
+### 체크리스트 (커밋 전 / 배포 전)
 
 - [ ] 하드코딩된 비밀값 없음 (`.env.example`에 키 이름만)
 - [ ] `NEXT_PUBLIC_` 접두사가 붙은 서버 전용 값 없음
-- [ ] 모든 Server Action이 세션·역할·방 소속을 검증
+- [ ] `AUTH_DEV_LOGIN`이 프로덕션 env에 `true`로 남아 있지 않음
+- [ ] 모든 신규 Server Action이 세션·방 소속·역할을 재검증
 - [ ] 모든 외부 입력(폼·realtime·vision)이 zod 통과
-- [ ] 신규 테이블에 RLS 활성화 + 정책 존재
+- [ ] 신규 테이블에 RLS 활성화(방어층 목적) — 단, 이 자체가 인가 경로가 아님을 인지
 - [ ] 에러 메시지에 내부 식별자·스택 노출 없음
-- [ ] Vision 업로드에 크기·MIME·호출 빈도 상한 적용
 
 ## 개인정보
 
-- 저장하는 개인정보는 **표시 이름과 아바타 URL**뿐이다. 이메일은 저장하지 않는다
-  (필요 없고, 저장하면 지켜야 할 것만 늘어난다).
-- 게임 기록은 그룹 내에서만 조회된다.
-- 사진 인식 업로드 이미지는 인식 후 보존하지 않는다. 오인식 추적에는 결과와 신뢰도만 남긴다.
+- 저장하는 개인정보는 표시 이름과 아바타 URL(`users.displayName`, `users.avatarUrl`)뿐이다.
+  이메일은 저장하지 않는다.
+- 사진 인식 업로드 이미지는 Server Action 호출 한 번 처리 후 보존하지 않는다. 인식 결과 자체도
+  DB에 저장되지 않는다(위 참조) — 현재는 신뢰도 로그도 남지 않는다.
 
 ## Verification
 
 | 대상 | 방법 |
 |------|------|
-| RLS 격리 | 비참가자 JWT로 각 테이블 조회 → 0행 확인 |
-| 원장 쓰기 차단 | anon 키로 `chip_ledger` INSERT 시도 → 거부 확인 |
-| 역할 게이팅 | player 세션으로 승인·정정 Server Action 호출 → 거부 확인 |
-| 손패 비공개 | 판 진행 중 타인 `hand_records` 조회 → 0행 확인 |
-| 토큰 누출 | 클라이언트 번들 검색으로 서버 전용 키 부재 확인 |
+| 역할 게이팅 | player 세션으로 `startRound`/`approveBet`/`closeRoom` 등 host·dealer 전용 Server Action 호출 → `fail()` 반환 확인 |
+| 대리 입력 제한 | player가 `placeBet`에 `targetUserId`를 다른 사용자로 지정 → 거부 확인 |
+| observer 베팅 차단 | observer 역할로 `placeBet` 호출 → 거부 확인 |
+| 원장 불변성 | `kkeutbal_app` 롤로 `chip_ledger` 직접 UPDATE 시도 → 트리거 예외 확인 |
+| 방 소속 격리 | 비참가자 세션으로 `refreshRoom` 호출 → 실패 확인 |
+| dev-login 프로덕션 차단 | 배포 env에서 `AUTH_DEV_LOGIN` 값 확인 (`false` 또는 미설정) |
+| 토큰 누출 | 클라이언트 번들(`next build` 산출물)에서 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_AUTHENTIK_SECRET`, `ANTHROPIC_API_KEY` 문자열 검색 → 부재 확인 |
 
 ## Open Questions
 
-- [ ] Supabase JWT 브리지 vs third-party auth 설정 — 구현 착수 전 결론 필요.
-- [ ] 방 코드만 알면 입장 가능한가, 아니면 host 승인이 필요한가. 기본값 결정 필요
-      (현재 가정: 코드만으로 입장, host가 강퇴 가능).
+- [ ] `addBuyIn`이 `observer` 역할의 본인 바이인을 명시적으로 막지 않는다 — 의도된 동작인지
+      확인 필요.
+- [ ] Vision 인식 호출에 rate limit이 없다 — 도입 여부와 방식(사용자당/방당) 결정 필요.
+- [ ] RLS 정책(특히 `hand_records`, realtime private 채널 정책)이 실제로 평가되지 않는 상태로
+      유지할지, 코드 경로를 정책에 맞출지, 아니면 미사용 정책을 정리할지 결정 필요.
+- [ ] Authentik 실등록 시점과 절차 — 스코프 문서(`README.md`) 우선순위 참조.

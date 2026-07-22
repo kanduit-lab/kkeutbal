@@ -4,101 +4,162 @@
 |-------|-------|
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
-| Status | draft |
+| Status | active |
 | Source of truth | this document (스택·배포 토폴로지·모듈 경계) |
 | Last reviewed | 2026-07-22 |
 
 ## Context
 
-실물 화투판 옆에서 돌아가는 **실시간 다중 참가 기록 앱**이다. 제약:
+실물 화투판 옆에서 돌아가는 실시간 다중 참가 기록 앱이다. 제약:
 
-- 운영자가 **전용 게임 서버를 두지 않는다.** 상시 켜둘 stateful 노드가 없다.
 - 참가자는 전부 모바일 브라우저. 설치 없이 링크/QR로 들어온다.
-- 사용자는 **Authentik**을 자체 운영 중이며, 전체 로그인을 전제로 한다.
-- 동시 사용 규모는 방당 2~10명, 동시 방 수 한 자릿수. 부하가 아니라 **지연**이 품질을 좌우한다.
+- 사용자는 Authentik을 자체 운영하지만, 로컬 개발과 MT 현장 게스트 로그인은 이름만으로 통과시킨다.
+- 동시 사용 규모는 방당 2~10명, 동시 방 수 한 자릿수. 부하가 아니라 지연이 품질을 좌우한다.
+- 배포 대상은 Vercel이 아니라 사용자가 운영하는 `kanduit-lab/docker-deploy-control-hub` 기반
+  self-hosted docker 인프라다.
 
 ## Goals
 
-- 액션 반영 지연 **p95 300ms 이내**.
-- 서버 상시 운영 부담 0 — 서버리스 + 관리형 백엔드로 끝낸다.
-- 게임 규칙 로직은 **순수 함수**로 격리해 단위 테스트 가능하게 한다.
-- 방 데이터가 다른 방/다른 사용자에게 새지 않도록 DB 레벨에서 차단한다.
+- 액션 반영 지연 체감 300ms 내외 — 브로드캐스트 직후 로컬 반영 + 스냅샷 refetch로 정합.
+- 서버 상시 상태 없이 Next.js 인스턴스 하나로 끝낸다 (stateful 게임 서버 없음).
+- 게임 규칙 로직은 순수 함수로 격리해 단위 테스트 가능하게 한다.
+- DB 쓰기 권한은 서비스 키/JWT 브리지 없이 서버 롤 하나로 통제한다.
 
 ## Non-goals
 
-- 수평 확장·리전 분산·고가용성 설계. 규모가 아니다.
-- 자체 WebSocket 서버 운영.
-- 오프라인 우선(offline-first) 완전 동기화. 재연결 복원까지만 한다.
+- 수평 확장·리전 분산·고가용성 설계.
+- 자체 WebSocket 서버 운영 — Supabase Realtime을 그대로 쓴다.
+- 오프라인 우선(offline-first) 완전 동기화. 재접속 시 스냅샷 복원까지만 한다.
+- Postgres Changes 기반 realtime — Broadcast만 쓴다.
 
 ## Current State
 
-신규 프로젝트. 기존 시스템·마이그레이션 대상 없음. 저장소 초기 커밋 시점 기준으로
-`src/` 는 도메인 타입·화투 카드 모델·엔진 스텁만 존재하며 런타임 구현은 미착수다.
+런타임 구현 진행 중. 도메인 엔진(`hwatu`/`seotda`/`gostop`), 방·베팅·예산·랭킹 Server Action,
+realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한다. 마이그레이션은 Supabase MCP로
+3건 적용됨: `init_schema`(drizzle 스키마 생성), `init_rls`(`supabase/migrations/0001_init_rls.sql`),
+`keep_alive_and_app_grants`(`keep_alive` 테이블 + `kkeutbal_app` 권한 부여 — SQL이 리포에 파일로
+남아 있지 않고 MCP 이력에만 있다. 재현하려면 `keep_alive` 테이블 DDL과 `kkeutbal_app` 권한 GRANT를
+새 마이그레이션 파일로 다시 작성해야 한다).
 
 ## Proposed Design
 
 ### 배포 토폴로지
 
 ```
- ┌─────────────┐   OIDC    ┌──────────────┐
- │  브라우저   │◄─────────►│  Authentik   │  (사용자 자체 운영)
- │ (모바일 웹) │           └──────────────┘
+ ┌─────────────┐   OIDC(선택)   ┌──────────────┐
+ │  브라우저   │◄──────────────►│  Authentik   │  (사용자 자체 운영, 미등록 시 비활성)
+ │ (모바일 웹) │                └──────────────┘
  └──────┬──────┘
         │ HTTPS (SSR/RSC, Server Actions)
         ▼
- ┌──────────────────────┐
- │  Next.js 15 @ Vercel │  서버리스. 쓰기 검증·권한·엔진 실행
- └──────┬───────────────┘
-        │ postgres-js / supabase-js (service role)
-        ▼
+ ┌────────────────────────────────────────┐
+ │  Next.js 15 (standalone) 컨테이너       │
+ │  docker-deploy-control-hub 로 배포      │
+ │  도메인: kkeutbal.kanduit.app           │
+ └──────┬───────────────────────────────┬──┘
+        │ postgres-js (kkeutbal_app)    │ anon key (브라우저 직결)
+        ▼                               ▼
  ┌──────────────────────────────────────────┐
  │  Supabase                                │
- │  ├ PostgreSQL  : 영속 상태 · RLS         │
- │  └ Realtime    : Broadcast · Presence    │
+ │  ├ PostgreSQL  : pooler(session, 5432)   │
+ │  │   전용 롤 kkeutbal_app (bypassrls)    │
+ │  └ Realtime    : Broadcast 공개 채널     │
+ │                  room:{uuid}, Presence    │
  └──────────────────────────────────────────┘
-        ▲
-        └──── WebSocket (브라우저 직결, anon key + JWT) ────┘
 ```
 
-### 실시간 전략 — Broadcast 우선
+전용 게임 서버를 두지 않는다는 원제약은 유지하되, 실행 위치는 Vercel이 아니라 사용자 소유
+docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfiles/Dockerfile.nextjs`가
+`.next/standalone` + `node server.js`를 그대로 컨테이너에 담는다(`next.config.ts`).
 
-Supabase Realtime은 세 가지 기능을 제공한다: **Broadcast**(pub/sub 메시지), **Presence**(접속자
-상태), **Postgres Changes**(DB 변경 CDC 스트림).
+### DB 접근 — 전용 앱 롤, service role key 안 씀
 
-끗발은 **라이브 액션에 Broadcast를 쓴다.** Postgres Changes를 쓰지 않는 이유:
+`src/lib/db.ts`가 서버 전용 drizzle 클라이언트를 만든다. 접속 정보는 `DATABASE_URL` 하나이며
+가리키는 대상은:
 
-| 항목 | Broadcast | Postgres Changes |
-|------|-----------|------------------|
-| 경로 | 클라이언트 → Realtime 서버 → 클라이언트 | DB 커밋 → WAL 복제 → 필터 → 클라이언트 |
-| 지연 | DB를 거치지 않음. 수십 ms | 복제·필터 단계만큼 추가 |
-| 부하 특성 | 메시지 수에 비례 | 테이블 변경량·RLS 필터 비용에 비례 |
-| 권한 | 채널 구독 시 RLS 1회 검사 후 커넥션 동안 캐시 | 변경 행마다 구독자별 권한 평가 |
+- Supabase pooler, 리전 `aws-1-ap-northeast-2`, **session mode 포트 5432**(transaction mode
+  아님 — drizzle의 prepared statement/트랜잭션 사용과 맞물려 있다).
+- 전용 롤 `kkeutbal_app`, 속성 `bypassrls`.
 
-즉 "Supabase Realtime은 느리다"는 통념은 대부분 Postgres Changes 경로 이야기다.
-Broadcast는 DB를 타지 않으므로 게임 액션 전파에 적합하다.
+즉 Supabase `service_role` 키도, Auth.js 세션을 Supabase JWT로 바꿔 넘기는 브리지도 쓰지 않는다.
+서버 프로세스가 DB에 접속하는 통로는 이 롤 하나뿐이고, RLS(`supabase/migrations/0001_init_rls.sql`)는
+`anon`/`authenticated` 대상 방어층으로만 존재한다 — 실제 권한 판정(방 참가자인지, 딜러인지, 잔액이
+충분한지)은 각 도메인 `actions.ts`의 Server Action이 수행한다. RLS를 우회하는 롤이 유일한 쓰기
+경로이므로, **Server Action의 권한 검사를 건너뛰면 DB 레벨 방어가 없다**는 점이 이 설계의 핵심
+트레이드오프다.
 
-**역할 분담:**
+커넥션은 `globalThis` 캐시로 dev HMR 재생성을 막는다(`max: 5`, `idle_timeout: 30s`).
 
-- **Broadcast** — 베팅 액션, 라운드 진행, 딜러 승인, 타이머, 커서/타이핑 같은 휘발성 이벤트.
-- **Presence** — 누가 방에 접속해 있는지, 연결 상태.
-- **Postgres** — 확정 상태(칩 잔액, 판 결과, 랭킹). 재접속 시 여기서 전량 복원.
+### Auth — Authentik 선택적, 게스트 로그인 기본
 
-권한은 `realtime.messages` 테이블에 RLS 정책을 걸고 클라이언트가 `private: true`로 구독하게 해
-"방 참가자만 그 방 채널을 구독·발행"을 DB 레벨에서 강제한다. 정책은 구독 시 1회 평가 후 커넥션
-수명 동안 캐시되므로 메시지마다 DB를 치지 않는다. 상세 이벤트 스키마는 `03-realtime-protocol.md`.
+`src/lib/auth.ts` / `src/lib/auth-config.ts`:
 
-### 쓰기 경로 — 낙관적 UI + 서버 확정
+- `AUTH_AUTHENTIK_ID` / `_SECRET` / `_ISSUER` 세 값이 모두 있을 때만 Authentik provider가
+  provider 목록에 들어간다(`hasAuthentik()`). 현재 실제 등록은 안 돼 있다.
+- `AUTH_DEV_LOGIN=true`일 때 Credentials provider(`dev-login`)가 활성화된다. 입력은 이름
+  하나뿐이며 `dev:{name.toLowerCase()}`를 sub로 써서 **같은 이름 = 같은 계정**으로 매핑한다.
+  MT 현장에서 기기를 바꿔도 전적이 이어지게 하려는 의도지만, 이름 충돌·사칭을 막는 장치가 없다.
+  프로덕션에서 켜면 인증이 사실상 무력화된다.
+- `jwt` 콜백에서 최초 로그인 시 `public.users`에 upsert(`authentikSub` 충돌 시 갱신) 하고
+  내부 id를 `token.uid`에 싣는다. 이후 모든 서버 컨텍스트는 `session.user.id`로 이 내부 id를
+  쓴다.
+- `authConfigBase`(`auth-config.ts`)는 edge-safe 부분만 분리해 둔 것 — DB(postgres-js)를 물지
+  않아 미들웨어 번들에 안전하게 들어간다. `src/middleware.ts`는 이 설정만으로 NextAuth 인스턴스를
+  만들어 JWT 쿠키 유무만 검사하고 `/login`으로 리다이렉트한다. **미들웨어는 UX 게이트일 뿐이며
+  실제 권한 검사는 하지 않는다** — 각 Server Action이 다시 세션을 확인한다.
+
+### 실시간 전략 — 공개 Broadcast 채널 + 클라이언트 send + 스냅샷 truth
+
+`src/lib/supabase/client.ts`가 브라우저 전용 Supabase 클라이언트를 anon key로 만든다
+(`persistSession: false`, `autoRefreshToken: false` — 이 클라이언트는 DB 조회에 쓰지 않고
+Realtime 전용이다). `src/lib/realtime/client.ts` + `events.ts`가 프로토콜을 정의한다. 상세는
+`03-realtime-protocol.md`가 소유하며, 여기서는 아키텍처 결정만 적는다.
+
+실제 구현은 애초 설계했던 "`realtime.messages` RLS로 `private: true` 채널 구독 제어"가 **아니다.**
+지금 채널은:
+
+- **공개(public) 채널**, 토픽 `room:{roomId}`(`roomTopic()`). `roomId`가 UUID라 추측이 어렵다는
+  점에 의존하는 obscurity 방어이며, RLS로 강제되는 접근 제어가 아니다.
+- 인증 없는 anon key로 구독·발행한다.
+- 이벤트는 **행동한 클라이언트가 Server Action 성공 응답을 받은 뒤 직접 `channel.send()`**
+  한다(`sendRoomEvent`). 서버가 대신 브로드캐스트하지 않는다.
+- 수신 측은 `onRoomEvent`로 이벤트를 받아도 그 payload를 상태에 바로 반영하지 않는다. 이벤트는
+  "지금 다시 읽어라"는 힌트 + 토스트 표시용일 뿐이고, 실제 상태 갱신은 항상 `refreshRoom()`
+  Server Action을 다시 호출해 얻은 스냅샷으로 한다(`room-client.tsx`의 `debouncedRefetch`).
+  그래서 이벤트가 유실되거나 위조돼도(공개 채널이라 이론상 가능) 최종 상태는 스냅샷이 정정한다.
+
+**refetch 트리거 4종**(`room-client.tsx`):
+
+| 트리거 | 조건 |
+|---|---|
+| 이벤트 수신 | 모든 broadcast 이벤트 → 250ms 디바운스 후 refetch |
+| Presence sync | 참가자 입장/이탈 감지 시 즉시 디바운스 refetch |
+| 구독 성공 직후 | `channel.subscribe` 콜백에서 즉시 refetch(재연결 공백 복원) |
+| 폴링 | 탭이 visible일 때 20초 간격 `setInterval` |
+| 가시성 복귀 | `visibilitychange` 이벤트에서 탭이 다시 보이면 즉시 refetch |
+
+payload 검증은 `events.ts`의 `parseEvent()` — envelope(`v`/`id`/`roomId`/`actorId`/`at`) +
+이벤트별 zod 스키마를 한 번에 검증하고, 실패하면 조용히 버린다(상태 미반영, 스냅샷 경로로 복구).
+
+`realtime.messages` RLS 정책은 마이그레이션에 존재하지만 클라이언트가 `private: true`로 구독하지
+않는 한 적용되지 않는다 — 현재 미사용 상태다. 이걸 켜는 것은 Open Questions 항목.
+
+### 쓰기 경로
 
 ```
 1. 사용자 탭
-2. 로컬 상태 즉시 반영 (optimistic)
-3. Broadcast 로 방에 액션 전파  ← 화면 동기화는 여기서 끝
-4. Server Action 으로 서버 검증 + Postgres 커밋 (권한·불변식·엔진 판정)
-5. 서버가 확정 이벤트를 Broadcast 로 되쏨 → 클라이언트 상태를 서버 값으로 정합
+2. Server Action 호출 — 권한 검사, 도메인 엔진 판정, DB 커밋 (칩 관련은 방 단위
+   pg_advisory_xact_lock 으로 동시 갱신 직렬화)
+3. 성공 응답을 받은 클라이언트가 sendRoomEvent() 로 방에 브로드캐스트
+4. 다른 클라이언트는 이벤트를 힌트로 debouncedRefetch() → refreshRoom() 스냅샷으로 정합
 ```
 
-3번이 체감 속도를, 4~5번이 정확성을 담당한다. 불일치가 생기면 **항상 서버 값이 이긴다.**
-멱등키(`action_id` UUID)를 클라이언트가 생성해 중복 전송·재연결 재전송을 흡수한다.
+Vercel 배포를 전제로 했던 "로컬 optimistic 반영 → 브로드캐스트 → 서버 확정" 3~5단계 설계는
+폐기됐다. 지금은 서버 확정이 끝난 뒤에야 이벤트가 나간다 — 화면 반응은 각 클라이언트의 자체
+Server Action 응답으로, 다른 참가자 화면 동기화는 이벤트+스냅샷으로 나눠 처리한다.
+
+베팅 멱등키는 클라이언트가 생성한 UUID를 PK로 써서 중복 제출·재전송을 흡수한다
+(`src/features/betting/actions.ts`).
 
 ### 모듈 경계
 
@@ -107,105 +168,121 @@ src/features/<domain>/       도메인별 폴더가 경계
   ├ types.ts                 도메인 타입 (외부 의존 없음)
   ├ <engine>.ts              순수 함수. I/O 금지
   ├ *.test.ts                엔진 단위 테스트
-  ├ actions.ts               Server Actions (권한 검사 + 영속화)
+  ├ actions.ts / queries.ts  Server Actions (권한 검사 + 영속화 + refetch용 쿼리)
   └ components/              해당 도메인 전용 UI
 ```
 
+현재 도메인: `hwatu`(카드 모델, 최하위 공용), `seotda`(끗/족보 엔진), `gostop`(점수 엔진),
+`game`(방·세션·라운드, room-code 발급, 컴포넌트 다수), `betting`(베팅 액션), `budget`(예산),
+`ranking`(랭킹 조회), `jokbo-advisor`(vision + 수동 피커), `auth`(세션 헬퍼).
+
 규칙:
 
-- `features/hwatu` 는 최하위 공용 모듈. 다른 feature 를 import 하지 않는다.
-- `features/seotda`, `features/gostop` 은 `hwatu` 만 의존한다. 서로 의존 금지.
-- 엔진(순수 함수)은 `lib/`, `app/`, DB, fetch 를 import 하지 않는다. 테스트 가능성이 이 규칙의 이유다.
-- DB 접근은 `lib/db` 와 각 도메인 `actions.ts` 에서만 한다. 컴포넌트에서 직접 쿼리 금지.
+- `features/hwatu`는 다른 feature를 import하지 않는다.
+- `features/seotda`, `features/gostop`은 `hwatu`만 의존한다. 서로 의존 금지.
+- 엔진(순수 함수)은 `lib/`, `app/`, DB, fetch를 import하지 않는다.
+- DB 접근은 `lib/db`와 각 도메인 `actions.ts`/`queries.ts`에서만 한다. 컴포넌트에서 직접
+  쿼리 금지.
+- `lib/auth-config.ts`(edge-safe)와 `lib/auth.ts`(DB 포함)는 분리 유지 — 미들웨어는 전자만
+  import한다.
 
 ### 기술 선택 요약
 
 | 레이어 | 선택 | 근거 |
 |--------|------|------|
-| 앱 프레임워크 | Next.js 15 App Router | SSR로 초기 방 상태를 즉시 그림. Server Actions로 별도 API 계층 생략 |
-| 언어 | TypeScript strict + `noUncheckedIndexedAccess` | 카드 배열 인덱싱이 많아 undefined 누락이 실제 버그 원인이 됨 |
-| 실시간 | Supabase Realtime Broadcast/Presence | 전용 서버 불필요, 저지연, RLS 연동 |
-| DB 접근 | Drizzle ORM + postgres-js | 스키마를 타입 소스로. 마이그레이션 추적 가능 |
-| 인증 | Auth.js v5 + Authentik OIDC | 사용자 기존 IdP 재사용, SSO 일원화 |
+| 앱 프레임워크 | Next.js 15 App Router, `output: 'standalone'` | SSR로 초기 방 상태를 즉시 그림. standalone 산출물을 docker 이미지에 그대로 담는다 |
+| 언어 | TypeScript strict | 카드 배열 인덱싱이 많아 undefined 누락이 실제 버그 원인이 됨 |
+| 실시간 | Supabase Realtime Broadcast(공개 채널) + Presence | 전용 서버 불필요, 저지연. 인증 연동은 안 함 — obscurity + 스냅샷 재검증으로 대체 |
+| DB 접근 | Drizzle ORM + postgres-js, 전용 롤(bypassrls) | 스키마를 타입 소스로. service role key/JWT 브리지 없이 커넥션 문자열 하나로 통제 |
+| 인증 | Auth.js v5, Authentik 선택적 + 게스트 로그인 | Authentik 미등록 상태에서도 개발·현장 운영 가능 |
 | 검증 | zod | realtime payload·env·폼 입력 단일 검증 수단 |
-| 스타일 | Tailwind CSS v4 | 모바일 우선 레이아웃 반복 작업 축소 |
-| 테스트 | Vitest(단위) + Playwright(E2E) | 엔진은 단위, 다중 기기 동기화는 E2E |
-| Vision | Anthropic Claude `claude-sonnet-5` | 화투 패 인식을 별도 모델 학습 없이 처리 |
+| 배포 | Docker, `kanduit-lab/docker-deploy-control-hub` v2 | 사용자 소유 self-hosted 인프라. Vercel 미사용 |
+| Vision | Anthropic Claude(`JOKBO_VISION_MODEL`, 기본 `claude-sonnet-5`) | 화투 패 인식을 별도 모델 학습 없이 처리 |
 
 ## Alternatives Considered
 
 ### A. 자체 Node + Socket.IO 서버
 
-- 장점: 프로토콜 완전 제어, 서버 권위 상태머신을 한곳에 둘 수 있음, 벤더 종속 없음.
-- 단점: **상시 켜둔 stateful 호스트가 필요**(Railway/Fly/Render). Vercel 단독 배포 불가.
-  운영·모니터링·재기동 부담이 이 프로젝트 규모에 비해 과하다.
-- 기각 사유: "전용 서버 없음"이 하드 제약.
+- 기각 사유: docker 인프라로도 stateful WebSocket 서버를 별도로 유지하는 비용이 Supabase
+  Realtime 재사용보다 크다. 규칙 판정은 이미 Server Action에 있어 실익이 없다.
 
-### B. Next.js 단독 + SSE / 폴링
+### B. `realtime.messages` RLS + `private: true` 채널
 
-- 장점: 의존성 최소, 인프라 추가 0.
-- 단점: 양방향이 아니라 액션 업로드는 별도 HTTP. 폴링은 지연·비용이 같이 오른다.
-  Presence(누가 접속 중)를 직접 구현해야 한다.
-- 기각 사유: 베팅 UX의 체감 속도 목표(300ms)를 안정적으로 못 맞춘다.
+- 애초 설계(구 버전 문서)였으나 구현하지 않았다. 채널 구독 시 RLS 평가 비용과 Authentik/게스트
+  로그인이 뒤섞인 신원 모델을 Supabase 세션에 연결하는 작업이 필요해 뒤로 미뤘다.
+- 대신 공개 채널 + UUID 토픽 난독화 + 클라이언트 zod 검증 + 서버 스냅샷 재검증으로 방어한다.
+  민감 데이터(칩 금액 등)가 이벤트 payload에 실려 나가는 게 이 대안의 실질적 노출면이다 —
+  `03-realtime-protocol.md`에서 payload 최소화 원칙을 다룬다.
 
-### C. Supabase Postgres Changes 로 전체 동기화
+### C. Supabase Postgres Changes로 전체 동기화
 
-- 장점: 상태가 DB 하나로 수렴, 클라이언트 로직 단순.
-- 단점: 모든 액션이 DB 왕복 + WAL 복제를 타서 지연이 붙고, 변경 행마다 구독자별 권한 평가 비용.
-- 기각 사유: 지연. 단 **재접속 복원·랭킹 갱신** 같은 비휘발성 경로에는 부분 채택.
+- 기각 사유: 변경 행마다 구독자별 권한 평가 비용, WAL 복제 지연. 재접속 복원은 이미 Postgres
+  스냅샷 refetch로 대체하고 있어 CDC가 추가 이점을 주지 않는다.
 
-### D. 인증을 Supabase Auth 로 통일
+### D. Vercel + service role key
 
-- 장점: RLS와 JWT가 기본 연동돼 구성이 가장 단순.
-- 단점: 사용자가 운영 중인 Authentik과 신원이 이원화된다. 범용 OIDC 연동은 1급 지원이 아니다.
-- 기각 사유: SSO 일원화 우선. 단 **Authentik을 못 쓰는 환경의 대체 경로**로 문서에 남긴다
-  (`07-auth-and-security.md`).
+- 기각 사유: 실제로는 Vercel을 쓰지 않는다(사용자 self-hosted 인프라 사용). service role key도
+  쓰지 않는다 — 전용 앱 롤(`kkeutbal_app`, bypassrls)로 대체해 키 하나를 덜 관리한다.
 
 ## Data / API / Permission Changes
 
-- 신규 스키마 전체를 생성한다. 테이블·인덱스·관계는 `02-data-model.md`가 소유한다.
-- RLS는 "방 참가자만 그 방 데이터 접근" 원칙으로 전 테이블에 적용한다.
-- `realtime.messages` RLS로 채널 구독·발행 권한을 제어한다.
-- 외부 공개 REST API는 만들지 않는다. 클라이언트 진입점은 Server Actions와 Realtime 채널뿐이다.
+- 스키마 소유: `02-data-model.md` (drizzle `drizzle/schema.ts`가 source of truth, SQL은
+  `drizzle/migrations/` + `supabase/migrations/`).
+- RLS는 `anon`/`authenticated` 대상 방어층. 실질적 권한 판정은 Server Action.
+- `kkeutbal_app` 롤 권한(GRANT)은 `keep_alive_and_app_grants` 마이그레이션으로 적용됐으나 SQL
+  파일이 리포에 없다 — Migration And Rollout 및 Open Questions 참조.
+- 외부 공개 REST API는 없다. 클라이언트 진입점은 Server Actions, Realtime 공개 채널, Supabase
+  REST(anon key, `keep_alive` 테이블 ping 전용)뿐이다.
 
 ## Migration And Rollout
 
-초기 구축이라 데이터 마이그레이션이 없다. 롤아웃 순서:
+1. `pnpm db:generate` / `pnpm db:push`로 drizzle 스키마 반영.
+2. `supabase/migrations/0001_init_rls.sql` 적용 — RLS 정책.
+3. `keep_alive` 테이블 + `kkeutbal_app` GRANT를 마이그레이션 파일로 재작성해 리포에 커밋(현재
+   미비 — Open Questions).
+4. Authentik 실등록 시 `AUTH_AUTHENTIK_ID`/`_SECRET`/`_ISSUER`를 배포 환경에 주입하고
+   redirect URI 등록.
+5. `.deploy.yml` — `preview`/`staging`는 `enabled: false`(ENV_FILE_BASE64 시크릿 구성 전).
+   `production`은 `v*` 안정 태그 push 시 `.github/workflows/deploy.yml`이
+   `kanduit-lab/docker-deploy-control-hub@v2`의 `ci-reusable.yml`/`cd-reusable.yml`을 호출해
+   빌드·배포한다. 도메인 `kkeutbal.kanduit.app`, health check `/api/health`.
+6. `.github/workflows/keep-alive.yml`이 6시간 간격으로 `keep_alive` 테이블에 REST insert/delete를
+   보내 Supabase 무료 티어 7일 pause를 막는다. 시크릿 `SUPABASE_URL`/`SUPABASE_ANON_KEY` 등록됨.
+7. 실제 MT 전에 2대 이상 기기로 리허설 1회 — 동기화·재접속·정산 확인.
 
-1. `drizzle-kit push` 로 테이블 생성 (`pnpm db:push`).
-2. `supabase/migrations/0001_init.sql` 적용 — RLS 정책, realtime 발행 설정.
-3. Authentik에 OIDC 애플리케이션 등록 후 redirect URI 등록.
-4. Vercel 환경변수 주입 후 프리뷰 배포.
-5. 실제 MT 전에 **2대 이상 기기로 리허설 1회** — 동기화·재접속·정산 확인.
-
-롤백: 앱은 Vercel 이전 배포로 즉시 되돌린다. 스키마는 초기 단계이므로 파괴적 변경 시
-`drizzle-kit generate` 로 down 경로를 명시적으로 만든다.
+롤백: 이전 docker 이미지 태그로 재배포(`docker-deploy-control-hub` 워크플로 기준). 스키마는
+초기 단계이므로 파괴적 변경 시 `drizzle-kit generate`로 down 경로를 명시적으로 만든다.
 
 ## Verification Plan
 
 | 대상 | 방법 |
 |------|------|
-| 게임 엔진 정확성 | Vitest 단위 테스트. 섯다는 20장 조합 전수 대조 |
-| 칩 보존 불변식 | 세션 정산 시 순손익 합계 0 검증 (단위 + E2E) |
-| 실시간 지연 | 2개 브라우저 컨텍스트에서 액션→반영 타임스탬프 측정 (Playwright) |
-| 재접속 복원 | 소켓 강제 종료 후 상태 일치 비교 (E2E) |
-| 권한 격리 | 비참가자 토큰으로 방 데이터 조회 시도 → 0행 확인 |
+| 게임 엔진 정확성 | Vitest 단위 테스트(`*.test.ts`). 섯다는 20장 조합 대조 |
+| 칩 보존 불변식 | `chip_ledger` 기반 잔액 = delta 합. 세션 정산 시 순손익 합계 0 검증 |
+| 실시간 지연 | 2개 브라우저 컨텍스트에서 액션→반영 타임스탬프 측정(Playwright) — 현재 자동화 스위트 없음 |
+| 재접속 복원 | 소켓 강제 종료 후 `refreshRoom` 스냅샷 일치 확인 |
+| 권한 격리 | 비참가자 세션으로 Server Action 호출 시 거부 확인(RLS는 anon 직접 조회 차단만 검증) |
 | 타입·린트 | `pnpm typecheck`, `pnpm lint` |
+| 빌드 | `pnpm build` — 사용자가 직접 실행(에이전트는 코드 수정·오류 분석만) |
 
 ## Risks And Mitigations
 
 | 리스크 | 영향 | 완화 |
 |--------|------|------|
-| MT 현장 Wi-Fi/LTE 불안정 | 액션 유실·중복 | 멱등키 + 로컬 큐 재전송, 서버 값 우선 정합 |
-| Broadcast 메시지 유실(전달 보장 없음) | 화면 불일치 | 주기적 상태 스냅샷 브로드캐스트 + 재접속 시 Postgres 전량 복원 |
-| Supabase 무료 티어 동시 연결/메시지 한도 | 접속 실패 | 사용량 사전 확인, 방 인원 상한(10) 적용 |
-| Authentik 다운 시 로그인 불가 | 앱 진입 불가 | 세션 수명을 이벤트 길이 이상으로 설정, 대체 인증 경로 문서화 |
-| Vision 오인식으로 잘못된 족보 안내 | 판 분쟁 | 인식은 보조. 결과 수정 필수 UI, 신뢰도 표기 |
-| 서버리스 콜드스타트 | 첫 액션 지연 | 화면 동기화는 Broadcast로 선행. 콜드스타트는 확정 경로에만 영향 |
+| 공개 Realtime 채널 — 인증 없이 누구나 `roomId`만 알면 구독·발행 가능 | 칩 금액 등 payload 노출, 위조 이벤트 주입 | UUID 토픽 난독화, zod 검증 실패 시 폐기, 진실은 항상 Server Action 재검증 스냅샷 |
+| `kkeutbal_app`이 bypassrls — Server Action 권한 검사 누락 시 RLS 방어 없음 | 방 데이터 교차 노출 | 모든 쓰기 경로가 Server Action을 거치도록 코드 리뷰로 강제. 컴포넌트 직접 쿼리 금지 규칙 |
+| 게스트 로그인이 이름만으로 계정 매핑 | 사칭, 계정 탈취 | MT 현장 한정 운용 전제. 프로덕션 상시 노출 시 `AUTH_DEV_LOGIN` 반드시 false |
+| `keep_alive_and_app_grants` 마이그레이션 SQL이 리포에 미보존 | 재현 불가, 신규 환경 구축 시 수동 추정 필요 | Migration And Rollout 3번 — SQL 파일로 재작성해 커밋 |
+| MT 현장 Wi-Fi/LTE 불안정 | 액션 유실·중복 | 멱등키(betting), 폴링+visibilitychange 재동기화, 서버 스냅샷 우선 |
+| Broadcast 메시지 유실(전달 보장 없음) | 화면 불일치 | 이벤트를 힌트로만 쓰고 20초 폴링 + 250ms 디바운스 refetch로 항상 정정 |
+| Supabase 무료 티어 pause(7일 비활성) | 서비스 중단 | `keep-alive.yml` 6시간 주기 ping |
+| Vision 오인식으로 잘못된 족보 안내 | 판 분쟁 | 인식은 보조. 수동 피커 폴백, 결과 수정 UI 필수 |
 
 ## Open Questions
 
-- [ ] Auth.js 세션을 Supabase RLS용 JWT로 브리지하는 방식 확정 필요 — 서버에서 단명 JWT 발급 vs
-      Supabase third-party auth 설정. `07-auth-and-security.md`에서 결론 내고 여기에 링크.
-- [ ] Broadcast 메시지 보존(`realtime.messages` 적재) 사용 여부 — 감사 로그를 Postgres 별도
-      테이블로 이중화할지 결정.
+- [ ] `keep_alive_and_app_grants` 마이그레이션을 `supabase/migrations/`에 SQL 파일로
+      역커밋할지 — 현재 Supabase MCP 이력에만 존재.
+- [ ] `realtime.messages` RLS(`private: true` 채널)를 실제로 켤지, 아니면 공개 채널 +
+      스냅샷 재검증 모델을 정식 채택으로 확정할지. 후자면 마이그레이션의 미사용 정책을 정리.
+- [ ] `preview`/`staging` 배포(`enabled: false`)를 켤 시점과 `ENV_FILE_BASE64` 시크릿 구성 주체.
+- [ ] Authentik 실등록 일정 — 그때까지 게스트 로그인이 유일한 인증 경로.
