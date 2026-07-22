@@ -1,18 +1,24 @@
+'use client'
+
 import { createBrowserClient } from '@supabase/ssr'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { clientEnv } from '../env'
 
 /**
- * 브라우저용 Supabase 클라이언트. Realtime 구독 전용에 가깝다.
+ * 브라우저용 Supabase 클라이언트 — Realtime(Broadcast·Presence) 전용.
  *
- * anon 키만 쓰며, RLS 판정에 필요한 신원은 `accessToken` 으로 넘긴 단명 JWT 가 제공한다
- * (docs/07-auth-and-security.md "Supabase RLS 브리지").
- *
- * @param accessToken 서버가 발급한 Supabase JWT. 만료 전 갱신 책임은 호출부에 있다.
+ * anon 키 + 공개 채널을 쓴다. 채널 토픽은 UUID 방 id 라 추측이 어렵고,
+ * 브로드캐스트 payload 에는 화면 갱신 힌트만 담는다 — 진실은 항상 서버 스냅샷이다.
+ * DB 조회는 이 클라이언트로 하지 않는다.
  */
-export function createClient(accessToken: () => Promise<string>) {
-  const env = clientEnv()
 
-  return createBrowserClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
-    accessToken,
+let cached: SupabaseClient | null = null
+
+export function getSupabaseBrowser(): SupabaseClient {
+  if (cached) return cached
+  const env = clientEnv()
+  cached = createBrowserClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
   })
+  return cached
 }

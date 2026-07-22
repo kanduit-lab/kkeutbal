@@ -1,22 +1,35 @@
 @import 'tailwindcss';
 
 /*
- * 어두운 펜션 조명에서 쓰는 앱이라 다크를 기본값으로 둔다 (docs/08-ui-ux.md).
- * 얇은 회색 텍스트는 쓰지 않는다 — 실사용 환경에서 안 보인다.
+ * 화투판 디자인 시스템.
+ * 초록 모포(담요) 위에 옻칠 패널·금박 칩·크림 카드가 올라가는 구성.
  */
 @theme {
-  --color-bg: #0b0b0f;
-  --color-surface: #16161d;
-  --color-text: #f2f2f5;
-  --color-muted: #a8a8b3;
-  --color-accent: #e5484d;
-  --color-win: #30a46c;
-  --color-warn: #f5a524;
+  /* 모포 (배경) */
+  --color-bg: #0c2b20;
+  --color-bg-deep: #071d15;
+  /* 옻칠 패널 */
+  --color-surface: #123527;
+  --color-surface-raised: #17402f;
+  /* 텍스트 */
+  --color-text: #f4efe2;
+  --color-muted: #9db8a8;
+  /* 화투 빨강 (홍단·뒷면) */
+  --color-accent: #d8433f;
+  /* 금박 (칩·팟) */
+  --color-gold: #e5b954;
+  /* 승리 */
+  --color-win: #4cae72;
+  --color-warn: #e5b954;
+  /* 카드 면 */
+  --color-card: #fbf3e3;
+
+  --font-display: 'Gungsuh', 'GungsuhChe', 'Nanum Myeongjo', 'Batang', 'AppleMyungjo', serif;
 }
 
 html,
 body {
-  background: var(--color-bg);
+  min-height: 100dvh;
   color: var(--color-text);
   -webkit-text-size-adjust: 100%;
 }
@@ -24,11 +37,71 @@ body {
 body {
   margin: 0;
   font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
     'Pretendard',
+    'Malgun Gothic',
+    'Apple SD Gothic Neo',
+    'Noto Sans KR',
+    system-ui,
     sans-serif;
-  /* 실시간 갱신이 잦은 화면이라 스크롤 튐을 줄인다. */
   overscroll-behavior-y: contain;
+  /* 모포 질감: 심도 그라디언트 + 미세 노이즈 */
+  background-color: var(--color-bg);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(120% 90% at 50% 0%, #14432f 0%, var(--color-bg) 55%, var(--color-bg-deep) 100%);
+  background-attachment: fixed;
+}
+
+/* 제목·족보명용 명조/궁서 계열 */
+.font-brush {
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+}
+
+/* 옻칠 패널: 미세한 금테 + 안쪽 광 */
+.lacquer {
+  background:
+    linear-gradient(160deg, rgb(255 255 255 / 0.04), transparent 40%),
+    var(--color-surface);
+  border: 1px solid rgb(229 185 84 / 0.14);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.05) inset,
+    0 10px 30px -18px rgb(0 0 0 / 0.8);
+}
+
+/* 금박 숫자 (팟·잔액 강조) */
+.gilt {
+  color: var(--color-gold);
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.45);
+}
+
+/* 등장 연출 */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rise-in {
+  animation: rise-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.rise-in-1 { animation-delay: 0.05s; }
+.rise-in-2 { animation-delay: 0.12s; }
+.rise-in-3 { animation-delay: 0.19s; }
+.rise-in-4 { animation-delay: 0.26s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rise-in,
+  .rise-in-1,
+  .rise-in-2,
+  .rise-in-3,
+  .rise-in-4 {
+    animation: none;
+  }
 }

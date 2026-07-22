@@ -17,7 +17,7 @@ import {
  * RLS 정책과 realtime 설정은 supabase/migrations/*.sql 이 소유한다 (여기 아님).
  */
 
-export const gameType = pgEnum('game_type', ['seotda', 'gostop'])
+export const gameType = pgEnum('game_type', ['seotda', 'gostop', 'poker'])
 export const roomStatus = pgEnum('room_status', ['waiting', 'playing', 'settled', 'closed'])
 export const inputMode = pgEnum('input_mode', ['trust', 'approval'])
 export const memberRole = pgEnum('member_role', ['host', 'dealer', 'player', 'observer'])

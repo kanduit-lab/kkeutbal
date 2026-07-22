@@ -4,21 +4,27 @@ import { z } from 'zod'
  * 환경변수 단일 검증 지점.
  *
  * 서버 전용 값과 클라이언트 노출 값을 스키마로 분리한다.
- * `NEXT_PUBLIC_` 접두사가 없는 값은 클라이언트 번들에 들어가면 안 된다
- * (docs/07-auth-and-security.md 보안 경계).
+ * `NEXT_PUBLIC_` 접두사가 없는 값은 클라이언트 번들에 들어가면 안 된다.
  */
 
 const serverSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
-  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
-  SUPABASE_JWT_SECRET: z.string().min(1),
+  /** 전용 앱 롤(bypassrls) 접속 문자열. 모든 DB 접근은 서버에서 drizzle 로만 한다. */
   DATABASE_URL: z.string().url(),
 
   AUTH_SECRET: z.string().min(1),
-  AUTH_AUTHENTIK_ID: z.string().min(1),
-  AUTH_AUTHENTIK_SECRET: z.string().min(1),
-  AUTH_AUTHENTIK_ISSUER: z.string().url(),
+  /**
+   * 개발용 게스트 로그인(이름만 입력). Authentik 미등록 환경 전용.
+   * 프로덕션에서 켜면 인증이 무력화되므로 절대 true 로 배포하지 않는다.
+   */
+  AUTH_DEV_LOGIN: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
+  AUTH_AUTHENTIK_ID: z.string().min(1).optional(),
+  AUTH_AUTHENTIK_SECRET: z.string().min(1).optional(),
+  AUTH_AUTHENTIK_ISSUER: z.string().url().optional(),
 
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   JOKBO_VISION_MODEL: z.string().default('claude-sonnet-5'),

@@ -3,9 +3,8 @@ import { z } from 'zod'
 /**
  * 실시간 이벤트 스키마.
  *
- * 규약은 docs/03-realtime-protocol.md 가 소유한다.
  * 수신 payload 는 신뢰 경계 밖이다 — 파싱에 실패하면 상태에 반영하지 않고 버린다.
- * 버려도 `state.snapshot` 경로로 복구되므로, 검증되지 않은 값을 반영하는 것보다 안전하다.
+ * 버려도 `state.snapshot` 경로로 복구된다.
  */
 
 export const PROTOCOL_VERSION = 1 as const
@@ -17,7 +16,7 @@ export function roomTopic(roomId: string): string {
 
 const uuid = z.string().uuid()
 
-/** 모든 이벤트 공통 봉투. `v` 덕분에 구버전 클라이언트가 조용히 오작동하지 않는다. */
+/** 모든 이벤트 공통 봉투. `v` 는 프로토콜 버전 — 값이 다르면 파싱이 실패한다. */
 export const envelopeSchema = z.object({
   v: z.literal(PROTOCOL_VERSION),
   id: uuid,
@@ -39,7 +38,7 @@ export const chipReasonSchema = z.enum([
   'settlement',
 ])
 
-/** 칩 금액은 정수만 허용한다 — 부동소수 반올림 오차 차단 (docs/02-data-model.md). */
+/** 칩 금액은 정수만 허용한다 — 부동소수 반올림 오차 차단. */
 const chipAmount = z.number().int().nonnegative()
 
 export const eventPayloads = {
