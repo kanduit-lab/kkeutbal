@@ -15,7 +15,7 @@ const ENTRIES: readonly GuideEntry[] = [
     href: '/guide/seotda',
     emoji: GAME_LABELS.seotda.emoji,
     title: GAME_LABELS.seotda.name,
-    description: '두 장으로 끗발을 겨루는 게임. 족보 서열과 광땡·특수패 정리',
+    description: '두 장으로 족보를 겨루는 게임. 족보 서열과 광땡·특수패 정리',
   },
   {
     href: '/guide/gostop',

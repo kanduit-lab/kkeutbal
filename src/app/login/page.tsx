@@ -39,9 +39,9 @@ export default async function LoginPage({
           끗발<span className="text-accent">.</span>
         </h1>
         <p className="mt-4 text-lg text-muted">
-          오늘 누가 제일 땄는지,
+          누가 얼마 땄는지,
           <br />
-          끝나면 여기 다 나옵니다.
+          끝까지 다 남습니다.
         </p>
       </section>
 

@@ -18,7 +18,7 @@ export default async function RankingPage() {
         </Link>
         <div>
           <h1 className="font-brush text-4xl font-black lg:text-5xl">누적 랭킹</h1>
-          <p className="text-xs text-muted">정산 완료된 세션만 집계</p>
+          <p className="text-xs text-muted">정산이 끝난 세션만 집계합니다</p>
         </div>
       </header>
 

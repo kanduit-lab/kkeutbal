@@ -46,7 +46,7 @@ export default function SeotdaGuidePage() {
         backLabel="가이드 목록으로"
         emoji="🎴"
         title="섯다"
-        description="두 장 받고 베팅해서 끗발을 겨루는 게임. 서열이 높은 쪽이 판돈을 가져가요"
+        description="두 장을 받고 베팅한 뒤 족보를 겨루는 게임. 서열이 높은 쪽이 판돈을 가져가요"
       />
 
       <div className="grid gap-6 lg:grid-cols-12">

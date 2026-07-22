@@ -197,7 +197,7 @@ export function RoomClient({
         <div className="flex items-center gap-1.5">
           {!connected ? <Badge tone="warn">연결 끊김</Badge> : null}
           <Badge tone={snapshot.currentRound ? 'win' : 'muted'}>
-            {snapshot.currentRound ? `${snapshot.currentRound.seq}판 진행` : '대기'}
+            {snapshot.currentRound ? `${snapshot.currentRound.seq}판 진행 중` : '대기'}
           </Badge>
         </div>
       </header>
@@ -211,7 +211,7 @@ export function RoomClient({
             </p>
             {snapshot.lastResult && !snapshot.currentRound ? (
               <p className="mt-2 text-xs text-muted lg:text-sm">
-                지난 판({snapshot.lastResult.seq}판):{' '}
+                지난 {snapshot.lastResult.seq}판:{' '}
                 {snapshot.members.find((m) => m.userId === snapshot.lastResult?.winnerId)
                   ?.displayName ?? '무효'}{' '}
                 +{snapshot.lastResult.pot.toLocaleString()}

@@ -102,7 +102,7 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
   try {
     return await db.transaction(async (tx) => {
       const [room] = await tx.select().from(rooms).where(eq(rooms.code, code)).limit(1)
-      if (!room) return fail('그 코드의 방이 없습니다')
+      if (!room) return fail('그 코드로 만든 방이 없습니다')
       if (room.status === 'settled' || room.status === 'closed') {
         return fail('이미 끝난 방입니다')
       }
@@ -153,7 +153,7 @@ export async function joinRoomAndGo(formData: FormData): Promise<void> {
 export async function refreshRoom(roomId: string): Promise<ActionResult<RoomSnapshot>> {
   const userId = await currentUserId()
   if (!userId) return fail('로그인이 필요합니다')
-  if (!z.string().uuid().safeParse(roomId).success) return fail('잘못된 방입니다')
+  if (!z.string().uuid().safeParse(roomId).success) return fail('방 정보가 올바르지 않습니다')
 
   const snapshot = await getRoomSnapshot(roomId)
   if (!snapshot) return fail('방을 찾을 수 없습니다')

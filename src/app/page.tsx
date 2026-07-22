@@ -26,7 +26,7 @@ export default async function HomePage({
             끗발<span className="text-accent">.</span>
           </h1>
           <p className="mt-2 text-muted">
-            {session.user.name ?? '플레이어'} 님, 오늘 끗발 좀 서나 봅시다
+            {session.user.name ?? '플레이어'} 님, 오늘도 좋은 패 받으세요
           </p>
         </div>
         <form
@@ -102,7 +102,7 @@ export default async function HomePage({
           {myRooms.length === 0 ? (
             <EmptyState
               title="아직 참여 중인 판이 없어요"
-              hint="새로 만들거나 코드를 받아서 들어와보세요"
+              hint="새로 만들거나 받은 코드로 들어오세요"
             />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">

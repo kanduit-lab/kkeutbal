@@ -119,8 +119,8 @@ export default function NewRoomPage() {
           </div>
           <p className="mt-1.5 text-xs text-muted">
             {inputMode === 'trust'
-              ? '입력하면 바로 반영. 친한 사이 기본값.'
-              : '딜러가 승인해야 반영. 처음 보는 사람 있을 때.'}
+              ? '입력하는 대로 바로 반영됩니다.'
+              : '딜러가 승인한 베팅만 반영됩니다.'}
           </p>
         </Field>
 

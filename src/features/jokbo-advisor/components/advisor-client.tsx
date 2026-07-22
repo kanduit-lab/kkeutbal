@@ -114,7 +114,7 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
           onRecognized={(ids, confidence) => {
             setSelected(new Set(ids.slice(0, maxSelect)))
             toast(
-              `카드 ${ids.length}장 인식 (정확도 ${(confidence * 100).toFixed(0)}%) — 잘못 짚었으면 직접 고치세요`,
+              `카드 ${ids.length}장을 인식했어요 (정확도 ${(confidence * 100).toFixed(0)}%). 틀린 카드는 직접 고쳐 주세요`,
               confidence >= 0.9 ? 'success' : 'info',
             )
           }}
@@ -205,7 +205,7 @@ function SeotdaResult({ cards }: { cards: readonly HwatuCard[] }) {
               <div className="bg-accent" style={{ width: `${result.stats.loseRate * 100}%` }} />
             </div>
             <p className="text-[11px] text-muted">
-              상대 1명이 남은 18장에서 받는 153가지 패와 전부 붙였을 때 기준
+              남은 18장으로 상대가 받을 수 있는 153가지 패와 모두 겨룬 결과입니다
             </p>
           </div>
         </>
@@ -306,13 +306,13 @@ function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
               족보 {stats.position}위 / 10
             </span>
             <span className="rounded-full bg-white/10 px-2.5 py-1 text-muted">
-              5장 뽑아 나올 확률 {formatProbability(stats.probability)}
+              5장을 뽑았을 때 나올 확률 {formatProbability(stats.probability)}
             </span>
           </div>
         </>
       ) : (
         <p className="pt-9 text-sm text-muted">
-          {cards.length < 5 ? `카드를 ${5 - cards.length}장 더 고르면 확인돼요` : '판정할 수 없는 조합입니다'}
+          {cards.length < 5 ? `카드를 ${5 - cards.length}장 더 고르면 족보가 나와요` : '판정할 수 없는 조합입니다'}
         </p>
       )}
     </Panel>
@@ -382,7 +382,7 @@ function VisionCapture({
         return
       }
       if (result.data.cardIds.length === 0) {
-        toast('카드를 알아보지 못했어요. 더 밝은 곳에서 다시 찍어보세요', 'error')
+        toast('카드를 알아보지 못했어요. 더 밝은 곳에서 다시 찍어 주세요', 'error')
         return
       }
       onRecognized(result.data.cardIds, result.data.confidence)
