@@ -1,0 +1,52 @@
+# ============================================
+# Supabase Keep-Alive
+#
+# 무료 티어 프로젝트가 7일간 요청이 없으면 pause되는 것을 방지한다.
+# travisvn/supabase-inactive-fix 메커니즘의 자체 구현:
+#   1. keep_alive 테이블에 행 삽입 (REST 요청 = 활동으로 집계)
+#   2. 7일 지난 행 삭제로 테이블 크기 유지
+#
+# 필요 시크릿:
+#   SUPABASE_URL      — https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY — anon (public) API key
+# ============================================
+
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: '0 0,6,12,18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Insert keep-alive row
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          curl --fail --silent --show-error -X POST \
+            "$SUPABASE_URL/rest/v1/keep_alive" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"note":"keep-alive ping"}'
+          echo "keep-alive row inserted"
+
+      - name: Delete rows older than 7 days
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          CUTOFF=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          curl --fail --silent --show-error -X DELETE \
+            "$SUPABASE_URL/rest/v1/keep_alive?created_at=lt.$CUTOFF" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
+          echo "old rows before $CUTOFF deleted"

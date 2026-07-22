@@ -1,0 +1,33 @@
+# Version control
+.git
+.gitignore
+
+# Environment files (except production local)
+.env
+.env.*
+!.env.example
+!.env.production.local
+
+# Documentation
+*.md
+
+# IDE / Editor
+.vscode
+.idea
+
+# Claude Code
+.claude
+.mcp.json
+
+# Blueprint files (not needed in container)
+dockerfiles/
+templates/
+scripts/
+
+# Node.js
+node_modules
+.next
+
+# Java
+.gradle
+build/

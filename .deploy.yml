@@ -1,0 +1,36 @@
+app_name: kkeutbal
+domain: kkeutbal.kanduit.app
+framework: nextjs
+health_path: "/api/health"
+
+ci:
+  trivy_scan: true
+  runner_labels_arm64: '["self-hosted", "ci", "arm64"]'
+
+cd:
+  deploy_env: production
+  runner_labels: '["self-hosted", "cd", "prod"]'
+  drain_timeout: 5
+  notifications: true
+  verify_deployment: true
+  # memory_limit: 512m
+  # cpu_limit: 0.5
+  # health_timeout: 60          # seconds to wait for health check (default: 60)
+  # post_sidecar: ""            # shell command after sidecars start, e.g. npx drizzle-kit push
+  # network: auto               # docker network to join (default: auto)
+  # network_strict: false       # fail if network is not found (default: false)
+
+preview:
+  # ENV_FILE_BASE64 시크릿 구성 후 true로 전환
+  enabled: false
+  max: 3
+  public: true
+  # Previews deploy automatically on PR open/update, cleanup on PR close
+
+staging:
+  # ENV_FILE_BASE64 시크릿 구성 후 true로 전환
+  enabled: false
+  domain: kkeutbal-{channel}.kanduit.app
+  branches: [develop]
+
+# services: postgresql 사이드카 없음 — DB는 Supabase 외부
