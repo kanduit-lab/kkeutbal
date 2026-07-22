@@ -1,9 +1,6 @@
 import type { HwatuCard } from '../hwatu/types'
 
-/**
- * 섯다 족보 타입 · 서열 상수.
- * 규칙 근거는 docs/04-game-engines.md "섯다 엔진" 절.
- */
+/** 섯다 족보 타입 · 서열 상수. */
 
 export type SeotdaCategory = 'gwangttaeng' | 'ttaeng' | 'special' | 'kkeut'
 
@@ -38,12 +35,7 @@ export const SEOTDA_RULES_STANDARD: SeotdaRules = Object.freeze({
   tieBreak: 'replay',
 })
 
-/**
- * 서열 상수.
- *
- * 구간을 띄워 둔 이유: 나중에 지역 룰로 족보가 하나 끼어들어도 기존 값을 재계산하지 않아도 된다.
- * 값 자체에 의미는 없고 대소 관계만 계약이다.
- */
+/** 서열 상수. 값 자체에 의미는 없고 대소 관계만 계약이다. */
 export const SEOTDA_RANK = Object.freeze({
   /** 광땡 — 38 > 18 > 13 */
   GWANGTTAENG_38: 1000,

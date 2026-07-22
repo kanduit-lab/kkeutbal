@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HWATU_DECK, SEOTDA_DECK, cardsOfMonth, findCard } from './cards'
 
-/**
- * 카드 모델은 다른 모든 엔진의 전제다. 여기가 틀리면 섯다·고스톱 판정이 전부 틀린다.
- * 그래서 구성 불변식을 데이터 레벨에서 고정한다.
- */
 describe('화투 덱 구성', () => {
   it('총 48장이다', () => {
     expect(HWATU_DECK).toHaveLength(48)

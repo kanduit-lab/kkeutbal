@@ -1,11 +1,6 @@
 import type { CardKind, HwatuCard, Month, TtiKind } from './types'
 
-/**
- * 화투 48장 = 12개월 × 4장.
- *
- * 구성 근거는 docs/04-game-engines.md 의 "광 · 고도리 · 단 기준" 표.
- * 월별 명세를 선언하고 덱을 파생시킨다 — 48줄을 손으로 나열하면 중복 오타가 나기 쉽다.
- */
+/** 화투 48장 = 12개월 × 4장. */
 
 interface CardSpec {
   readonly kind: CardKind

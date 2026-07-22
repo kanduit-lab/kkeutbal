@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { SEOTDA_RANK, SEOTDA_SPECIALS, SEOTDA_TRAIT_COMBOS } from './types'
 
 /**
- * Phase 1 (docs/09-roadmap.md) 착수 전 테스트 계약.
+ * Phase 1 착수 전 테스트 계약.
  *
  * `it.todo` 항목은 구현과 함께 채운다. 190조합 전수 기대값은 사람이 작성한
  * `seotda.fixtures.ts` 를 소스로 삼는다 — 엔진 출력으로 생성하지 않는다.

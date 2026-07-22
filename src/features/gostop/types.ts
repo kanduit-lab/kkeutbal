@@ -1,9 +1,6 @@
 import type { HwatuCard } from '../hwatu/types'
 
-/**
- * 고스톱 점수 타입 · 룰 프리셋.
- * 규칙 근거는 docs/04-game-engines.md "고스톱 엔진" 절.
- */
+/** 고스톱 점수 타입 · 룰 프리셋. */
 
 /** 획득 패를 분류별로 집계한 중간 산출물. */
 export interface GostopCapture {
@@ -38,7 +35,7 @@ export interface GostopScore {
 
 /**
  * 지역 룰 편차를 담는 프리셋. 엔진은 이 값을 직접 알지 않고 인자로 받는다.
- * 방 생성 시 선택되어 `rooms.rule_preset` jsonb 로 저장된다 (docs/02-data-model.md).
+ * 방 생성 시 선택되어 `rooms.rule_preset` jsonb 로 저장된다.
  */
 export interface GostopRules {
   /** 1고·2고 가산점. 인덱스 0 = 1고. */
