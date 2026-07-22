@@ -1,0 +1,34 @@
+@import 'tailwindcss';
+
+/*
+ * 어두운 펜션 조명에서 쓰는 앱이라 다크를 기본값으로 둔다 (docs/08-ui-ux.md).
+ * 얇은 회색 텍스트는 쓰지 않는다 — 실사용 환경에서 안 보인다.
+ */
+@theme {
+  --color-bg: #0b0b0f;
+  --color-surface: #16161d;
+  --color-text: #f2f2f5;
+  --color-muted: #a8a8b3;
+  --color-accent: #e5484d;
+  --color-win: #30a46c;
+  --color-warn: #f5a524;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    'Pretendard',
+    sans-serif;
+  /* 실시간 갱신이 잦은 화면이라 스크롤 튐을 줄인다. */
+  overscroll-behavior-y: contain;
+}
