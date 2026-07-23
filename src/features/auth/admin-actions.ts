@@ -1,12 +1,14 @@
 'use server'
 
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
+import { serverEnv } from '@/lib/env'
 import { lockRoom } from '../game/action-helpers'
 import { currentUserId } from './session'
 import { isAdminUser } from './roles'
+import { generateRegistrationCode, registrationCodeHash } from './registration-codes'
 
 /** 관리자 전용 액션 — 게스트 토큰 발급·회수, 관리자 지정, 방 강제 정산. */
 
@@ -30,6 +32,42 @@ const createTokenSchema = z.object({
   /** 만료까지의 시간. 0 이면 무기한. */
   expiresInHours: z.number().int().min(0).max(24 * 90),
 })
+
+const createRegistrationCodeSchema = createTokenSchema
+
+export async function createRegistrationCode(
+  input: z.infer<typeof createRegistrationCodeSchema>,
+): Promise<ActionResult<{ code: string }>> {
+  const adminId = await requireAdmin()
+  if (!adminId) return fail('관리자만 발급할 수 있습니다')
+
+  const parsed = createRegistrationCodeSchema.safeParse(input)
+  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  const { label, expiresInHours } = parsed.data
+  const expiresAt =
+    expiresInHours > 0 ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000) : null
+  const secret = serverEnv().AUTH_SECRET
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = generateRegistrationCode()
+    try {
+      await db.insert(schema.registrationCodes).values({
+        codeHash: registrationCodeHash(code, secret),
+        label,
+        createdBy: adminId,
+        expiresAt,
+      })
+      return ok({ code })
+    } catch (error) {
+      const isUnique =
+        Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505')
+      if (isUnique) continue
+      console.error('createRegistrationCode failed:', error)
+      return fail('가입코드 발급에 실패했습니다')
+    }
+  }
+  return fail('가입코드 생성에 실패했습니다. 다시 시도하세요')
+}
 
 export async function createGuestToken(
   input: z.infer<typeof createTokenSchema>,
@@ -85,6 +123,30 @@ export async function revokeGuestToken(
   }
 }
 
+const revokeRegistrationCodeSchema = z.object({ codeId: z.string().uuid() })
+
+export async function revokeRegistrationCode(
+  input: z.infer<typeof revokeRegistrationCodeSchema>,
+): Promise<ActionResult<{ codeId: string }>> {
+  const adminId = await requireAdmin()
+  if (!adminId) return fail('관리자만 회수할 수 있습니다')
+  const parsed = revokeRegistrationCodeSchema.safeParse(input)
+  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+
+  try {
+    const [updated] = await db
+      .update(schema.registrationCodes)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(schema.registrationCodes.id, parsed.data.codeId), isNull(schema.registrationCodes.revokedAt)))
+      .returning({ id: schema.registrationCodes.id })
+    if (!updated) return fail('가입코드를 찾을 수 없거나 이미 회수했습니다')
+    return ok({ codeId: updated.id })
+  } catch (error) {
+    console.error('revokeRegistrationCode failed:', error)
+    return fail('가입코드 회수에 실패했습니다')
+  }
+}
+
 const setAdminSchema = z.object({
   targetUserId: z.string().uuid(),
   isAdmin: z.boolean(),
@@ -105,12 +167,22 @@ export async function setAdmin(
   }
 
   try {
+    const [target] = await db
+      .select({ id: schema.users.id, authentikSub: schema.users.authentikSub })
+      .from(schema.users)
+      .where(eq(schema.users.id, targetUserId))
+      .limit(1)
+    if (!target) return fail('사용자를 찾을 수 없습니다')
+    if (target.authentikSub.startsWith('guest:')) {
+      return fail('게스트 계정은 관리자로 지정할 수 없습니다')
+    }
+
     const [updated] = await db
       .update(schema.users)
       .set({ isAdmin })
       .where(eq(schema.users.id, targetUserId))
       .returning({ id: schema.users.id })
-    if (!updated) return fail('사용자를 찾을 수 없습니다')
+    if (!updated) return fail('권한을 변경하지 못했습니다')
     return ok({ targetUserId, isAdmin })
   } catch (error) {
     console.error('setAdmin failed:', error)

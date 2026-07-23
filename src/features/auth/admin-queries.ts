@@ -14,6 +14,39 @@ export interface GuestTokenView {
   readonly revokedAt: string | null
 }
 
+export interface RegistrationCodeView {
+  readonly id: string
+  readonly label: string
+  readonly createdByName: string
+  readonly createdAt: string
+  readonly expiresAt: string | null
+  readonly revokedAt: string | null
+}
+
+/** 가입코드 원문은 저장하지 않으므로 목록에는 운영 메타데이터만 표시한다. */
+export async function listRegistrationCodes(): Promise<RegistrationCodeView[]> {
+  const rows = await db
+    .select({
+      id: schema.registrationCodes.id,
+      label: schema.registrationCodes.label,
+      createdByName: schema.users.displayName,
+      createdAt: schema.registrationCodes.createdAt,
+      expiresAt: schema.registrationCodes.expiresAt,
+      revokedAt: schema.registrationCodes.revokedAt,
+    })
+    .from(schema.registrationCodes)
+    .innerJoin(schema.users, eq(schema.users.id, schema.registrationCodes.createdBy))
+    .orderBy(desc(schema.registrationCodes.createdAt))
+    .limit(100)
+
+  return rows.map((row) => ({
+    ...row,
+    createdAt: row.createdAt.toISOString(),
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    revokedAt: row.revokedAt?.toISOString() ?? null,
+  }))
+}
+
 export async function listGuestTokens(): Promise<GuestTokenView[]> {
   const rows = await db
     .select({
@@ -100,6 +133,7 @@ export interface AdminUserView {
   readonly phoneMasked: string | null
   readonly isAdmin: boolean
   readonly isGuest: boolean
+  readonly authType: 'internal' | 'sso' | 'guest'
   readonly createdAt: string
 }
 
@@ -124,7 +158,12 @@ export async function listUsers(): Promise<AdminUserView[]> {
     username: row.username,
     phoneMasked: row.phone ? `****${row.phone.slice(-4)}` : null,
     isAdmin: row.isAdmin,
-    isGuest: row.authentikSub.startsWith('guest:') || row.authentikSub.startsWith('dev:'),
+    isGuest: row.authentikSub.startsWith('guest:'),
+    authType: row.authentikSub.startsWith('guest:')
+      ? 'guest'
+      : row.username
+        ? 'internal'
+        : 'sso',
     createdAt: row.createdAt.toISOString(),
   }))
 }

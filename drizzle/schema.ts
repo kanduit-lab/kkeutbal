@@ -77,6 +77,27 @@ export const guestTokens = pgTable('guest_tokens', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+/**
+ * 내부 계정 회원가입 코드. 원문은 발급 직후 한 번만 보여주고, DB에는 AUTH_SECRET 기반 HMAC만 저장한다.
+ * 관리자는 만료·회수할 수 있으며, 같은 코드를 다시 조회할 수 없다.
+ */
+export const registrationCodes = pgTable(
+  'registration_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    codeHash: text('code_hash').notNull().unique(),
+    /** 발급 목적을 식별하는 운영 메모. */
+    label: text('label').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('registration_codes_expires_at_idx').on(table.expiresAt)],
+)
+
 export const rooms = pgTable(
   'rooms',
   {

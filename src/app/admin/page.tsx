@@ -2,7 +2,13 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { isAdminUser } from '@/features/auth/roles'
-import { listActiveRooms, listGuestTokens, listUsers } from '@/features/auth/admin-queries'
+import {
+  listActiveRooms,
+  listGuestTokens,
+  listRegistrationCodes,
+  listUsers,
+} from '@/features/auth/admin-queries'
+import { serverEnv } from '@/lib/env'
 import { AdminClient } from '@/features/auth/components/admin-client'
 import { Badge, ButtonLink, Panel } from '@/components/ui'
 
@@ -36,8 +42,9 @@ export default async function AdminPage() {
     )
   }
 
-  const [tokens, users, rooms] = await Promise.all([
+  const [tokens, registrationCodes, users, rooms] = await Promise.all([
     listGuestTokens(),
+    listRegistrationCodes(),
     listUsers(),
     listActiveRooms(),
   ])
@@ -50,7 +57,14 @@ export default async function AdminPage() {
         </Link>
         <h1 className="font-brush text-3xl font-black">관리자</h1>
       </header>
-      <AdminClient tokens={tokens} users={users} rooms={rooms} selfId={session.user.id} />
+      <AdminClient
+        tokens={tokens}
+        registrationCodes={registrationCodes}
+        users={users}
+        rooms={rooms}
+        selfId={session.user.id}
+        bootstrapRegistrationCodeEnabled={Boolean(serverEnv().AUTH_REGISTRATION_CODE)}
+      />
     </main>
   )
 }
