@@ -96,12 +96,68 @@ body {
 .rise-in-3 { animation-delay: 0.19s; }
 .rise-in-4 { animation-delay: 0.26s; }
 
+/* 베팅 칩이 좌석에서 팟으로 날아가는 연출 */
+@keyframes chip-fly {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fly-x, 0px), var(--fly-y, 0px)) scale(0.8);
+    opacity: 0;
+  }
+}
+
+.chip-fly {
+  animation: chip-fly 0.6s cubic-bezier(0.25, 0.8, 0.35, 1) both;
+}
+
+/* 팟에 칩이 떨어져 얹히는 연출 */
+@keyframes pot-drop {
+  0% {
+    transform: translateY(-14px) scale(1.25);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(2px) scale(0.98);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+.pot-drop {
+  animation: pot-drop 0.35s ease-out both;
+}
+
+/* 승자 좌석 발광 */
+@keyframes winner-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 6px rgb(76 174 114 / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 18px rgb(76 174 114 / 0.9);
+  }
+}
+
+.winner-glow {
+  animation: winner-glow 1.2s ease-in-out 3;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rise-in,
   .rise-in-1,
   .rise-in-2,
   .rise-in-3,
-  .rise-in-4 {
+  .rise-in-4,
+  .chip-fly,
+  .pot-drop,
+  .winner-glow {
     animation: none;
   }
 }

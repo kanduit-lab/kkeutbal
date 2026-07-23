@@ -1,16 +1,20 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { approveBet, placeBet, rejectBet, revertBet } from '@/features/betting/actions'
-import { addBuyIn } from '@/features/budget/actions'
-import { closeRoom, endRound, setMemberRole, startRound, voidRound } from '../actions'
-import type { BetActionKind, BetActionView, RoomSnapshot } from '../types'
-import { Button, Input, Panel } from '@/components/ui'
+import { approveBet, rejectBet, revertBet } from '@/features/betting/actions'
+import { closeRoom } from '../actions'
+import { endRound, startRound, voidRound } from '../round-actions'
+import type { BetActionView, RoomSnapshot } from '../types'
+import { Button, ConfirmDialog, Input, Panel, Stepper } from '@/components/ui'
 import { BET_LABELS, WINNER_NOTE_PLACEHOLDER, type RunAction } from './shared'
 
 type PanelMode = 'idle' | 'pickWinner'
 
-/** 딜러/방장 전용 컨트롤. 권한 없는 사용자에게는 아예 렌더되지 않는다 (숨김 게이팅). */
+/**
+ * 딜러/방장 전용 컨트롤 — 판 시작·종료·무효, 승인 대기열, 정정, 세션 정산.
+ * 멤버 단위 조작(바이인·대리 입력·역할·위임)은 좌석 탭 → MemberSheet 로 옮겼다.
+ * 권한 없는 사용자에게는 아예 렌더되지 않는다 (숨김 게이팅).
+ */
 export function DealerPanel({
   snapshot,
   pendingActions,
@@ -25,6 +29,8 @@ export function DealerPanel({
   const [mode, setMode] = useState<PanelMode>('idle')
   const [winnerId, setWinnerId] = useState<string | null>(null)
   const [note, setNote] = useState('')
+  const [score, setScore] = useState(3)
+  const [settleOpen, setSettleOpen] = useState(false)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -33,6 +39,9 @@ export function DealerPanel({
   const round = snapshot.currentRound
   const isHost = snapshot.members.find((member) => member.userId === selfId)?.role === 'host'
   const players = snapshot.members.filter((member) => member.role !== 'observer')
+  const isGostop = snapshot.room.gameType === 'gostop'
+  const loserCount = winnerId ? Math.max(0, players.length - 1) : 0
+  const gostopPay = score * snapshot.room.pointValue
 
   const run = (task: () => Promise<unknown>) => {
     if (isPending) return
@@ -54,6 +63,7 @@ export function DealerPanel({
           {!round ? (
             <Button
               variant="primary"
+              size="lg"
               disabled={isPending}
               onClick={() =>
                 run(() =>
@@ -73,6 +83,7 @@ export function DealerPanel({
             <>
               <Button
                 variant="win"
+                size="lg"
                 disabled={isPending || pendingActions.length > 0}
                 disabledReason={
                   pendingActions.length > 0 ? '승인 대기 베팅을 먼저 처리하세요' : undefined
@@ -100,11 +111,7 @@ export function DealerPanel({
               className="border border-white/10"
               disabled={isPending || snapshot.endedRounds === 0}
               disabledReason={snapshot.endedRounds === 0 ? '끝난 판이 없습니다' : undefined}
-              onClick={() => {
-                if (window.confirm('세션을 정산할까요? 정산 후에는 판을 다시 진행할 수 없어요.')) {
-                  run(() => runAction(() => closeRoom(roomId)))
-                }
-              }}
+              onClick={() => setSettleOpen(true)}
             >
               🧾 세션 정산
             </Button>
@@ -114,16 +121,20 @@ export function DealerPanel({
 
       {/* ── 승자 선택 ── */}
       {mode === 'pickWinner' && round ? (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <p className="text-sm font-medium">
-            {round.seq}판 승자 선택 · 팟{' '}
-            <span className="tabular-nums font-bold text-warn">{round.pot.toLocaleString()}</span>
+            {round.seq}판 승자 선택
+            {isGostop ? null : (
+              <>
+                {' · 팟 '}
+                <span className="tabular-nums font-bold text-warn">{round.pot.toLocaleString()}</span>
+              </>
+            )}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {players.map((member) => (
               <Button
                 key={member.userId}
-                size="sm"
                 variant={winnerId === member.userId ? 'win' : 'surface'}
                 className={winnerId === member.userId ? 'max-w-full' : 'max-w-full border border-white/10'}
                 onClick={() => setWinnerId(member.userId)}
@@ -132,6 +143,26 @@ export function DealerPanel({
               </Button>
             ))}
           </div>
+          {isGostop ? (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="shrink-0 text-sm font-medium">점수</span>
+                <Stepper
+                  value={score}
+                  onChange={setScore}
+                  min={1}
+                  max={999}
+                  ariaLabel="고스톱 점수"
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-xs text-muted">
+                × 점당 {snapshot.room.pointValue.toLocaleString()} ={' '}
+                <span className="tabular-nums font-bold text-warn">{gostopPay.toLocaleString()}</span>
+                /인{loserCount > 0 ? ` · 패자 ${loserCount}명` : ''}
+              </p>
+            </div>
+          ) : null}
           <Input
             value={note}
             onChange={(event) => setNote(event.target.value)}
@@ -144,6 +175,7 @@ export function DealerPanel({
             </Button>
             <Button
               variant="win"
+              size="lg"
               disabled={!winnerId || isPending}
               disabledReason={!winnerId ? '승자를 선택하세요' : undefined}
               onClick={() => {
@@ -152,7 +184,12 @@ export function DealerPanel({
                 run(async () => {
                   const success = await runAction(
                     () =>
-                      endRound({ roomId, winnerId, note: note.trim() || undefined }),
+                      endRound({
+                        roomId,
+                        winnerId,
+                        note: note.trim() || undefined,
+                        score: isGostop ? score : undefined,
+                      }),
                     (data) => ({
                       event: 'round.ended',
                       payload: {
@@ -172,6 +209,19 @@ export function DealerPanel({
           </div>
         </div>
       ) : null}
+
+      {/* ── 세션 정산 확인 ── */}
+      <ConfirmDialog
+        open={settleOpen}
+        title="세션을 정산할까요?"
+        body="정산하면 이 방에서 더 이상 판을 진행할 수 없습니다. 결과 화면으로 이동합니다."
+        confirmLabel="정산"
+        onConfirm={() => {
+          setSettleOpen(false)
+          run(() => runAction(() => closeRoom(roomId)))
+        }}
+        onClose={() => setSettleOpen(false)}
+      />
 
       {/* ── 승인 대기열 ── */}
       {pendingActions.length > 0 ? (
@@ -256,18 +306,12 @@ export function DealerPanel({
         </div>
       ) : null}
 
-      {/* ── 부가 도구 ── */}
-      <details className="rounded-xl bg-bg-deep/60 px-3 py-2">
-        <summary className="cursor-pointer text-sm font-medium text-muted">
-          정정 · 바이인 · 대리 입력 · 역할
-        </summary>
-        <div className="mt-3 space-y-4">
-          <RevertList snapshot={snapshot} selfId={selfId} runAction={runAction} />
-          <BuyInForm snapshot={snapshot} runAction={runAction} />
-          <ProxyBetForm snapshot={snapshot} runAction={runAction} />
-          {isHost ? <RoleForm snapshot={snapshot} selfId={selfId} runAction={runAction} /> : null}
-        </div>
-      </details>
+      {/* ── 확정 액션 정정 ── */}
+      <RevertList snapshot={snapshot} selfId={selfId} runAction={runAction} />
+
+      <p className="text-xs text-muted">
+        바이인 · 대리 입력 · 역할 변경 · 방장 위임은 테이블의 좌석을 탭하세요
+      </p>
     </Panel>
   )
 }
@@ -289,243 +333,36 @@ function RevertList({
     snapshot.members.find((member) => member.userId === userId)?.displayName ?? '?'
 
   return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-bold text-muted">확정 액션 정정 (되돌리기)</p>
-      {accepted.map((action) => (
-        <div key={action.id} className="flex items-center justify-between text-sm">
-          <span>
-            #{action.seq} {nameOf(action.userId)} {BET_LABELS[action.action]}{' '}
-            {action.amount > 0 ? action.amount.toLocaleString() : ''}
-          </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={isPending}
-            onClick={() =>
-              startTransition(async () => {
-                await runAction(
-                  () => revertBet({ actionId: action.id, reason: '딜러 정정' }),
-                  () => ({
-                    event: 'bet.reverted',
-                    payload: { actionId: action.id, revertedBy: selfId, reason: '딜러 정정' },
-                  }),
-                )
-              })
-            }
-          >
-            되돌리기
-          </Button>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function BuyInForm({ snapshot, runAction }: { snapshot: RoomSnapshot; runAction: RunAction }) {
-  const [target, setTarget] = useState('')
-  const [amount, setAmount] = useState(snapshot.room.startingChips)
-  const [isPending, startTransition] = useTransition()
-
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-bold text-muted">추가 바이인</p>
-      <div className="flex gap-1.5">
-        <select
-          value={target}
-          onChange={(event) => setTarget(event.target.value)}
-          className="min-h-10 flex-1 rounded-lg border border-gold/15 bg-bg-deep/60 px-2 text-sm"
-          aria-label="바이인 대상"
-        >
-          <option value="">대상 선택</option>
-          {snapshot.members.map((member) => (
-            <option key={member.userId} value={member.userId}>
-              {member.displayName}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          min={1}
-          value={amount}
-          onChange={(event) => setAmount(Math.max(1, Number(event.target.value) || 1))}
-          className="min-h-10 w-20 rounded-lg border border-gold/15 bg-bg-deep/60 px-2 text-center text-sm tabular-nums"
-          aria-label="바이인 금액"
-        />
-        <Button
-          size="sm"
-          variant="surface"
-          className="border border-white/10"
-          disabled={isPending || !target}
-          disabledReason={!target ? '대상을 선택하세요' : undefined}
-          onClick={() =>
-            startTransition(async () => {
-              await runAction(() =>
-                addBuyIn({ roomId: snapshot.room.id, amount, targetUserId: target }),
-              )
-            })
-          }
-        >
-          추가
-        </Button>
+    <details className="rounded-xl bg-bg-deep/60 px-3 py-2">
+      <summary className="cursor-pointer text-sm font-medium text-muted">확정 액션 정정</summary>
+      <div className="mt-2 space-y-1.5">
+        {accepted.map((action) => (
+          <div key={action.id} className="flex items-center justify-between text-sm">
+            <span>
+              #{action.seq} {nameOf(action.userId)} {BET_LABELS[action.action]}{' '}
+              {action.amount > 0 ? action.amount.toLocaleString() : ''}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={isPending}
+              onClick={() =>
+                startTransition(async () => {
+                  await runAction(
+                    () => revertBet({ actionId: action.id, reason: '딜러 정정' }),
+                    () => ({
+                      event: 'bet.reverted',
+                      payload: { actionId: action.id, revertedBy: selfId, reason: '딜러 정정' },
+                    }),
+                  )
+                })
+              }
+            >
+              되돌리기
+            </Button>
+          </div>
+        ))}
       </div>
-    </div>
-  )
-}
-
-function ProxyBetForm({ snapshot, runAction }: { snapshot: RoomSnapshot; runAction: RunAction }) {
-  const [target, setTarget] = useState('')
-  const [action, setAction] = useState<BetActionKind>('call')
-  const [amount, setAmount] = useState(10)
-  const [isPending, startTransition] = useTransition()
-
-  const movesChips = action === 'call' || action === 'raise' || action === 'allin'
-
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-bold text-muted">대리 입력 (폰 없는 참가자)</p>
-      <div className="flex flex-wrap gap-1.5">
-        <select
-          value={target}
-          onChange={(event) => setTarget(event.target.value)}
-          className="min-h-10 flex-1 rounded-lg border border-gold/15 bg-bg-deep/60 px-2 text-sm"
-          aria-label="대리 입력 대상"
-        >
-          <option value="">대상 선택</option>
-          {snapshot.members
-            .filter((member) => member.role !== 'observer')
-            .map((member) => (
-              <option key={member.userId} value={member.userId}>
-                {member.displayName}
-              </option>
-            ))}
-        </select>
-        <select
-          value={action}
-          onChange={(event) => setAction(event.target.value as BetActionKind)}
-          className="min-h-10 rounded-lg border border-gold/15 bg-bg-deep/60 px-2 text-sm"
-          aria-label="액션"
-        >
-          {(Object.keys(BET_LABELS) as BetActionKind[]).map((kind) => (
-            <option key={kind} value={kind}>
-              {BET_LABELS[kind]}
-            </option>
-          ))}
-        </select>
-        {movesChips ? (
-          <input
-            type="number"
-            min={1}
-            value={amount}
-            onChange={(event) => setAmount(Math.max(1, Number(event.target.value) || 1))}
-            className="min-h-10 w-20 rounded-lg border border-gold/15 bg-bg-deep/60 px-2 text-center text-sm tabular-nums"
-            aria-label="금액"
-          />
-        ) : null}
-        <Button
-          size="sm"
-          variant="surface"
-          className="border border-white/10"
-          disabled={isPending || !target || !snapshot.currentRound}
-          disabledReason={
-            !snapshot.currentRound ? '진행 중인 판이 없습니다' : !target ? '대상을 선택하세요' : undefined
-          }
-          onClick={() =>
-            startTransition(async () => {
-              await runAction(
-                () =>
-                  placeBet({
-                    actionId: crypto.randomUUID(),
-                    roomId: snapshot.room.id,
-                    action,
-                    amount: movesChips ? amount : 0,
-                    targetUserId: target,
-                  }),
-                (data) => ({
-                  event: 'bet.placed',
-                  payload: {
-                    actionId: data.action.id,
-                    roundId: data.action.roundId,
-                    action: data.action.action,
-                    amount: data.action.amount,
-                    seq: data.action.seq,
-                  },
-                }),
-              )
-            })
-          }
-        >
-          제출
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function RoleForm({
-  snapshot,
-  selfId,
-  runAction,
-}: {
-  snapshot: RoomSnapshot
-  selfId: string
-  runAction: RunAction
-}) {
-  const [target, setTarget] = useState('')
-  const [role, setRole] = useState<'dealer' | 'player' | 'observer'>('dealer')
-  const [isPending, startTransition] = useTransition()
-
-  const candidates = snapshot.members.filter((member) => member.userId !== selfId)
-  if (candidates.length === 0) return null
-
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-bold text-muted">역할 변경 (딜러 위임 등)</p>
-      <div className="flex gap-1.5">
-        <select
-          value={target}
-          onChange={(event) => setTarget(event.target.value)}
-          className="min-h-10 flex-1 rounded-lg border border-gold/15 bg-bg-deep/60 px-2 text-sm"
-          aria-label="역할 변경 대상"
-        >
-          <option value="">대상 선택</option>
-          {candidates.map((member) => (
-            <option key={member.userId} value={member.userId}>
-              {member.displayName} ({member.role})
-            </option>
-          ))}
-        </select>
-        <select
-          value={role}
-          onChange={(event) => setRole(event.target.value as typeof role)}
-          className="min-h-10 rounded-lg border border-gold/15 bg-bg-deep/60 px-2 text-sm"
-          aria-label="새 역할"
-        >
-          <option value="dealer">딜러</option>
-          <option value="player">플레이어</option>
-          <option value="observer">관전자</option>
-        </select>
-        <Button
-          size="sm"
-          variant="surface"
-          className="border border-white/10"
-          disabled={isPending || !target}
-          disabledReason={!target ? '대상을 선택하세요' : undefined}
-          onClick={() =>
-            startTransition(async () => {
-              await runAction(
-                () =>
-                  setMemberRole({ roomId: snapshot.room.id, targetUserId: target, role }),
-                () => ({
-                  event: 'member.role_changed',
-                  payload: { userId: target, role },
-                }),
-              )
-            })
-          }
-        >
-          변경
-        </Button>
-      </div>
-    </div>
+    </details>
   )
 }

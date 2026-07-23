@@ -24,7 +24,7 @@ export default async function RoomPage({
 
   const room = await findRoomByCode(code)
   if (!room) {
-    return <ErrorScreen title="방을 찾을 수 없어요" hint={`코드 ${code} 가 맞는지 확인해주세요.`} />
+    return <ErrorScreen title="방을 찾을 수 없습니다" hint={`코드 ${code} 를 확인하세요.`} />
   }
 
   if (room.status === 'settled' || room.status === 'closed') {
@@ -37,13 +37,13 @@ export default async function RoomPage({
   if (!isMember) {
     const joined = await joinRoom(code)
     if (!joined.success) {
-      return <ErrorScreen title="입장할 수 없어요" hint={joined.error} />
+      return <ErrorScreen title="입장할 수 없습니다" hint={joined.error} />
     }
     snapshot = await getRoomSnapshot(room.id)
   }
 
   if (!snapshot) {
-    return <ErrorScreen title="방 상태를 불러오지 못했어요" hint="잠시 후 다시 시도해주세요." />
+    return <ErrorScreen title="방 상태를 불러오지 못했습니다" hint="잠시 후 다시 시도하세요." />
   }
 
   return <RoomClient initial={snapshot} selfId={userId} />

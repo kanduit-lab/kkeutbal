@@ -26,6 +26,36 @@ export const BET_LABELS: Record<BetActionKind, string> = {
   allin: '올인',
 }
 
+/** 게임별 액션 표기 — 섯다는 섯다 용어를 쓴다. 고스톱은 베팅 자체가 없다. */
+export const BET_LABELS_BY_GAME: Record<'seotda' | 'poker', Record<BetActionKind, string>> = {
+  seotda: { check: '체크', call: '콜', raise: '올려', fold: '다이', allin: '올인' },
+  poker: { check: '체크', call: '콜', raise: '레이즈', fold: '폴드', allin: '올인' },
+}
+
+/**
+ * 레이즈 프리셋 — 직전 베팅·팟 기준 표준 콜.
+ * 섯다: 삥(기본 단위)·따당(직전×2)·하프(팟 절반)·풀(팟).
+ */
+export function raisePresets(
+  gameType: 'seotda' | 'poker',
+  { lastBet, pot, base }: { lastBet: number; pot: number; base: number },
+): readonly { label: string; amount: number }[] {
+  const half = Math.ceil(pot / 2)
+  if (gameType === 'seotda') {
+    return [
+      { label: '삥', amount: base },
+      { label: '따당', amount: lastBet * 2 },
+      { label: '하프', amount: half },
+      { label: '풀', amount: pot },
+    ].filter((preset) => preset.amount >= 1)
+  }
+  return [
+    { label: '×2', amount: lastBet * 2 },
+    { label: '하프', amount: half },
+    { label: '팟', amount: pot },
+  ].filter((preset) => preset.amount >= 1)
+}
+
 export const GAME_LABELS: Record<RoomGameType, { name: string; emoji: string }> = {
   seotda: { name: '섯다', emoji: '🎴' },
   gostop: { name: '고스톱', emoji: '🌸' },
