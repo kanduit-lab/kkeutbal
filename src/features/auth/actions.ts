@@ -4,11 +4,12 @@ import bcrypt from 'bcryptjs'
 import type { Route } from 'next'
 import { redirect } from 'next/navigation'
 import { AuthError } from 'next-auth'
-import { and, eq, isNull, like, or, sql } from 'drizzle-orm'
+import { and, eq, isNull, like, or } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, schema } from '@/lib/db'
 import { signIn } from '@/lib/auth'
 import { grantRegistrationAccess, hasRegistrationAccess } from '@/features/auth/registration-access'
+import { createUserGrantingFirstAdmin } from '@/features/auth/bootstrap'
 
 /**
  * 내부 계정 회원가입·로그인 form action.
@@ -50,9 +51,6 @@ const registerSchema = z.object({
     .transform((value) => value.replace(/\D/g, ''))
     .pipe(z.string().regex(/^01[016789]\d{7,8}$/)),
 })
-
-/** 첫 관리자 승격 직렬화용 고정 락 키 — 방 단위 락과 네임스페이스가 겹치지 않는다. */
-const BOOTSTRAP_LOCK_KEY = 'kkeutbal:bootstrap-admin'
 
 /** 실패 시 되돌려줄 입력값 — 비밀번호는 절대 포함하지 않는다. */
 interface RegisterFields {
@@ -128,20 +126,12 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
 
   try {
     const passwordHash = await bcrypt.hash(password, 10)
-    await db.transaction(async (tx) => {
-      // 첫 계정 판정과 삽입을 한 트랜잭션에 묶어 직렬화한다 — 동시 가입 둘이 모두
-      // "계정 없음"을 보고 관리자가 두 명 생기는 경쟁을 막는다.
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${BOOTSTRAP_LOCK_KEY}, 42))`)
-      const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)
-      await tx.insert(schema.users).values({
-        authentikSub: `local:${username}`,
-        username,
-        passwordHash,
-        phone,
-        displayName: name,
-        // 계정이 하나도 없던 인스턴스의 첫 가입자는 곧 운영자다.
-        isAdmin: !existing,
-      })
+    await createUserGrantingFirstAdmin({
+      authentikSub: `local:${username}`,
+      username,
+      passwordHash,
+      phone,
+      displayName: name,
     })
   } catch (error) {
     console.error('registerAndLogin failed:', error)
