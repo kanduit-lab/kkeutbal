@@ -7,6 +7,14 @@ import { z } from 'zod'
  * `NEXT_PUBLIC_` 접두사가 없는 값은 클라이언트 번들에 들어가면 안 된다.
  */
 
+/** `.env`의 빈 선택값은 미설정으로 취급한다. */
+function optionalEnv<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    schema.optional(),
+  )
+}
+
 const serverSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
@@ -14,21 +22,17 @@ const serverSchema = z.object({
   DATABASE_URL: z.string().url(),
 
   AUTH_SECRET: z.string().min(1),
-  /**
-   * 개발용 게스트 로그인(이름만 입력). Authentik 미등록 환경 전용.
-   * 프로덕션에서 켜면 인증이 무력화되므로 절대 true 로 배포하지 않는다.
-   */
-  AUTH_DEV_LOGIN: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
-  AUTH_AUTHENTIK_ID: z.string().min(1).optional(),
-  AUTH_AUTHENTIK_SECRET: z.string().min(1).optional(),
-  AUTH_AUTHENTIK_ISSUER: z.string().url().optional(),
+  /** 회원가입을 열기 위해 입력하는 서버 전용 코드. */
+  AUTH_REGISTRATION_CODE: optionalEnv(
+    z.string().trim().toUpperCase().regex(/^[A-Z2-9]{10}$/),
+  ),
+  AUTH_AUTHENTIK_ID: optionalEnv(z.string().min(1)),
+  AUTH_AUTHENTIK_SECRET: optionalEnv(z.string().min(1)),
+  AUTH_AUTHENTIK_ISSUER: optionalEnv(z.string().url()),
   /** 관리자 부트스트랩 — 쉼표로 구분한 내부 계정 아이디 목록. DB is_admin 과 OR 로 판정한다. */
   AUTH_ADMIN_USERNAMES: z.string().default(''),
 
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_API_KEY: optionalEnv(z.string().min(1)),
   JOKBO_VISION_MODEL: z.string().default('claude-sonnet-5'),
   JOKBO_VISION_ENABLED: z
     .enum(['true', 'false'])
@@ -39,7 +43,8 @@ const serverSchema = z.object({
 const clientSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
+  /** Supabase publishable 키(`sb_publishable_…`). legacy anon JWT 는 폐기 예정이라 쓰지 않는다. */
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
 })
 
 export type ServerEnv = z.infer<typeof serverSchema>
@@ -67,7 +72,7 @@ export function clientEnv(): ClientEnv {
   const parsed = clientSchema.safeParse({
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   })
   if (!parsed.success) {
     const missing = parsed.error.issues.map((issue) => issue.path.join('.')).join(', ')

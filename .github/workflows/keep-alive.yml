@@ -8,7 +8,7 @@
 #
 # 필요 시크릿:
 #   SUPABASE_URL      — https://<project-ref>.supabase.co
-#   SUPABASE_ANON_KEY — anon (public) API key
+#   SUPABASE_PUBLISHABLE_KEY — publishable API key (sb_publishable_…). legacy anon JWT 는 쓰지 않는다.
 # ============================================
 
 name: Supabase Keep-Alive
@@ -29,12 +29,12 @@ jobs:
       - name: Insert keep-alive row
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           curl --fail --silent --show-error -X POST \
             "$SUPABASE_URL/rest/v1/keep_alive" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY" \
             -H "Content-Type: application/json" \
             -d '{"note":"keep-alive ping"}'
           echo "keep-alive row inserted"
@@ -42,11 +42,11 @@ jobs:
       - name: Delete rows older than 7 days
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           CUTOFF=$(date -u -d '7 days ago' +%Y-%m-%dT%H:%M:%SZ)
           curl --fail --silent --show-error -X DELETE \
             "$SUPABASE_URL/rest/v1/keep_alive?created_at=lt.$CUTOFF" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY"
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
           echo "old rows before $CUTOFF deleted"
