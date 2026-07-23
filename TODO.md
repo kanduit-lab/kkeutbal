@@ -42,14 +42,15 @@
 
 ### Low — 2026-07-23 개선 스윕 후속
 
-- [ ] **joinRoomAndGo 에러 코드화**: 홈 `?error=` 배너가 서버 한국어 원문을 그대로 렌더 —
-  auth 페이지처럼 코드 → 사전 키 매핑으로 전환 (`src/features/game/actions.ts`, `src/app/page.tsx`)
-- [ ] **formatChips 만 단위 en 로케일**: `shared.ts` `formatChips`의 '만' 축약이 사전 밖 하드코딩 —
-  en 은 K/M 계열이 자연스러워 포맷 레벨 결정 필요 (코드 주석에 gap 표시됨)
-- [ ] **고스톱 loserPenalties 영속화 검토**: 패자별 박 계수가 `rounds.result`에 저장되지 않아
-  결과 페이지에서 정산 근거를 재구성할 수 없다 — 필요해지면 `result` jsonb 확장
-- [ ] **서버 액션 에러 errors.* 키 전환**: 액션들이 한국어 원문을 반환하고 `translateError`가
-  통과시키는 구조 — en 로케일에서 서버 에러만 한국어로 남는다 (정책은 `src/lib/i18n/client.tsx` JSDoc)
+- [ ] **admin·vision 액션 에러 키 전환**: `auth/admin-actions.ts` · `jokbo-advisor/vision/actions.ts`가
+  아직 한국어 원문을 반환한다 — 관리자·어드바이저 화면이 ko 중심이라 허용 범위로 남김
+  (주 플로우 액션은 전부 `errors.*` 키 전환 완료, 정책은 `src/lib/i18n/client.tsx` JSDoc)
+- [ ] **betActions.reason 시스템 사유 코드화**: `'잔액 부족 (자동 거절)'`처럼 서버가 심는 reason이
+  딜러 자유 입력과 같은 컬럼에 섞여 번역 불가 — 시스템 사유만 고정 코드로 분리하면 해결
+- [ ] **전광판 박 표시**: `RecentRoundView.penalties`가 이미 내려오지만 `monitor-client.tsx`는
+  미표시 — 결과 페이지와 같은 "박×N" 마커 추가만 하면 됨
+- [ ] **result 페이지 i18n**: `rooms/[code]/result/page.tsx` 전체가 하드코딩 한국어 —
+  박 마커 포함 사전 배선 필요 (제안 키: `result.penaltyMarker` 템플릿)
 
 ---
 
@@ -85,6 +86,17 @@
   (`/ranking/player/[id]`), 랭킹 게임·기간 필터, 관리자 방 강제 정산
 - [x] **성능**: `getRoomSnapshot` 2단계 병렬화(~8RTT→~2RTT), `chip_ledger(round_id, reason)`
   인덱스(live 적용), 스프라이트 816KB→471KB(알파 제거), ActionBar 단일 인스턴스
+
+### 개선 스윕 Low 후속 처리 (2026-07-23)
+
+- [x] **서버 액션 에러 errors.* 키 전환**: 주 플로우 액션 전부(game/actions·round-actions·
+  member-actions·betting·budget) `errors.*` 키 반환으로 전환, 사전에 82키 등록.
+  `joinRoomAndGo` 홈 `?error=` 배너도 키 → `localizeError` 매핑 (`src/app/page.tsx`)
+- [x] **formatChips 로케일 인지**: `formatChips(n, locale='ko')` — ko '만' 유지, en k/M 축약.
+  호출부 13곳 `useDict()` locale 배선, `shared.test.ts` 8케이스 신규
+- [x] **고스톱 loserPenalties 영속화**: `rounds.result` jsonb에 `penalties: {userId, factor}[]`
+  (factor>1 실패자만) 저장 — 스키마 변경 없음. 결과 페이지 판 기록에 "박×2/박×4" 마커,
+  구 데이터는 필드 부재 시 안전 통과
 
 ### 계정 · 운영 · UX 개편 (2026-07-23)
 
