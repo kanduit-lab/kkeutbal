@@ -6,6 +6,7 @@ import { useState, useTransition } from 'react'
 import { createRoom } from '@/features/game/actions'
 import type { RoomGameType } from '@/features/game/types'
 import { GAME_LABELS } from '@/features/game/labels'
+import { translateError, useDict } from '@/lib/i18n/client'
 import { Button, Field, Input, Panel, Stepper, useToast } from '@/components/ui'
 
 const CHIP_PRESETS = [50, 100, 200, 500] as const
@@ -14,6 +15,7 @@ const GAME_TYPES: readonly RoomGameType[] = ['seotda', 'gostop', 'poker']
 export default function NewRoomPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { d } = useDict()
   const [isPending, startTransition] = useTransition()
 
   const [name, setName] = useState('')
@@ -27,7 +29,7 @@ export default function NewRoomPage() {
     if (isPending) return
     startTransition(async () => {
       const result = await createRoom({
-        name: name.trim() || GAME_LABELS[gameType].name,
+        name: name.trim() || d.games[gameType],
         gameType,
         inputMode,
         startingChips,
@@ -37,7 +39,7 @@ export default function NewRoomPage() {
       if (result.success) {
         router.push(`/rooms/${result.data.code}`)
       } else {
-        toast(result.error, 'error')
+        toast(translateError(d, result.error), 'error')
       }
     })
   }
@@ -48,20 +50,20 @@ export default function NewRoomPage() {
         <Link href="/" className="text-2xl text-muted">
           ←
         </Link>
-        <h1 className="font-brush text-3xl font-black">방 만들기</h1>
+        <h1 className="font-brush text-3xl font-black">{d.newRoom.title}</h1>
       </header>
 
       <Panel className="space-y-5">
-        <Field label="방 이름">
+        <Field label={d.roomForm.nameLabel}>
           <Input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="방 이름"
+            placeholder={d.roomForm.namePlaceholder}
             maxLength={30}
           />
         </Field>
 
-        <Field label="게임">
+        <Field label={d.roomForm.gameLabel}>
           <div className="grid grid-cols-3 gap-2">
             {GAME_TYPES.map((type) => (
               <Button
@@ -72,13 +74,13 @@ export default function NewRoomPage() {
                 pressed={gameType === type}
                 onClick={() => setGameType(type)}
               >
-                {GAME_LABELS[type].emoji} {GAME_LABELS[type].name}
+                {GAME_LABELS[type].emoji} {d.games[type]}
               </Button>
             ))}
           </div>
         </Field>
 
-        <Field label="시작 칩">
+        <Field label={d.roomForm.startingChipsLabel}>
           <div className="grid grid-cols-4 gap-2">
             {CHIP_PRESETS.map((preset) => (
               <Button
@@ -100,34 +102,36 @@ export default function NewRoomPage() {
             min={1}
             max={1_000_000}
             step={10}
-            ariaLabel="시작 칩"
+            ariaLabel={d.roomForm.startingChipsAria}
             className="mt-2"
           />
         </Field>
 
         {gameType === 'gostop' ? (
-          <Field label="점당 칩">
+          <Field label={d.roomForm.pointValueLabel}>
             <Stepper
               value={pointValue}
               onChange={setPointValue}
               min={1}
               max={100_000}
-              ariaLabel="점당 칩"
+              ariaLabel={d.roomForm.pointValueAria}
             />
-            <p className="mt-1.5 text-xs text-muted">
-              판 종료 시 패자 전원이 점수 × 점당 칩을 승자에게 지불합니다
-            </p>
+            <p className="mt-1.5 text-xs text-muted">{d.roomForm.pointValueHint}</p>
           </Field>
         ) : (
-          <Field label="삥 (베팅 기본 단위)">
-            <Stepper value={baseBet} onChange={setBaseBet} min={1} max={100_000} ariaLabel="삥 단위" />
-            <p className="mt-1.5 text-xs text-muted">
-              레이즈 프리셋과 스테퍼가 이 단위로 움직입니다
-            </p>
+          <Field label={d.roomForm.baseBetLabel}>
+            <Stepper
+              value={baseBet}
+              onChange={setBaseBet}
+              min={1}
+              max={100_000}
+              ariaLabel={d.roomForm.baseBetAria}
+            />
+            <p className="mt-1.5 text-xs text-muted">{d.roomForm.baseBetHint}</p>
           </Field>
         )}
 
-        <Field label="입력 모드">
+        <Field label={d.inputMode.label}>
           <div className="grid grid-cols-2 gap-2">
             <Button
               type="button"
@@ -136,7 +140,7 @@ export default function NewRoomPage() {
               pressed={inputMode === 'trust'}
               onClick={() => setInputMode('trust')}
             >
-              바로 반영
+              {d.inputMode.trust}
             </Button>
             <Button
               type="button"
@@ -145,13 +149,11 @@ export default function NewRoomPage() {
               pressed={inputMode === 'approval'}
               onClick={() => setInputMode('approval')}
             >
-              딜러 승인
+              {d.inputMode.approval}
             </Button>
           </div>
           <p className="mt-1.5 text-xs text-muted">
-            {inputMode === 'trust'
-              ? '각자 입력한 베팅이 바로 반영됩니다'
-              : '딜러가 승인한 베팅만 반영됩니다'}
+            {inputMode === 'trust' ? d.inputMode.trustHint : d.inputMode.approvalHint}
           </p>
         </Field>
 
@@ -163,7 +165,7 @@ export default function NewRoomPage() {
           disabled={isPending}
           onClick={submit}
         >
-          {isPending ? '만드는 중…' : '방 만들기'}
+          {isPending ? d.newRoom.creating : d.newRoom.create}
         </Button>
       </Panel>
     </main>

@@ -1,6 +1,8 @@
 'use client'
 
 import { Button, useToast } from '@/components/ui'
+import { format, useDict } from '@/lib/i18n/client'
+import type { Dictionary } from '@/lib/i18n/client'
 
 /**
  * 세션 결과 공유 버튼 — 모바일이면 OS 공유 시트(navigator.share),
@@ -28,17 +30,18 @@ function formatNet(net: number): string {
 }
 
 function buildShareText(
+  d: Dictionary,
   roomName: string,
   standings: readonly ShareStanding[],
   transfers: readonly ShareTransfer[],
 ): string {
   // 로컬 accumulator — 함수 밖으로 새지 않음
-  const lines: string[] = [`🏆 ${roomName} 결과`, '']
+  const lines: string[] = [format(d.result.shareHeader, { name: roomName }), '']
   standings.forEach((row, index) => {
     lines.push(`${rankMark(index)} ${row.displayName} ${formatNet(row.net)}`)
   })
   if (transfers.length > 0) {
-    lines.push('', '💸 정산')
+    lines.push('', d.result.shareSettlement)
     for (const transfer of transfers) {
       lines.push(`${transfer.fromName} → ${transfer.toName} ${transfer.amount.toLocaleString()}`)
     }
@@ -56,13 +59,14 @@ export function ShareResultButton({
   transfers: readonly ShareTransfer[]
 }) {
   const { toast } = useToast()
+  const { d } = useDict()
 
   async function handleShare() {
-    const text = buildShareText(roomName, standings, transfers)
+    const text = buildShareText(d, roomName, standings, transfers)
 
     if (typeof navigator.share === 'function') {
       try {
-        await navigator.share({ title: `${roomName} 결과`, text })
+        await navigator.share({ title: format(d.result.shareTitle, { name: roomName }), text })
         return
       } catch (error) {
         // 사용자가 공유 시트를 닫은 것은 실패가 아니다 — 조용히 종료.
@@ -73,9 +77,9 @@ export function ShareResultButton({
 
     try {
       await navigator.clipboard.writeText(text)
-      toast('복사됨', 'success')
+      toast(d.result.copied, 'success')
     } catch {
-      toast('복사할 수 없습니다', 'error')
+      toast(d.result.copyFailed, 'error')
     }
   }
 
@@ -86,7 +90,7 @@ export function ShareResultButton({
       className="w-full border border-white/10"
       onClick={() => handleShare()}
     >
-      📤 결과 공유
+      📤 {d.result.share}
     </Button>
   )
 }

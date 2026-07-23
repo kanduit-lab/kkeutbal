@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { findRoomByCode } from '@/features/game/queries'
 import { normalizeRoomCode } from '@/features/game/room-code'
-import { GAME_LABELS } from '@/features/game/labels'
+import { getDict, format } from '@/lib/i18n/server'
 import { getRoundHistory, getSessionStandings } from '@/features/ranking/queries'
 import { computeSettlementTransfers } from '@/features/ranking/settlement'
 import { ShareResultButton } from '@/features/ranking/components/share-result-button'
@@ -21,6 +21,8 @@ export default async function RoomResultPage({
   const room = await findRoomByCode(normalizeRoomCode(rawCode))
   if (!room) redirect('/')
 
+  const { d } = await getDict()
+
   const standings = await getSessionStandings(room.id)
   const rounds = await getRoundHistory(room.id)
 
@@ -31,21 +33,21 @@ export default async function RoomResultPage({
 
   const transfers = computeSettlementTransfers(standings)
   const nameById = new Map(standings.map((row) => [row.userId, row.displayName]))
-  const displayName = (userId: string) => nameById.get(userId) ?? '알 수 없음'
+  const displayName = (userId: string) => nameById.get(userId) ?? d.common.unknownPlayer
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8">
       <header>
         <p className="text-sm text-muted">
-          {room.name} · {GAME_LABELS[room.gameType].name} ·{' '}
-          {room.status === 'settled' || room.status === 'closed' ? '정산 완료' : '진행 중'}
+          {room.name} · {d.games[room.gameType]} ·{' '}
+          {room.status === 'settled' || room.status === 'closed' ? d.result.settled : d.result.inProgress}
         </p>
-        <h1 className="font-brush text-4xl font-black lg:text-5xl">세션 결과</h1>
+        <h1 className="font-brush text-4xl font-black lg:text-5xl">{d.result.title}</h1>
       </header>
 
       <section className="space-y-2">
         {standings.length === 0 ? (
-          <EmptyState title="기록이 없습니다" />
+          <EmptyState title={d.result.noRecords} />
         ) : (
           standings.map((row, index) => (
             <Panel key={row.userId} className="flex items-center justify-between py-3">
@@ -56,8 +58,11 @@ export default async function RoomResultPage({
                 <div className="min-w-0">
                   <p className="truncate font-bold">{row.displayName}</p>
                   <p className="text-xs text-muted">
-                    {row.wins}승 · 바이인 {row.buyInTotal.toLocaleString()} · 잔액{' '}
-                    {row.balance.toLocaleString()}
+                    {format(d.result.statLine, {
+                      wins: row.wins,
+                      buyIn: row.buyInTotal.toLocaleString(),
+                      balance: row.balance.toLocaleString(),
+                    })}
                   </p>
                 </div>
               </div>
@@ -76,9 +81,9 @@ export default async function RoomResultPage({
 
       {standings.length > 0 ? (
         <section className="space-y-1">
-          <h2 className="px-1 text-sm font-bold text-muted">정산</h2>
+          <h2 className="px-1 text-sm font-bold text-muted">{d.result.settlementTitle}</h2>
           {transfers.length === 0 ? (
-            <EmptyState title="주고받을 것이 없습니다" />
+            <EmptyState title={d.result.nothingToSettle} />
           ) : (
             <ul className="space-y-1">
               {transfers.map((transfer) => (
@@ -103,27 +108,39 @@ export default async function RoomResultPage({
 
       {standings.length > 0 ? (
         <section className="grid grid-cols-2 gap-2">
-          {mvp && mvp.net > 0 ? <BadgeCard emoji="👑" title="MVP" name={mvp.displayName} /> : null}
+          {mvp && mvp.net > 0 ? (
+            <BadgeCard emoji="👑" title={d.result.badgeMvp} name={mvp.displayName} />
+          ) : null}
           {biggestWin && biggestWin.biggestPot > 0 ? (
             <BadgeCard
               emoji="💥"
-              title="한방"
+              title={d.result.badgeBiggestWin}
               name={`${biggestWin.displayName} (${biggestWin.biggestPot.toLocaleString()})`}
             />
           ) : null}
           {mostRaises && mostRaises.raises > 0 ? (
-            <BadgeCard emoji="🚜" title="불도저" name={`${mostRaises.displayName} (레이즈 ${mostRaises.raises})`} />
+            <BadgeCard
+              emoji="🚜"
+              title={d.result.badgeBulldozer}
+              name={`${mostRaises.displayName} (${format(d.result.raisesCount, { n: mostRaises.raises })})`}
+            />
           ) : null}
           {mostFolds && mostFolds.folds > 0 ? (
-            <BadgeCard emoji="🦊" title="여우" name={`${mostFolds.displayName} (다이 ${mostFolds.folds})`} />
+            <BadgeCard
+              emoji="🦊"
+              title={d.result.badgeFox}
+              name={`${mostFolds.displayName} (${format(d.result.foldsCount, { n: mostFolds.folds })})`}
+            />
           ) : null}
         </section>
       ) : null}
 
       <section className="space-y-1">
-        <h2 className="px-1 text-sm font-bold text-muted">판 기록 ({rounds.length})</h2>
+        <h2 className="px-1 text-sm font-bold text-muted">
+          {format(d.result.roundHistoryCount, { n: rounds.length })}
+        </h2>
         {rounds.length === 0 ? (
-          <EmptyState title="끝난 판이 없습니다" />
+          <EmptyState title={d.result.noRecords} />
         ) : (
           <ul className="space-y-1">
             {rounds.map((round) => (
@@ -132,7 +149,10 @@ export default async function RoomResultPage({
                   <span>
                     <span className="text-muted">#{round.seq}</span>{' '}
                     {round.status === 'voided' ? (
-                      <span className="text-muted">무효{round.note ? ` — ${round.note}` : ''}</span>
+                      <span className="text-muted">
+                        {d.result.voided}
+                        {round.note ? ` — ${round.note}` : ''}
+                      </span>
                     ) : (
                       <>
                         <span className="font-medium">{round.winnerName ?? '?'}</span>
@@ -145,7 +165,7 @@ export default async function RoomResultPage({
                       +{round.pot.toLocaleString()}
                     </span>
                   ) : (
-                    <Badge tone="muted">재경기</Badge>
+                    <Badge tone="muted">{d.result.rematch}</Badge>
                   )}
                 </div>
                 {round.status === 'ended' && round.penalties.length > 0 ? (
@@ -176,12 +196,12 @@ export default async function RoomResultPage({
         <div className="grid grid-cols-2 gap-2">
           <Link href={`/rooms/${room.code}`} className="block">
             <Button variant="surface" className="w-full border border-white/10">
-              방으로
+              {d.result.toRoom}
             </Button>
           </Link>
           <Link href="/" className="block">
             <Button variant="primary" className="w-full">
-              홈으로
+              {d.common.home}
             </Button>
           </Link>
         </div>
