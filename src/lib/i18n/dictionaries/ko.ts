@@ -446,6 +446,8 @@ export const ko = {
   /**
    * 족보 판독 — 패별 상황 안내. 키 이름은 seotda/advice.ts 의 SeotdaAdviceCode 와 1:1 이다.
    * `{rate}` 자리에는 그 잡는 패가 상대에게 나올 확률이 들어간다.
+   * `monthLabel`·`ranking` 은 섯다 카드 피커(card-picker)와 족보 순위 참고 패널
+   * (seotda-ranking-panel)이 쓴다.
    */
   advisor: {
     advice: {
@@ -457,6 +459,19 @@ export const ko = {
       caughtByTtaengjabi: '땡잡이(3·7)에게 잡힐 수 있어요 · 상대에게 나올 확률 {rate}',
       unbeatable: '잡힐 일이 없는 최상위 패예요',
       lowest: '가장 낮은 끗이에요. 상대가 죽어야 이기는 자리예요',
+    },
+    /** 카드 피커의 월별 그룹 라벨. `{month}` 자리에 1~12 숫자가 들어간다. */
+    monthLabel: '{month}월',
+    /** 섯다 족보 순위 참고 패널 (seotda-ranking-panel). */
+    ranking: {
+      title: '섯다 족보 순위',
+      show: '족보 순위 보기',
+      hide: '족보 순위 접기',
+      current: '내 패',
+      categoryGwangttaeng: '광땡',
+      categoryTtaeng: '땡',
+      categorySpecial: '특수패',
+      categoryKkeut: '끗',
     },
   },
   /** 배너·팝업 공지 (features/promotions). 내용은 DB 가 갖고, 여기는 조작 문구만 둔다. */

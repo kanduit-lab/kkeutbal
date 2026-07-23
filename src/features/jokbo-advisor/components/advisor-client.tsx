@@ -10,6 +10,7 @@ import { Button, Panel, useToast } from '@/components/ui'
 import { CardPicker } from './card-picker'
 import { PokerPicker } from './poker-picker'
 import { GostopResult, PokerResult, SeotdaResult } from './advisor-results'
+import { SeotdaRankingPanel } from './seotda-ranking-panel'
 import { VisionCapture } from './vision-capture'
 
 type AdvisorTab = 'seotda' | 'gostop' | 'poker'
@@ -150,12 +151,26 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
                   </Button>
                 ) : null}
               </div>
-              <CardPicker
-                gameType={hwatuGameType}
-                selected={selected}
-                maxSelect={maxSelect}
-                onToggle={toggle}
-              />
+              {tab === 'seotda' ? (
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                  <div className="min-w-0 flex-1">
+                    <CardPicker
+                      gameType={hwatuGameType}
+                      selected={selected}
+                      maxSelect={maxSelect}
+                      onToggle={toggle}
+                    />
+                  </div>
+                  <SeotdaRankingPanel cards={cards} />
+                </div>
+              ) : (
+                <CardPicker
+                  gameType={hwatuGameType}
+                  selected={selected}
+                  maxSelect={maxSelect}
+                  onToggle={toggle}
+                />
+              )}
             </Panel>
           )}
         </div>

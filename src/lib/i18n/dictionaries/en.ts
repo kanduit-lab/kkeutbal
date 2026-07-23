@@ -424,6 +424,17 @@ export const en: Dictionary = {
       unbeatable: 'Nothing can catch this hand',
       lowest: 'The lowest 끗 — you only win if everyone else folds',
     },
+    monthLabel: 'Month {month}',
+    ranking: {
+      title: 'Seotda hand ranking',
+      show: 'Show ranking',
+      hide: 'Hide ranking',
+      current: 'My hand',
+      categoryGwangttaeng: '광땡',
+      categoryTtaeng: '땡',
+      categorySpecial: '특수패',
+      categoryKkeut: '끗',
+    },
   },
   promo: {
     close: 'Close',
