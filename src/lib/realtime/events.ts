@@ -28,7 +28,6 @@ export const envelopeSchema = z.object({
 export type Envelope = z.infer<typeof envelopeSchema>
 
 export const betActionSchema = z.enum(['check', 'call', 'raise', 'fold', 'allin'])
-export type BetAction = z.infer<typeof betActionSchema>
 
 export const chipReasonSchema = z.enum([
   'buy_in',

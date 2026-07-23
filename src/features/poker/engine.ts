@@ -33,7 +33,7 @@ const CATEGORY_LABEL: Readonly<Record<PokerCategory, string>> = Object.freeze({
   'high-card': '하이카드',
 })
 
-// 카테고리 우선순위(높을수록 강함). ranks[0]에 담겨 comparePokerHands 의 1차 비교 키가 된다.
+// 카테고리 우선순위(높을수록 강함). ranks[0]에 담기는 1차 비교 키다.
 const CATEGORY_PRIORITY: Readonly<Record<PokerCategory, number>> = Object.freeze({
   'royal-flush': 9,
   'straight-flush': 8,
@@ -254,11 +254,6 @@ export function evaluatePokerHand(cards: readonly PokerCard[]): PokerHand {
     cards: best.orderedCards,
     ranks: best.ranks,
   }
-}
-
-/** ranks 벡터를 사전식으로 비교. a>b 면 양수, a<b 면 음수, 동률이면 0. */
-export function comparePokerHands(a: PokerHand, b: PokerHand): number {
-  return compareRankVectors(a.ranks, b.ranks)
 }
 
 function describeGroupRanks(hand: PokerHand): string {

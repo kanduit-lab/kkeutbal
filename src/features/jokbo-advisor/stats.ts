@@ -90,5 +90,3 @@ export const POKER_CATEGORY_STATS: Record<
   'one-pair': { position: 9, probability: 42.2569 },
   'high-card': { position: 10, probability: 50.1177 },
 }
-
-export const POKER_CATEGORY_COUNT = 10

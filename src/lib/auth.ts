@@ -10,13 +10,12 @@ import { db, schema } from './db'
 import { serverEnv } from './env'
 
 /**
- * Auth.js v5 — 4개 로그인 경로.
+ * Auth.js v5 — 3개 로그인 경로.
  *
  * - `password`: 내부 계정 (아이디·비밀번호). 회원가입은 features/auth/actions.ts.
  * - `authentik`: OIDC SSO. `AUTH_AUTHENTIK_*` 3종이 모두 있을 때만 노출되며,
  *   아이디 또는 전화번호가 일치하는 내부 계정이 있으면 같은 계정으로 자동 연동한다.
  * - `guest-token`: 관리자가 발급한 토큰 + 이름. 같은 (토큰, 이름) = 같은 계정.
- * - `dev-login`: 이름만으로 로그인. `AUTH_DEV_LOGIN=true` 개발 환경 전용.
  */
 
 const env = serverEnv()
@@ -38,8 +37,6 @@ const guestTokenSchema = z.object({
     .regex(/^[A-Z2-9]{8}$/),
   name: z.string().trim().min(1).max(20),
 })
-
-const guestSchema = z.object({ name: z.string().trim().min(1).max(20) })
 
 function buildProviders(): NextAuthConfig['providers'] {
   const providers: NextAuthConfig['providers'] = []
@@ -94,31 +91,11 @@ function buildProviders(): NextAuthConfig['providers'] {
     }),
   )
 
-  if (env.AUTH_DEV_LOGIN) {
-    providers.push(
-      Credentials({
-        id: 'dev-login',
-        name: '게스트',
-        credentials: { name: { label: '이름' } },
-        authorize(credentials) {
-          const parsed = guestSchema.safeParse(credentials)
-          if (!parsed.success) return null
-          const name = parsed.data.name
-          return { id: `dev:${name.toLowerCase()}`, name }
-        },
-      }),
-    )
-  }
-
   return providers
 }
 
 export function hasAuthentik(): boolean {
   return Boolean(env.AUTH_AUTHENTIK_ID && env.AUTH_AUTHENTIK_SECRET && env.AUTH_AUTHENTIK_ISSUER)
-}
-
-export function hasDevLogin(): boolean {
-  return env.AUTH_DEV_LOGIN
 }
 
 /** OIDC profile 의 병합 단서 — 표준 클레임에서 아이디·전화번호를 뽑는다. */
@@ -199,8 +176,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return token
           }
 
-          const isCredentialGuest =
-            account.provider === 'dev-login' || account.provider === 'guest-token'
+          const isCredentialGuest = account.provider === 'guest-token'
           const sub = isCredentialGuest
             ? String(user.id)
             : (token.sub ?? `${account.provider}:${String(user.id)}`)

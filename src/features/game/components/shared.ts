@@ -19,14 +19,6 @@ export type RunAction = <T>(
   onSuccess?: (data: T) => BroadcastSpec | void,
 ) => Promise<boolean>
 
-export const BET_LABELS: Record<BetActionKind, string> = {
-  check: '체크',
-  call: '콜',
-  raise: '레이즈',
-  fold: '다이',
-  allin: '올인',
-}
-
 /** 게임별 액션 표기 — 섯다는 섯다 용어를 쓴다. 고스톱은 베팅 자체가 없다. */
 export const BET_LABELS_BY_GAME: Record<'seotda' | 'poker', Record<BetActionKind, string>> = {
   seotda: { check: '체크', call: '콜', raise: '올려', fold: '다이', allin: '올인' },
@@ -127,27 +119,8 @@ export const GAME_LABELS: Record<RoomGameType, { name: string; emoji: string }> 
   poker: { name: '포커', emoji: '♠' },
 }
 
-/**
- * 게임 라벨 — 사전(d)을 넘기면 로케일 이름(d.games)을 쓰고, 없으면 GAME_LABELS 상수로
- * 폴백한다. emoji 는 로케일과 무관하다. GAME_LABELS 직접 참조는 이 함수로 옮겨갈 대상.
- */
-export function gameLabelFor(
-  gameType: RoomGameType,
-  d?: Pick<Dictionary, 'games'>,
-): { name: string; emoji: string } {
-  const fallback = GAME_LABELS[gameType]
-  return d ? { name: d.games[gameType], emoji: fallback.emoji } : fallback
-}
-
 export const GAME_BADGE_TONE: Record<RoomGameType, 'accent' | 'win' | 'warn'> = {
   seotda: 'accent',
   gostop: 'win',
   poker: 'warn',
-}
-
-/** 딜러 승자 확정 메모 입력창 placeholder — 게임마다 예시가 다르다. */
-export const WINNER_NOTE_PLACEHOLDER: Record<RoomGameType, string> = {
-  seotda: '예: 38광땡',
-  gostop: '예: 3점 스톱',
-  poker: '예: 풀하우스',
 }

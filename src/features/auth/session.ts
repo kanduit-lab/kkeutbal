@@ -8,9 +8,3 @@ export async function currentUserId(): Promise<string | null> {
   const session = await auth()
   return session?.user?.id ?? null
 }
-
-export async function currentUser(): Promise<{ id: string; name: string } | null> {
-  const session = await auth()
-  if (!session?.user?.id) return null
-  return { id: session.user.id, name: session.user.name ?? '플레이어' }
-}

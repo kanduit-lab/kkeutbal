@@ -20,11 +20,6 @@ import type { z } from 'zod'
  * 수신자는 payload 를 화면 힌트로만 쓰고, 진실은 스냅샷 refetch 로 맞춘다.
  */
 
-export interface RoomPresenceMeta {
-  userId: string
-  displayName: string
-}
-
 export function createRoomChannel(roomId: string, userId: string): RealtimeChannel {
   const supabase = getSupabaseBrowser()
   return supabase.channel(roomTopic(roomId), {

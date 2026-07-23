@@ -18,9 +18,7 @@ const nextConfig: NextConfig = {
     }
     return config
   },
-  experimental: {
-    typedRoutes: true,
-  },
+  typedRoutes: true,
   // 족보 vision 업로드 이미지는 Supabase Storage 경유
   images: {
     remotePatterns: [
