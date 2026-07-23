@@ -1,7 +1,8 @@
 import type { z } from 'zod'
 import type { ActionResult } from '@/lib/action-result'
+import type { Dictionary } from '@/lib/i18n/dictionaries/ko'
 import type { EventName, eventPayloads } from '@/lib/realtime/events'
-import type { BetActionKind, RoomGameType } from '../types'
+import type { BetActionKind, BetActionView, RoomGameType } from '../types'
 
 /** 액션 성공 후 피어에게 쏠 이벤트. */
 export interface BroadcastSpec {
@@ -33,26 +34,75 @@ export const BET_LABELS_BY_GAME: Record<'seotda' | 'poker', Record<BetActionKind
 }
 
 /**
+ * 게임별 베팅 라벨 결정 — 방 gameType 을 그대로 받아 분기를 한곳에 모은다.
+ * 고스톱은 베팅 UI 가 없지만 로그·과거 기록 표기용으로 섯다 라벨로 폴백한다.
+ * 사전(d)을 넘기면 로케일 라벨(d.bet)을 쓰고, 없으면 한국어 상수로 폴백한다.
+ */
+export function betLabelsFor(
+  gameType: RoomGameType,
+  d?: Pick<Dictionary, 'bet'>,
+): Record<BetActionKind, string> {
+  const key = gameType === 'poker' ? 'poker' : 'seotda'
+  return d ? d.bet[key] : BET_LABELS_BY_GAME[key]
+}
+
+/**
+ * 칩 금액 표기 — 10만 이상은 만 단위로 축약해 판 옆 작은 화면에서 자릿수를 줄인다.
+ * 예: 125000 → '12.5만' (필요할 때만 소수 1자리), 10000000 → '1,000만', 99999 → '99,999'
+ * '만' 접미사는 사전에 로케일 키가 아직 없다 — 키가 생기면 사전 기반으로 바꿀 것.
+ */
+export function formatChips(n: number): string {
+  if (Math.abs(n) < 100_000) return n.toLocaleString()
+  const man = n / 10_000
+  return `${man.toLocaleString(undefined, { maximumFractionDigits: 1 })}만`
+}
+
+/**
+ * 유저별 마지막 확정(accepted) 액션 — 다이·올인 상태 게이팅의 기준.
+ * snapshot.actions 는 seq 오름차순이므로 순회하며 덮어쓰면 마지막 확정 액션이 남는다.
+ */
+export function lastAcceptedByUser(actions: readonly BetActionView[]): Map<string, BetActionView> {
+  // 로컬 accumulator — 함수 밖으로 새지 않음
+  const byUser = new Map<string, BetActionView>()
+  for (const action of actions) {
+    if (action.status === 'accepted') byUser.set(action.userId, action)
+  }
+  return byUser
+}
+
+/** 레이즈 프리셋 라벨 폴백 — 사전 없이 호출되는 경로에서 쓰는 한국어 상수. */
+const PRESET_LABELS_FALLBACK: Dictionary['presets'] = {
+  pping: '삥',
+  ttadang: '따당',
+  half: '하프',
+  full: '풀',
+  pot: '팟',
+  double: '×2',
+}
+
+/**
  * 레이즈 프리셋 — 직전 베팅·팟 기준 표준 콜.
  * 섯다: 삥(기본 단위)·따당(직전×2)·하프(팟 절반)·풀(팟).
+ * labels 에 사전의 d.presets 를 넘기면 로케일 라벨을 쓴다.
  */
 export function raisePresets(
   gameType: 'seotda' | 'poker',
   { lastBet, pot, base }: { lastBet: number; pot: number; base: number },
+  labels: Dictionary['presets'] = PRESET_LABELS_FALLBACK,
 ): readonly { label: string; amount: number }[] {
   const half = Math.ceil(pot / 2)
   if (gameType === 'seotda') {
     return [
-      { label: '삥', amount: base },
-      { label: '따당', amount: lastBet * 2 },
-      { label: '하프', amount: half },
-      { label: '풀', amount: pot },
+      { label: labels.pping, amount: base },
+      { label: labels.ttadang, amount: lastBet * 2 },
+      { label: labels.half, amount: half },
+      { label: labels.full, amount: pot },
     ].filter((preset) => preset.amount >= 1)
   }
   return [
-    { label: '×2', amount: lastBet * 2 },
-    { label: '하프', amount: half },
-    { label: '팟', amount: pot },
+    { label: labels.double, amount: lastBet * 2 },
+    { label: labels.half, amount: half },
+    { label: labels.pot, amount: pot },
   ].filter((preset) => preset.amount >= 1)
 }
 
@@ -60,6 +110,18 @@ export const GAME_LABELS: Record<RoomGameType, { name: string; emoji: string }> 
   seotda: { name: '섯다', emoji: '🎴' },
   gostop: { name: '고스톱', emoji: '🌸' },
   poker: { name: '포커', emoji: '♠' },
+}
+
+/**
+ * 게임 라벨 — 사전(d)을 넘기면 로케일 이름(d.games)을 쓰고, 없으면 GAME_LABELS 상수로
+ * 폴백한다. emoji 는 로케일과 무관하다. GAME_LABELS 직접 참조는 이 함수로 옮겨갈 대상.
+ */
+export function gameLabelFor(
+  gameType: RoomGameType,
+  d?: Pick<Dictionary, 'games'>,
+): { name: string; emoji: string } {
+  const fallback = GAME_LABELS[gameType]
+  return d ? { name: d.games[gameType], emoji: fallback.emoji } : fallback
 }
 
 export const GAME_BADGE_TONE: Record<RoomGameType, 'accent' | 'win' | 'warn'> = {
