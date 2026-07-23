@@ -35,7 +35,7 @@
 | 화투 카드 모델 | 구현 완료 | `src/features/hwatu/cards.ts` |
 | 섯다 엔진 | 구현 완료, 190 픽스처 검증 미실행 | `src/features/seotda/engine.ts`, `engine.test.ts`(`it.todo`), `seotda.fixtures.ts` 부재 |
 | 고스톱 엔진 | 구현 완료, 테스트 없음 | `src/features/gostop/scoring.ts` — 테스트 파일 자체가 없음 |
-| 인증 | Auth.js v5 내부 계정·게스트 토큰 동작, Authentik 미등록 | `src/lib/auth.ts`, `registration_codes`/`AUTH_AUTHENTIK_*` |
+| 인증 | Auth.js v5 내부 계정·게스트 토큰 동작, SSO는 관리자 화면에서 연결 가능 | `src/lib/auth.ts`, `registration_codes`/`auth_settings` |
 | DB · RLS | 마이그레이션 3개 적용됨 | init_schema, init_rls(`supabase/migrations/0001`), keep_alive_and_app_grants |
 | 방 · 실시간 | 구현 완료 | `src/features/game/`(actions·queries·room-client), `src/lib/realtime/` |
 | 베팅 · 칩 원장 | 구현 완료 | `src/features/betting/actions.ts`, `src/features/budget/actions.ts` |
@@ -77,9 +77,8 @@ Phase 0(스캐폴드)부터 핵심 경로 6단계(화투·섯다 / 인증·데�
 Advisor / 정산·랭킹), Phase 7(vision), Phase 8(고스톱)까지 코드 레벨 구현이 끝나 있다.
 세부 근거는 위 "현재 상태 요약" 표.
 
-Authentik만 예외다 — env 스키마와 조건부 provider 로직(`AUTH_AUTHENTIK_ID/SECRET/ISSUER`
-셋 다 있을 때만 활성)은 구현됐지만, 실제 Authentik 애플리케이션 등록·redirect URI 연결은
-안 됐다. 내부 계정은 가입코드 확인 뒤에 만들 수 있고, Authentik은 아직 선택적으로만 활성화된다.
+Authentik은 초기 관리자 로그인 뒤 `/admin`의 SSO 설정에서 Issuer URL·Client ID·Client secret을
+입력하고 활성화한다. Authentik 애플리케이션의 Redirect URI 등록만 운영자가 마치면 된다.
 
 ---
 

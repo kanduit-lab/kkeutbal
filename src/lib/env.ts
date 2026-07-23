@@ -22,16 +22,6 @@ const serverSchema = z.object({
   DATABASE_URL: z.string().url(),
 
   AUTH_SECRET: z.string().min(1),
-  /** 회원가입을 열기 위해 입력하는 서버 전용 코드. */
-  AUTH_REGISTRATION_CODE: optionalEnv(
-    z.string().trim().toUpperCase().regex(/^[A-Z2-9]{10}$/),
-  ),
-  AUTH_AUTHENTIK_ID: optionalEnv(z.string().min(1)),
-  AUTH_AUTHENTIK_SECRET: optionalEnv(z.string().min(1)),
-  AUTH_AUTHENTIK_ISSUER: optionalEnv(z.string().url()),
-  /** 관리자 부트스트랩 — 쉼표로 구분한 내부 계정 아이디 목록. DB is_admin 과 OR 로 판정한다. */
-  AUTH_ADMIN_USERNAMES: z.string().default(''),
-
   ANTHROPIC_API_KEY: optionalEnv(z.string().min(1)),
   JOKBO_VISION_MODEL: z.string().default('claude-sonnet-5'),
   JOKBO_VISION_ENABLED: z
@@ -43,7 +33,6 @@ const serverSchema = z.object({
 const clientSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
-  /** Supabase publishable 키(`sb_publishable_…`). legacy anon JWT 는 폐기 예정이라 쓰지 않는다. */
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
 })
 

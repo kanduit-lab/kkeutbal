@@ -8,6 +8,7 @@ import {
   createRegistrationCode,
   revokeGuestToken,
   revokeRegistrationCode,
+  saveSsoSettings,
   setAdmin,
 } from '../admin-actions'
 import type {
@@ -16,7 +17,8 @@ import type {
   GuestTokenView,
   RegistrationCodeView,
 } from '../admin-queries'
-import { Badge, Button, ConfirmDialog, Input, Panel, useToast } from '@/components/ui'
+import type { SsoSettingsView } from '../sso-settings'
+import { Badge, Button, ConfirmDialog, Field, Input, Panel, useToast } from '@/components/ui'
 import { GAME_BADGE_TONE, GAME_LABELS } from '@/features/game/components/shared'
 
 const EXPIRY_PRESETS = [
@@ -52,14 +54,14 @@ export function AdminClient({
   users,
   rooms,
   selfId,
-  bootstrapRegistrationCodeEnabled,
+  ssoSettings,
 }: {
   tokens: readonly GuestTokenView[]
   registrationCodes: readonly RegistrationCodeView[]
   users: readonly AdminUserView[]
   rooms: readonly AdminRoomView[]
   selfId: string
-  bootstrapRegistrationCodeEnabled: boolean
+  ssoSettings: SsoSettingsView
 }) {
   const router = useRouter()
   const { toast } = useToast()
@@ -71,12 +73,15 @@ export function AdminClient({
   const [registrationHours, setRegistrationHours] = useState<number>(72)
   const [latestRegistrationCode, setLatestRegistrationCode] = useState<string | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<GuestTokenView | null>(null)
-  const [revokeRegistrationTarget, setRevokeRegistrationTarget] = useState<RegistrationCodeView | null>(
-    null,
-  )
+  const [revokeRegistrationTarget, setRevokeRegistrationTarget] =
+    useState<RegistrationCodeView | null>(null)
   const [adminTarget, setAdminTarget] = useState<AdminUserView | null>(null)
   const [closeTarget, setCloseTarget] = useState<AdminRoomView | null>(null)
   const [memberQuery, setMemberQuery] = useState('')
+  const [ssoEnabled, setSsoEnabled] = useState(ssoSettings.enabled)
+  const [ssoIssuer, setSsoIssuer] = useState(ssoSettings.issuer)
+  const [ssoClientId, setSsoClientId] = useState(ssoSettings.clientId)
+  const [ssoClientSecret, setSsoClientSecret] = useState('')
 
   const normalizedMemberQuery = memberQuery.trim().toLowerCase()
   const filteredUsers = normalizedMemberQuery
@@ -119,12 +124,102 @@ export function AdminClient({
     })
   }
 
+  function saveSso() {
+    if (isPending) return
+    startTransition(async () => {
+      const result = await saveSsoSettings({
+        enabled: ssoEnabled,
+        issuer: ssoIssuer.trim(),
+        clientId: ssoClientId.trim(),
+        clientSecret: ssoClientSecret,
+      })
+      if (result.success) {
+        setSsoClientSecret('')
+        toast(
+          ssoEnabled ? 'SSO 설정을 저장하고 활성화했습니다' : 'SSO 설정을 저장했습니다',
+          'success',
+        )
+        router.refresh()
+      } else {
+        toast(result.error, 'error')
+      }
+    })
+  }
+
   return (
     <div className="space-y-6">
       <Panel className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold">SSO 설정</h2>
+            <p className="mt-1 text-sm text-muted">
+              Authentik OIDC 연결은 이 화면에서만 관리합니다
+            </p>
+          </div>
+          <Badge tone={ssoEnabled ? 'win' : 'muted'}>{ssoEnabled ? '사용 중' : '꺼짐'}</Badge>
+        </div>
+        <label className="flex min-h-12 items-center gap-3 rounded-xl bg-bg-deep/60 px-4 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={ssoEnabled}
+            onChange={(event) => setSsoEnabled(event.target.checked)}
+            className="size-4 accent-accent"
+          />
+          SSO 로그인 사용
+        </label>
+        <Field label="Issuer URL">
+          <Input
+            type="url"
+            value={ssoIssuer}
+            onChange={(event) => setSsoIssuer(event.target.value)}
+            placeholder="https://auth.example.com/application/o/kkeutbal/"
+            maxLength={500}
+            autoCapitalize="off"
+          />
+        </Field>
+        <Field label="Client ID">
+          <Input
+            value={ssoClientId}
+            onChange={(event) => setSsoClientId(event.target.value)}
+            maxLength={500}
+            autoCapitalize="off"
+          />
+        </Field>
+        <Field
+          label={ssoSettings.hasClientSecret ? 'Client secret (변경할 때만 입력)' : 'Client secret'}
+        >
+          <Input
+            type="password"
+            value={ssoClientSecret}
+            onChange={(event) => setSsoClientSecret(event.target.value)}
+            placeholder={
+              ssoSettings.hasClientSecret ? '기존 값은 안전하게 보관됩니다' : 'Client secret 입력'
+            }
+            maxLength={1000}
+            autoComplete="new-password"
+          />
+        </Field>
+        <p className="text-xs text-muted">
+          secret은 표시하지 않고 AUTH_SECRET으로 암호화해 저장합니다. Authentik Redirect URI는
+          /api/auth/callback/authentik 입니다.
+        </p>
+        <Button
+          type="button"
+          variant="primary"
+          className="w-full"
+          disabled={isPending}
+          onClick={saveSso}
+        >
+          SSO 설정 저장
+        </Button>
+      </Panel>
+
+      <Panel className="space-y-4">
         <div>
           <h2 className="font-bold">가입코드 발급</h2>
-          <p className="mt-1 text-sm text-muted">발급한 코드는 이 화면에서 한 번만 확인할 수 있습니다</p>
+          <p className="mt-1 text-sm text-muted">
+            발급한 코드는 이 화면에서 한 번만 확인할 수 있습니다
+          </p>
         </div>
         <Input
           value={registrationLabel}
@@ -160,7 +255,9 @@ export function AdminClient({
           <div className="rounded-xl bg-bg-deep/60 p-3">
             <p className="text-xs text-muted">방금 발급한 가입코드</p>
             <div className="mt-1 flex items-center justify-between gap-3">
-              <code className="font-mono text-lg font-bold tracking-[0.18em]">{latestRegistrationCode}</code>
+              <code className="font-mono text-lg font-bold tracking-[0.18em]">
+                {latestRegistrationCode}
+              </code>
               <Button
                 type="button"
                 size="sm"
@@ -185,11 +282,7 @@ export function AdminClient({
       <Panel className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-bold">가입코드 관리</h2>
-          {bootstrapRegistrationCodeEnabled ? <Badge tone="warn">비상 코드 사용 중</Badge> : null}
         </div>
-        {bootstrapRegistrationCodeEnabled ? (
-          <p className="text-sm text-muted">환경변수 비상 코드는 이 화면에서 회수할 수 없습니다</p>
-        ) : null}
         {registrationCodes.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted">발급된 가입코드가 없습니다</p>
         ) : (
@@ -333,7 +426,8 @@ export function AdminClient({
                 </p>
                 <p className="mt-0.5 text-xs text-muted">
                   {user.username ?? '아이디 없음'}
-                  {user.phoneMasked ? ` · ${user.phoneMasked}` : ''} · {formatDate(user.createdAt)} 가입
+                  {user.phoneMasked ? ` · ${user.phoneMasked}` : ''} · {formatDate(user.createdAt)}{' '}
+                  가입
                 </p>
               </li>
             ))}

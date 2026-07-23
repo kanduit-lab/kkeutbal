@@ -24,7 +24,7 @@ password (항상 활성)
   → 내부 계정. 회원가입은 features/auth/actions.ts registerAndLogin
   → users.username + bcrypt(password_hash). sub = `local:{username}`
 
-AUTH_AUTHENTIK_ID + AUTH_AUTHENTIK_SECRET + AUTH_AUTHENTIK_ISSUER 모두 설정
+관리자 콘솔의 SSO 설정에서 활성화 + Issuer URL + Client ID + Client secret 모두 저장
   → Authentik OIDC provider 활성 (hasAuthentik())
   → 자동 연동: sub 일치 행이 없으면 preferred_username/phone_number 클레임으로
     내부 계정을 찾아 authentik_sub 를 교체해 병합 (resolveProviderUser)
@@ -35,8 +35,8 @@ guest-token (항상 활성)
 
 ```
 
-로그인 화면은 활성 provider만 노출한다. 관리자(`users.is_admin` 또는 `AUTH_ADMIN_USERNAMES`
-부트스트랩 목록)는 `/admin`에서 게스트 토큰 발급·회수와 관리자 지정을 한다
+로그인 화면은 활성 provider만 노출한다. 관리자(`users.is_admin`)는 `/admin`에서 게스트 토큰
+발급·회수, 관리자 지정, SSO 설정을 한다
 (`features/auth/admin-actions.ts`, 게이트는 `features/auth/roles.ts` `isAdminUser`).
 
 ```
@@ -67,9 +67,9 @@ guest-token (항상 활성)
 코드인지 확인한다. 일치하면 `AUTH_SECRET`으로 서명한 10분짜리 HTTP-only 쿠키를 `/register`
 경로에 발급한다. `/register` 페이지와 `registerAndLogin` 액션은 모두 이 쿠키를 검증하므로
 URL 직접 접근이나 폼 직접 제출로는 가입할 수 없다. 원문 코드는 발급 직후에만 관리자에게
-반환되고, 이후에는 회수·만료 상태만 관리한다. `AUTH_REGISTRATION_CODE`는 DB 가입코드를 아직
-발급할 수 없는 첫 관리자 생성용 비상 경로이며, 일반 가입코드와 같이 혼동 문자를 제외한 영문
-대문자·숫자 10자리여야 한다. 구현 근거:
+반환되고, 이후에는 회수·만료 상태만 관리한다. 단, 계정이 없는 새 인스턴스에서는 `/register`가
+바로 열리고 첫 가입자가 관리자가 된다. 이 승격은 `registerAndLogin` 트랜잭션 안에서 직렬화한다.
+구현 근거:
 `src/features/auth/registration-access.ts`, `registration-codes.ts`, `admin-actions.ts`.
 
 ### 설정 파일이 둘로 나뉜 이유
@@ -97,7 +97,10 @@ URL 직접 접근이나 폼 직접 제출로는 가입할 수 없다. 원문 코
 | Subject mode | 안정적인 `sub` |
 
 `sub`가 바뀌면 `users.authentikSub` 매칭이 끊겨 기존 전적과 분리된 새 계정이 생긴다. Authentik에서
-subject mode를 바꾸지 말 것.
+subject mode를 바꾸지 말 것. Issuer URL·Client ID·Client secret은 초기 관리자 로그인 후 `/admin`의
+SSO 설정에 입력한다. client secret은 화면에 다시 표시하지 않으며 `AUTH_SECRET`으로 AES-GCM 암호화한
+값만 `auth_settings`에 저장한다. `AUTH_SECRET`을 교체하면 기존 SSO secret을 복호화할 수 없으므로,
+SSO 설정에서 새 secret을 다시 저장해야 한다.
 
 ## 미들웨어 — UX 게이트일 뿐
 
@@ -236,7 +239,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 | Realtime payload | 신뢰 경계 밖. 힌트로만 쓰고 진실은 `refreshRoom` refetch | `03-realtime-protocol.md`, 위 "Realtime" 절 |
 | Vision 모델 출력 | 신뢰 경계 밖. zod 파싱 실패 시 부분 반영 없이 실패 반환 | `src/features/jokbo-advisor/vision/actions.ts` |
 | 칩 원장 쓰기 | append-only 트리거로 UPDATE/DELETE 자체가 불가. 정정은 반대 부호 INSERT | `chip_ledger_is_append_only` 트리거 |
-| 비밀값 | `DATABASE_URL`, `AUTH_SECRET`, `AUTH_AUTHENTIK_SECRET`, `ANTHROPIC_API_KEY`는 서버 전용 (`serverEnv()`) | `src/lib/env.ts` — `NEXT_PUBLIC_` 접두사만 클라이언트 노출 |
+| 비밀값 | `DATABASE_URL`, `AUTH_SECRET`, `ANTHROPIC_API_KEY`는 서버 전용 (`serverEnv()`)이다. SSO client secret은 `auth_settings`의 암호문으로만 저장한다 | `src/lib/env.ts`, `features/auth/sso-settings.ts` |
 | DB 접근 | 서버(drizzle)만 `kkeutbal_app`으로 접속. 브라우저는 DB에 직접 붙지 않는다 | `src/lib/db.ts` |
 | 데이터 격리 | RLS는 전 테이블에 활성화되어 있으나 정상 경로에서 평가되지 않음(위 "RLS는 방어층" 절). 실질 격리는 Server Action의 방 소속 검사 | `requireRole` / `memberRole` 패턴 |
 
@@ -248,7 +251,7 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 
 - [ ] 하드코딩된 비밀값 없음 (`.env.example`에 키 이름만)
 - [ ] `NEXT_PUBLIC_` 접두사가 붙은 서버 전용 값 없음
-- [ ] `registration_codes` 마이그레이션이 적용되어 있고, 운영용 활성 가입코드가 발급되어 있음
+- [ ] `registration_codes`와 `auth_settings` 마이그레이션이 적용되어 있고, 운영용 활성 가입코드가 발급되어 있음
 - [ ] 모든 신규 Server Action이 세션·방 소속·역할을 재검증
 - [ ] 모든 외부 입력(폼·realtime·vision)이 zod 통과
 - [ ] 신규 테이블에 RLS 활성화(방어층 목적) — 단, 이 자체가 인가 경로가 아님을 인지
@@ -271,7 +274,7 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 | 원장 불변성 | `kkeutbal_app` 롤로 `chip_ledger` 직접 UPDATE 시도 → 트리거 예외 확인 |
 | 방 소속 격리 | 비참가자 세션으로 `refreshRoom` 호출 → 실패 확인 |
 | 가입코드 게이트 | 가입코드 없이 `/register` 접근·가입 폼 제출 → `/login`으로 이동, 올바른 코드 뒤에는 가입 가능 |
-| 토큰 누출 | 클라이언트 번들(`next build` 산출물)에서 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_AUTHENTIK_SECRET`, `ANTHROPIC_API_KEY` 문자열 검색 → 부재 확인 |
+| 토큰 누출 | 클라이언트 번들(`next build` 산출물)에서 `DATABASE_URL`, `AUTH_SECRET`, `ANTHROPIC_API_KEY` 문자열 검색 → 부재 확인 |
 
 ## Open Questions
 

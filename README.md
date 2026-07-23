@@ -77,10 +77,11 @@ pnpm dev                     # http://localhost:3000
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | ✅ | Realtime 공개 채널 구독 |
 | `DATABASE_URL` | ✅ | `kkeutbal_app` 롤, Supabase pooler(session mode, 5432) |
 | `AUTH_SECRET` | ✅ | `openssl rand -base64 32` |
-| `AUTH_ADMIN_USERNAMES` | — | 관리자 부트스트랩 (쉼표 구분 아이디 목록) |
-| `AUTH_AUTHENTIK_ID` / `_SECRET` / `_ISSUER` | — | 3종 모두 있을 때만 SSO 활성 |
-| `AUTH_REGISTRATION_CODE` | — | 첫 가입용 비상 코드(영문 대문자·숫자 10자리). 평소 가입코드는 관리자 화면에서 발급·회수 |
 | `ANTHROPIC_API_KEY` / `JOKBO_VISION_ENABLED` / `JOKBO_VISION_MODEL` | — | 미설정 시 수동 피커만 동작 |
+
+처음 실행할 때 로그인 화면에서 **초기 관리자 만들기**를 선택해 아이디·비밀번호를 만듭니다.
+첫 계정만 관리자이며, 이후 내부 계정 가입은 `/admin`에서 관리자가 발급한 가입코드가 필요합니다.
+Authentik SSO도 `/admin`의 SSO 설정에서 연결합니다.
 
 ## 🗂️ 구조
 

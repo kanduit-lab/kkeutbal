@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { loginWithGuestToken, loginWithPassword } from '@/features/auth/actions'
 import { GuestNamePicker } from '@/features/auth/components/guest-name-picker'
 import { RegistrationCodeForm } from '@/features/auth/components/registration-code-form'
@@ -13,11 +14,14 @@ type LoginMode = 'password' | 'guest' | 'registration'
 export function LoginFormSwitcher({
   redirectTo,
   initialMode,
+  firstAccount,
 }: {
   redirectTo: string
   initialMode: LoginMode
+  firstAccount: boolean
 }) {
   const { d } = useDict()
+  const router = useRouter()
   const [mode, setMode] = useState<LoginMode>(initialMode)
 
   if (mode === 'guest') {
@@ -38,6 +42,26 @@ export function LoginFormSwitcher({
   }
 
   if (mode === 'registration') {
+    if (firstAccount) {
+      return (
+        <Panel className="space-y-4">
+          <div>
+            <h2 className="font-bold">초기 관리자 계정</h2>
+            <p className="mt-1 text-sm text-muted">
+              처음 실행입니다. 아이디와 비밀번호를 만들면 이 계정이 관리자가 됩니다.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button type="button" variant="ghost" onClick={() => setMode('password')}>
+              {d.common.cancel}
+            </Button>
+            <Button type="button" variant="primary" onClick={() => router.push('/register')}>
+              관리자 만들기
+            </Button>
+          </div>
+        </Panel>
+      )
+    }
     return (
       <Panel className="space-y-4">
         <div className="flex items-center justify-between gap-3">
@@ -71,12 +95,17 @@ export function LoginFormSwitcher({
           required
           autoComplete="current-password"
         />
-        <SubmitButton variant="primary" size="lg" className="w-full" pendingLabel={d.auth.loginPending}>
+        <SubmitButton
+          variant="primary"
+          size="lg"
+          className="w-full"
+          pendingLabel={d.auth.loginPending}
+        >
           {d.auth.login}
         </SubmitButton>
       </form>
       <p className="text-center text-sm text-muted">
-        {d.auth.noAccount}{' '}
+        {firstAccount ? '처음 설치인가요?' : d.auth.noAccount}{' '}
         <Button
           type="button"
           variant="ghost"
@@ -84,7 +113,7 @@ export function LoginFormSwitcher({
           className="min-h-0 px-0 py-0 font-bold text-text underline underline-offset-4"
           onClick={() => setMode('registration')}
         >
-          {d.auth.registerLink}
+          {firstAccount ? '초기 관리자 만들기' : d.auth.registerLink}
         </Button>
       </p>
       <Button type="button" variant="ghost" className="w-full" onClick={() => setMode('guest')}>

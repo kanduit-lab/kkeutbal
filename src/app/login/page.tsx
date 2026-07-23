@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { hasAuthentik, signIn } from '@/lib/auth'
 import { LoginFormSwitcher } from '@/features/auth/components/login-form-switcher'
+import { isFirstAccount } from '@/features/auth/bootstrap'
 import { findCard } from '@/features/hwatu/cards'
 import { HwatuCardView } from '@/components/hwatu-card'
 import { LocaleSwitcher } from '@/components/locale-switcher'
@@ -27,10 +28,14 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ next?: string; error?: string; mode?: string }>
 }) {
-  const [{ next, error, mode }, { d }] = await Promise.all([searchParams, getDict()])
+  const [{ next, error, mode }, { d }, authentik, firstAccount] = await Promise.all([
+    searchParams,
+    getDict(),
+    hasAuthentik(),
+    isFirstAccount(),
+  ])
   const errorMessage = error ? (loginErrorCopy(d)[error] ?? d.auth.errorLoginFailed) : null
   const redirectTo = next && next.startsWith('/') ? next : '/'
-  const authentik = hasAuthentik()
   const initialMode = mode === 'guest' ? 'guest' : 'password'
   const showcase = SHOWCASE_CARD_IDS.map((id) => findCard(id)).filter(
     (card): card is NonNullable<typeof card> => card !== undefined,
@@ -56,11 +61,15 @@ export default async function LoginPage({
           ))}
         </div>
         <h1 className="font-brush text-7xl font-black tracking-tight lg:text-8xl">
-          {d.common.appName}<span className="text-accent">.</span>
+          {d.common.appName}
+          <span className="text-accent">.</span>
         </h1>
         <p className="mt-4 text-lg text-muted">{d.auth.tagline}</p>
         <p className="mt-2">
-          <Link href="/about" className="text-sm text-muted underline underline-offset-4 hover:text-text">
+          <Link
+            href="/about"
+            className="text-sm text-muted underline underline-offset-4 hover:text-text"
+          >
             {d.auth.aboutLink}
           </Link>
         </p>
@@ -74,7 +83,11 @@ export default async function LoginPage({
             </p>
           ) : null}
 
-          <LoginFormSwitcher redirectTo={redirectTo} initialMode={initialMode} />
+          <LoginFormSwitcher
+            redirectTo={redirectTo}
+            initialMode={initialMode}
+            firstAccount={firstAccount}
+          />
 
           {authentik ? (
             <form
@@ -83,7 +96,12 @@ export default async function LoginPage({
                 await signIn('authentik', { redirectTo })
               }}
             >
-              <Button type="submit" variant="surface" size="lg" className="w-full border border-white/10">
+              <Button
+                type="submit"
+                variant="surface"
+                size="lg"
+                className="w-full border border-white/10"
+              >
                 {d.auth.authentikButton}
               </Button>
             </form>

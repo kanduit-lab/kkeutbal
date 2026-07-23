@@ -23,12 +23,7 @@ export const inputMode = pgEnum('input_mode', ['trust', 'approval'])
 export const memberRole = pgEnum('member_role', ['host', 'dealer', 'player', 'observer'])
 export const roundStatus = pgEnum('round_status', ['playing', 'ended', 'voided'])
 export const betAction = pgEnum('bet_action', ['check', 'call', 'raise', 'fold', 'allin'])
-export const actionStatus = pgEnum('action_status', [
-  'pending',
-  'accepted',
-  'rejected',
-  'reverted',
-])
+export const actionStatus = pgEnum('action_status', ['pending', 'accepted', 'rejected', 'reverted'])
 export const promotionKind = pgEnum('promotion_kind', ['banner', 'popup'])
 export const chipReason = pgEnum('chip_reason', [
   'buy_in',
@@ -55,9 +50,22 @@ export const users = pgTable('users', {
   phone: text('phone').unique(),
   displayName: text('display_name').notNull(),
   avatarUrl: text('avatar_url'),
-  /** 관리자 — 게스트 토큰 발급·관리자 지정 권한. 부트스트랩은 AUTH_ADMIN_USERNAMES env. */
+  /** 관리자 — 게스트 토큰 발급·관리자 지정·SSO 설정 권한. */
   isAdmin: boolean('is_admin').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+/**
+ * 인스턴스 단위 인증 설정. SSO 비밀값은 AUTH_SECRET 기반 AES-GCM 암호문으로만 보관한다.
+ * id 는 항상 `default` 한 행만 사용한다.
+ */
+export const authSettings = pgTable('auth_settings', {
+  id: text('id').primaryKey().default('default'),
+  ssoEnabled: boolean('sso_enabled').notNull().default(false),
+  ssoIssuer: text('sso_issuer'),
+  ssoClientId: text('sso_client_id'),
+  ssoClientSecretCiphertext: text('sso_client_secret_ciphertext'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 /**

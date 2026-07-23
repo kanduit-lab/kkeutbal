@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { and, eq, gt, isNull, or } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import { serverEnv } from '@/lib/env'
+import { isFirstAccount } from './bootstrap'
 import { registrationCodeHash, registrationCodeSchema } from './registration-codes'
 
 const REGISTRATION_ACCESS_COOKIE = 'kkeutbal_registration_access'
@@ -65,12 +66,8 @@ export async function grantRegistrationAccess(code: string): Promise<Registratio
 
   try {
     const matchedDatabaseCode = await isActiveDatabaseCode(parsed.data, env.AUTH_SECRET)
-    const matchedBootstrapCode =
-      env.AUTH_REGISTRATION_CODE !== undefined && matches(env.AUTH_REGISTRATION_CODE, parsed.data)
-    if (!matchedDatabaseCode && !matchedBootstrapCode) {
-      return (await hasActiveDatabaseCode()) || env.AUTH_REGISTRATION_CODE
-        ? 'invalid'
-        : 'unavailable'
+    if (!matchedDatabaseCode) {
+      return (await hasActiveDatabaseCode()) ? 'invalid' : 'unavailable'
     }
   } catch (error) {
     console.error('registration code lookup failed:', error)
@@ -93,6 +90,8 @@ export async function grantRegistrationAccess(code: string): Promise<Registratio
 
 /** 회원가입 화면과 가입 액션이 모두 확인하는 접근 권한. */
 export async function hasRegistrationAccess(): Promise<boolean> {
+  if (await isFirstAccount()) return true
+
   const env = serverEnv()
   const token = (await cookies()).get(REGISTRATION_ACCESS_COOKIE)?.value
   if (!token) return false

@@ -9,6 +9,7 @@ import { lockRoom } from '../game/action-helpers'
 import { currentUserId } from './session'
 import { isAdminUser } from './roles'
 import { generateRegistrationCode, registrationCodeHash } from './registration-codes'
+import { encryptSsoClientSecret, SETTINGS_ID } from './sso-settings'
 
 /** 관리자 전용 액션 — 게스트 토큰 발급·회수, 관리자 지정, 방 강제 정산. */
 
@@ -30,10 +31,77 @@ function generateTokenCode(): string {
 const createTokenSchema = z.object({
   label: z.string().trim().min(1).max(40),
   /** 만료까지의 시간. 0 이면 무기한. */
-  expiresInHours: z.number().int().min(0).max(24 * 90),
+  expiresInHours: z
+    .number()
+    .int()
+    .min(0)
+    .max(24 * 90),
 })
 
 const createRegistrationCodeSchema = createTokenSchema
+
+const saveSsoSettingsSchema = z.object({
+  enabled: z.boolean(),
+  issuer: z.string().trim().max(500),
+  clientId: z.string().trim().max(500),
+  clientSecret: z.string().trim().max(1000),
+})
+
+export async function saveSsoSettings(
+  input: z.infer<typeof saveSsoSettingsSchema>,
+): Promise<ActionResult<undefined>> {
+  const adminId = await requireAdmin()
+  if (!adminId) return fail('관리자만 변경할 수 있습니다')
+  const parsed = saveSsoSettingsSchema.safeParse(input)
+  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+
+  const { enabled, issuer, clientId, clientSecret } = parsed.data
+  if (enabled) {
+    if (!issuer || !z.string().url().safeParse(issuer).success || !clientId) {
+      return fail('SSO를 켜려면 Issuer URL과 Client ID를 입력하세요')
+    }
+  }
+
+  try {
+    const [current] = await db
+      .select({ clientSecretCiphertext: schema.authSettings.ssoClientSecretCiphertext })
+      .from(schema.authSettings)
+      .where(eq(schema.authSettings.id, SETTINGS_ID))
+      .limit(1)
+    const clientSecretCiphertext = clientSecret
+      ? encryptSsoClientSecret(clientSecret)
+      : (current?.clientSecretCiphertext ?? null)
+
+    if (enabled && !clientSecretCiphertext) {
+      return fail('SSO를 켜려면 Client secret을 입력하세요')
+    }
+
+    await db
+      .insert(schema.authSettings)
+      .values({
+        id: SETTINGS_ID,
+        ssoEnabled: enabled,
+        ssoIssuer: issuer || null,
+        ssoClientId: clientId || null,
+        ssoClientSecretCiphertext: clientSecretCiphertext,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: schema.authSettings.id,
+        set: {
+          ssoEnabled: enabled,
+          ssoIssuer: issuer || null,
+          ssoClientId: clientId || null,
+          ssoClientSecretCiphertext: clientSecretCiphertext,
+          updatedAt: new Date(),
+        },
+      })
+    return ok(undefined)
+  } catch (error) {
+    console.error('saveSsoSettings failed:', error)
+    return fail('SSO 설정을 저장하지 못했습니다')
+  }
+}
 
 export async function createRegistrationCode(
   input: z.infer<typeof createRegistrationCodeSchema>,
@@ -59,8 +127,9 @@ export async function createRegistrationCode(
       })
       return ok({ code })
     } catch (error) {
-      const isUnique =
-        Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505')
+      const isUnique = Boolean(
+        error && typeof error === 'object' && 'code' in error && error.code === '23505',
+      )
       if (isUnique) continue
       console.error('createRegistrationCode failed:', error)
       return fail('가입코드 발급에 실패했습니다')
@@ -88,8 +157,9 @@ export async function createGuestToken(
       await db.insert(schema.guestTokens).values({ code, label, createdBy: adminId, expiresAt })
       return ok({ code })
     } catch (error) {
-      const isUnique =
-        Boolean(error && typeof error === 'object' && 'code' in error && error.code === '23505')
+      const isUnique = Boolean(
+        error && typeof error === 'object' && 'code' in error && error.code === '23505',
+      )
       if (isUnique) continue
       console.error('createGuestToken failed:', error)
       return fail('토큰 발급에 실패했습니다')
@@ -137,7 +207,12 @@ export async function revokeRegistrationCode(
     const [updated] = await db
       .update(schema.registrationCodes)
       .set({ revokedAt: new Date() })
-      .where(and(eq(schema.registrationCodes.id, parsed.data.codeId), isNull(schema.registrationCodes.revokedAt)))
+      .where(
+        and(
+          eq(schema.registrationCodes.id, parsed.data.codeId),
+          isNull(schema.registrationCodes.revokedAt),
+        ),
+      )
       .returning({ id: schema.registrationCodes.id })
     if (!updated) return fail('가입코드를 찾을 수 없거나 이미 회수했습니다')
     return ok({ codeId: updated.id })

@@ -7,18 +7,17 @@ import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { authConfigBase } from './auth-config'
 import { db, schema } from './db'
-import { serverEnv } from './env'
+import { getActiveSsoSettings, type ActiveSsoSettings } from '@/features/auth/sso-settings'
+import { createUserGrantingFirstAdmin } from '@/features/auth/bootstrap'
 
 /**
  * Auth.js v5 — 3개 로그인 경로.
  *
  * - `password`: 내부 계정 (아이디·비밀번호). 회원가입은 features/auth/actions.ts.
- * - `authentik`: OIDC SSO. `AUTH_AUTHENTIK_*` 3종이 모두 있을 때만 노출되며,
+ * - `authentik`: OIDC SSO. 관리자 화면에서 활성화·저장한 설정이 완전할 때만 노출되며,
  *   아이디 또는 전화번호가 일치하는 내부 계정이 있으면 같은 계정으로 자동 연동한다.
  * - `guest-token`: 관리자가 발급한 토큰 + 이름. 같은 (토큰, 이름) = 같은 계정.
  */
-
-const env = serverEnv()
 
 const passwordSchema = z.object({
   username: z
@@ -38,11 +37,17 @@ const guestTokenSchema = z.object({
   name: z.string().trim().min(1).max(20),
 })
 
-function buildProviders(): NextAuthConfig['providers'] {
+function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['providers'] {
   const providers: NextAuthConfig['providers'] = []
 
-  if (env.AUTH_AUTHENTIK_ID && env.AUTH_AUTHENTIK_SECRET && env.AUTH_AUTHENTIK_ISSUER) {
-    providers.push(Authentik)
+  if (sso) {
+    providers.push(
+      Authentik({
+        clientId: sso.clientId,
+        clientSecret: sso.clientSecret,
+        issuer: sso.issuer,
+      }),
+    )
   }
 
   providers.push(
@@ -94,8 +99,8 @@ function buildProviders(): NextAuthConfig['providers'] {
   return providers
 }
 
-export function hasAuthentik(): boolean {
-  return Boolean(env.AUTH_AUTHENTIK_ID && env.AUTH_AUTHENTIK_SECRET && env.AUTH_AUTHENTIK_ISSUER)
+export async function hasAuthentik(): Promise<boolean> {
+  return Boolean(await getActiveSsoSettings())
 }
 
 /** OIDC profile 의 병합 단서 — 표준 클레임에서 아이디·전화번호를 뽑는다. */
@@ -104,8 +109,7 @@ function mergeHints(profile: unknown): { username: string | null; phone: string 
   const p = profile as { preferred_username?: unknown; phone_number?: unknown }
   const username =
     typeof p.preferred_username === 'string' ? p.preferred_username.trim().toLowerCase() : null
-  const phoneDigits =
-    typeof p.phone_number === 'string' ? p.phone_number.replace(/\D/g, '') : null
+  const phoneDigits = typeof p.phone_number === 'string' ? p.phone_number.replace(/\D/g, '') : null
   return {
     username: username && /^[a-z0-9_]{3,20}$/.test(username) ? username : null,
     phone: phoneDigits && phoneDigits.length >= 9 ? phoneDigits : null,
@@ -152,53 +156,53 @@ async function resolveProviderUser(input: {
     if (linked) return linked
   }
 
-  const [created] = await db
-    .insert(schema.users)
-    .values({ authentikSub: sub, displayName, avatarUrl })
-    .returning({ id: schema.users.id })
-  if (!created) throw new Error('user insert failed')
-  return created
+  // 첫 계정이면 관리자로 승격한다. SSO 가 유일한 로그인 수단인 인스턴스에서도 관리자를
+  // 세울 수 있어야 하므로, 비밀번호 가입과 똑같은 함수를 쓴다.
+  return await createUserGrantingFirstAdmin({ authentikSub: sub, displayName, avatarUrl })
 }
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  ...authConfigBase,
-  providers: buildProviders(),
-  callbacks: {
-    ...authConfigBase.callbacks,
-    async jwt({ token, user, account, profile }) {
-      // 최초 로그인 시에만 실행된다.
-      if (user && account) {
-        try {
-          if (account.provider === 'password') {
-            // authorize 가 내부 사용자 행을 검증했다 — id 가 곧 내부 id.
-            token.uid = String(user.id)
-            token.name = user.name
-            return token
+export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
+  const sso = await getActiveSsoSettings()
+  return {
+    ...authConfigBase,
+    providers: buildProviders(sso),
+    callbacks: {
+      ...authConfigBase.callbacks,
+      async jwt({ token, user, account, profile }) {
+        // 최초 로그인 시에만 실행된다.
+        if (user && account) {
+          try {
+            if (account.provider === 'password') {
+              // authorize 가 내부 사용자 행을 검증했다 — id 가 곧 내부 id.
+              token.uid = String(user.id)
+              token.name = user.name
+              return token
+            }
+
+            const isCredentialGuest = account.provider === 'guest-token'
+            const sub = isCredentialGuest
+              ? String(user.id)
+              : (token.sub ?? `${account.provider}:${String(user.id)}`)
+            const displayName = user.name?.trim() || '플레이어'
+
+            const row = await resolveProviderUser({
+              sub,
+              displayName,
+              avatarUrl: user.image ?? null,
+              hints:
+                account.provider === 'authentik'
+                  ? mergeHints(profile)
+                  : { username: null, phone: null },
+            })
+            token.uid = row.id
+            token.name = displayName
+          } catch (error) {
+            console.error('sign-in user resolution failed:', error)
+            throw new Error('로그인 처리 중 오류가 발생했습니다')
           }
-
-          const isCredentialGuest = account.provider === 'guest-token'
-          const sub = isCredentialGuest
-            ? String(user.id)
-            : (token.sub ?? `${account.provider}:${String(user.id)}`)
-          const displayName = user.name?.trim() || '플레이어'
-
-          const row = await resolveProviderUser({
-            sub,
-            displayName,
-            avatarUrl: user.image ?? null,
-            hints:
-              account.provider === 'authentik'
-                ? mergeHints(profile)
-                : { username: null, phone: null },
-          })
-          token.uid = row.id
-          token.name = displayName
-        } catch (error) {
-          console.error('sign-in user resolution failed:', error)
-          throw new Error('로그인 처리 중 오류가 발생했습니다')
         }
-      }
-      return token
+        return token
+      },
     },
-  },
+  }
 })

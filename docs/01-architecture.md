@@ -90,16 +90,17 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
 
 커넥션은 `globalThis` 캐시로 dev HMR 재생성을 막는다(`max: 5`, `idle_timeout: 30s`).
 
-### Auth — Authentik 선택적, 가입코드 검증
+### Auth — 관리자 설정 SSO, 가입코드 검증
 
 `src/lib/auth.ts` / `src/lib/auth-config.ts`:
 
-- `AUTH_AUTHENTIK_ID` / `_SECRET` / `_ISSUER` 세 값이 모두 있을 때만 Authentik provider가
-  provider 목록에 들어간다(`hasAuthentik()`). 현재 실제 등록은 안 돼 있다.
+- 관리자가 `/admin`의 SSO 설정에서 Authentik Issuer URL·Client ID·Client secret을 저장하고
+  활성화하면 provider 목록에 들어간다(`hasAuthentik()`). secret은 `AUTH_SECRET` 기반 AES-GCM
+  암호문으로 `auth_settings`에만 저장하며, 환경 변수로 받지 않는다.
 - 회원가입은 관리자가 `/admin`에서 발급한 `registration_codes`의 해시를 서버에서 확인한 뒤에만
-  연다. 성공하면 10분짜리 서명된 HTTP-only 쿠키가 발급되고, `/register` 페이지와
-  `registerAndLogin` 액션이 모두 이를 확인한다. `AUTH_REGISTRATION_CODE`는 첫 관리자 생성용
-  비상 코드로만 유지한다.
+  연다. 단, 계정이 하나도 없는 첫 실행은 예외로 가입코드 없이 `/register`를 열고, 첫 계정은
+  트랜잭션 안에서 자동으로 관리자가 된다. 일반 가입코드가 확인되면 10분짜리 서명된 HTTP-only
+  쿠키가 발급되고, `/register` 페이지와 `registerAndLogin` 액션이 모두 이를 확인한다.
 - `jwt` 콜백에서 최초 로그인 시 `public.users`에 upsert(`authentikSub` 충돌 시 갱신) 하고
   내부 id를 `token.uid`에 싣는다. 이후 모든 서버 컨텍스트는 `session.user.id`로 이 내부 id를
   쓴다.
@@ -240,8 +241,8 @@ src/features/<domain>/       도메인별 폴더가 경계
 2. `supabase/migrations/0001_init_rls.sql` 적용 — RLS 정책.
 3. `keep_alive` 테이블 + `kkeutbal_app` GRANT를 마이그레이션 파일로 재작성해 리포에 커밋(현재
    미비 — Open Questions).
-4. Authentik 실등록 시 `AUTH_AUTHENTIK_ID`/`_SECRET`/`_ISSUER`를 배포 환경에 주입하고
-   redirect URI 등록.
+4. Authentik 애플리케이션에 `{APP_URL}/api/auth/callback/authentik`을 Redirect URI로 등록하고,
+   초기 관리자 계정으로 `/admin`의 SSO 설정을 저장·활성화.
 5. `.deploy.yml` — `preview`/`staging`는 `enabled: false`(ENV_FILE_BASE64 시크릿 구성 전).
    `production`은 `v*` 안정 태그 push 시 `.github/workflows/deploy.yml`이
    `kanduit-lab/docker-deploy-control-hub@v2`의 `ci-reusable.yml`/`cd-reusable.yml`을 호출해

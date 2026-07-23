@@ -8,8 +8,8 @@ import {
   listRegistrationCodes,
   listUsers,
 } from '@/features/auth/admin-queries'
-import { serverEnv } from '@/lib/env'
 import { AdminClient } from '@/features/auth/components/admin-client'
+import { getSsoSettings } from '@/features/auth/sso-settings'
 import { PromotionsAdmin } from '@/features/promotions/components/promotions-admin'
 import { listPromotions } from '@/features/promotions/queries'
 import { Badge, ButtonLink, Panel } from '@/components/ui'
@@ -29,7 +29,7 @@ export default async function AdminPage() {
           <p className="text-3xl">🔒</p>
           <h1 className="text-xl font-bold">관리자 전용 페이지입니다</h1>
           <p className="text-sm text-muted">
-            게스트 토큰 발급과 관리자 지정은 관리자 계정만 할 수 있습니다
+            가입코드·게스트 토큰·SSO 설정과 관리자 지정은 관리자 계정만 할 수 있습니다
           </p>
           <div className="flex justify-center pt-1">
             <Badge tone="accent">admin</Badge>
@@ -44,12 +44,13 @@ export default async function AdminPage() {
     )
   }
 
-  const [tokens, registrationCodes, users, rooms, promotions] = await Promise.all([
+  const [tokens, registrationCodes, users, rooms, promotions, ssoSettings] = await Promise.all([
     listGuestTokens(),
     listRegistrationCodes(),
     listUsers(),
     listActiveRooms(),
     listPromotions(),
+    getSsoSettings(),
   ])
 
   return (
@@ -66,7 +67,7 @@ export default async function AdminPage() {
         users={users}
         rooms={rooms}
         selfId={session.user.id}
-        bootstrapRegistrationCodeEnabled={Boolean(serverEnv().AUTH_REGISTRATION_CODE)}
+        ssoSettings={ssoSettings}
       />
       <PromotionsAdmin promotions={promotions} />
     </main>
