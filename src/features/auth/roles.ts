@@ -4,7 +4,10 @@ import { serverEnv } from '@/lib/env'
 
 /**
  * 관리자 판정 — DB `is_admin` 또는 `AUTH_ADMIN_USERNAMES` 부트스트랩 목록.
- * env 목록은 DB 를 만지지 못하는 초기 상태에서 첫 관리자를 세우기 위한 탈출구다.
+ *
+ * 정상 경로는 DB `is_admin` 이다. 계정이 하나도 없는 인스턴스에서는 첫 가입자가
+ * 자동으로 관리자가 되므로(`registerAndLogin`, `bootstrap.ts`) 신규 설치에 env 는 필요 없다.
+ * `AUTH_ADMIN_USERNAMES` 는 관리자가 전부 잠겼을 때만 쓰는 비상 복구용 탈출구로 남긴다.
  */
 export async function isAdminUser(userId: string): Promise<boolean> {
   try {

@@ -4,10 +4,11 @@ import bcrypt from 'bcryptjs'
 import type { Route } from 'next'
 import { redirect } from 'next/navigation'
 import { AuthError } from 'next-auth'
-import { and, eq, isNull, like, or } from 'drizzle-orm'
+import { and, eq, isNull, like, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, schema } from '@/lib/db'
 import { signIn } from '@/lib/auth'
+import { grantRegistrationAccess, hasRegistrationAccess } from '@/features/auth/registration-access'
 
 /**
  * 내부 계정 회원가입·로그인 form action.
@@ -29,6 +30,12 @@ export type AuthErrorCode =
   | 'username_taken'
   | 'phone_taken'
   | 'register_failed'
+  | 'registration_code_required'
+
+export type RegistrationCodeState =
+  | { status: 'idle' }
+  | { status: 'error'; error: 'invalid' | 'unavailable' }
+  | { status: 'success' }
 
 const registerSchema = z.object({
   username: z
@@ -43,6 +50,9 @@ const registerSchema = z.object({
     .transform((value) => value.replace(/\D/g, ''))
     .pipe(z.string().regex(/^01[016789]\d{7,8}$/)),
 })
+
+/** 첫 관리자 승격 직렬화용 고정 락 키 — 방 단위 락과 네임스페이스가 겹치지 않는다. */
+const BOOTSTRAP_LOCK_KEY = 'kkeutbal:bootstrap-admin'
 
 /** 실패 시 되돌려줄 입력값 — 비밀번호는 절대 포함하지 않는다. */
 interface RegisterFields {
@@ -83,6 +93,10 @@ function validationCode(issuePath: PropertyKey | undefined): AuthErrorCode {
 }
 
 export async function registerAndLogin(formData: FormData): Promise<void> {
+  if (!(await hasRegistrationAccess())) {
+    backTo('/login', 'registration_code_required')
+  }
+
   const raw = {
     username: String(formData.get('username') ?? ''),
     password: String(formData.get('password') ?? ''),
@@ -114,12 +128,20 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
 
   try {
     const passwordHash = await bcrypt.hash(password, 10)
-    await db.insert(schema.users).values({
-      authentikSub: `local:${username}`,
-      username,
-      passwordHash,
-      phone,
-      displayName: name,
+    await db.transaction(async (tx) => {
+      // 첫 계정 판정과 삽입을 한 트랜잭션에 묶어 직렬화한다 — 동시 가입 둘이 모두
+      // "계정 없음"을 보고 관리자가 두 명 생기는 경쟁을 막는다.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${BOOTSTRAP_LOCK_KEY}, 42))`)
+      const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)
+      await tx.insert(schema.users).values({
+        authentikSub: `local:${username}`,
+        username,
+        passwordHash,
+        phone,
+        displayName: name,
+        // 계정이 하나도 없던 인스턴스의 첫 가입자는 곧 운영자다.
+        isAdmin: !existing,
+      })
     })
   } catch (error) {
     console.error('registerAndLogin failed:', error)
@@ -127,6 +149,16 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
   }
 
   await signIn('password', { username, password, redirectTo: '/' })
+}
+
+/** 가입코드 검증 성공 시에만 `/register` 접근용 서명 쿠키를 발급한다. */
+export async function verifyRegistrationCode(
+  _previousState: RegistrationCodeState,
+  formData: FormData,
+): Promise<RegistrationCodeState> {
+  const result = await grantRegistrationAccess(String(formData.get('code') ?? ''))
+  if (result === 'granted') return { status: 'success' }
+  return { status: 'error', error: result }
 }
 
 export async function loginWithPassword(formData: FormData): Promise<void> {
@@ -155,7 +187,8 @@ export async function loginWithGuestToken(formData: FormData): Promise<void> {
     await signIn('guest-token', { code, name, redirectTo })
   } catch (error) {
     if (error instanceof AuthError) {
-      backTo('/login', 'guest_token_invalid')
+      const params = new URLSearchParams({ error: 'guest_token_invalid', mode: 'guest', next: redirectTo })
+      redirect(`/login?${params.toString()}` as Route)
     }
     throw error
   }
