@@ -54,6 +54,14 @@ export const eventPayloads = {
     role: z.enum(['host', 'dealer', 'player', 'observer']),
   }),
 
+  /** 퇴장 알림. 진실은 refetch — payload 는 "누가 나갔다" 힌트뿐이다. */
+  'member.left': z.object({
+    userId: uuid,
+  }),
+
+  /** 방 옵션 변경 알림. 수신자는 어차피 refetch 하므로 내용은 싣지 않는다. */
+  'room.settings_changed': z.object({}).passthrough(),
+
   'round.started': z.object({
     roundId: uuid,
     seq: z.number().int().positive(),
@@ -64,6 +72,13 @@ export const eventPayloads = {
     seq: z.number().int().positive(),
     winnerId: uuid.nullable(),
     pot: chipAmount,
+  }),
+
+  'round.voided': z.object({
+    roundId: uuid,
+    seq: z.number().int().nonnegative(),
+    /** 사유는 필수다. 사유 없는 무효 처리는 분쟁을 만든다. */
+    reason: z.string().min(1).max(200),
   }),
 
   'bet.placed': z.object({
@@ -122,6 +137,14 @@ export const eventPayloads = {
 } as const
 
 export type EventName = keyof typeof eventPayloads
+
+/**
+ * 이름과 payload 가 짝으로 좁혀지는 판별 유니온.
+ * 수신 측이 `event.name === 'bet.placed'` 분기만으로 payload 타입을 캐스트 없이 얻는다.
+ */
+export type RoomEvent = {
+  [K in EventName]: { name: K; payload: z.infer<(typeof eventPayloads)[K]> }
+}[EventName]
 
 /** 이벤트 이름 + 봉투 + payload 를 한 번에 검증한다. */
 export function parseEvent<K extends EventName>(
