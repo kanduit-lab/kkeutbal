@@ -20,11 +20,16 @@ const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000] as const
 const CONNECT_TIMEOUT_MS = 10_000
 /** 연속 refetch 실패가 이 횟수에 닿으면 syncFailed 를 켠다 — 1회 실패는 일시 오류로 본다. */
 const SYNC_FAIL_THRESHOLD = 2
-/** 재시도로 복구될 수 없는 실패 — 배너 대신 인증 안내가 필요하다. 서버 문구와 문자열 일치. */
-const AUTH_ERROR_MESSAGES: ReadonlySet<string> = new Set([
-  '로그인이 필요합니다',
-  '이 방의 참가자가 아닙니다',
-])
+/**
+ * 재시도로 복구될 수 없는 실패 — 배너 대신 인증 안내가 필요하다.
+ * `refreshRoom` 이 사전 키를 돌려주므로 키로 비교한다 (한국어 원문과 비교하면 절대 안 맞는다).
+ */
+export const AUTH_ERROR_KEYS = {
+  loginRequired: 'errors.loginRequired',
+  notMember: 'errors.notMember',
+} as const
+
+const AUTH_ERROR_MESSAGES: ReadonlySet<string> = new Set(Object.values(AUTH_ERROR_KEYS))
 
 /**
  * 방 실시간 동기화 훅 — 채널 구독·Presence·폴링·재접속을 소유한다.
@@ -100,7 +105,7 @@ export function useRoomSync({
     } catch (error) {
       // 네트워크 단절 등 Server Action reject 도 동기화 실패로 취급한다.
       console.error('refreshRoom failed:', error)
-      result = { success: false, error: '동기화에 실패했습니다' }
+      result = { success: false, error: 'errors.syncFailed' }
     }
 
     if (!result.success) {

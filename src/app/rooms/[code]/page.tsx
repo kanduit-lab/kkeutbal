@@ -5,6 +5,7 @@ import { joinRoom } from '@/features/game/actions'
 import { findRoomByCode, getRoomSnapshot } from '@/features/game/queries'
 import { normalizeRoomCode } from '@/features/game/room-code'
 import { RoomClient } from '@/features/game/components/room-client'
+import { getDict } from '@/lib/i18n/server'
 import { Button, Panel } from '@/components/ui'
 
 /**
@@ -37,7 +38,14 @@ export default async function RoomPage({
   if (!isMember) {
     const joined = await joinRoom(code)
     if (!joined.success) {
-      return <ErrorScreen title="입장할 수 없습니다" hint={joined.error} />
+      // joinRoom 은 `errors.*` 사전 키를 돌려준다 — 그대로 그리면 화면에 키가 노출된다.
+      const { d } = await getDict()
+      const key = joined.error.startsWith('errors.')
+        ? (joined.error.slice('errors.'.length) as keyof typeof d.errors)
+        : null
+      return (
+        <ErrorScreen title="입장할 수 없습니다" hint={(key && d.errors[key]) || joined.error} />
+      )
     }
     snapshot = await getRoomSnapshot(room.id)
   }

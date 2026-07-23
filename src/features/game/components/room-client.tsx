@@ -9,7 +9,7 @@ import type { RoomEvent } from '@/lib/realtime/events'
 import { isMuted, playChip, playRoundStart, playWin, setMuted } from '@/lib/sound'
 import type { RoomSnapshot } from '../types'
 import { Badge, useToast } from '@/components/ui'
-import { useRoomSync } from './use-room-sync'
+import { AUTH_ERROR_KEYS, useRoomSync } from './use-room-sync'
 import { GameTable } from './game-table'
 import { ActionBar } from './action-bar'
 import { DealerPanel } from './dealer-panel'
@@ -131,7 +131,7 @@ export function RoomClient({
   // 재시도로 복구 불가한 실패 — 세션 만료는 로그인으로, 추방·미참가는 홈으로 보낸다.
   useEffect(() => {
     if (!authError) return
-    router.push(authError.includes('로그인이 필요합니다') ? '/login' : '/')
+    router.push(authError === AUTH_ERROR_KEYS.loginRequired ? '/login' : '/')
   }, [authError, router])
 
   const afterMutation = useCallback(
