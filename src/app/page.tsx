@@ -4,11 +4,20 @@ import { redirect } from 'next/navigation'
 import { auth, signOut } from '@/lib/auth'
 import { isAdminUser } from '@/features/auth/roles'
 import { joinRoomAndGo } from '@/features/game/actions'
-import { getMyActiveRooms } from '@/features/game/queries'
+import { getMyActiveRooms, getMyRecentSessions } from '@/features/game/queries'
 import { GAME_BADGE_TONE } from '@/features/game/components/shared'
-import { Badge, Button, ButtonLink, EmptyState, Input, Panel } from '@/components/ui'
+import { Badge, Button, ButtonLink, EmptyState, Input, Panel, SubmitButton } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { getDict } from '@/lib/i18n/server'
+import type { Locale } from '@/lib/i18n/config'
+
+function formatSessionDate(iso: string | null, locale: Locale): string | null {
+  if (!iso) return null
+  return new Date(iso).toLocaleDateString(locale === 'ko' ? 'ko-KR' : 'en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+}
 
 export default async function HomePage({
   searchParams,
@@ -19,8 +28,9 @@ export default async function HomePage({
   if (!session?.user?.id) redirect('/login')
 
   const { error } = await searchParams
-  const [myRooms, isAdmin, { d }] = await Promise.all([
+  const [myRooms, recentSessions, isAdmin, { locale, d }] = await Promise.all([
     getMyActiveRooms(session.user.id),
+    getMyRecentSessions(session.user.id),
     isAdminUser(session.user.id),
     getDict(),
   ])
@@ -40,7 +50,7 @@ export default async function HomePage({
               href={'/admin' as Route}
               className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-text"
             >
-              관리자
+              {d.common.admin}
             </Link>
           ) : null}
           <LocaleSwitcher />
@@ -77,9 +87,14 @@ export default async function HomePage({
                 className="uppercase tracking-[0.35em]"
                 required
               />
-              <Button type="submit" variant="primary" size="lg" className="shrink-0 px-6">
+              <SubmitButton
+                variant="primary"
+                size="lg"
+                className="shrink-0 px-6"
+                pendingLabel={d.home.joining}
+              >
                 {d.home.join}
-              </Button>
+              </SubmitButton>
             </form>
             <ButtonLink href="/rooms/new" variant="surface" size="lg" className="w-full">
               {d.home.newRoom}
@@ -121,7 +136,7 @@ export default async function HomePage({
                       <p className="truncate font-bold">{room.name}</p>
                       <p className="mt-0.5 text-sm text-muted">
                         <span className="font-mono tracking-widest">{room.code}</span> ·{' '}
-                        {room.memberCount}{d.common.people}
+                        {d.home.memberCount.replace('{n}', String(room.memberCount))}
                       </p>
                     </div>
                     <div className="ml-3 flex shrink-0 flex-col items-end gap-1.5">
@@ -137,6 +152,44 @@ export default async function HomePage({
               ))}
             </div>
           )}
+
+          {/* 지난 세션 — 이력이 없으면 섹션 자체를 그리지 않는다 (빈 상태 안내 불필요). */}
+          {recentSessions.length > 0 ? (
+            <div className="space-y-3 pt-4">
+              <h2 className="px-1 text-lg font-bold">{d.home.recentSessions}</h2>
+              <div className="grid gap-2">
+                {recentSessions.map((past) => (
+                  <Link key={past.id} href={`/rooms/${past.code}/result`} className="block">
+                    <Panel className="flex items-center justify-between gap-3 py-3 transition-transform hover:-translate-y-0.5">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <p className="truncate font-bold">{past.name}</p>
+                        <Badge tone={GAME_BADGE_TONE[past.gameType]}>
+                          {d.games[past.gameType]}
+                        </Badge>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        <span className="text-xs text-muted">
+                          {formatSessionDate(past.closedAt, locale)}
+                        </span>
+                        <span
+                          className={`font-black tabular-nums ${
+                            past.myNet > 0
+                              ? 'text-win'
+                              : past.myNet < 0
+                                ? 'text-accent'
+                                : 'text-muted'
+                          }`}
+                        >
+                          {past.myNet > 0 ? '+' : ''}
+                          {past.myNet.toLocaleString()}
+                        </span>
+                      </div>
+                    </Panel>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
 
@@ -145,7 +198,7 @@ export default async function HomePage({
           href={'/about' as Route}
           className="text-xs text-muted underline underline-offset-4 hover:text-text"
         >
-          끗발 소개
+          {d.home.aboutLink}
         </Link>
       </footer>
     </main>

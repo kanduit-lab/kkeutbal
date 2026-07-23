@@ -19,9 +19,17 @@ export function VisionCapture({
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
 
-  async function handleFile(file: File) {
-    const dataUrl = await downscale(file, 1568)
+  function handleFile(file: File) {
     startTransition(async () => {
+      // 다운스케일(디코드)도 transition 안에서 — 큰 사진은 디코드만으로 수 초 걸려 pending 표시가 필요하다.
+      let dataUrl: string
+      try {
+        dataUrl = await downscale(file, 1568)
+      } catch (error) {
+        console.error('downscale failed:', error)
+        toast('사진을 읽을 수 없습니다. 다른 사진으로 시도하세요', 'error')
+        return
+      }
       const result = await recognizeHand({ imageDataUrl: dataUrl, gameType })
       if (!result.success) {
         toast(result.error, 'error')
@@ -45,7 +53,7 @@ export function VisionCapture({
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0]
-          if (file) void handleFile(file)
+          if (file) handleFile(file)
           event.target.value = ''
         }}
       />

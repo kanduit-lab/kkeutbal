@@ -69,6 +69,7 @@ export default function NewRoomPage() {
                 type="button"
                 variant={gameType === type ? 'primary' : 'surface'}
                 className={gameType === type ? '' : 'border border-white/10'}
+                pressed={gameType === type}
                 onClick={() => setGameType(type)}
               >
                 {GAME_LABELS[type].emoji} {GAME_LABELS[type].name}
@@ -86,6 +87,7 @@ export default function NewRoomPage() {
                 size="sm"
                 variant={startingChips === preset ? 'primary' : 'surface'}
                 className={startingChips === preset ? '' : 'border border-white/10'}
+                pressed={startingChips === preset}
                 onClick={() => setStartingChips(preset)}
               >
                 {preset}
@@ -113,14 +115,14 @@ export default function NewRoomPage() {
               ariaLabel="점당 칩"
             />
             <p className="mt-1.5 text-xs text-muted">
-              판 종료 시 패자 전원이 점수 × 점당 칩을 승자에게 지불합니다.
+              판 종료 시 패자 전원이 점수 × 점당 칩을 승자에게 지불합니다
             </p>
           </Field>
         ) : (
           <Field label="삥 (베팅 기본 단위)">
             <Stepper value={baseBet} onChange={setBaseBet} min={1} max={100_000} ariaLabel="삥 단위" />
             <p className="mt-1.5 text-xs text-muted">
-              레이즈 프리셋과 스테퍼가 이 단위로 움직입니다.
+              레이즈 프리셋과 스테퍼가 이 단위로 움직입니다
             </p>
           </Field>
         )}
@@ -131,6 +133,7 @@ export default function NewRoomPage() {
               type="button"
               variant={inputMode === 'trust' ? 'primary' : 'surface'}
               className={inputMode === 'trust' ? '' : 'border border-white/10'}
+              pressed={inputMode === 'trust'}
               onClick={() => setInputMode('trust')}
             >
               바로 반영
@@ -139,6 +142,7 @@ export default function NewRoomPage() {
               type="button"
               variant={inputMode === 'approval' ? 'primary' : 'surface'}
               className={inputMode === 'approval' ? '' : 'border border-white/10'}
+              pressed={inputMode === 'approval'}
               onClick={() => setInputMode('approval')}
             >
               딜러 승인
@@ -146,8 +150,8 @@ export default function NewRoomPage() {
           </div>
           <p className="mt-1.5 text-xs text-muted">
             {inputMode === 'trust'
-              ? '각자 입력한 베팅이 바로 반영됩니다.'
-              : '딜러가 승인한 베팅만 반영됩니다.'}
+              ? '각자 입력한 베팅이 바로 반영됩니다'
+              : '딜러가 승인한 베팅만 반영됩니다'}
           </p>
         </Field>
 

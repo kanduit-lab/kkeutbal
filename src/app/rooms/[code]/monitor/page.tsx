@@ -7,6 +7,8 @@ import { MonitorClient } from '@/features/game/components/monitor-client'
 /**
  * 모니터링 화면 — 판 옆 태블릿·TV 용 읽기 전용 전광판.
  * 조작 UI 없이 테이블·팟·기록만 크게 보여준다.
+ * 로그인만 하면 참가자가 아니어도 관전할 수 있다 — 자동 입장 없음, 읽기 전용이라
+ * 스냅샷(refreshRoom)도 참가 여부를 묻지 않고, 쓰기 액션은 서버에서 각자 막는다.
  */
 export default async function MonitorPage({
   params,
@@ -26,11 +28,6 @@ export default async function MonitorPage({
 
   const snapshot = await getRoomSnapshot(room.id)
   if (!snapshot) redirect('/')
-
-  // 참가자가 아니면 방 화면으로 — 거기서 자동 입장 후 다시 올 수 있다.
-  if (!snapshot.members.some((member) => member.userId === session.user.id)) {
-    redirect(`/rooms/${room.code}`)
-  }
 
   return <MonitorClient initial={snapshot} selfId={session.user.id} />
 }

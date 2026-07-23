@@ -5,6 +5,8 @@ import { findRoomByCode } from '@/features/game/queries'
 import { normalizeRoomCode } from '@/features/game/room-code'
 import { GAME_LABELS } from '@/features/game/components/shared'
 import { getRoundHistory, getSessionStandings } from '@/features/ranking/queries'
+import { computeSettlementTransfers } from '@/features/ranking/settlement'
+import { ShareResultButton } from '@/features/ranking/components/share-result-button'
 import { Badge, Button, EmptyState, Panel } from '@/components/ui'
 
 export default async function RoomResultPage({
@@ -26,6 +28,10 @@ export default async function RoomResultPage({
   const biggestWin = [...standings].sort((a, b) => b.biggestPot - a.biggestPot)[0]
   const mostFolds = [...standings].sort((a, b) => b.folds - a.folds)[0]
   const mostRaises = [...standings].sort((a, b) => b.raises - a.raises)[0]
+
+  const transfers = computeSettlementTransfers(standings)
+  const nameById = new Map(standings.map((row) => [row.userId, row.displayName]))
+  const displayName = (userId: string) => nameById.get(userId) ?? '알 수 없음'
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8">
@@ -67,6 +73,33 @@ export default async function RoomResultPage({
           ))
         )}
       </section>
+
+      {standings.length > 0 ? (
+        <section className="space-y-1">
+          <h2 className="px-1 text-sm font-bold text-muted">정산</h2>
+          {transfers.length === 0 ? (
+            <EmptyState title="주고받을 것이 없습니다" />
+          ) : (
+            <ul className="space-y-1">
+              {transfers.map((transfer) => (
+                <li
+                  key={`${transfer.fromId}:${transfer.toId}`}
+                  className="flex items-center justify-between rounded-xl bg-surface px-3 py-2 text-sm"
+                >
+                  <span className="min-w-0 truncate">
+                    <span className="font-medium">{displayName(transfer.fromId)}</span>{' '}
+                    <span className="text-muted">→</span>{' '}
+                    <span className="font-medium">{displayName(transfer.toId)}</span>
+                  </span>
+                  <span className="ml-3 shrink-0 tabular-nums font-bold">
+                    {transfer.amount.toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
 
       {standings.length > 0 ? (
         <section className="grid grid-cols-2 gap-2">
@@ -122,17 +155,30 @@ export default async function RoomResultPage({
         )}
       </section>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Link href={`/rooms/${room.code}`} className="block">
-          <Button variant="surface" className="w-full border border-white/10">
-            방으로
-          </Button>
-        </Link>
-        <Link href="/" className="block">
-          <Button variant="primary" className="w-full">
-            홈으로
-          </Button>
-        </Link>
+      <div className="space-y-2">
+        {standings.length > 0 ? (
+          <ShareResultButton
+            roomName={room.name}
+            standings={standings.map((row) => ({ displayName: row.displayName, net: row.net }))}
+            transfers={transfers.map((transfer) => ({
+              fromName: displayName(transfer.fromId),
+              toName: displayName(transfer.toId),
+              amount: transfer.amount,
+            }))}
+          />
+        ) : null}
+        <div className="grid grid-cols-2 gap-2">
+          <Link href={`/rooms/${room.code}`} className="block">
+            <Button variant="surface" className="w-full border border-white/10">
+              방으로
+            </Button>
+          </Link>
+          <Link href="/" className="block">
+            <Button variant="primary" className="w-full">
+              홈으로
+            </Button>
+          </Link>
+        </div>
       </div>
     </main>
   )
