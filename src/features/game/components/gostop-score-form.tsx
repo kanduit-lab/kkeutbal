@@ -80,7 +80,7 @@ export function GostopScoreForm({
   losers: readonly MemberView[]
   pointValue: number
 }) {
-  const { d } = useDict()
+  const { d, locale } = useDict()
   const factor = commonFactor(state)
   const total = gostopEffectiveScore(state)
   /** 박 없는 패자 1명이 내는 칩. */
@@ -139,7 +139,7 @@ export function GostopScoreForm({
           base: state.base,
           factor,
           total,
-          chips: formatChips(perLoserPay),
+          chips: formatChips(perLoserPay, locale),
         })}
       </p>
 
@@ -170,7 +170,7 @@ export function GostopScoreForm({
                   )
                 })}
                 <span className="min-w-16 shrink-0 text-right text-sm font-bold tabular-nums text-warn">
-                  {charge > 0 ? `−${formatChips(charge)}` : '0'}
+                  {charge > 0 ? `−${formatChips(charge, locale)}` : '0'}
                 </span>
               </div>
             )

@@ -47,14 +47,29 @@ export function betLabelsFor(
 }
 
 /**
- * 칩 금액 표기 — 10만 이상은 만 단위로 축약해 판 옆 작은 화면에서 자릿수를 줄인다.
- * 예: 125000 → '12.5만' (필요할 때만 소수 1자리), 10000000 → '1,000만', 99999 → '99,999'
- * '만' 접미사는 사전에 로케일 키가 아직 없다 — 키가 생기면 사전 기반으로 바꿀 것.
+ * 칩 금액 표기 — 판 옆 작은 화면에서 자릿수를 줄이려고 축약한다. 로케일별로 단위가 다르다.
+ * ko(기본값): 10만(100,000) 이상은 만 단위. 예: 125000 → '12.5만', 10000000 → '1,000만', 99999 → '99,999'
+ * en: 1만(10,000) 이상은 k/M 단위. 예: 10000 → '10k', 12500 → '12.5k', 1000000 → '1M', 9999 → '9,999'
+ * 두 로케일 모두 축약 임계값 미만은 천 단위 구분자가 있는 평문 숫자를 쓴다.
  */
-export function formatChips(n: number): string {
+export function formatChips(n: number, locale: 'ko' | 'en' = 'ko'): string {
+  if (locale === 'en') return formatChipsEn(n)
   if (Math.abs(n) < 100_000) return n.toLocaleString()
   const man = n / 10_000
   return `${man.toLocaleString(undefined, { maximumFractionDigits: 1 })}만`
+}
+
+/** en 로케일 축약 — 100만 이상은 M, 1만 이상은 k. 소수 1자리까지만, 불필요한 .0 은 Intl 이 알아서 생략한다. */
+function formatChipsEn(n: number): string {
+  if (Math.abs(n) < 10_000) return n.toLocaleString('en-US')
+  const useMillion = Math.abs(n) >= 1_000_000
+  const divisor = useMillion ? 1_000_000 : 1_000
+  const value = n / divisor
+  const formatted = value.toLocaleString('en-US', {
+    maximumFractionDigits: 1,
+    useGrouping: false,
+  })
+  return `${formatted}${useMillion ? 'M' : 'k'}`
 }
 
 /**

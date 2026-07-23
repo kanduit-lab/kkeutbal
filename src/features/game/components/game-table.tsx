@@ -105,7 +105,7 @@ export function GameTable({
   /** 액션 뱃지 표기용 — 섯다는 다이, 포커는 폴드. */
   gameType?: RoomGameType
 }) {
-  const { d } = useDict()
+  const { d, locale } = useDict()
   const [flights, setFlights] = useState<readonly Flight[]>([])
   const flightKey = useRef(0)
   const lastActionId = useRef<string | null>(null)
@@ -198,7 +198,7 @@ export function GameTable({
   }, [actions])
 
   const potChips = chipBreakdown(pot, 7)
-  const potText = formatChips(pot)
+  const potText = formatChips(pot, locale)
 
   return (
     <section className="relative mx-auto mb-4 aspect-[4/5] w-full max-w-3xl select-none [container-type:size] sm:aspect-[16/10]">
@@ -280,7 +280,7 @@ export function GameTable({
         const seatLabel = [
           member.displayName,
           roleLabel ?? d.roles.player,
-          format(d.table.balanceAria, { n: formatChips(member.balance) }),
+          format(d.table.balanceAria, { n: formatChips(member.balance, locale) }),
           isOnline ? d.common.online : d.common.offline,
           folded ? labels.fold : null,
           isWinner ? d.table.winner : null,
@@ -352,7 +352,7 @@ export function GameTable({
                     member.balance <= 0 ? 'text-accent' : 'gilt',
                   )}
                 >
-                  {formatChips(member.balance)}
+                  {formatChips(member.balance, locale)}
                 </span>
               </div>
               {!compact ? (
@@ -364,7 +364,7 @@ export function GameTable({
                   )}
                 >
                   {net >= 0 ? '+' : ''}
-                  {formatChips(net)}
+                  {formatChips(net, locale)}
                 </span>
               ) : null}
               {last ? (
@@ -376,7 +376,7 @@ export function GameTable({
                   )}
                 >
                   {labels[last.action]}
-                  {last.amount > 0 ? ` ${formatChips(last.amount)}` : ''}
+                  {last.amount > 0 ? ` ${formatChips(last.amount, locale)}` : ''}
                 </span>
               ) : null}
               {pending ? (
@@ -387,7 +387,7 @@ export function GameTable({
                   )}
                 >
                   {labels[pending.action]}
-                  {pending.amount > 0 ? ` ${formatChips(pending.amount)}` : ''}
+                  {pending.amount > 0 ? ` ${formatChips(pending.amount, locale)}` : ''}
                   {` · ${d.table.waiting}`}
                 </span>
               ) : null}

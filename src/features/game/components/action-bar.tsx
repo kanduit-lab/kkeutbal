@@ -38,7 +38,7 @@ export function ActionBar({
   /** true = 데스크톱 본문 안 정적 패널, false = 모바일 하단 고정 바 */
   inline?: boolean
 }) {
-  const { d } = useDict()
+  const { d, locale } = useDict()
   const gameType = snapshot.room.gameType === 'poker' ? 'poker' : 'seotda'
   const labels = betLabelsFor(snapshot.room.gameType, d)
   const { toast } = useToast()
@@ -205,13 +205,13 @@ export function ActionBar({
         <div className="flex items-center justify-between text-sm font-medium text-muted">
           <span>
             {d.actionBar.myChips}{' '}
-            <span className="gilt text-base font-black tabular-nums">{formatChips(balance)}</span>
+            <span className="gilt text-base font-black tabular-nums">{formatChips(balance, locale)}</span>
           </span>
           {lastBet > 0 ? (
             <span>
               {d.actionBar.toCall}{' '}
               <span className="text-base font-black tabular-nums text-warn">
-                {formatChips(callAmount)}
+                {formatChips(callAmount, locale)}
               </span>
             </span>
           ) : (
@@ -227,7 +227,7 @@ export function ActionBar({
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs text-muted">
               <span>{d.actionBar.raiseAmount}</span>
-              <span>{format(d.actionBar.minRaise, { n: formatChips(minRaise) })}</span>
+              <span>{format(d.actionBar.minRaise, { n: formatChips(minRaise, locale) })}</span>
             </div>
             <div className={presets.length > 4 ? 'grid grid-cols-5 gap-1.5' : 'grid grid-cols-4 gap-1.5'}>
               {presets.map((preset) => (
@@ -245,7 +245,7 @@ export function ActionBar({
                 >
                   {preset.label}
                   <span className="tabular-nums text-[11px] leading-tight opacity-80">
-                    {formatChips(preset.amount)}
+                    {formatChips(preset.amount, locale)}
                   </span>
                 </Button>
               ))}
@@ -268,7 +268,7 @@ export function ActionBar({
                 disabled={isPending || raiseAmount < minRaise || raiseAmount > balance}
                 disabledReason={
                   raiseAmount < minRaise
-                    ? format(d.actionBar.minRaise, { n: formatChips(minRaise) })
+                    ? format(d.actionBar.minRaise, { n: formatChips(minRaise, locale) })
                     : raiseAmount > balance
                       ? d.actionBar.insufficientBalance
                       : undefined
@@ -308,7 +308,7 @@ export function ActionBar({
             >
               <span className="text-lg leading-tight">{callIsAllin ? labels.allin : labels.call}</span>
               <span className="tabular-nums text-xs leading-tight opacity-90">
-                {formatChips(callAmount)}
+                {formatChips(callAmount, locale)}
               </span>
             </Button>
           )}
