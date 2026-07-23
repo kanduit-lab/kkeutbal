@@ -1,6 +1,10 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { registerAndLogin } from '@/features/auth/actions'
+import { hasRegistrationAccess } from '@/features/auth/registration-access'
+import { isFirstAccount } from '@/features/auth/bootstrap'
 import { Field, Input, Panel, SubmitButton } from '@/components/ui'
+import { PhoneInput } from '@/features/auth/components/phone-input'
 import { getDict, type Dictionary } from '@/lib/i18n/server'
 
 /**
@@ -26,19 +30,31 @@ export default async function RegisterPage({
 }: {
   searchParams: Promise<{ error?: string; username?: string; name?: string; phone?: string }>
 }) {
-  const [{ error, username, name, phone }, { d }] = await Promise.all([searchParams, getDict()])
+  const [accessGranted, { error, username, name, phone }, { d }, firstAccount] = await Promise.all([
+    hasRegistrationAccess(),
+    searchParams,
+    getDict(),
+    isFirstAccount(),
+  ])
+  if (!accessGranted) redirect('/login?error=registration_code_required')
   const errorMessage = error ? (registerErrorCopy(d)[error] ?? d.auth.errorRequestFailed) : null
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-5 px-6 py-10">
       <header className="text-center">
         <h1 className="font-brush text-4xl font-black">{d.auth.registerTitle}</h1>
-        <p className="mt-2 text-sm text-muted">{d.auth.registerIntro}</p>
       </header>
 
       {errorMessage ? (
         <p className="rounded-xl border border-accent/30 bg-[#471a17] px-4 py-3 text-sm font-medium text-[#ff9a94]">
           {errorMessage}
+        </p>
+      ) : null}
+
+      {/* 계정이 하나도 없는 인스턴스 — 이 가입이 곧 관리자 프로비저닝이다. */}
+      {firstAccount ? (
+        <p className="rounded-xl border border-gold/30 bg-gold/10 px-4 py-3 text-sm font-medium text-text">
+          {d.auth.firstAccountNotice}
         </p>
       ) : null}
 
@@ -87,16 +103,7 @@ export default async function RegisterPage({
             />
           </Field>
           <Field label={d.auth.phoneLabel}>
-            <Input
-              name="phone"
-              type="tel"
-              defaultValue={phone ?? ''}
-              placeholder={d.auth.phonePlaceholder}
-              maxLength={13}
-              required
-              autoComplete="tel"
-              inputMode="numeric"
-            />
+            <PhoneInput defaultValue={phone ?? ''} placeholder={d.auth.phonePlaceholder} />
           </Field>
           <SubmitButton variant="primary" size="lg" className="w-full" pendingLabel={d.auth.registerPending}>
             {d.auth.registerSubmit}
