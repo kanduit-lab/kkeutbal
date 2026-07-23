@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { Route } from 'next'
 import { Panel } from '@/components/ui'
-import { GAME_LABELS } from '@/features/game/components/shared'
+import { GAME_LABELS } from '@/features/game/labels'
 
 interface GuideEntry {
   readonly href: Route

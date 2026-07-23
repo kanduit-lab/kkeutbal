@@ -8,7 +8,7 @@ import {
   getPlayerRecentSessions,
   getPlayerStats,
 } from '@/features/ranking/queries'
-import { GAME_BADGE_TONE, GAME_LABELS } from '@/features/game/components/shared'
+import { GAME_BADGE_TONE, GAME_LABELS } from '@/features/game/labels'
 import { Avatar, Badge, EmptyState, Panel } from '@/components/ui'
 
 /** params 는 외부 입력 — uuid 가 아니면 DB 캐스트 오류 대신 404 로 보낸다. */

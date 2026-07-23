@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { createRoom } from '@/features/game/actions'
 import type { RoomGameType } from '@/features/game/types'
-import { GAME_LABELS } from '@/features/game/components/shared'
+import { GAME_LABELS } from '@/features/game/labels'
 import { Button, Field, Input, Panel, Stepper, useToast } from '@/components/ui'
 
 const CHIP_PRESETS = [50, 100, 200, 500] as const

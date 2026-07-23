@@ -4,6 +4,9 @@ import type { Dictionary } from '@/lib/i18n/dictionaries/ko'
 import type { EventName, eventPayloads } from '@/lib/realtime/events'
 import type { BetActionKind, BetActionView, RoomGameType } from '../types'
 
+/** 재수출 — 정본은 `../labels` (feature 공개 표면). 기존 내부 호출부(components/**) 호환용. */
+export { GAME_LABELS, GAME_BADGE_TONE } from '../labels'
+
 /** 액션 성공 후 피어에게 쏠 이벤트. */
 export interface BroadcastSpec {
   event: EventName
@@ -111,16 +114,4 @@ export function raisePresets(
     { label: labels.half, amount: half },
     { label: labels.pot, amount: pot },
   ].filter((preset) => preset.amount >= 1)
-}
-
-export const GAME_LABELS: Record<RoomGameType, { name: string; emoji: string }> = {
-  seotda: { name: '섯다', emoji: '🎴' },
-  gostop: { name: '고스톱', emoji: '🌸' },
-  poker: { name: '포커', emoji: '♠' },
-}
-
-export const GAME_BADGE_TONE: Record<RoomGameType, 'accent' | 'win' | 'warn'> = {
-  seotda: 'accent',
-  gostop: 'win',
-  poker: 'warn',
 }
