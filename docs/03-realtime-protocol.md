@@ -16,7 +16,7 @@
 
 ## 채널
 
-방 하나당 채널 하나. **공개 채널**이다 — `private: true`를 쓰지 않고 anon key로 구독한다.
+방 하나당 채널 하나. **공개 채널**이다 — `private: true`를 쓰지 않고 publishable key로 구독한다.
 
 ```ts
 // src/lib/realtime/client.ts — createRoomChannel

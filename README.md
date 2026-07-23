@@ -74,12 +74,12 @@ pnpm dev                     # http://localhost:3000
 | 변수 | 필수 | 비고 |
 |------|:---:|------|
 | `NEXT_PUBLIC_APP_URL` | ✅ | |
-| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | Realtime 공개 채널 구독 |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | ✅ | Realtime 공개 채널 구독 |
 | `DATABASE_URL` | ✅ | `kkeutbal_app` 롤, Supabase pooler(session mode, 5432) |
 | `AUTH_SECRET` | ✅ | `openssl rand -base64 32` |
 | `AUTH_ADMIN_USERNAMES` | — | 관리자 부트스트랩 (쉼표 구분 아이디 목록) |
 | `AUTH_AUTHENTIK_ID` / `_SECRET` / `_ISSUER` | — | 3종 모두 있을 때만 SSO 활성 |
-| `AUTH_DEV_LOGIN` | — | `true`면 이름만으로 게스트 로그인. **프로덕션 금지** |
+| `AUTH_REGISTRATION_CODE` | — | 첫 가입용 비상 코드(영문 대문자·숫자 10자리). 평소 가입코드는 관리자 화면에서 발급·회수 |
 | `ANTHROPIC_API_KEY` / `JOKBO_VISION_ENABLED` / `JOKBO_VISION_MODEL` | — | 미설정 시 수동 피커만 동작 |
 
 ## 🗂️ 구조

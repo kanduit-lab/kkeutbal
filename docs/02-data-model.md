@@ -35,7 +35,7 @@ Supabase 프로젝트에 3개 마이그레이션으로 적용돼 있다: `init_s
    붙는다. 모든 읽기·쓰기가 이 경로를 지난다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
    RLS가 아니라 각 Server Action이 쿼리로 직접 한다 (`src/features/betting/actions.ts`,
    `src/features/budget/actions.ts` 등).
-2. **브라우저 → Supabase anon key**. `src/lib/supabase/client.ts`가 명시하듯 이 클라이언트는
+2. **브라우저 → Supabase publishable key**. `src/lib/supabase/client.ts`가 명시하듯 이 클라이언트는
    **테이블 조회에 쓰지 않는다.** 용도는 두 가지뿐이다: Realtime Broadcast/Presence 구독
    (`room:{room_id}` 공개 채널, `03-realtime-protocol.md`), 그리고 `keep-alive.yml`
    워크플로가 REST로 `keep_alive` 테이블에 넣고 지우는 것.
@@ -172,9 +172,16 @@ erDiagram
 
 Authentik이 신원의 소유자다. 이 테이블은 미러이며 비밀번호·이메일을 보관하지 않는다.
 
-- `authentik_sub` — 유일 키. OIDC `sub` 클레임, 또는 `AUTH_DEV_LOGIN=true`일 때 `dev:{name}`
-  형태(`src/features/auth`). 같은 sub → 같은 계정. 로그인 시 upsert.
+- `authentik_sub` — 유일 키. OIDC `sub` 클레임 또는 내부 계정의 `local:{username}` 형태.
+  같은 sub → 같은 계정. 로그인 시 upsert.
 - 표시 이름·아바타는 로컬 편집 가능(방에서 부르는 별명).
+
+### `registration_codes`
+
+- `code_hash` — `AUTH_SECRET` 기반 HMAC. 원문 가입코드는 DB에 저장하지 않는다.
+- `label` — 발급 목적을 식별하는 운영 메모.
+- `expires_at` / `revoked_at` — 만료 또는 회수된 코드는 회원가입에 사용할 수 없다.
+- `/admin`의 관리자 액션만 생성·회수하며, 원문은 발급 응답에서만 한 번 반환된다.
 
 ### `rooms`
 
@@ -243,7 +250,7 @@ enum 포함). 이 결정으로 누적 랭킹은 **전역 사용자 단위로 확
 
 Supabase 무료 티어가 7일 무활동 시 프로젝트를 일시정지하는 것을 막는 용도. 스키마는
 `id`(bigint, identity), `note`, `created_at` 뿐이며 다른 테이블과 관계가 없다.
-`.github/workflows/keep-alive.yml`이 6시간(cron `0 0,6,12,18 * * *`)마다 anon key로
+`.github/workflows/keep-alive.yml`이 6시간(cron `0 0,6,12,18 * * *`)마다 publishable key로
 REST INSERT 한 행 뒤 7일 지난 행을 DELETE한다. 이 워크플로만 `anon` 롤로 이 테이블을 직접
 건드린다 — 앱 코드는 접근하지 않는다.
 
@@ -305,7 +312,7 @@ UPDATE/DELETE 시도는 예외를 던진다. 정정은 `reverted_of`로 원본�
 `0001_init_rls.sql`에 `realtime.messages` 대상 `authenticated` 전용 정책
 (`realtime_room_read`/`realtime_room_write`, 토픽 `room:%` + `is_room_member`)이 존재한다.
 그러나 **현재 앱은 이 정책이 요구하는 `private: true` 구독을 쓰지 않는다** —
-`src/lib/realtime/client.ts`는 `room:{room_id}` 채널을 anon key로 공개 채널로 구독한다.
+`src/lib/realtime/client.ts`는 `room:{room_id}` 채널을 publishable key로 공개 채널로 구독한다.
 따라서 이 정책은 오늘 살아있는 브로드캐스트 트래픽에는 적용되지 않는다. 방 격리는 채널 토픽이
 추측 불가능한 UUID라는 점과, payload가 힌트일 뿐이고 진실은 항상 서버 스냅샷 refetch라는 점으로
 확보한다. 상세 프로토콜과 이 결정의 근거는 `03-realtime-protocol.md`가 소유한다.

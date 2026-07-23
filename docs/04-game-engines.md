@@ -325,8 +325,8 @@ interface PokerCard {
 > 스트레이트(4) > 트리플(3) > 투페어(2) > 원페어(1) > 하이카드(0)
 ```
 
-`PokerHand.ranks`는 `[카테고리 우선순위, ...키커 내림차순]` 벡터다. `comparePokerHands`는 이
-벡터를 사전식(lexicographic)으로 비교할 뿐 — 섯다의 `rank` 정수 한 값 비교와 달리 카테고리별
+`PokerHand.ranks`는 `[카테고리 우선순위, ...키커 내림차순]` 벡터다. 엔진은 이 벡터를
+사전식(lexicographic)으로 비교한다 — 섯다의 `rank` 정수 한 값 비교와 달리 카테고리별
 키커까지 벡터로 들고 다닌다(카테고리가 같을 때 키커 비교가 필요해서).
 
 ### 5~7장 → best-5 (`evaluatePokerHand`)

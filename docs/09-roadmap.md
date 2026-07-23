@@ -23,7 +23,7 @@
 배포·인증·실시간 라이브 경로가 죽으면 앱 자체가 없다 — 종이로 돌아가는 것 외에 대체가 없다.
 2026-07-23 이전 판은 이 원칙과 반대로 엔진 검증(대체 경로 있음)을 P0에, 라이브 경로
 증명(대체 경로 없음)을 P1 이하에 놓았고, P0 실물 리허설이 P1 Authentik 없이는 실행
-불가능한 자기모순도 있었다(dev-login은 프로덕션 배포 금지). 이 판에서 순서를 뒤집었다.
+불가능한 자기모순도 있었다(프로덕션에서 쓸 수 없는 이름 기반 로그인에 의존). 이 판에서 순서를 뒤집었다.
 
 ## 현재 상태 요약
 
@@ -35,7 +35,7 @@
 | 화투 카드 모델 | 구현 완료 | `src/features/hwatu/cards.ts` |
 | 섯다 엔진 | 구현 완료, 190 픽스처 검증 미실행 | `src/features/seotda/engine.ts`, `engine.test.ts`(`it.todo`), `seotda.fixtures.ts` 부재 |
 | 고스톱 엔진 | 구현 완료, 테스트 없음 | `src/features/gostop/scoring.ts` — 테스트 파일 자체가 없음 |
-| 인증 | Auth.js v5 + dev 로그인 동작, Authentik 미등록 | `src/lib/auth-config.ts`, `AUTH_DEV_LOGIN`/`AUTH_AUTHENTIK_*`(`src/lib/env.ts`) |
+| 인증 | Auth.js v5 내부 계정·게스트 토큰 동작, Authentik 미등록 | `src/lib/auth.ts`, `registration_codes`/`AUTH_AUTHENTIK_*` |
 | DB · RLS | 마이그레이션 3개 적용됨 | init_schema, init_rls(`supabase/migrations/0001`), keep_alive_and_app_grants |
 | 방 · 실시간 | 구현 완료 | `src/features/game/`(actions·queries·room-client), `src/lib/realtime/` |
 | 베팅 · 칩 원장 | 구현 완료 | `src/features/betting/actions.ts`, `src/features/budget/actions.ts` |
@@ -79,7 +79,7 @@ Advisor / 정산·랭킹), Phase 7(vision), Phase 8(고스톱)까지 코드 레�
 
 Authentik만 예외다 — env 스키마와 조건부 provider 로직(`AUTH_AUTHENTIK_ID/SECRET/ISSUER`
 셋 다 있을 때만 활성)은 구현됐지만, 실제 Authentik 애플리케이션 등록·redirect URI 연결은
-안 됐다. 지금은 `AUTH_DEV_LOGIN=true`의 이름 기반 게스트 로그인으로만 동작한다.
+안 됐다. 내부 계정은 가입코드 확인 뒤에 만들 수 있고, Authentik은 아직 선택적으로만 활성화된다.
 
 ---
 
@@ -90,10 +90,9 @@ Authentik만 예외다 — env 스키마와 조건부 provider 로직(`AUTH_AUTH
 
 ### P0 — 라이브 경로 증명 (대체 경로 없음 — 죽으면 MT 당일 앱 자체가 없다)
 
-1. **MT 인증 결정·구성** — 나머지 P0 전체를 게이팅한다. dev-login은 프로덕션 배포 금지이므로
-   둘 중 하나를 결정해야 실배포 검증이 가능하다: (a) Authentik OIDC 애플리케이션 등록
-   (provider 생성, redirect URI 연결, 로그인 왕복 확인), (b) 사설 MT 전제에서 dev-login의
-   프로덕션 허용 범위 재정의.
+1. **MT 인증 구성 검증** — 관리자 화면에서 발급한 가입코드로 내부 계정 가입·로그인 왕복을
+   실배포에서 확인한다. Authentik OIDC를 쓸 경우에는 애플리케이션 등록과 redirect URI 연결도
+   함께 확인한다.
 2. **실배포 스모크 1회** — 배포된 앱에서 실기기 2대로 전체 플로우 완주: 로그인 → 방 생성 →
    입장 → 베팅 → 동기화 → 판 종료 → 정산 → 랭킹. "구현 완료"가 배포 상태로 엔드투엔드
    돌아간 적이 아직 한 번도 없다 — 정보량이 가장 큰 단일 검증이다. Broadcast 왕복 p95
@@ -135,8 +134,8 @@ Authentik만 예외다 — env 스키마와 조건부 provider 로직(`AUTH_AUTH
 
 1. **라이브 경로 미증명** — 배포+인증+실시간을 엮은 엔드투엔드가 실배포 상태로 돈 적이 없다.
    여기가 죽으면 대체 경로가 없다 — 종이 기록으로 회귀 (P0-2).
-2. **인증 정책 미결정** — dev-login 프로덕션 금지 vs Authentik 미등록 사이에 실배포 검증이
-   끼어 있다. P0 전체의 선행 조건 (P0-1).
+2. **인증 경로 미검증** — 가입코드 확인부터 내부 계정 로그인까지 실배포 왕복이 아직 없다.
+   P0 전체의 선행 조건 (P0-1).
 3. **섯다·고스톱 규칙 정확도** — 190 픽스처 대조·고스톱 테스트가 없다. 틀려도 사람이 그
    자리에서 교정 가능하지만, 앱 신뢰는 깎인다 (P1).
 4. **현장 네트워크** — 실물 리허설에서만 드러난다. 완화책은 로컬 큐 + 스냅샷 복원

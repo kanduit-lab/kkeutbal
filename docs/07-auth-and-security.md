@@ -17,7 +17,7 @@ Authentik을 운영 중이면 SSO 로그인 시 아이디 또는 전화번호가
 
 ## 인증 흐름 (2026-07-23 개편)
 
-4개 로그인 경로가 조건부로 공존한다. `src/lib/auth.ts`가 런타임에 provider 배열을 구성한다.
+3개 로그인 경로가 조건부로 공존한다. `src/lib/auth.ts`가 런타임에 provider 배열을 구성한다.
 
 ```
 password (항상 활성)
@@ -33,9 +33,6 @@ guest-token (항상 활성)
   → 관리자가 발급한 8자 토큰 + 이름 → sub = `guest:{tokenId}:{name}`
   → 같은 (토큰, 이름) = 같은 계정. 토큰은 만료·회수 가능 (guest_tokens 테이블)
 
-AUTH_DEV_LOGIN=true
-  → dev-login Credentials provider 활성 (hasDevLogin()) — 개발 전용
-  → 이름(1~20자)만 입력 → sub = `dev:{name.toLowerCase()}`
 ```
 
 로그인 화면은 활성 provider만 노출한다. 관리자(`users.is_admin` 또는 `AUTH_ADMIN_USERNAMES`
@@ -45,12 +42,9 @@ AUTH_DEV_LOGIN=true
 ```
 브라우저 ──► Next.js (Auth.js v5)
                  │
-      ┌──────────┴───────────┐
-      ▼                      ▼
-  Authentik OIDC        dev-login (Credentials)
-  (Authorization Code)  (이름만 입력, 서명 없음)
-      │                      │
-      └──────────┬───────────┘
+                 ▼
+          password / Authentik / guest-token
+                 │
                  ▼
          jwt 콜백 (src/lib/auth.ts)
                  │  최초 로그인(user && account 존재)에만 실행
@@ -65,6 +59,18 @@ AUTH_DEV_LOGIN=true
 ```
 
 증거: `src/lib/auth.ts`, `src/lib/auth-config.ts`.
+
+### 회원가입 코드
+
+관리자가 `/admin`에서 발급한 가입코드는 `registration_codes.code_hash`로만 저장된다. 로그인
+카드의 가입코드 폼이 `verifyRegistrationCode` Server Action으로 코드를 전송하고, 활성·미만료·미회수
+코드인지 확인한다. 일치하면 `AUTH_SECRET`으로 서명한 10분짜리 HTTP-only 쿠키를 `/register`
+경로에 발급한다. `/register` 페이지와 `registerAndLogin` 액션은 모두 이 쿠키를 검증하므로
+URL 직접 접근이나 폼 직접 제출로는 가입할 수 없다. 원문 코드는 발급 직후에만 관리자에게
+반환되고, 이후에는 회수·만료 상태만 관리한다. `AUTH_REGISTRATION_CODE`는 DB 가입코드를 아직
+발급할 수 없는 첫 관리자 생성용 비상 경로이며, 일반 가입코드와 같이 혼동 문자를 제외한 영문
+대문자·숫자 10자리여야 한다. 구현 근거:
+`src/features/auth/registration-access.ts`, `registration-codes.ts`, `admin-actions.ts`.
 
 ### 설정 파일이 둘로 나뉜 이유
 
@@ -93,22 +99,6 @@ AUTH_DEV_LOGIN=true
 `sub`가 바뀌면 `users.authentikSub` 매칭이 끊겨 기존 전적과 분리된 새 계정이 생긴다. Authentik에서
 subject mode를 바꾸지 말 것.
 
-**미구현**: Authentik 실등록은 아직 없다. 현재 배포 가능한 유일한 로그인 경로는 dev-login이다.
-
-### AUTH_DEV_LOGIN — 프로덕션 금지
-
-```ts
-// src/lib/env.ts
-AUTH_DEV_LOGIN: z.enum(['true', 'false']).default('false').transform(v => v === 'true'),
-```
-
-이름 입력만으로 임의 사용자를 자칭할 수 있다. 비밀번호도, 소유권 증명도 없다. `sub`가
-`dev:{이름소문자}`로 결정되므로 **아무나 다른 사람의 표시 이름을 입력하면 그 계정으로 로그인된다.**
-Authentik 없이도 앱을 굴리기 위한 개발·데모 전용 경로다.
-
-- 프로덕션 env에 `AUTH_DEV_LOGIN=true`가 남아 있으면 인증이 사실상 없는 것과 같다.
-- 배포 전 체크리스트에 필수 항목으로 넣는다: `AUTH_DEV_LOGIN` 미설정 또는 `false` 확인.
-
 ## 미들웨어 — UX 게이트일 뿐
 
 `src/middleware.ts`는 `authConfigBase`로 JWT 쿠키를 해독해 로그인 여부만 본다. 결과로 하는 일은
@@ -130,7 +120,7 @@ JWT로 서명해 내려주는 방식)은 구현되지 않았다. 실제 경로�
 | 경로 | 클라이언트 | 인증 방식 | 용도 |
 |------|-----------|----------|------|
 | DB 읽기/쓰기 | `src/lib/db.ts` (drizzle + postgres-js, 서버 전용) | 전용 롤 `kkeutbal_app` (`bypassrls`), Supabase pooler session mode | 모든 테이블 CRUD |
-| Realtime | `src/lib/supabase/client.ts` (브라우저) | `NEXT_PUBLIC_SUPABASE_ANON_KEY`, 로그인 세션과 무관 | Broadcast·Presence만 |
+| Realtime | `src/lib/supabase/client.ts` (브라우저) | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, 로그인 세션과 무관 | Broadcast·Presence만 |
 
 `kkeutbal_app`은 `bypassrls` 롤이므로 RLS 정책과 무관하게 모든 행에 접근한다. **인가는 RLS가
 아니라 Server Action의 명시적 검사가 담당한다.** 패턴은 두 곳에 반복된다:
@@ -154,7 +144,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 `supabase/migrations/0001_init_rls.sql`은 `authenticated` 롤 기준으로 `auth.uid()`를 쓰는
 정책을 전 테이블에 걸어 두었다. 이 정책들은 다음 상황에서만 의미가 있다:
 
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`가 유출되어 누군가 PostgREST를 직접 두드리는 경우
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`가 유출되어 누군가 PostgREST를 직접 두드리는 경우
 - 향후 브라우저에서 Supabase 클라이언트로 직접 테이블을 조회하는 코드가 추가되는 경우
 
 앱의 정상 동작 경로(Server Action → `kkeutbal_app`)는 이 정책들을 아예 거치지 않는다.
@@ -173,7 +163,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 ## Realtime — 공개 채널, payload는 힌트일 뿐
 
 `src/lib/realtime/client.ts`의 `createRoomChannel`은 `private: true`를 지정하지 않는다 —
-**공개(public) Broadcast 채널**이며 anon key로 접속한다. 토픽은 `room:{roomId}` (UUID).
+**공개(public) Broadcast 채널**이며 publishable key로 접속한다. 토픽은 `room:{roomId}` (UUID).
 
 `0001_init_rls.sql`의 `realtime_room_read` / `realtime_room_write` 정책(`realtime.messages`,
 `to authenticated`)은 **현재 경로에서 평가되지 않는다.** 앱이 Supabase Auth로 인증하지
@@ -258,7 +248,7 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 
 - [ ] 하드코딩된 비밀값 없음 (`.env.example`에 키 이름만)
 - [ ] `NEXT_PUBLIC_` 접두사가 붙은 서버 전용 값 없음
-- [ ] `AUTH_DEV_LOGIN`이 프로덕션 env에 `true`로 남아 있지 않음
+- [ ] `registration_codes` 마이그레이션이 적용되어 있고, 운영용 활성 가입코드가 발급되어 있음
 - [ ] 모든 신규 Server Action이 세션·방 소속·역할을 재검증
 - [ ] 모든 외부 입력(폼·realtime·vision)이 zod 통과
 - [ ] 신규 테이블에 RLS 활성화(방어층 목적) — 단, 이 자체가 인가 경로가 아님을 인지
@@ -280,7 +270,7 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 | observer 베팅 차단 | observer 역할로 `placeBet` 호출 → 거부 확인 |
 | 원장 불변성 | `kkeutbal_app` 롤로 `chip_ledger` 직접 UPDATE 시도 → 트리거 예외 확인 |
 | 방 소속 격리 | 비참가자 세션으로 `refreshRoom` 호출 → 실패 확인 |
-| dev-login 프로덕션 차단 | 배포 env에서 `AUTH_DEV_LOGIN` 값 확인 (`false` 또는 미설정) |
+| 가입코드 게이트 | 가입코드 없이 `/register` 접근·가입 폼 제출 → `/login`으로 이동, 올바른 코드 뒤에는 가입 가능 |
 | 토큰 누출 | 클라이언트 번들(`next build` 산출물)에서 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_AUTHENTIK_SECRET`, `ANTHROPIC_API_KEY` 문자열 검색 → 부재 확인 |
 
 ## Open Questions

@@ -57,7 +57,7 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
  │  docker-deploy-control-hub 로 배포      │
  │  도메인: kkeutbal.kanduit.app           │
  └──────┬───────────────────────────────┬──┘
-        │ postgres-js (kkeutbal_app)    │ anon key (브라우저 직결)
+        │ postgres-js (kkeutbal_app)    │ publishable key (브라우저 직결)
         ▼                               ▼
  ┌──────────────────────────────────────────┐
  │  Supabase                                │
@@ -90,16 +90,16 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
 
 커넥션은 `globalThis` 캐시로 dev HMR 재생성을 막는다(`max: 5`, `idle_timeout: 30s`).
 
-### Auth — Authentik 선택적, 게스트 로그인 기본
+### Auth — Authentik 선택적, 가입코드 검증
 
 `src/lib/auth.ts` / `src/lib/auth-config.ts`:
 
 - `AUTH_AUTHENTIK_ID` / `_SECRET` / `_ISSUER` 세 값이 모두 있을 때만 Authentik provider가
   provider 목록에 들어간다(`hasAuthentik()`). 현재 실제 등록은 안 돼 있다.
-- `AUTH_DEV_LOGIN=true`일 때 Credentials provider(`dev-login`)가 활성화된다. 입력은 이름
-  하나뿐이며 `dev:{name.toLowerCase()}`를 sub로 써서 **같은 이름 = 같은 계정**으로 매핑한다.
-  MT 현장에서 기기를 바꿔도 전적이 이어지게 하려는 의도지만, 이름 충돌·사칭을 막는 장치가 없다.
-  프로덕션에서 켜면 인증이 사실상 무력화된다.
+- 회원가입은 관리자가 `/admin`에서 발급한 `registration_codes`의 해시를 서버에서 확인한 뒤에만
+  연다. 성공하면 10분짜리 서명된 HTTP-only 쿠키가 발급되고, `/register` 페이지와
+  `registerAndLogin` 액션이 모두 이를 확인한다. `AUTH_REGISTRATION_CODE`는 첫 관리자 생성용
+  비상 코드로만 유지한다.
 - `jwt` 콜백에서 최초 로그인 시 `public.users`에 upsert(`authentikSub` 충돌 시 갱신) 하고
   내부 id를 `token.uid`에 싣는다. 이후 모든 서버 컨텍스트는 `session.user.id`로 이 내부 id를
   쓴다.
@@ -110,7 +110,7 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
 
 ### 실시간 전략 — 공개 Broadcast 채널 + 클라이언트 send + 스냅샷 truth
 
-`src/lib/supabase/client.ts`가 브라우저 전용 Supabase 클라이언트를 anon key로 만든다
+`src/lib/supabase/client.ts`가 브라우저 전용 Supabase 클라이언트를 publishable key로 만든다
 (`persistSession: false`, `autoRefreshToken: false` — 이 클라이언트는 DB 조회에 쓰지 않고
 Realtime 전용이다). `src/lib/realtime/client.ts` + `events.ts`가 프로토콜을 정의한다. 상세는
 `03-realtime-protocol.md`가 소유하며, 여기서는 아키텍처 결정만 적는다.
@@ -120,7 +120,7 @@ Realtime 전용이다). `src/lib/realtime/client.ts` + `events.ts`가 프로토�
 
 - **공개(public) 채널**, 토픽 `room:{roomId}`(`roomTopic()`). `roomId`가 UUID라 추측이 어렵다는
   점에 의존하는 obscurity 방어이며, RLS로 강제되는 접근 제어가 아니다.
-- 인증 없는 anon key로 구독·발행한다.
+- 인증 없는 publishable key로 구독·발행한다.
 - 이벤트는 **행동한 클라이언트가 Server Action 성공 응답을 받은 뒤 직접 `channel.send()`**
   한다(`sendRoomEvent`). 서버가 대신 브로드캐스트하지 않는다.
 - 수신 측은 `onRoomEvent`로 이벤트를 받아도 그 payload를 상태에 바로 반영하지 않는다. 이벤트는
@@ -232,7 +232,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 - `kkeutbal_app` 롤 권한(GRANT)은 `keep_alive_and_app_grants` 마이그레이션으로 적용됐으나 SQL
   파일이 리포에 없다 — Migration And Rollout 및 Open Questions 참조.
 - 외부 공개 REST API는 없다. 클라이언트 진입점은 Server Actions, Realtime 공개 채널, Supabase
-  REST(anon key, `keep_alive` 테이블 ping 전용)뿐이다.
+  REST(publishable key, `keep_alive` 테이블 ping 전용)뿐이다.
 
 ## Migration And Rollout
 
@@ -247,7 +247,7 @@ src/features/<domain>/       도메인별 폴더가 경계
    `kanduit-lab/docker-deploy-control-hub@v2`의 `ci-reusable.yml`/`cd-reusable.yml`을 호출해
    빌드·배포한다. 도메인 `kkeutbal.kanduit.app`, health check `/api/health`.
 6. `.github/workflows/keep-alive.yml`이 6시간 간격으로 `keep_alive` 테이블에 REST insert/delete를
-   보내 Supabase 무료 티어 7일 pause를 막는다. 시크릿 `SUPABASE_URL`/`SUPABASE_ANON_KEY` 등록됨.
+   보내 Supabase 무료 티어 7일 pause를 막는다. 시크릿 `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` 등록됨.
 7. 실제 MT 전에 2대 이상 기기로 리허설 1회 — 동기화·재접속·정산 확인.
 
 롤백: 이전 docker 이미지 태그로 재배포(`docker-deploy-control-hub` 워크플로 기준). 스키마는
@@ -271,7 +271,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 |--------|------|------|
 | 공개 Realtime 채널 — 인증 없이 누구나 `roomId`만 알면 구독·발행 가능 | 칩 금액 등 payload 노출, 위조 이벤트 주입 | UUID 토픽 난독화, zod 검증 실패 시 폐기, 진실은 항상 Server Action 재검증 스냅샷 |
 | `kkeutbal_app`이 bypassrls — Server Action 권한 검사 누락 시 RLS 방어 없음 | 방 데이터 교차 노출 | 모든 쓰기 경로가 Server Action을 거치도록 코드 리뷰로 강제. 컴포넌트 직접 쿼리 금지 규칙 |
-| 게스트 로그인이 이름만으로 계정 매핑 | 사칭, 계정 탈취 | MT 현장 한정 운용 전제. 프로덕션 상시 노출 시 `AUTH_DEV_LOGIN` 반드시 false |
+| 회원가입 코드가 유출됨 | 무단 가입 | 관리자가 `/admin`에서 즉시 회수. DB에는 `AUTH_SECRET` 기반 해시만 저장하고, 원문은 발급 직후 한 번만 노출 |
 | `keep_alive_and_app_grants` 마이그레이션 SQL이 리포에 미보존 | 재현 불가, 신규 환경 구축 시 수동 추정 필요 | Migration And Rollout 3번 — SQL 파일로 재작성해 커밋 |
 | MT 현장 Wi-Fi/LTE 불안정 | 액션 유실·중복 | 멱등키(betting), 폴링+visibilitychange 재동기화, 서버 스냅샷 우선 |
 | Broadcast 메시지 유실(전달 보장 없음) | 화면 불일치 | 이벤트를 힌트로만 쓰고 20초 폴링 + 250ms 디바운스 refetch로 항상 정정 |

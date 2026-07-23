@@ -14,9 +14,9 @@ MT/모임에서 공용 칩을 쓰면 승패 기록이 안 남는 문제를 푼�
 | 레이어 | 선택 |
 |--------|------|
 | 앱 | Next.js 15 App Router, TypeScript strict, RSC + Server Actions, `output: 'standalone'` |
-| 실시간 | Supabase Realtime **Broadcast** 공개 채널(`room:{uuid}`, anon key) |
+| 실시간 | Supabase Realtime **Broadcast** 공개 채널(`room:{uuid}`, publishable key) |
 | DB | PostgreSQL(Supabase) + Drizzle ORM. 전용 롤 `kkeutbal_app`(bypassrls)로 pooler(session mode, 5432) 직결. RLS는 anon/authenticated 대상 방어층일 뿐, 실제 권한 검사는 Server Action이 한다 |
-| 인증 | Auth.js v5, 4개 경로: `password`(내부 계정 — username·bcrypt·phone, `local:{username}` sub) · Authentik OIDC(`AUTH_AUTHENTIK_*` 3종 있을 때만, 아이디/전화번호 일치 시 내부 계정에 자동 병합) · `guest-token`(관리자 발급 토큰+이름, `guest:{tokenId}:{name}` sub) · `dev-login`(`AUTH_DEV_LOGIN=true` 개발 전용). 관리자 판정은 `users.is_admin` OR `AUTH_ADMIN_USERNAMES` |
+| 인증 | Auth.js v5, 3개 경로: `password`(내부 계정 — username·bcrypt·phone, `local:{username}` sub) · Authentik OIDC(`AUTH_AUTHENTIK_*` 3종 있을 때만, 아이디/전화번호 일치 시 내부 계정에 자동 병합) · `guest-token`(관리자 발급 토큰+이름, `guest:{tokenId}:{name}` sub). 회원가입은 관리자가 발급·회수하는 `registration_codes` 검증 뒤에만 열림. `AUTH_REGISTRATION_CODE`는 첫 관리자 생성용 비상 코드다. 관리자 판정은 `users.is_admin` OR `AUTH_ADMIN_USERNAMES` |
 | Vision | `@anthropic-ai/sdk`, 모델은 `JOKBO_VISION_MODEL` env(기본 `claude-sonnet-5`). 족보 사진 인식 실패 시 수동 피커로 폴백 |
 | 배포 | kanduit-lab `docker-deploy-control-hub` v2 (`.github/workflows/deploy.yml`, `.deploy.yml`), 전용 서버 없음. `dockerfiles/Dockerfile.nextjs` |
 

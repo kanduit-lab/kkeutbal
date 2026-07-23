@@ -151,8 +151,8 @@
 
 ### 인증
 
-- [x] Auth.js v5 세션 연동: Authentik OIDC(조건부 활성) + 개발용 게스트 로그인
-  - `src/features/auth/session.ts` — `AUTH_AUTHENTIK_*` env 3종 있을 때만 OIDC 활성, `AUTH_DEV_LOGIN=true`면 이름 기반 게스트 로그인(`dev:{name}` sub, 동일 이름=동일 계정)
+- [x] Auth.js v5 세션 연동: 내부 계정·Authentik OIDC(조건부 활성)·게스트 토큰
+  - `src/lib/auth.ts` — `AUTH_AUTHENTIK_*` env 3종이 있을 때만 OIDC 활성. 이름만으로 로그인하는 개발용 provider는 제거됨
   - `jwt` 콜백에서 `public.users` upsert 후 `token.uid`에 내부 id 저장. 미들웨어는 edge-safe 설정으로 쿠키만 검사, 실제 권한 검사는 각 Server Action
   - Authentik 실제 애플리케이션 등록은 미완료 — High "MT 인증 결정·구성" 항목에서 추적
 
@@ -160,7 +160,7 @@
 
 - [x] 방 생성·입장·실시간 동기화 구현
   - `src/app/rooms/new/page.tsx`, `src/app/rooms/[code]/page.tsx`, `src/features/game/`(`actions.ts`, `queries.ts`, `room-code.ts`, `components/room-client.tsx` 외)
-  - Broadcast는 공개 채널 `room:{uuid}` + anon key. 행동한 클라이언트가 Server Action 성공 후 이벤트를 직접 send, 수신자는 이벤트를 힌트로만 쓰고 `refreshRoom` 스냅샷 refetch(250ms 디바운스 + 20초 폴링 + `visibilitychange`)로 진실 상태 확정
+  - Broadcast는 공개 채널 `room:{uuid}` + publishable key. 행동한 클라이언트가 Server Action 성공 후 이벤트를 직접 send, 수신자는 이벤트를 힌트로만 쓰고 `refreshRoom` 스냅샷 refetch(250ms 디바운스 + 20초 폴링 + `visibilitychange`)로 진실 상태 확정
   - 재접속 시에도 동일 `refreshRoom` 경로로 자동 복원됨 — 별도 `state.request`/`state.snapshot` 프로토콜은 마이그레이션에 정의만 있고 미사용
 
 - [x] 베팅 액션 + 칩 원장 UI: `src/features/betting/actions.ts`, `src/features/game/components/action-bar.tsx`, `dealer-panel.tsx`
@@ -183,7 +183,7 @@
 
 - [x] Supabase keep-alive 크론: `.github/workflows/keep-alive.yml`
   - 6시간 간격으로 `keep_alive` 테이블에 REST insert, 7일 지난 행 삭제. 무료 티어 7일 비활성 pause 방지
-  - 시크릿 `SUPABASE_URL` / `SUPABASE_ANON_KEY` GitHub repo에 등록 완료
+  - 시크릿 `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` GitHub repo에 등록 완료
 
 ### 스캐폴드
 
