@@ -2,9 +2,10 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
-import { createGuestToken, revokeGuestToken, setAdmin } from '../admin-actions'
-import type { AdminUserView, GuestTokenView } from '../admin-queries'
+import { adminCloseRoom, createGuestToken, revokeGuestToken, setAdmin } from '../admin-actions'
+import type { AdminRoomView, AdminUserView, GuestTokenView } from '../admin-queries'
 import { Badge, Button, ConfirmDialog, Input, Panel, useToast } from '@/components/ui'
+import { GAME_BADGE_TONE, GAME_LABELS } from '@/features/game/components/shared'
 
 const EXPIRY_PRESETS = [
   { label: '24시간', hours: 24 },
@@ -13,13 +14,25 @@ const EXPIRY_PRESETS = [
   { label: '무기한', hours: 0 },
 ] as const
 
+/** 방 생성 후 경과 시간 — 방치 여부 판단용이라 분/시간/일 단위면 충분하다. */
+function formatAge(createdAt: string): string {
+  const minutes = Math.floor((Date.now() - Date.parse(createdAt)) / 60_000)
+  if (minutes < 1) return '방금 전'
+  if (minutes < 60) return `${minutes}분 전`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}시간 전`
+  return `${Math.floor(hours / 24)}일 전`
+}
+
 export function AdminClient({
   tokens,
   users,
+  rooms,
   selfId,
 }: {
   tokens: readonly GuestTokenView[]
   users: readonly AdminUserView[]
+  rooms: readonly AdminRoomView[]
   selfId: string
 }) {
   const router = useRouter()
@@ -30,6 +43,7 @@ export function AdminClient({
   const [hours, setHours] = useState<number>(72)
   const [revokeTarget, setRevokeTarget] = useState<GuestTokenView | null>(null)
   const [adminTarget, setAdminTarget] = useState<AdminUserView | null>(null)
+  const [closeTarget, setCloseTarget] = useState<AdminRoomView | null>(null)
 
   function issue() {
     if (isPending || !label.trim()) return
@@ -167,6 +181,44 @@ export function AdminClient({
         </ul>
       </Panel>
 
+      <Panel className="space-y-3">
+        <h2 className="font-bold">진행 중인 방</h2>
+        {rooms.length === 0 ? (
+          <p className="py-4 text-center text-sm text-muted">진행 중인 방이 없습니다</p>
+        ) : (
+          <ul className="space-y-2">
+            {rooms.map((room) => (
+              <li
+                key={room.id}
+                className="flex items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3 py-2.5"
+              >
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 font-bold">
+                    <span className="font-mono tracking-widest">{room.code}</span>
+                    <span className="truncate">{room.name}</span>
+                    <Badge tone={GAME_BADGE_TONE[room.gameType]}>
+                      {GAME_LABELS[room.gameType].name}
+                    </Badge>
+                  </p>
+                  <p className="truncate text-xs text-muted">
+                    방장 {room.hostName} · {room.memberCount}명 · {formatAge(room.createdAt)} 생성
+                    {room.status === 'playing' ? ' · 판 진행 중' : ''}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="danger"
+                  disabled={isPending}
+                  onClick={() => setCloseTarget(room)}
+                >
+                  강제 정산
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
       <ConfirmDialog
         open={revokeTarget !== null}
         title={`토큰 ${revokeTarget?.code ?? ''} 을 회수할까요?`}
@@ -219,6 +271,29 @@ export function AdminClient({
           })
         }}
         onClose={() => setAdminTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={closeTarget !== null}
+        title="방을 강제 정산할까요?"
+        body="진행 중인 판은 무효 처리됩니다."
+        confirmLabel="강제 정산"
+        tone="danger"
+        onConfirm={() => {
+          const target = closeTarget
+          setCloseTarget(null)
+          if (!target) return
+          startTransition(async () => {
+            const result = await adminCloseRoom(target.id)
+            if (result.success) {
+              toast('방을 강제 정산했습니다', 'success')
+              router.refresh()
+            } else {
+              toast(result.error, 'error')
+            }
+          })
+        }}
+        onClose={() => setCloseTarget(null)}
       />
     </div>
   )

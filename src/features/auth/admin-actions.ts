@@ -1,13 +1,14 @@
 'use server'
 
-import { eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
+import { lockRoom } from '../game/action-helpers'
 import { currentUserId } from './session'
 import { isAdminUser } from './roles'
 
-/** 관리자 전용 액션 — 게스트 토큰 발급·회수, 관리자 지정. */
+/** 관리자 전용 액션 — 게스트 토큰 발급·회수, 관리자 지정, 방 강제 정산. */
 
 async function requireAdmin(): Promise<string | null> {
   const userId = await currentUserId()
@@ -114,5 +115,99 @@ export async function setAdmin(
   } catch (error) {
     console.error('setAdmin failed:', error)
     return fail('권한 변경에 실패했습니다')
+  }
+}
+
+/** 강제 정산으로 무효 처리되는 판·베팅에 남기는 사유. */
+const ADMIN_CLOSE_REASON = '관리자 강제 정산'
+
+/**
+ * 방 강제 정산 — 방장이 잠수하거나 게스트 로그인을 잃어 방을 못 닫을 때의 회수 경로.
+ * closeRoom(game/actions.ts)과 달리 방장 역할 대신 관리자 권한으로 통과하고,
+ * 진행 중인 판이 있으면 voidRound(game/round-actions.ts)와 같은 절차로 무효 처리한 뒤 정산한다.
+ */
+export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ code: string }>> {
+  const adminId = await requireAdmin()
+  if (!adminId) return fail('관리자만 강제 정산할 수 있습니다')
+  if (!z.string().uuid().safeParse(roomId).success) return fail('잘못된 방입니다')
+
+  try {
+    return await db.transaction(async (tx) => {
+      await lockRoom(tx, roomId)
+
+      const [room] = await tx
+        .select({ code: schema.rooms.code, status: schema.rooms.status })
+        .from(schema.rooms)
+        .where(eq(schema.rooms.id, roomId))
+        .limit(1)
+      if (!room) return fail('방을 찾을 수 없습니다')
+      if (room.status === 'settled' || room.status === 'closed') return fail('이미 끝난 방입니다')
+
+      const [round] = await tx
+        .select({ id: schema.rounds.id })
+        .from(schema.rounds)
+        .where(and(eq(schema.rounds.roomId, roomId), eq(schema.rounds.status, 'playing')))
+        .orderBy(desc(schema.rounds.seq))
+        .limit(1)
+
+      if (round) {
+        // voidRound 와 동일한 정정 절차 — 아직 정정되지 않은 베팅 행을 전액 반환한다.
+        const betRows = await tx
+          .select()
+          .from(schema.chipLedger)
+          .where(and(eq(schema.chipLedger.roundId, round.id), eq(schema.chipLedger.reason, 'bet')))
+        const corrected = new Set(
+          (
+            await tx
+              .select({ revertedOf: schema.chipLedger.revertedOf })
+              .from(schema.chipLedger)
+              .where(
+                and(
+                  eq(schema.chipLedger.roundId, round.id),
+                  eq(schema.chipLedger.reason, 'correction'),
+                ),
+              )
+          ).map((row) => row.revertedOf),
+        )
+
+        const refunds = betRows
+          .filter((row) => !corrected.has(row.id))
+          .map((row) => ({
+            roomId,
+            roundId: round.id,
+            userId: row.userId,
+            delta: -row.delta,
+            reason: 'correction' as const,
+            refActionId: row.refActionId,
+            revertedOf: row.id,
+          }))
+        if (refunds.length > 0) await tx.insert(schema.chipLedger).values(refunds)
+
+        await tx
+          .update(schema.betActions)
+          .set({ status: 'reverted', reason: ADMIN_CLOSE_REASON })
+          .where(
+            and(
+              eq(schema.betActions.roundId, round.id),
+              inArray(schema.betActions.status, ['pending', 'accepted']),
+            ),
+          )
+
+        await tx
+          .update(schema.rounds)
+          .set({ status: 'voided', result: { note: ADMIN_CLOSE_REASON }, endedAt: new Date() })
+          .where(eq(schema.rounds.id, round.id))
+      }
+
+      await tx
+        .update(schema.rooms)
+        .set({ status: 'settled', closedAt: new Date() })
+        .where(eq(schema.rooms.id, roomId))
+
+      return ok({ code: room.code })
+    })
+  } catch (error) {
+    console.error('adminCloseRoom failed:', error)
+    return fail('강제 정산에 실패했습니다')
   }
 }

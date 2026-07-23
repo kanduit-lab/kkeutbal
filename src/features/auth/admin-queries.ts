@@ -1,5 +1,6 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
+import type { RoomGameType } from '@/features/game/types'
 
 /** 관리자 페이지 전용 조회. 호출 전 isAdminUser 게이트를 통과해야 한다. */
 
@@ -35,6 +36,60 @@ export async function listGuestTokens(): Promise<GuestTokenView[]> {
     expiresAt: row.expiresAt?.toISOString() ?? null,
     revokedAt: row.revokedAt?.toISOString() ?? null,
   }))
+}
+
+export interface AdminRoomView {
+  readonly id: string
+  readonly code: string
+  readonly name: string
+  readonly gameType: RoomGameType
+  readonly status: 'waiting' | 'playing'
+  readonly createdAt: string
+  /** leftAt 이 없는 활성 멤버 수. */
+  readonly memberCount: number
+  readonly hostName: string
+}
+
+/** 진행 중(waiting·playing)인 방 목록 — 방치된 방 강제 정산 판단용. */
+export async function listActiveRooms(): Promise<AdminRoomView[]> {
+  const rows = await db
+    .select({
+      id: schema.rooms.id,
+      code: schema.rooms.code,
+      name: schema.rooms.name,
+      gameType: schema.rooms.gameType,
+      status: schema.rooms.status,
+      createdAt: schema.rooms.createdAt,
+      hostName: schema.users.displayName,
+      memberCount: sql<number>`(
+        select count(*)::int from ${schema.roomMembers}
+        where ${schema.roomMembers.roomId} = ${schema.rooms.id}
+          and ${schema.roomMembers.leftAt} is null
+      )`,
+    })
+    .from(schema.rooms)
+    .innerJoin(schema.users, eq(schema.users.id, schema.rooms.hostId))
+    .where(inArray(schema.rooms.status, ['waiting', 'playing']))
+    .orderBy(desc(schema.rooms.createdAt))
+    .limit(100)
+
+  // where 절이 이미 걸러내지만 drizzle 타입은 좁혀지지 않는다 — 캐스트 대신 런타임 좁히기.
+  return rows.flatMap((row) =>
+    row.status === 'waiting' || row.status === 'playing'
+      ? [
+          {
+            id: row.id,
+            code: row.code,
+            name: row.name,
+            gameType: row.gameType,
+            status: row.status,
+            createdAt: row.createdAt.toISOString(),
+            memberCount: row.memberCount,
+            hostName: row.hostName,
+          },
+        ]
+      : [],
+  )
 }
 
 export interface AdminUserView {
