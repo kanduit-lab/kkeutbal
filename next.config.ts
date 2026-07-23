@@ -8,7 +8,13 @@ const nextConfig: NextConfig = {
     // 테스트 도구가 프로젝트 안에 로그를 쓰면 watcher 가 무한 재컴파일에 빠진다
     config.watchOptions = {
       ...config.watchOptions,
-      ignored: ['**/node_modules/**', '**/.git/**', '**/.next/**', '**/.playwright-mcp/**'],
+      ignored: [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/.next/**',
+        '**/.playwright-mcp/**',
+        '**/.qa-reports/**',
+      ],
     }
     return config
   },
