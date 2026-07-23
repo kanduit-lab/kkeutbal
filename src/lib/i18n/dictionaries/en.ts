@@ -469,6 +469,8 @@ export const en: Dictionary = {
     startingChipsWaitingOnly:
       'Starting chips can only change before the game starts (while waiting)',
     startingChipsHasRounds: 'Starting chips cannot change once a round has been played',
+    startingChipsBelowBalance:
+      'Cannot lower starting chips — a player holds fewer chips than would be taken back',
     updateSettingsFailed: 'Failed to update room options',
     hostOnlySettle: 'Only the host can settle the session',
     activeRoundBeforeSettle: 'Finish or void the round in progress first',

@@ -506,6 +506,7 @@ export const ko = {
     hostOnlySettings: '방장만 방 옵션을 바꿀 수 있습니다',
     startingChipsWaitingOnly: '시작 칩은 게임 시작 전(대기 중)에만 바꿀 수 있습니다',
     startingChipsHasRounds: '이미 진행한 판이 있어 시작 칩을 바꿀 수 없습니다',
+    startingChipsBelowBalance: '남은 칩이 회수액보다 적은 참가자가 있어 시작 칩을 낮출 수 없습니다',
     updateSettingsFailed: '방 옵션 변경에 실패했습니다',
     hostOnlySettle: '방장만 세션을 정산할 수 있습니다',
     activeRoundBeforeSettle: '진행 중인 판을 먼저 끝내거나 무효화하세요',

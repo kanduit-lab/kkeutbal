@@ -98,13 +98,23 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
 
   try {
     return await db.transaction(async (tx) => {
-      const [room] = await tx.select().from(rooms).where(eq(rooms.code, code)).limit(1)
+      // 코드로 id 만 먼저 찾고, 판단에 쓰는 값은 전부 락을 잡은 뒤에 다시 읽는다.
+      // 락 이전에 읽은 status/rulePreset/startingChips 는 그 사이 closeRoom·updateRoomSettings 가
+      // 커밋해 버릴 수 있다 — 그러면 이미 정산된 방에 멤버와 시작 칩이 들어간다.
+      const [target] = await tx
+        .select({ id: rooms.id })
+        .from(rooms)
+        .where(eq(rooms.code, code))
+        .limit(1)
+      if (!target) return fail('errors.roomCodeNotFound')
+
+      await lockRoom(tx, target.id)
+
+      const [room] = await tx.select().from(rooms).where(eq(rooms.id, target.id)).limit(1)
       if (!room) return fail('errors.roomCodeNotFound')
       if (room.status === 'settled' || room.status === 'closed') {
         return fail('errors.roomEnded')
       }
-
-      await lockRoom(tx, room.id)
 
       const [existing] = await tx
         .select({ userId: roomMembers.userId, leftAt: roomMembers.leftAt })
@@ -281,7 +291,14 @@ export async function updateRoomSettings(
         // observer 는 시작 칩을 받지 않았으므로 제외 (승격 시 바이인으로 받는다).
         const delta = startingChips - room.startingChips
         const targets = await tx
-          .select({ userId: roomMembers.userId })
+          .select({
+            userId: roomMembers.userId,
+            balance: sql<number>`(
+              select coalesce(sum(${chipLedger.delta}), 0)::int from ${chipLedger}
+              where ${chipLedger.roomId} = ${roomId}
+                and ${chipLedger.userId} = ${roomMembers.userId}
+            )`,
+          })
           .from(roomMembers)
           .where(
             and(
@@ -290,6 +307,13 @@ export async function updateRoomSettings(
               ne(roomMembers.role, 'observer'),
             ),
           )
+
+        // 시작 칩을 낮추면 전원에게서 차액을 회수한다 — 회수액이 잔액을 넘으면 원장 잔액이
+        // 음수가 된다. voidRound·undoLastBuyIn 과 같은 기준으로 미리 막는다.
+        if (delta < 0 && targets.some((member) => member.balance + delta < 0)) {
+          return fail('errors.startingChipsBelowBalance')
+        }
+
         if (targets.length > 0) {
           await tx.insert(buyIns).values(
             targets.map((member) => ({
