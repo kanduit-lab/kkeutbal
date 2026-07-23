@@ -22,7 +22,8 @@ MT/모임에서 공용 칩을 쓰면 승패 기록이 안 남는 문제를 푼�
 
 **중요**: 라이브 액션은 Postgres Changes가 아니라 **Broadcast**를 쓴다. 행동한 클라이언트가
 Server Action 성공 후 이벤트를 직접 send하고, 수신자는 그 이벤트를 힌트로만 쓰고 진실은
-스냅샷 refetch(`refreshRoom`, 250ms 디바운스 + 20초 폴링 + `visibilitychange`)로 확인한다.
+스냅샷 refetch(`refreshRoom`, 250ms 디바운스·이벤트 유래 최소 1초 간격 + 20초 폴링 +
+`visibilitychange`/`online`/`pageshow`, CLOSED 시 백오프 자동 재구독)로 확인한다.
 private 채널·RLS realtime 정책은 마이그레이션에 존재하나 현재 미사용. 이유·프로토콜 상세는
 `docs/03-realtime-protocol.md`. 이 경계를 바꾸려면 문서부터 갱신할 것.
 

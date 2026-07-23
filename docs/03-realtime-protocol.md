@@ -6,7 +6,7 @@
 | Audience | engineering / reviewers |
 | Status | active |
 | Source of truth | this document (채널·이벤트·동기화 규약) — 구현은 `src/lib/realtime/events.ts`, `src/lib/realtime/client.ts` |
-| Last reviewed | 2026-07-22 |
+| Last reviewed | 2026-07-23 |
 
 ## Context
 
@@ -56,25 +56,35 @@ type Envelope = {
 
 ### 이벤트 목록과 실제 사용처
 
-`eventPayloads`에 정의된 이벤트는 9개, 그중 실제로 send되는 것은 7개다.
+`eventPayloads`에 정의된 이벤트는 12개다.
 
 | 이벤트 | 발신 위치 | `room-client.tsx` 수신 처리 |
 |--------|-----------|------------------------------|
 | `round.started` | `dealer-panel.tsx` | 토스트("N번째 판 시작") + refetch |
 | `round.ended` | `dealer-panel.tsx` | 토스트(승자·팟) + refetch |
+| `round.voided` | 딜러의 판 무효 처리 경로 | refetch (payload의 `reason`은 토스트 힌트) |
 | `bet.placed` | `action-bar.tsx`, `dealer-panel.tsx` | refetch만 |
 | `bet.approved` | `dealer-panel.tsx` | refetch만 |
 | `bet.rejected` | `dealer-panel.tsx` | 자기 액션이면 토스트(거절 사유) + refetch |
 | `bet.reverted` | `dealer-panel.tsx` | refetch만 |
 | `member.role_changed` | `dealer-panel.tsx` | refetch만 |
+| `member.left` | 방 나가기 성공 후 — 채널 해제 직전이므로 `sendOneShotRoomEvent` 사용 | refetch만 |
+| `room.settings_changed` | 방 설정 저장 후 (`rooms/[code]/settings`) — 구독 채널 없는 화면이라 `sendOneShotRoomEvent` 사용 | refetch만 (payload 빈 객체) |
 | `state.snapshot` | `room-client.tsx` (모든 성공적 mutation 뒤) | refetch만 |
 | `member.joined` | 스키마만 존재, 어디서도 send 안 함 | — |
 | `state.request` | 스키마만 존재, 어디서도 send 안 함 | — |
 | `chips.updated` | 스키마만 존재, 어디서도 send 안 함 | — |
 
-`bet.rejected` / `round.started` / `round.ended`만 payload 내용을 UI에 직접 반영한다(토스트 문구).
-나머지 이벤트는 **"뭔가 바뀌었다" 신호일 뿐**이고, 실제 화면 갱신은 전부 `refreshRoom` 스냅샷
-refetch가 담당한다.
+`round.voided`/`member.left`/`room.settings_changed`는 2026-07-23 하드닝에서 스키마가 추가됐다.
+수신 측은 다른 이벤트와 동일하게 "refetch 힌트"로만 다루고, 발신 연결은 각 기능 경로(판 무효·
+방 나가기·설정 저장)가 담당한다.
+
+수신 타입은 `RoomEvent` 판별 유니온(`src/lib/realtime/events.ts`)이다 — `event.name` 분기만으로
+payload 타입이 캐스트 없이 좁혀진다. `useRoomSync`의 `onEvent` 콜백이 이 타입을 받는다.
+
+payload 내용을 UI에 직접 반영하는 것은 토스트 문구를 가진 소수뿐이다 — `bet.rejected` /
+`round.started` / `round.ended`, 그리고 신규 `round.voided`의 `reason`. 나머지 이벤트는
+**"뭔가 바뀌었다" 신호일 뿐**이고, 실제 화면 갱신은 전부 `refreshRoom` 스냅샷 refetch가 담당한다.
 
 ### payload 예시
 
@@ -125,17 +135,26 @@ refetch가 담당한다.
 실패한 Server Action은 아무것도 브로드캐스트하지 않는다 — 실패는 호출자 화면에 토스트로만
 보인다 (`runAction`, `room-client.tsx`).
 
+구독 중인 채널이 없는 화면(설정 페이지, 퇴장 직전)은 `sendOneShotRoomEvent`(`client.ts`)로 쏜다.
+supabase-js는 미구독 채널의 `send`를 REST로 보내므로 웹소켓 구독 없이 이벤트 하나만 발신하고
+채널을 바로 해제한다. 발신 실패는 조용히 삼킨다 — 브로드캐스트는 힌트일 뿐이고 수신자는
+폴링으로 복구된다.
+
 ## 스냅샷 refetch 전략 — 진실의 원천
 
 이벤트 payload는 힌트다. **진실은 항상 `refreshRoom(roomId)`가 반환하는 Postgres 스냅샷.**
-`room-client.tsx`는 다음 4개 트리거로 refetch한다.
+`useRoomSync`는 다음 트리거로 refetch한다.
 
 | 트리거 | 지연 |
 |--------|------|
-| 임의 Broadcast 이벤트 수신 | 250ms 디바운스 (`debouncedRefetch`) |
-| Presence `sync` (참가자 입장/이탈 감지) | 250ms 디바운스 |
+| 임의 Broadcast 이벤트 수신 | 250ms 트레일링 디바운스 + 최소 1초 간격 (`debouncedRefetch`) |
+| Presence `sync` (참가자 입장/이탈 감지) | 250ms 트레일링 디바운스 + 최소 1초 간격 |
 | 채널 `SUBSCRIBED` 전이 (최초 구독·재연결) | 즉시 |
 | `visibilitychange`로 탭 복귀 + 20초 폴링 인터벌 | 즉시 / 20초 주기 |
+| `online` 복귀 | 즉시 (+ 미연결이면 재구독) |
+
+이벤트 유입 refetch만 최소 1초 간격으로 묶인다(폭주 시 서버 호출 상한). 첫 이벤트는 250ms
+디바운스만 탄다. 폴링·visibility·afterMutation의 직접 refetch는 간격 제한을 받지 않는다.
 
 `refreshRoom` 결과 `room.status`가 `settled`/`closed`면 결과 페이지로 라우팅한다. 별도의
 "재연결 후 로컬 큐 재전송" 로직은 없다 — 클라이언트는 액션을 큐잉하지 않는다. Server Action 자체가
@@ -151,6 +170,42 @@ refetch가 담당한다.
 Broadcast는 전역 순서를 보장하지 않는다. 순서가 의미를 갖는 판·액션 순번은 서버가 커밋 시점에
 확정하며, 클라이언트가 이벤트에 실어 보내는 `seq`는 표시용 추정치일 뿐이다. 어긋남은 방치한다 —
 다음 refetch가 서버 값으로 덮어쓴다.
+
+### 스냅샷 반영 규칙
+
+`useRoomSync`(`src/features/game/components/use-room-sync.ts`)가 두 가지 가드를 건다.
+
+- **단조 순번 가드**: refetch는 시작 시 순번을 올리고, 응답 반영 시점에 자기 순번이 최신일 때만
+  스냅샷을 교체한다 — 늦게 도착한 이전 응답이 더 새 스냅샷을 덮어쓰지 않는다.
+- **동일 내용 참조 유지**: 새 스냅샷이 기존과 내용이 같으면(JSON 직렬화 비교) 기존 참조를
+  유지한다 — 무변화 폴링이 리렌더를 일으키지 않는다.
+
+## 연결 복구와 실패 표면화
+
+연결 수명 관리는 전부 `useRoomSync`가 소유한다. 소비자(RoomClient·MonitorClient)는 반환값만 본다.
+
+### 재접속 정책
+
+- **CLOSED 자동 재구독**: 채널이 `CLOSED`로 전이하면 지수 백오프 1s → 2s → 5s → 10s → 20s →
+  30s(상한)로 채널을 처음부터 다시 구독한다. `SUBSCRIBED` 성공 시 백오프 카운터가 리셋된다.
+- **수동 재접속(`reconnect`)**: 백오프 없이 즉시. `resetRealtimeSocket()`(`client.ts`,
+  `realtime.disconnect()`)으로 웹소켓을 먼저 끊고 새 소켓으로 재구독한다 — 절전 복귀처럼 소켓은
+  죽었는데 라이브러리는 살아있다고 믿는 상태를 뚫는다.
+- **생명주기 트리거**: `pageshow`(bfcache 복원, `persisted`) → reconnect. `online` → refetch +
+  미연결이면 reconnect. `offline` → connected=false. `visibilitychange` 복귀 → refetch +
+  미연결이면 reconnect.
+- **늦은 콜백 차단**: epoch 교체로 버려진 이전 채널의 상태 콜백은 무시한다(effect 스코프
+  `disposed` 플래그) — 재접속 직후 이전 채널의 `CLOSED`가 새 연결 상태를 덮어써 "연결 끊김"
+  오탐을 내는 것을 막는다.
+
+### 실패 표면화
+
+| 반환값 | 조건 | 의미 |
+|--------|------|------|
+| `connected=false` | 채널 오류·끊김·`offline` | 기존 배너 조건(`everConnected && !connected`) |
+| `connectTimedOut` | 구독 시작 후 10초 내 `SUBSCRIBED` 미도달 | 최초 연결 실패 — `everConnected`가 아직 false라 기존 배너 조건에 안 걸리는 구간을 메운다. 배너 조건에 `연결끊김 OR connectTimedOut`으로 더해 쓴다 |
+| `syncFailed` | refetch 연속 2회 실패 (Server Action reject 포함) | 채널과 무관하게 스냅샷 동기화 자체가 죽음. 성공 1회로 해제 |
+| `authError` | `refreshRoom`이 '로그인이 필요합니다' 또는 '이 방의 참가자가 아닙니다' 반환 (문자열 일치) | 재시도로 복구 불가 — 재로그인·재입장 안내 필요. null이면 정상 |
 
 ## Presence
 

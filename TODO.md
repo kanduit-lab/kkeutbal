@@ -40,9 +40,51 @@
   - 완료 기준: `staging.enabled` / `preview.enabled`를 `true`로 전환해도 `develop` 브랜치 배포와 PR 프리뷰가 정상 기동
   - 참조: `.deploy.yml` (현재 둘 다 `enabled: false`로 주석에 사유 명시), `.github/workflows/deploy.yml`. MT를 게이팅하지 않는 개발 편의 항목
 
+### Low — 2026-07-23 개선 스윕 후속
+
+- [ ] **joinRoomAndGo 에러 코드화**: 홈 `?error=` 배너가 서버 한국어 원문을 그대로 렌더 —
+  auth 페이지처럼 코드 → 사전 키 매핑으로 전환 (`src/features/game/actions.ts`, `src/app/page.tsx`)
+- [ ] **formatChips 만 단위 en 로케일**: `shared.ts` `formatChips`의 '만' 축약이 사전 밖 하드코딩 —
+  en 은 K/M 계열이 자연스러워 포맷 레벨 결정 필요 (코드 주석에 gap 표시됨)
+- [ ] **고스톱 loserPenalties 영속화 검토**: 패자별 박 계수가 `rounds.result`에 저장되지 않아
+  결과 페이지에서 정산 근거를 재구성할 수 없다 — 필요해지면 `result` jsonb 확장
+- [ ] **서버 액션 에러 errors.* 키 전환**: 액션들이 한국어 원문을 반환하고 `translateError`가
+  통과시키는 구조 — en 로케일에서 서버 에러만 한국어로 남는다 (정책은 `src/lib/i18n/client.tsx` JSDoc)
+
 ---
 
 ## Completed
+
+### 병렬 개선 스윕 — 감사 10 + 구현 23 에이전트 (2026-07-23)
+
+- [x] **실시간·재접속 강화**: `use-room-sync` 재작성 — stale 채널 레이스 차단, CLOSED 백오프
+  자동 재구독, 응답 순서 가드, refetch 실패 표면화(`syncFailed`·`authError`), `pageshow`/`online`/
+  `offline` 리스너, 이벤트 유래 refetch 1초 상한, 무변경 스냅샷 참조 유지. `RoomEvent` 판별 유니온
+- [x] **이중 베팅 봉쇄**: 베팅 의도당 `actionId` 1회 생성·재사용(액션바·대리 입력), 타임아웃 시
+  refetch 로 반영 여부 판정. `runAction` try/catch + 실패 시 재동기화
+- [x] **딜러 실수 복구**: 지난 판(ended) 취소(`voidRound` 확장), 바이인 지급 취소(`undoLastBuyIn`),
+  판 무효·되돌리기 ConfirmDialog + 사유 칩
+- [x] **멤버 관리**: 강퇴(`removeMember`)·나가기(`leaveRoom`)·재입장(leftAt 해제), 판중 입장자
+  베팅 가드, 강퇴 감지 시 홈 이동
+- [x] **정산**: who-pays-whom 최소 이체(`computeSettlementTransfers`, 테스트 11), 결과 텍스트
+  공유 버튼, 홈 지난 세션 목록, 방 헤더 🧾 결과 링크
+- [x] **고스톱 정산 정확화**: `endRound` `loserPenalties`(피박·광박 패자별 ×2/×4) + 공통 배수
+  (흔들기·총통) UI (`gostop-score-form.tsx`)
+- [x] **테이블 UX**: 턴·대기 힌트, 승인 대기 뱃지, 최소 레이즈 프리셋 필터, 다이/올인 후 잠금,
+  `formatChips` 만 단위 축약, 7인+ 밀집 좌석, 음소거 토글
+- [x] **전광판**: Screen Wake Lock + 전체 화면, board 스케일 타이포, 최근 판 피드·현재 1위,
+  관전자(비멤버) 열람 허용 + presence 미등록
+- [x] **방 옵션 확장**: 대기 중 시작 칩 수정(차액 보정), 최대 인원(2~10), 관전자 입장 토글,
+  설정 변경 즉시 브로드캐스트(`room.settings_changed`)
+- [x] **상태·접근성**: error/global-error/not-found/loading×5, 모달 계약(Escape·포커스 트랩·
+  스크롤 잠금), 터치 disabledReason 토스트, 토스트 aria-live, `viewportFit: cover`,
+  SubmitButton(useFormStatus), 가입 폼 입력 보존, 에러 코드 화이트리스트
+- [x] **i18n 전면**: 사전 ko/en 360+키, `useDict()`/`format()` 클라이언트 패턴, 방 UI·auth·about
+  전환 (게임 용어는 원어 유지, guide 는 콘텐츠 경계로 ko 고정)
+- [x] **신기능**: 로비·전광판 QR 입장, 게스트 이름 피커(오타 계정 분기 방지), 개인 전적 페이지
+  (`/ranking/player/[id]`), 랭킹 게임·기간 필터, 관리자 방 강제 정산
+- [x] **성능**: `getRoomSnapshot` 2단계 병렬화(~8RTT→~2RTT), `chip_ledger(round_id, reason)`
+  인덱스(live 적용), 스프라이트 816KB→471KB(알파 제거), ActionBar 단일 인스턴스
 
 ### 계정 · 운영 · UX 개편 (2026-07-23)
 
@@ -148,14 +190,16 @@
 
 ## Notes
 
-- **DB 반영 대기**: 스키마 제거(0001) + 2026-07-23 확장(users 의 username/password_hash/phone/is_admin,
-  `guest_tokens` 테이블)이 live DB 미적용. 적용은 사용자 실행 — `pnpm db:push` 권장(live DB를 직접
-  diff하므로 안전). 마이그레이션 파일 직접 실행 시 `ADD VALUE 'poker'`는 이미 존재하면 실패하니 주의.
+- **DB 반영 완료 (2026-07-23)**: 스키마 제거(0001)·users 확장·`guest_tokens`(0002)·
+  `chip_ledger_round_reason_idx`(0003) 전부 live DB 적용됨 — `kkeutbal_app` 롤엔 DDL 권한이 없어
+  Supabase Management API(`/database/query`) 경유로 적용했다. `pnpm db:push`는 비대화형에서
+  rename 프롬프트로 행 걸리니 쓰지 말 것.
 - **우선순위 재정렬 (2026-07-23)**: 엔진 검증(P0)→라이브 경로(P1)이던 순서를 뒤집었다. 근거는
   `docs/09-roadmap.md` 전제 — 수동 대체 경로 없는 것부터. 섯다/고스톱 정확도는 사람이 육안 교정 가능,
   라이브 경로는 대체 불가.
 - **섯다·고스톱 엔진 구현·검증 순서 역전**: `engine.ts`/`scoring.ts`가 먼저 구현되고 테스트가 뒤처졌다.
   190조합 전수 대조 전까지 버그 없음을 보증할 수 없다 — Medium 최상단에서 추적.
-- **실시간 프로토콜 문서와 구현 차이**: `docs/03-realtime-protocol.md`가 서술하는 `state.request`/`state.snapshot` 명시적 왕복 대신, 실제로는 이벤트를 힌트로만 쓰고 매번 스냅샷을 refetch하는 방식으로 구현됐다. 문서 갱신은 해당 문서 담당 에이전트 소관.
+- **실시간 프로토콜 문서 갱신 완료 (2026-07-23)**: `docs/03-realtime-protocol.md`가 이벤트 12종·
+  재접속 백오프 정책·실패 표면화 표를 포함해 실제 구현과 일치한다.
 - **빌드 실행**: `pnpm build` 등 무거운 빌드는 사용자가 실행한다. 단위 테스트·lint·typecheck는 에이전트가 직접 돌려도 된다. 자세한 분업은 `CLAUDE.md`.
 - **설계 결정 기록**: `docs/design-decisions/`는 git 미추적이다 (`.gitignore`).

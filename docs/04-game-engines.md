@@ -6,7 +6,7 @@
 | Audience | engineering / QA |
 | Status | active |
 | Source of truth | this document (카드 모델·족보 규칙) + 구현 코드 (계산 순서·경계값) |
-| Last reviewed | 2026-07-22 |
+| Last reviewed | 2026-07-23 |
 
 구현: `src/features/hwatu/`, `src/features/seotda/`, `src/features/gostop/`, `src/features/poker/`.
 섯다 테스트 계약: `src/features/seotda/engine.test.ts` (현재 `it.todo` — Phase 1 착수 전 스텁, 190조합
@@ -275,6 +275,27 @@ interface GostopScore {
 }
 ```
 
+### 점수 정산 (`endRound` — 액션 레이어, 엔진 밖)
+
+간이 모드(딜러가 최종 점수만 입력)의 칩 정산은 `src/features/game/round-actions.ts`의
+`endRound`가 수행한다. 패자별 지불액 공식:
+
+```
+지불 = score × pointValue × factor        (factor: 1 | 2 | 4, 기본 1)
+```
+
+- `factor`는 **패자별** 박 배수다 — 실전 고스톱에서 피박·광박은 패자 개인에게 붙는다.
+  2 = 피박 또는 광박, 4 = 둘 다. `endRound` 입력의 `loserPenalties: { userId, factor }[]`
+  (최대 9명)로 전달되고, 목록에 없는 패자는 1배
+- 흔들기·총통 같은 **전원 공통 배수는 딜러 UI가 score에 미리 곱해서** 보낸다 — 액션은
+  받은 score를 그대로 쓴다
+- 잔액 상한(올인)은 배수 적용 뒤의 지불액에 적용된다 — 원장 음수 금지 불변식 유지
+- `loserPenalties`의 userId가 방 멤버가 아니면 판 종료 전체가 실패한다. 멤버지만 실제
+  패자가 아닌 항목(승자·관전자·퇴장자)은 조용히 무시된다
+- **경계**: `gostop/scoring.ts` 순수 엔진은 이 정산에 관여하지 않는다(변경 없음).
+  `scoreGostop`의 multipliers는 점수 계산·Advisor 표시용이고, 칩 정산의 factor 적용은
+  액션 레이어 소관이다
+
 ---
 
 ## 포커 엔진 (`src/features/poker/`)
@@ -402,6 +423,6 @@ Advisor 화면이 판정과 함께 보여주는 파생 통계. 섯다·고스톱
 - [ ] `chongtongInstantWin` 소비 위치 — `features/game/`에 즉시 승리 처리가 아직 없다. 상태머신
       설계 시 `hasChongtong` 호출 지점을 확정할 것.
 - [x] 고스톱 입력 방식 확정(2026-07-23): "최종 점수만 입력" 간이 모드가 기본이다.
-      판 종료 시 딜러가 점수를 입력하면 점수 × 점당 칩을 패자 전원이 지불한다(`endRound`).
-      패 입력 후 자동 계산 정밀 모드는 미구현.
+      판 종료 시 딜러가 점수를 입력하면 점수 × 점당 칩 × 패자별 박 배수를 패자 전원이
+      지불한다(`endRound`, 위 "점수 정산" 절). 패 입력 후 자동 계산 정밀 모드는 미구현.
 - [ ] 위 점수표·서열은 통용 룰 기준이다. 실제 플레이 그룹의 룰과 1회 대조할 것.
