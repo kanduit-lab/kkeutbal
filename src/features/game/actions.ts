@@ -39,10 +39,10 @@ export async function createRoom(
   input: z.infer<typeof createRoomSchema>,
 ): Promise<ActionResult<{ code: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = createRoomSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { name, gameType, inputMode, startingChips, pointValue, baseBet } = parsed.data
   const rulePreset =
     gameType === 'gostop'
@@ -83,25 +83,25 @@ export async function createRoom(
     } catch (error) {
       if (isUniqueViolation(error)) continue
       console.error('createRoom failed:', error)
-      return fail('방 생성에 실패했습니다')
+      return fail('errors.createRoomFailed')
     }
   }
-  return fail('방 코드 생성에 실패했습니다. 다시 시도해주세요')
+  return fail('errors.roomCodeGenFailed')
 }
 
 export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const code = normalizeRoomCode(codeRaw)
-  if (!/^[A-Z2-9]{6}$/.test(code)) return fail('방 코드는 6자입니다')
+  if (!/^[A-Z2-9]{6}$/.test(code)) return fail('errors.codeLength')
 
   try {
     return await db.transaction(async (tx) => {
       const [room] = await tx.select().from(rooms).where(eq(rooms.code, code)).limit(1)
-      if (!room) return fail('그 코드로 만든 방이 없습니다')
+      if (!room) return fail('errors.roomCodeNotFound')
       if (room.status === 'settled' || room.status === 'closed') {
-        return fail('이미 끝난 방입니다')
+        return fail('errors.roomEnded')
       }
 
       await lockRoom(tx, room.id)
@@ -120,7 +120,7 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
         .from(roomMembers)
         .where(and(eq(roomMembers.roomId, room.id), isNull(roomMembers.leftAt)))
       if ((active?.count ?? 0) >= maxMembers) {
-        return fail(`방이 가득 찼습니다 (최대 ${maxMembers}명)`)
+        return fail('errors.roomFull')
       }
 
       // 관전 입장 옵션 — 켜져 있으면 observer 로 들어가고 시작 칩을 받지 않는다.
@@ -163,11 +163,15 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
     })
   } catch (error) {
     console.error('joinRoom failed:', error)
-    return fail('입장에 실패했습니다')
+    return fail('errors.joinRoomFailed')
   }
 }
 
-/** form action 용 래퍼 — 성공하면 방으로 이동한다. */
+/**
+ * form action 용 래퍼 — 성공하면 방으로 이동한다.
+ * 실패 시 `result.error`(`errors.*` 키)를 그대로 `?error=` 에 실어 홈으로 돌려보낸다 —
+ * 홈 페이지(app/page.tsx)가 그 키를 사전으로 옮겨 렌더한다.
+ */
 export async function joinRoomAndGo(formData: FormData): Promise<void> {
   const code = String(formData.get('code') ?? '')
   const result = await joinRoom(code)
@@ -176,13 +180,13 @@ export async function joinRoomAndGo(formData: FormData): Promise<void> {
 }
 
 export async function refreshRoom(roomId: string): Promise<ActionResult<RoomSnapshot>> {
-  if (!(await currentUserId())) return fail('로그인이 필요합니다')
-  if (!z.string().uuid().safeParse(roomId).success) return fail('방 정보가 올바르지 않습니다')
+  if (!(await currentUserId())) return fail('errors.loginRequired')
+  if (!z.string().uuid().safeParse(roomId).success) return fail('errors.invalidRoom')
 
   // 클라이언트가 폴링·디바운스로 반복 호출한다 — 일시 오류가 unhandled rejection 으로 새면 안 된다.
   try {
     const snapshot = await getRoomSnapshot(roomId)
-    if (!snapshot) return fail('방을 찾을 수 없습니다')
+    if (!snapshot) return fail('errors.roomNotFound')
     // 읽기는 로그인 사용자 전원 허용 — 전광판 관전용이고 스냅샷은 점수판 데이터라 비밀이 없다.
     // 쓰기 액션은 각자 멤버·역할 검사를 유지한다: placeBet 계열은 참가자 확인(betting/actions.ts),
     // addBuyIn·undoLastBuyIn 은 참가자·딜러 확인(budget/actions.ts), 판·역할·옵션·정산 액션은
@@ -190,7 +194,7 @@ export async function refreshRoom(roomId: string): Promise<ActionResult<RoomSnap
     return ok(snapshot)
   } catch (error) {
     console.error('refreshRoom failed:', error)
-    return fail('방 정보를 불러오지 못했습니다')
+    return fail('errors.roomFetchFailed')
   }
 }
 
@@ -213,22 +217,22 @@ export async function updateRoomSettings(
   input: z.infer<typeof updateSettingsSchema>,
 ): Promise<ActionResult<{ roomId: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = updateSettingsSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { roomId, name, inputMode, pointValue, baseBet, maxMembers, joinAsObserver } = parsed.data
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host']))) {
-        return fail('방장만 방 옵션을 바꿀 수 있습니다')
+        return fail('errors.hostOnlySettings')
       }
 
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
-      if (!room) return fail('방을 찾을 수 없습니다')
-      if (room.status === 'settled' || room.status === 'closed') return fail('이미 끝난 방입니다')
+      if (!room) return fail('errors.roomNotFound')
+      if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
       // 시작 칩 변경은 첫 판 전에만 — 판이 시작된 뒤에는 손익·팟 계산의 기준이 흔들린다.
       // 같은 값 재전송은 no-op 으로 통과시킨다 (설정 폼이 현재 값을 항상 보내도 안전).
@@ -239,14 +243,14 @@ export async function updateRoomSettings(
           : undefined
       if (startingChips !== undefined) {
         if (room.status !== 'waiting') {
-          return fail('시작 칩은 게임 시작 전(대기 중)에만 바꿀 수 있습니다')
+          return fail('errors.startingChipsWaitingOnly')
         }
         const [anyRound] = await tx
           .select({ id: rounds.id })
           .from(rounds)
           .where(eq(rounds.roomId, roomId))
           .limit(1)
-        if (anyRound) return fail('이미 진행한 판이 있어 시작 칩을 바꿀 수 없습니다')
+        if (anyRound) return fail('errors.startingChipsHasRounds')
       }
 
       const preset =
@@ -310,20 +314,20 @@ export async function updateRoomSettings(
     })
   } catch (error) {
     console.error('updateRoomSettings failed:', error)
-    return fail('방 옵션 변경에 실패했습니다')
+    return fail('errors.updateSettingsFailed')
   }
 }
 
 export async function closeRoom(roomId: string): Promise<ActionResult<{ code: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
-  if (!z.string().uuid().safeParse(roomId).success) return fail('잘못된 방입니다')
+  if (!userId) return fail('errors.loginRequired')
+  if (!z.string().uuid().safeParse(roomId).success) return fail('errors.invalidRoom')
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host']))) {
-        return fail('방장만 세션을 정산할 수 있습니다')
+        return fail('errors.hostOnlySettle')
       }
 
       const [playing] = await tx
@@ -331,19 +335,19 @@ export async function closeRoom(roomId: string): Promise<ActionResult<{ code: st
         .from(rounds)
         .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
         .limit(1)
-      if (playing) return fail('진행 중인 판을 먼저 끝내거나 무효화하세요')
+      if (playing) return fail('errors.activeRoundBeforeSettle')
 
       const [room] = await tx
         .update(rooms)
         .set({ status: 'settled', closedAt: new Date() })
         .where(eq(rooms.id, roomId))
         .returning({ code: rooms.code })
-      if (!room) return fail('방을 찾을 수 없습니다')
+      if (!room) return fail('errors.roomNotFound')
 
       return ok({ code: room.code })
     })
   } catch (error) {
     console.error('closeRoom failed:', error)
-    return fail('정산에 실패했습니다')
+    return fail('errors.settleFailed')
   }
 }

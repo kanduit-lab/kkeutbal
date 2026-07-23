@@ -79,36 +79,36 @@ export async function placeBet(
   input: z.infer<typeof placeBetSchema>,
 ): Promise<ActionResult<{ action: BetActionView }>> {
   const callerId = await currentUserId()
-  if (!callerId) return fail('로그인이 필요합니다')
+  if (!callerId) return fail('errors.loginRequired')
 
   const parsed = placeBetSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { actionId, roomId, action, targetUserId } = parsed.data
 
   const movesChips = action === 'call' || action === 'raise' || action === 'allin'
   const amount = movesChips ? parsed.data.amount : 0
-  if (movesChips && amount < 1) return fail('베팅 금액을 입력하세요')
+  if (movesChips && amount < 1) return fail('errors.betAmountRequired')
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
 
       const caller = await memberInfo(tx, roomId, callerId)
-      if (!caller || caller.leftAt) return fail('이 방의 참가자가 아닙니다')
+      if (!caller || caller.leftAt) return fail('errors.notMember')
 
       const userId = targetUserId ?? callerId
       const isProxy = userId !== callerId
       const isDealer = caller.role === 'host' || caller.role === 'dealer'
-      if (isProxy && !isDealer) return fail('대리 입력은 딜러만 할 수 있습니다')
+      if (isProxy && !isDealer) return fail('errors.proxyDealerOnly')
 
       const target = isProxy ? await memberInfo(tx, roomId, userId) : caller
-      if (!target || target.leftAt) return fail('대상이 방 참가자가 아닙니다')
-      if (target.role === 'observer') return fail('관전자는 베팅할 수 없습니다')
+      if (!target || target.leftAt) return fail('errors.targetNotMember')
+      if (target.role === 'observer') return fail('errors.observerCannotBet')
 
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
-      if (!room) return fail('방을 찾을 수 없습니다')
+      if (!room) return fail('errors.roomNotFound')
       // 고스톱은 베팅 없이 판 종료 시 점수로 정산한다.
-      if (room.gameType === 'gostop') return fail('고스톱 방은 점수로 정산합니다')
+      if (room.gameType === 'gostop') return fail('errors.gostopScoreOnly')
 
       const [round] = await tx
         .select()
@@ -116,11 +116,11 @@ export async function placeBet(
         .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
         .orderBy(desc(rounds.seq))
         .limit(1)
-      if (!round) return fail('진행 중인 판이 없습니다')
+      if (!round) return fail('errors.noActiveRound')
 
       // 판 시작 후 입장한 멤버는 이번 판에 참여할 수 없다 — 본인·대리 입력 동일.
       if (target.joinedAt > round.startedAt) {
-        return fail('이번 판 시작 후 입장했습니다 — 다음 판부터 참여할 수 있어요')
+        return fail('errors.joinedAfterRoundStart')
       }
 
       // 멱등: 같은 actionId 재전송이면 기존 행을 그대로 돌려준다.
@@ -133,7 +133,7 @@ export async function placeBet(
 
       if (movesChips) {
         const balance = await balanceOf(tx, roomId, userId)
-        if (balance < amount) return fail(`잔액 부족 (잔액 ${balance.toLocaleString()})`)
+        if (balance < amount) return fail('errors.insufficientBalance')
       }
 
       // 신뢰 모드는 즉시 확정. 승인 모드에서도 딜러 본인/대리 입력은 즉시 확정.
@@ -160,7 +160,7 @@ export async function placeBet(
           seq,
         })
         .returning()
-      if (!inserted) return fail('베팅 기록에 실패했습니다')
+      if (!inserted) return fail('errors.placeBetRecordFailed')
 
       if (autoAccept && movesChips) {
         await tx.insert(chipLedger).values({
@@ -177,7 +177,7 @@ export async function placeBet(
     })
   } catch (error) {
     console.error('placeBet failed:', error)
-    return fail('베팅에 실패했습니다')
+    return fail('errors.placeBetFailed')
   }
 }
 
@@ -187,10 +187,10 @@ export async function approveBet(
   input: z.infer<typeof approveSchema>,
 ): Promise<ActionResult<{ action: BetActionView }>> {
   const callerId = await currentUserId()
-  if (!callerId) return fail('로그인이 필요합니다')
+  if (!callerId) return fail('errors.loginRequired')
 
   const parsed = approveSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
 
   try {
     return await db.transaction(async (tx) => {
@@ -199,13 +199,13 @@ export async function approveBet(
         .from(betActions)
         .where(eq(betActions.id, parsed.data.actionId))
         .limit(1)
-      if (!target) return fail('액션을 찾을 수 없습니다')
+      if (!target) return fail('errors.actionNotFound')
 
       await lockRoom(tx, target.roomId)
 
       const callerRole = await memberRole(tx, target.roomId, callerId)
       if (callerRole !== 'host' && callerRole !== 'dealer') {
-        return fail('딜러 또는 방장만 승인할 수 있습니다')
+        return fail('errors.dealerOrHostOnlyApprove')
       }
 
       // 락 이후 상태 재조회 — 다른 딜러가 먼저 처리했을 수 있다.
@@ -214,14 +214,14 @@ export async function approveBet(
         .from(betActions)
         .where(eq(betActions.id, target.id))
         .limit(1)
-      if (!fresh || fresh.status !== 'pending') return fail('이미 처리된 액션입니다')
+      if (!fresh || fresh.status !== 'pending') return fail('errors.actionAlreadyProcessed')
 
       const [round] = await tx
         .select({ status: rounds.status })
         .from(rounds)
         .where(eq(rounds.id, fresh.roundId))
         .limit(1)
-      if (round?.status !== 'playing') return fail('판이 이미 끝났습니다')
+      if (round?.status !== 'playing') return fail('errors.roundAlreadyEnded')
 
       const movesChips =
         fresh.action === 'call' || fresh.action === 'raise' || fresh.action === 'allin'
@@ -237,7 +237,7 @@ export async function approveBet(
             .returning()
           return rejected
             ? ok({ action: toView(rejected) })
-            : fail('처리에 실패했습니다')
+            : fail('errors.approveBetProcessFailed')
         }
       }
 
@@ -246,7 +246,7 @@ export async function approveBet(
         .set({ status: 'accepted', approvedBy: callerId })
         .where(eq(betActions.id, fresh.id))
         .returning()
-      if (!updated) return fail('승인에 실패했습니다')
+      if (!updated) return fail('errors.approveBetFailed')
 
       if (movesChips) {
         await tx.insert(chipLedger).values({
@@ -263,7 +263,7 @@ export async function approveBet(
     })
   } catch (error) {
     console.error('approveBet failed:', error)
-    return fail('승인에 실패했습니다')
+    return fail('errors.approveBetFailed')
   }
 }
 
@@ -277,10 +277,10 @@ export async function rejectBet(
   input: z.infer<typeof rejectSchema>,
 ): Promise<ActionResult<{ action: BetActionView }>> {
   const callerId = await currentUserId()
-  if (!callerId) return fail('로그인이 필요합니다')
+  if (!callerId) return fail('errors.loginRequired')
 
   const parsed = rejectSchema.safeParse(input)
-  if (!parsed.success) return fail('거절 사유를 입력하세요')
+  if (!parsed.success) return fail('errors.rejectReasonRequired')
 
   try {
     return await db.transaction(async (tx) => {
@@ -289,13 +289,13 @@ export async function rejectBet(
         .from(betActions)
         .where(eq(betActions.id, parsed.data.actionId))
         .limit(1)
-      if (!target) return fail('액션을 찾을 수 없습니다')
+      if (!target) return fail('errors.actionNotFound')
 
       await lockRoom(tx, target.roomId)
 
       const callerRole = await memberRole(tx, target.roomId, callerId)
       if (callerRole !== 'host' && callerRole !== 'dealer') {
-        return fail('딜러 또는 방장만 거절할 수 있습니다')
+        return fail('errors.dealerOrHostOnlyReject')
       }
 
       const [updated] = await tx
@@ -303,13 +303,13 @@ export async function rejectBet(
         .set({ status: 'rejected', approvedBy: callerId, reason: parsed.data.reason })
         .where(and(eq(betActions.id, target.id), eq(betActions.status, 'pending')))
         .returning()
-      if (!updated) return fail('이미 처리된 액션입니다')
+      if (!updated) return fail('errors.actionAlreadyProcessed')
 
       return ok({ action: toView(updated) })
     })
   } catch (error) {
     console.error('rejectBet failed:', error)
-    return fail('거절에 실패했습니다')
+    return fail('errors.rejectBetFailed')
   }
 }
 
@@ -323,10 +323,10 @@ export async function revertBet(
   input: z.infer<typeof revertSchema>,
 ): Promise<ActionResult<{ action: BetActionView }>> {
   const callerId = await currentUserId()
-  if (!callerId) return fail('로그인이 필요합니다')
+  if (!callerId) return fail('errors.loginRequired')
 
   const parsed = revertSchema.safeParse(input)
-  if (!parsed.success) return fail('정정 사유를 입력하세요')
+  if (!parsed.success) return fail('errors.revertReasonRequired')
 
   try {
     return await db.transaction(async (tx) => {
@@ -335,13 +335,13 @@ export async function revertBet(
         .from(betActions)
         .where(eq(betActions.id, parsed.data.actionId))
         .limit(1)
-      if (!target) return fail('액션을 찾을 수 없습니다')
+      if (!target) return fail('errors.actionNotFound')
 
       await lockRoom(tx, target.roomId)
 
       const callerRole = await memberRole(tx, target.roomId, callerId)
       if (callerRole !== 'host' && callerRole !== 'dealer') {
-        return fail('딜러 또는 방장만 정정할 수 있습니다')
+        return fail('errors.dealerOrHostOnlyRevert')
       }
 
       const [round] = await tx
@@ -350,7 +350,7 @@ export async function revertBet(
         .where(eq(rounds.id, target.roundId))
         .limit(1)
       if (round?.status !== 'playing') {
-        return fail('끝난 판은 정정할 수 없습니다. 판 무효화를 사용하세요')
+        return fail('errors.cannotRevertEndedRound')
       }
 
       const [updated] = await tx
@@ -358,7 +358,7 @@ export async function revertBet(
         .set({ status: 'reverted', reason: parsed.data.reason })
         .where(and(eq(betActions.id, target.id), eq(betActions.status, 'accepted')))
         .returning()
-      if (!updated) return fail('확정된 액션만 정정할 수 있습니다')
+      if (!updated) return fail('errors.onlyAcceptedCanRevert')
 
       const [ledgerRow] = await tx
         .select()
@@ -381,6 +381,6 @@ export async function revertBet(
     })
   } catch (error) {
     console.error('revertBet failed:', error)
-    return fail('정정에 실패했습니다')
+    return fail('errors.revertBetFailed')
   }
 }

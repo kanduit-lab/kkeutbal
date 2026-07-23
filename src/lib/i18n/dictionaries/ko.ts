@@ -6,7 +6,8 @@
  * - `/guide/**` 페이지는 콘텐츠(게임 규칙·사용법 문서)다 — 사전 대상이 아니며 한국어로 유지한다.
  * - 게임 용어(섯다·고스톱·화투·끗·땡·광땡·삥·따당·고·스톱·피·광·다이·올려 등)는 어떤 로케일에서도
  *   번역하지 않는다. 영어 사전에서도 원어 그대로 두고, 도움이 되는 곳에 괄호 주석을 한 번만 단다.
- * - 서버 액션이 반환하는 에러 문자열은 이번 라운드에는 한국어 원문 그대로다 — translateError 참고.
+ * - 서버 액션 에러는 `errors.*` 키를 반환한다 — translateError 참고. round-actions.ts 는 전환 대기 중이라
+ *   과도기에는 한국어 원문이 여전히 나올 수 있다 (키가 없으면 translateError 가 원문을 그대로 통과시킨다).
  *
  * 템플릿 값은 `format(template, params)` 로 치환한다 — `{n}`, `{name}`, `{seq}` 자리표시자.
  * 섹션은 화면 단위(surface)로 묶는다. 여러 화면이 공유하는 문자열만 common·roles·bet 등
@@ -455,11 +456,88 @@ export const ko = {
     roomNotFound: '방을 찾을 수 없습니다',
     roomCodeNotFound: '그 코드로 만든 방이 없습니다',
     roomEnded: '이미 끝난 방입니다',
-    roomFull: '방이 가득 찼습니다 (최대 10명)',
+    roomFull: '방이 가득 찼습니다',
     notMember: '이 방의 참가자가 아닙니다',
     invalidRoom: '방 정보가 올바르지 않습니다',
     codeLength: '방 코드는 6자입니다',
     syncFailed: '동기화에 실패했습니다',
+    // 방 수명주기 (game/actions.ts)
+    createRoomFailed: '방 생성에 실패했습니다',
+    roomCodeGenFailed: '방 코드 생성에 실패했습니다. 다시 시도해주세요',
+    joinRoomFailed: '입장에 실패했습니다',
+    roomFetchFailed: '방 정보를 불러오지 못했습니다',
+    hostOnlySettings: '방장만 방 옵션을 바꿀 수 있습니다',
+    startingChipsWaitingOnly: '시작 칩은 게임 시작 전(대기 중)에만 바꿀 수 있습니다',
+    startingChipsHasRounds: '이미 진행한 판이 있어 시작 칩을 바꿀 수 없습니다',
+    updateSettingsFailed: '방 옵션 변경에 실패했습니다',
+    hostOnlySettle: '방장만 세션을 정산할 수 있습니다',
+    activeRoundBeforeSettle: '진행 중인 판을 먼저 끝내거나 무효화하세요',
+    settleFailed: '정산에 실패했습니다',
+    // 멤버 역할 (game/member-actions.ts)
+    cannotTransferSelf: '자기 자신에게는 위임할 수 없습니다',
+    hostOnlyTransfer: '방장만 위임할 수 있습니다',
+    targetNotMember: '대상이 방 참가자가 아닙니다',
+    transferHostFailed: '방장 위임에 실패했습니다',
+    hostOnlyRole: '방장만 역할을 바꿀 수 있습니다',
+    cannotChangeHostRole: '방장 역할은 바꿀 수 없습니다',
+    setRoleFailed: '역할 변경에 실패했습니다',
+    cannotRemoveSelf: '자기 자신은 내보낼 수 없습니다 — 나가기를 사용하세요',
+    dealerOrHostOnlyRemove: '딜러 또는 방장만 내보낼 수 있습니다',
+    alreadyLeft: '이미 나간 참가자입니다',
+    cannotRemoveHost: '방장은 내보낼 수 없습니다',
+    cannotRemoveHasAcceptedBet:
+      '이번 판에 확정된 베팅이 있어 내보낼 수 없습니다 — 판이 끝날 때까지는 관전자 전환을 사용하세요',
+    removeMemberFailed: '내보내기에 실패했습니다',
+    hostMustTransferBeforeLeave: '방장은 방장 위임 후에 나갈 수 있습니다',
+    cannotLeaveHasAcceptedBet:
+      '이번 판에 확정된 베팅이 있어 나갈 수 없습니다 — 판이 끝난 뒤 나가거나 관전자로 전환하세요',
+    leaveRoomFailed: '나가기에 실패했습니다',
+    // 베팅 (betting/actions.ts)
+    betAmountRequired: '베팅 금액을 입력하세요',
+    proxyDealerOnly: '대리 입력은 딜러만 할 수 있습니다',
+    observerCannotBet: '관전자는 베팅할 수 없습니다',
+    gostopScoreOnly: '고스톱 방은 점수로 정산합니다',
+    noActiveRound: '진행 중인 판이 없습니다',
+    joinedAfterRoundStart: '이번 판 시작 후 입장했습니다 — 다음 판부터 참여할 수 있어요',
+    insufficientBalance: '잔액이 부족합니다',
+    placeBetRecordFailed: '베팅 기록에 실패했습니다',
+    placeBetFailed: '베팅에 실패했습니다',
+    actionNotFound: '액션을 찾을 수 없습니다',
+    dealerOrHostOnlyApprove: '딜러 또는 방장만 승인할 수 있습니다',
+    actionAlreadyProcessed: '이미 처리된 액션입니다',
+    roundAlreadyEnded: '판이 이미 끝났습니다',
+    approveBetProcessFailed: '처리에 실패했습니다',
+    approveBetFailed: '승인에 실패했습니다',
+    rejectReasonRequired: '거절 사유를 입력하세요',
+    dealerOrHostOnlyReject: '딜러 또는 방장만 거절할 수 있습니다',
+    rejectBetFailed: '거절에 실패했습니다',
+    revertReasonRequired: '정정 사유를 입력하세요',
+    dealerOrHostOnlyRevert: '딜러 또는 방장만 정정할 수 있습니다',
+    cannotRevertEndedRound: '끝난 판은 정정할 수 없습니다. 판 무효화를 사용하세요',
+    onlyAcceptedCanRevert: '확정된 액션만 정정할 수 있습니다',
+    revertBetFailed: '정정에 실패했습니다',
+    // 바이인 (budget/actions.ts)
+    proxyBuyInDealerOnly: '다른 사람 바이인은 딜러만 추가할 수 있습니다',
+    addBuyInFailed: '바이인 추가에 실패했습니다',
+    dealerOrHostOnlyUndoBuyIn: '딜러 또는 방장만 지급을 취소할 수 있습니다',
+    nothingToUndoBuyIn: '취소할 바이인이 없습니다',
+    buyInAlreadySpent: '이미 사용한 칩이라 지급 취소가 불가합니다 — 정정 베팅으로 조정하세요',
+    undoBuyInFailed: '지급 취소에 실패했습니다',
+    // 판 진행 (game/round-actions.ts — 다른 에이전트가 이 파일을 이 키로 전환한다)
+    dealerOrHostOnlyStartRound: '딜러 또는 방장만 판을 시작할 수 있습니다',
+    roundAlreadyActive: '진행 중인 판이 있습니다',
+    createRoundFailed: '판 생성에 실패했습니다',
+    startRoundFailed: '판 시작에 실패했습니다',
+    dealerOrHostOnlyEndRound: '딜러 또는 방장만 판을 끝낼 수 있습니다',
+    gostopScoreRequired: '고스톱은 점수를 입력해야 합니다',
+    winnerMustBeMember: '승자는 방 참가자여야 합니다',
+    pendingBetsBeforeEnd: '승인 대기 중인 베팅을 먼저 처리하세요',
+    invalidLoserData: '패자 정보가 올바르지 않습니다',
+    endRoundFailed: '판 종료에 실패했습니다',
+    dealerOrHostOnlyVoidRound: '딜러 또는 방장만 판을 무효화할 수 있습니다',
+    noRoundToVoid: '무효화할 판이 없습니다',
+    refundExceedsBalance: '되돌릴 칩이 잔액보다 많습니다 — 바이인 추가 후 다시 시도하세요',
+    voidRoundFailed: '판 무효화에 실패했습니다',
   },
 } as const
 

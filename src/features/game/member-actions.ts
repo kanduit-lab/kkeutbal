@@ -21,18 +21,18 @@ export async function transferHost(
   input: z.infer<typeof transferHostSchema>,
 ): Promise<ActionResult<{ newHostId: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = transferHostSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { roomId, targetUserId } = parsed.data
-  if (targetUserId === userId) return fail('자기 자신에게는 위임할 수 없습니다')
+  if (targetUserId === userId) return fail('errors.cannotTransferSelf')
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host']))) {
-        return fail('방장만 위임할 수 있습니다')
+        return fail('errors.hostOnlyTransfer')
       }
 
       const [target] = await tx
@@ -40,7 +40,7 @@ export async function transferHost(
         .from(roomMembers)
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, targetUserId)))
         .limit(1)
-      if (!target || target.leftAt) return fail('대상이 방 참가자가 아닙니다')
+      if (!target || target.leftAt) return fail('errors.targetNotMember')
 
       await tx
         .update(roomMembers)
@@ -56,7 +56,7 @@ export async function transferHost(
     })
   } catch (error) {
     console.error('transferHost failed:', error)
-    return fail('방장 위임에 실패했습니다')
+    return fail('errors.transferHostFailed')
   }
 }
 
@@ -71,17 +71,17 @@ export async function setMemberRole(
   input: z.infer<typeof setRoleSchema>,
 ): Promise<ActionResult<{ targetUserId: string; role: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = setRoleSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { roomId, targetUserId, role } = parsed.data
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host']))) {
-        return fail('방장만 역할을 바꿀 수 있습니다')
+        return fail('errors.hostOnlyRole')
       }
 
       const [target] = await tx
@@ -89,8 +89,8 @@ export async function setMemberRole(
         .from(roomMembers)
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, targetUserId)))
         .limit(1)
-      if (!target) return fail('대상이 방 참가자가 아닙니다')
-      if (target.role === 'host') return fail('방장 역할은 바꿀 수 없습니다')
+      if (!target) return fail('errors.targetNotMember')
+      if (target.role === 'host') return fail('errors.cannotChangeHostRole')
 
       await tx
         .update(roomMembers)
@@ -101,7 +101,7 @@ export async function setMemberRole(
     })
   } catch (error) {
     console.error('setMemberRole failed:', error)
-    return fail('역할 변경에 실패했습니다')
+    return fail('errors.setRoleFailed')
   }
 }
 
@@ -183,18 +183,18 @@ export async function removeMember(
   input: z.infer<typeof removeMemberSchema>,
 ): Promise<ActionResult<{ targetUserId: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = removeMemberSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { roomId, targetUserId } = parsed.data
-  if (targetUserId === userId) return fail('자기 자신은 내보낼 수 없습니다 — 나가기를 사용하세요')
+  if (targetUserId === userId) return fail('errors.cannotRemoveSelf')
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host', 'dealer']))) {
-        return fail('딜러 또는 방장만 내보낼 수 있습니다')
+        return fail('errors.dealerOrHostOnlyRemove')
       }
 
       const [room] = await tx
@@ -202,20 +202,20 @@ export async function removeMember(
         .from(rooms)
         .where(eq(rooms.id, roomId))
         .limit(1)
-      if (!room) return fail('방을 찾을 수 없습니다')
-      if (room.status === 'settled' || room.status === 'closed') return fail('이미 끝난 방입니다')
+      if (!room) return fail('errors.roomNotFound')
+      if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
       const [target] = await tx
         .select({ role: roomMembers.role, leftAt: roomMembers.leftAt })
         .from(roomMembers)
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, targetUserId)))
         .limit(1)
-      if (!target) return fail('대상이 방 참가자가 아닙니다')
-      if (target.leftAt) return fail('이미 나간 참가자입니다')
-      if (target.role === 'host') return fail('방장은 내보낼 수 없습니다')
+      if (!target) return fail('errors.targetNotMember')
+      if (target.leftAt) return fail('errors.alreadyLeft')
+      if (target.role === 'host') return fail('errors.cannotRemoveHost')
 
       if (await hasAcceptedBetInPlayingRound(tx, roomId, targetUserId)) {
-        return fail('이번 판에 확정된 베팅이 있어 내보낼 수 없습니다 — 판이 끝날 때까지는 관전자 전환을 사용하세요')
+        return fail('errors.cannotRemoveHasAcceptedBet')
       }
 
       await retireMember(tx, roomId, targetUserId, userId)
@@ -223,7 +223,7 @@ export async function removeMember(
     })
   } catch (error) {
     console.error('removeMember failed:', error)
-    return fail('내보내기에 실패했습니다')
+    return fail('errors.removeMemberFailed')
   }
 }
 
@@ -234,10 +234,10 @@ export async function leaveRoom(
   input: z.infer<typeof leaveRoomSchema>,
 ): Promise<ActionResult<{ roomId: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = leaveRoomSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { roomId } = parsed.data
 
   try {
@@ -249,20 +249,20 @@ export async function leaveRoom(
         .from(roomMembers)
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
         .limit(1)
-      if (!me) return fail('이 방의 참가자가 아닙니다')
+      if (!me) return fail('errors.notMember')
       if (me.leftAt) return ok({ roomId }) // 이미 나감 — 멱등
-      if (me.role === 'host') return fail('방장은 방장 위임 후에 나갈 수 있습니다')
+      if (me.role === 'host') return fail('errors.hostMustTransferBeforeLeave')
 
       const [room] = await tx
         .select({ status: rooms.status })
         .from(rooms)
         .where(eq(rooms.id, roomId))
         .limit(1)
-      if (!room) return fail('방을 찾을 수 없습니다')
-      if (room.status === 'settled' || room.status === 'closed') return fail('이미 끝난 방입니다')
+      if (!room) return fail('errors.roomNotFound')
+      if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
       if (await hasAcceptedBetInPlayingRound(tx, roomId, userId)) {
-        return fail('이번 판에 확정된 베팅이 있어 나갈 수 없습니다 — 판이 끝난 뒤 나가거나 관전자로 전환하세요')
+        return fail('errors.cannotLeaveHasAcceptedBet')
       }
 
       await retireMember(tx, roomId, userId, userId)
@@ -270,6 +270,6 @@ export async function leaveRoom(
     })
   } catch (error) {
     console.error('leaveRoom failed:', error)
-    return fail('나가기에 실패했습니다')
+    return fail('errors.leaveRoomFailed')
   }
 }

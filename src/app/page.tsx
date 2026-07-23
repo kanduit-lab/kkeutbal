@@ -9,6 +9,7 @@ import { GAME_BADGE_TONE } from '@/features/game/components/shared'
 import { Badge, Button, ButtonLink, EmptyState, Input, Panel, SubmitButton } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { getDict } from '@/lib/i18n/server'
+import type { Dictionary } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/config'
 
 function formatSessionDate(iso: string | null, locale: Locale): string | null {
@@ -17,6 +18,17 @@ function formatSessionDate(iso: string | null, locale: Locale): string | null {
     month: 'short',
     day: 'numeric',
   })
+}
+
+/**
+ * `?error=` 배너 값 해석. joinRoomAndGo 는 실패 시 서버 액션이 돌려준 `errors.*` 키를
+ * 그대로 쿼리에 싣는다 — 여기서 사전으로 옮기고, 모르는 키(구버전 링크·예상 밖 값)는
+ * 원문을 그대로 보여준다 (translateError 와 동일한 폴백 규칙).
+ */
+function localizeError(d: Dictionary, raw: string): string {
+  if (!raw.startsWith('errors.')) return raw
+  const key = raw.slice('errors.'.length) as keyof Dictionary['errors']
+  return d.errors[key] ?? raw
 }
 
 export default async function HomePage({
@@ -69,7 +81,7 @@ export default async function HomePage({
 
       {error ? (
         <p className="mb-6 rounded-xl border border-accent/30 bg-[#471a17] px-4 py-3 text-sm font-medium text-[#ff9a94]">
-          {error}
+          {localizeError(d, error)}
         </p>
       ) : null}
 
