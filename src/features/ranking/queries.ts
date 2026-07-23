@@ -1,6 +1,7 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import { getMyRecentSessions } from '@/features/game/queries'
+import type { RoundPenaltyView } from '@/features/game/types'
 
 const { rooms, roomMembers, rounds, betActions, chipLedger, buyIns, users } = schema
 
@@ -206,6 +207,8 @@ export interface RoundHistoryRow {
   readonly note: string | null
   readonly status: 'ended' | 'voided'
   readonly endedAt: string | null
+  /** 고스톱 박(피박/광박) 적용 패자 목록(factor>1 만). 고스톱 외 게임·구버전 판은 빈 배열. */
+  readonly penalties: readonly RoundPenaltyView[]
 }
 
 export async function getRoundHistory(roomId: string): Promise<RoundHistoryRow[]> {
@@ -232,6 +235,7 @@ export async function getRoundHistory(roomId: string): Promise<RoundHistoryRow[]
     note: readNote(row.result),
     status: row.status as 'ended' | 'voided',
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,
+    penalties: readPenalties(row.result),
   }))
 }
 
@@ -241,6 +245,23 @@ function readNote(result: unknown): string | null {
     return typeof note === 'string' ? note : null
   }
   return null
+}
+
+/**
+ * rounds.result jsonb 의 penalties 필드를 방어적으로 읽는다.
+ * 구버전 판(필드 없음)·형식이 다른 값은 조용히 빈 배열로 처리한다 — 크래시 금지.
+ */
+function readPenalties(result: unknown): RoundPenaltyView[] {
+  if (!result || typeof result !== 'object' || !('penalties' in result)) return []
+  const raw = (result as { penalties?: unknown }).penalties
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const userId = (entry as { userId?: unknown }).userId
+    const factor = (entry as { factor?: unknown }).factor
+    if (typeof userId !== 'string' || (factor !== 2 && factor !== 4)) return []
+    return [{ userId, factor }]
+  })
 }
 
 /* ── 개인 전적 ───────────────────────────────────────────── */

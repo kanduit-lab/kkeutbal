@@ -127,28 +127,34 @@ export default async function RoomResultPage({
         ) : (
           <ul className="space-y-1">
             {rounds.map((round) => (
-              <li
-                key={round.seq}
-                className="flex items-center justify-between rounded-xl bg-surface px-3 py-2 text-sm"
-              >
-                <span>
-                  <span className="text-muted">#{round.seq}</span>{' '}
-                  {round.status === 'voided' ? (
-                    <span className="text-muted">무효{round.note ? ` — ${round.note}` : ''}</span>
-                  ) : (
-                    <>
-                      <span className="font-medium">{round.winnerName ?? '?'}</span>
-                      {round.note ? <span className="text-muted"> · {round.note}</span> : null}
-                    </>
-                  )}
-                </span>
-                {round.status === 'ended' ? (
-                  <span className="tabular-nums font-bold text-warn">
-                    +{round.pot.toLocaleString()}
+              <li key={round.seq} className="rounded-xl bg-surface px-3 py-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span>
+                    <span className="text-muted">#{round.seq}</span>{' '}
+                    {round.status === 'voided' ? (
+                      <span className="text-muted">무효{round.note ? ` — ${round.note}` : ''}</span>
+                    ) : (
+                      <>
+                        <span className="font-medium">{round.winnerName ?? '?'}</span>
+                        {round.note ? <span className="text-muted"> · {round.note}</span> : null}
+                      </>
+                    )}
                   </span>
-                ) : (
-                  <Badge tone="muted">재경기</Badge>
-                )}
+                  {round.status === 'ended' ? (
+                    <span className="tabular-nums font-bold text-warn">
+                      +{round.pot.toLocaleString()}
+                    </span>
+                  ) : (
+                    <Badge tone="muted">재경기</Badge>
+                  )}
+                </div>
+                {round.status === 'ended' && round.penalties.length > 0 ? (
+                  <p className="mt-0.5 text-xs text-muted">
+                    {round.penalties
+                      .map((penalty) => `${displayName(penalty.userId)} 박×${penalty.factor}`)
+                      .join(' · ')}
+                  </p>
+                ) : null}
               </li>
             ))}
           </ul>

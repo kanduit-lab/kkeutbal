@@ -7,6 +7,7 @@ import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
 import { getRoundPot } from './queries'
 import { balanceInRoom, lockRoom, readPointValue, requireRole } from './action-helpers'
+import type { RoundPenaltyView } from './types'
 
 /** 판 진행 액션 — 시작·종료·무효. 방 수명주기는 actions.ts. */
 
@@ -16,25 +17,25 @@ export async function startRound(
   roomId: string,
 ): Promise<ActionResult<{ roundId: string; seq: number }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host', 'dealer']))) {
-        return fail('딜러 또는 방장만 판을 시작할 수 있습니다')
+        return fail('errors.dealerOrHostOnlyStartRound')
       }
 
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
-      if (!room) return fail('방을 찾을 수 없습니다')
-      if (room.status === 'settled' || room.status === 'closed') return fail('이미 끝난 방입니다')
+      if (!room) return fail('errors.roomNotFound')
+      if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
       const [playing] = await tx
         .select({ id: rounds.id })
         .from(rounds)
         .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
         .limit(1)
-      if (playing) return fail('진행 중인 판이 있습니다')
+      if (playing) return fail('errors.roundAlreadyActive')
 
       const [maxSeq] = await tx
         .select({ max: sql<number>`coalesce(max(${rounds.seq}), 0)` })
@@ -46,7 +47,7 @@ export async function startRound(
         .insert(rounds)
         .values({ roomId, seq })
         .returning({ id: rounds.id, seq: rounds.seq })
-      if (!round) return fail('판 생성에 실패했습니다')
+      if (!round) return fail('errors.createRoundFailed')
 
       if (room.status === 'waiting') {
         await tx.update(rooms).set({ status: 'playing' }).where(eq(rooms.id, roomId))
@@ -56,7 +57,7 @@ export async function startRound(
     })
   } catch (error) {
     console.error('startRound failed:', error)
-    return fail('판 시작에 실패했습니다')
+    return fail('errors.startRoundFailed')
   }
 }
 
@@ -83,23 +84,23 @@ export async function endRound(
   input: z.infer<typeof endRoundSchema>,
 ): Promise<ActionResult<{ seq: number; pot: number; winnerId: string }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = endRoundSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { roomId, winnerId, note, score, loserPenalties } = parsed.data
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host', 'dealer']))) {
-        return fail('딜러 또는 방장만 판을 끝낼 수 있습니다')
+        return fail('errors.dealerOrHostOnlyEndRound')
       }
 
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
-      if (!room) return fail('방을 찾을 수 없습니다')
+      if (!room) return fail('errors.roomNotFound')
       const isGostop = room.gameType === 'gostop'
-      if (isGostop && !score) return fail('고스톱은 점수를 입력해야 합니다')
+      if (isGostop && !score) return fail('errors.gostopScoreRequired')
 
       const [round] = await tx
         .select()
@@ -107,14 +108,14 @@ export async function endRound(
         .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
         .orderBy(desc(rounds.seq))
         .limit(1)
-      if (!round) return fail('진행 중인 판이 없습니다')
+      if (!round) return fail('errors.noActiveRound')
 
       const [winner] = await tx
         .select({ userId: roomMembers.userId })
         .from(roomMembers)
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, winnerId)))
         .limit(1)
-      if (!winner) return fail('승자는 방 참가자여야 합니다')
+      if (!winner) return fail('errors.winnerMustBeMember')
 
       // 승인 대기 중인 액션이 남아 있으면 팟이 확정되지 않는다.
       const [pending] = await tx
@@ -122,9 +123,11 @@ export async function endRound(
         .from(schema.betActions)
         .where(and(eq(schema.betActions.roundId, round.id), eq(schema.betActions.status, 'pending')))
         .limit(1)
-      if (pending) return fail('승인 대기 중인 베팅을 먼저 처리하세요')
+      if (pending) return fail('errors.pendingBetsBeforeEnd')
 
       let pot = await getRoundPot(round.id)
+      // 판 결과에 기록할 박 적용 내역 — factor>1 이면서 실제 패자인 항목만. 원장 계산과 무관한 표시용 데이터.
+      let persistedPenalties: RoundPenaltyView[] = []
 
       if (isGostop && score) {
         // 점수 정산: 패자(관전 제외, 승자 제외) 전원이 점수 × 점당 칩 × 박 배수를 지불한다.
@@ -147,7 +150,7 @@ export async function endRound(
             )
           const memberIds = new Set(memberRows.map((row) => row.userId))
           if (penalties.some((penalty) => !memberIds.has(penalty.userId))) {
-            return fail('패자 정보가 올바르지 않습니다')
+            return fail('errors.invalidLoserData')
           }
         }
         // 실제 패자가 아닌 항목(승자·관전자·퇴장자)은 아래 패자 순회에서만 조회되므로 조용히 무시된다.
@@ -182,6 +185,13 @@ export async function endRound(
             reason: 'settlement',
           })
         }
+        // 표시용 기록 — 실제 패자에게 적용된 박(factor>1)만 남긴다. 지급액이 올인으로 깎여도
+        // "박이 적용됐다"는 사실 자체는 바뀌지 않으므로 owed/pay 와 무관하게 입력값 기준으로 남긴다.
+        const loserIds = new Set(losers.map((loser) => loser.userId))
+        persistedPenalties = penalties.flatMap((penalty) => {
+          if (penalty.factor === 1 || !loserIds.has(penalty.userId)) return []
+          return [{ userId: penalty.userId, factor: penalty.factor }]
+        })
         if (collected > 0) {
           await tx.insert(chipLedger).values({
             roomId,
@@ -202,13 +212,22 @@ export async function endRound(
         })
       }
 
+      const result =
+        note || score || persistedPenalties.length > 0
+          ? {
+              ...(note ? { note } : {}),
+              ...(score ? { score } : {}),
+              ...(persistedPenalties.length > 0 ? { penalties: persistedPenalties } : {}),
+            }
+          : null
+
       await tx
         .update(rounds)
         .set({
           status: 'ended',
           pot,
           winnerId,
-          result: note || score ? { ...(note ? { note } : {}), ...(score ? { score } : {}) } : null,
+          result,
           endedAt: new Date(),
         })
         .where(eq(rounds.id, round.id))
@@ -217,7 +236,7 @@ export async function endRound(
     })
   } catch (error) {
     console.error('endRound failed:', error)
-    return fail('판 종료에 실패했습니다')
+    return fail('errors.endRoundFailed')
   }
 }
 
@@ -234,17 +253,17 @@ export async function voidRound(
   input: z.infer<typeof voidRoundSchema>,
 ): Promise<ActionResult<{ roundId: string; seq: number }>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = voidRoundSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { roomId, reason } = parsed.data
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host', 'dealer']))) {
-        return fail('딜러 또는 방장만 판을 무효화할 수 있습니다')
+        return fail('errors.dealerOrHostOnlyVoidRound')
       }
 
       const [playing] = await tx
@@ -264,7 +283,7 @@ export async function voidRound(
           .where(eq(rounds.roomId, roomId))
           .orderBy(desc(rounds.seq))
           .limit(1)
-        if (!latest || latest.status !== 'ended') return fail('무효화할 판이 없습니다')
+        if (!latest || latest.status !== 'ended') return fail('errors.noRoundToVoid')
         round = latest
       }
 
@@ -309,7 +328,7 @@ export async function voidRound(
       for (const [memberId, delta] of giveBack) {
         const balance = await balanceInRoom(tx, roomId, memberId)
         if (balance + delta < 0) {
-          return fail('되돌릴 칩이 잔액보다 많습니다 — 바이인 추가 후 다시 시도하세요')
+          return fail('errors.refundExceedsBalance')
         }
       }
 
@@ -334,6 +353,6 @@ export async function voidRound(
     })
   } catch (error) {
     console.error('voidRound failed:', error)
-    return fail('판 무효화에 실패했습니다')
+    return fail('errors.voidRoundFailed')
   }
 }

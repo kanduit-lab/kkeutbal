@@ -69,6 +69,15 @@ export interface LastResultView {
   readonly note: string | null
 }
 
+/**
+ * 고스톱 패자 박(피박/광박) 배수 기록. 딜러 UI 는 최종 배수(factor)만 서버로 보내고
+ * 어떤 박인지(피박/광박/둘 다)는 구분해 전달하지 않으므로, 여기서도 factor 만 안다.
+ */
+export interface RoundPenaltyView {
+  readonly userId: string
+  readonly factor: 2 | 4
+}
+
 /** 최근 종료·무효 판 요약. 방 화면의 판 히스토리 미리보기용. */
 export interface RecentRoundView {
   readonly seq: number
@@ -76,6 +85,8 @@ export interface RecentRoundView {
   readonly pot: number
   readonly note: string | null
   readonly status: 'ended' | 'voided'
+  /** 고스톱 박 적용 패자 목록(factor>1 만). 고스톱 외 게임·구버전 판은 빈 배열. */
+  readonly penalties: readonly RoundPenaltyView[]
 }
 
 export interface RoomSnapshot {

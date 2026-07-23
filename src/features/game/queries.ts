@@ -13,6 +13,7 @@ import type {
   MemberView,
   RoomSnapshot,
   RoomView,
+  RoundPenaltyView,
 } from './types'
 
 const { rooms, roomMembers, users, rounds, betActions, chipLedger, buyIns } = schema
@@ -220,6 +221,7 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
       pot: row.pot,
       note: readResultNote(row.result),
       status: row.status as 'ended' | 'voided',
+      penalties: readResultPenalties(row.result),
     })),
   }
 }
@@ -230,6 +232,23 @@ function readResultNote(result: unknown): string | null {
     return typeof note === 'string' ? note : null
   }
   return null
+}
+
+/**
+ * rounds.result jsonb 의 penalties 필드를 방어적으로 읽는다.
+ * 구버전 판(필드 없음)·형식이 다른 값은 조용히 빈 배열로 처리한다 — 크래시 금지.
+ */
+function readResultPenalties(result: unknown): RoundPenaltyView[] {
+  if (!result || typeof result !== 'object' || !('penalties' in result)) return []
+  const raw = (result as { penalties?: unknown }).penalties
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return []
+    const userId = (entry as { userId?: unknown }).userId
+    const factor = (entry as { factor?: unknown }).factor
+    if (typeof userId !== 'string' || (factor !== 2 && factor !== 4)) return []
+    return [{ userId, factor }]
+  })
 }
 
 /** 로그인 사용자가 참가 중인(정산 전) 방 목록 — 홈 화면용. */
