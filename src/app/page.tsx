@@ -8,8 +8,8 @@ import { getMyActiveRooms, getMyRecentSessions } from '@/features/game/queries'
 import { GAME_BADGE_TONE } from '@/features/game/components/shared'
 import { Badge, Button, ButtonLink, EmptyState, Input, Panel, SubmitButton } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
+import { GreetingRotator } from '@/components/greeting-rotator'
 import { getDict } from '@/lib/i18n/server'
-import { format } from '@/lib/i18n/format'
 import type { Dictionary } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/config'
 
@@ -55,9 +55,11 @@ export default async function HomePage({
           <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
             {d.common.appName}<span className="text-accent">.</span>
           </h1>
-          <p className="mt-2 text-muted">
-            {format(d.home.greeting, { name: session.user.name ?? 'Player' })}
-          </p>
+          {/* 시작 프리셋은 서버가 고른다 — 클라이언트에서 뽑으면 hydration 이 어긋난다. */}
+          <GreetingRotator
+            name={session.user.name ?? 'Player'}
+            initialIndex={Math.floor(Math.random() * Object.keys(d.home.greetings).length)}
+          />
         </div>
         <div className="flex items-center gap-2">
           {isAdmin ? (

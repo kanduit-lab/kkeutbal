@@ -149,6 +149,22 @@ body {
   animation: winner-glow 1.2s ease-in-out 3;
 }
 
+/* 인사말 교체 — 위에서 아래로 내려오며 바뀐다 */
+@keyframes greeting-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.greeting-in {
+  animation: greeting-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rise-in,
   .rise-in-1,
@@ -157,7 +173,8 @@ body {
   .rise-in-4,
   .chip-fly,
   .pot-drop,
-  .winner-glow {
+  .winner-glow,
+  .greeting-in {
     animation: none;
   }
 }

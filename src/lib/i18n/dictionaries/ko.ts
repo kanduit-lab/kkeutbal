@@ -153,8 +153,19 @@ export const ko = {
     loadNamesFailed: '이름을 불러오지 못했습니다',
   },
   home: {
-    /** {name} 자리에 표시 이름이 들어간다. */
-    greeting: '{name}님, 오늘도 끗발 받으세요',
+    /**
+     * 홈 인사말 프리셋 — 한 개를 골라 일정 시간마다 바꿔 보여준다 (GreetingRotator).
+     * `{name}` 자리에 표시 이름이 들어간다. 키 이름은 노출되지 않으니 자유롭게 늘려도 된다.
+     */
+    greetings: {
+      luck: '{name}님, 오늘도 끗발 받으세요',
+      asking: '{name}님, 오늘 끗발 좀 붙었나요?',
+      ready: '{name}님, 판 벌일 준비 됐나요?',
+      goodHand: '{name}님, 좋은 패 받으세요',
+      warmHands: '{name}님, 오늘은 손이 좀 따뜻한가요?',
+      goBig: '{name}님, 한 판 크게 가볼까요?',
+      catchGwang: '{name}님, 오늘 광 좀 잡아보세요',
+    },
     joinTitle: '방 입장',
     codePlaceholder: '방 코드 6자리',
     join: '입장',

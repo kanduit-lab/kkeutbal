@@ -142,7 +142,15 @@ export const en: Dictionary = {
     loadNamesFailed: 'Could not load names',
   },
   home: {
-    greeting: 'Good luck today, {name}',
+    greetings: {
+      luck: 'Good luck today, {name}',
+      asking: 'Feeling lucky today, {name}?',
+      ready: 'Ready to deal, {name}?',
+      goodHand: 'May the cards be kind, {name}',
+      warmHands: 'Hot hands tonight, {name}?',
+      goBig: 'Going big this round, {name}?',
+      catchGwang: 'Go catch a 광, {name}',
+    },
     joinTitle: 'Join room',
     codePlaceholder: 'Room code (6 chars)',
     join: 'Join',
