@@ -21,8 +21,9 @@ export function LocaleSwitcher() {
           key={candidate}
           type="button"
           disabled={isPending || candidate === locale}
+          aria-current={candidate === locale ? 'true' : undefined}
           className={clsx(
-            'min-h-8 rounded-full px-3 text-xs font-bold transition-colors',
+            'min-h-12 min-w-12 rounded-full px-3 text-xs font-bold transition-colors',
             candidate === locale ? 'bg-gold/20 text-gold' : 'text-muted hover:text-text',
           )}
           onClick={() =>

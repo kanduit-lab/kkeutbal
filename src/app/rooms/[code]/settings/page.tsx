@@ -18,7 +18,7 @@ export default async function RoomSettingsPage({
   const { code: rawCode } = await params
   const code = normalizeRoomCode(rawCode)
   const room = await findRoomByCode(code)
-  if (!room) redirect('/')
+  if (!room) redirect('/?error=errors.roomNotFound')
   if (room.status === 'settled' || room.status === 'closed') {
     redirect(`/rooms/${room.code}/result`)
   }

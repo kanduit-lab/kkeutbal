@@ -266,7 +266,7 @@ export function RoomClient({
     : null
 
   const iconLinkClass =
-    'inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-white/10 px-2 py-1.5 text-sm text-muted transition-colors hover:text-text'
+    'inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 px-2 py-1.5 text-sm text-muted transition-colors hover:text-text'
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-56 pt-5 lg:px-8 lg:pb-12 lg:pt-8">
@@ -275,7 +275,7 @@ export function RoomClient({
           <Link
             href="/"
             aria-label={d.room.backAria}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center text-xl text-muted transition-colors hover:text-text"
+            className="inline-flex min-h-12 min-w-12 items-center justify-center text-xl text-muted transition-colors hover:text-text"
           >
             ←
           </Link>
@@ -314,7 +314,7 @@ export function RoomClient({
             aria-pressed={muted}
             aria-label={muted ? d.room.soundOnAria : d.room.soundOffAria}
             suppressHydrationWarning
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-white/10 px-2 py-1.5 text-sm transition-colors hover:text-text"
+            className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 px-2 py-1.5 text-sm transition-colors hover:text-text"
           >
             {muted ? '🔇' : '🔊'}
           </button>

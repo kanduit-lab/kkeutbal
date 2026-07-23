@@ -77,7 +77,7 @@ export function MonitorClient({
         <div className="flex items-center gap-3">
           <Link
             href={`/rooms/${snapshot.room.code}`}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center text-xl text-muted transition-colors hover:text-text"
+            className="inline-flex min-h-12 min-w-12 items-center justify-center text-xl text-muted transition-colors hover:text-text"
             aria-label={d.monitor.backToRoom}
             title={d.monitor.backToRoom}
           >
