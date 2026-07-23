@@ -196,6 +196,8 @@ export const chipLedger = pgTable(
   (table) => [
     index('chip_ledger_room_user_idx').on(table.roomId, table.userId),
     index('chip_ledger_room_time_idx').on(table.roomId, table.createdAt),
+    /** 판별 팟 계산(getRoundPot: roundId + reason 필터)용. */
+    index('chip_ledger_round_reason_idx').on(table.roundId, table.reason),
   ],
 )
 

@@ -1,0 +1,1 @@
+CREATE INDEX "chip_ledger_round_reason_idx" ON "chip_ledger" USING btree ("round_id","reason");
