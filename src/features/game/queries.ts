@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
+import { defaultBaseBet, readBaseBet, readPointValue } from './action-helpers'
 import type {
   BetActionView,
   LastResultView,
@@ -26,6 +27,8 @@ function toRoomView(room: typeof rooms.$inferSelect): RoomView {
     inputMode: room.inputMode,
     startingChips: room.startingChips,
     hostId: room.hostId,
+    pointValue: readPointValue(room.rulePreset),
+    baseBet: readBaseBet(room.rulePreset) ?? defaultBaseBet(room.startingChips),
   }
 }
 

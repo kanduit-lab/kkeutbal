@@ -42,6 +42,10 @@ export interface RoomView {
   readonly inputMode: InputMode
   readonly startingChips: number
   readonly hostId: string
+  /** 고스톱 점당 칩. 고스톱 외 게임은 사용하지 않는다. */
+  readonly pointValue: number
+  /** 베팅 기본 단위(삥). rulePreset 미지정 시 시작 칩의 1%. */
+  readonly baseBet: number
 }
 
 export interface RoundView {

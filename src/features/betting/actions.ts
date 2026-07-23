@@ -89,6 +89,8 @@ export async function placeBet(
 
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
       if (!room) return fail('방을 찾을 수 없습니다')
+      // 고스톱은 베팅 없이 판 종료 시 점수로 정산한다.
+      if (room.gameType === 'gostop') return fail('고스톱 방은 점수로 정산합니다')
 
       const [round] = await tx
         .select()
