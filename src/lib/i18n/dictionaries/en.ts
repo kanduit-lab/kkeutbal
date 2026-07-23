@@ -414,6 +414,17 @@ export const en: Dictionary = {
     start: 'Get started',
     guideLink: 'Game guide',
   },
+  advisor: {
+    advice: {
+      gusaReplay: 'This is 구사 — the round is voided and replayed',
+      amhaengeosaCatches: 'This is 암행어사. If someone has 광땡, this hand beats it',
+      ttaengjabiCatches: 'This is 땡잡이. It beats any 땡 — but not 광땡',
+      caughtByAmhaengeosa: '암행어사 (4·7 열끗) beats this · {rate} chance an opponent holds it',
+      caughtByTtaengjabi: '땡잡이 (3·7) beats this · {rate} chance an opponent holds it',
+      unbeatable: 'Nothing can catch this hand',
+      lowest: 'The lowest 끗 — you only win if everyone else folds',
+    },
+  },
   promo: {
     close: 'Close',
     dismissFor: "Hide for {hours}h",

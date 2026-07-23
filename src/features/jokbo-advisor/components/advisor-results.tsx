@@ -7,7 +7,9 @@ import { GOSTOP_RULES_STANDARD } from '@/features/gostop/types'
 import { captureOf, hasChongtong, scoreGostop } from '@/features/gostop/scoring'
 import type { PokerCard } from '@/features/poker/cards'
 import { describePokerHand, evaluatePokerHand } from '@/features/poker/engine'
+import type { SeotdaAdviceCode } from '@/features/seotda/advice'
 import { Panel } from '@/components/ui'
+import { format, useDict } from '@/lib/i18n/client'
 import { POKER_CATEGORY_STATS, seotdaStats } from '../stats'
 
 /** 어드바이저 판정 결과 패널 3종 — 게임별 표시만 담당하고 선택 상태는 advisor-client 가 소유한다. */
@@ -56,6 +58,7 @@ export function SeotdaResult({ cards }: { cards: readonly HwatuCard[] }) {
               남은 18장으로 상대가 받을 수 있는 153가지 패와 모두 겨룬 결과입니다
             </p>
           </div>
+          <SeotdaAdviceList advice={result.stats.advice} catcherRate={result.stats.catcherRate} />
         </>
       ) : (
         <p className="pt-9 text-sm text-muted">
@@ -63,6 +66,34 @@ export function SeotdaResult({ cards }: { cards: readonly HwatuCard[] }) {
         </p>
       )}
     </Panel>
+  )
+}
+
+/**
+ * 패별 상황 안내 — 무엇에 잡히고 무엇을 잡는지. 코드는 엔진(seotda/advice.ts)이 판정하고
+ * 문장은 사전이 갖는다. `{rate}` 는 잡는 패가 상대에게 나올 확률로 채운다.
+ */
+function SeotdaAdviceList({
+  advice,
+  catcherRate,
+}: {
+  advice: readonly SeotdaAdviceCode[]
+  catcherRate: number
+}) {
+  const { d } = useDict()
+  if (advice.length === 0) return null
+  const rate = `${(catcherRate * 100).toFixed(1)}%`
+  return (
+    <ul className="space-y-1.5 text-left">
+      {advice.map((code) => (
+        <li
+          key={code}
+          className="rounded-lg bg-white/5 px-3 py-2 text-xs leading-relaxed text-muted"
+        >
+          {format(d.advisor.advice[code], { rate })}
+        </li>
+      ))}
+    </ul>
   )
 }
 

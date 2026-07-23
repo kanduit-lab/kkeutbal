@@ -443,6 +443,22 @@ export const ko = {
     start: '시작하기',
     guideLink: '게임 가이드',
   },
+  /**
+   * 족보 판독 — 패별 상황 안내. 키 이름은 seotda/advice.ts 의 SeotdaAdviceCode 와 1:1 이다.
+   * `{rate}` 자리에는 그 잡는 패가 상대에게 나올 확률이 들어간다.
+   */
+  advisor: {
+    advice: {
+      gusaReplay: '멍텅구리 구사예요. 이 패가 나오면 판이 무효가 되고 재경기로 갑니다',
+      amhaengeosaCatches: '암행어사예요. 상대가 광땡이면 이 패로 뒤집을 수 있어요',
+      ttaengjabiCatches:
+        '땡잡이예요. 상대가 땡이면 이 패로 뒤집을 수 있어요 — 광땡은 못 잡아요',
+      caughtByAmhaengeosa: '암행어사(4·7 열끗)에게 잡힐 수 있어요 · 상대에게 나올 확률 {rate}',
+      caughtByTtaengjabi: '땡잡이(3·7)에게 잡힐 수 있어요 · 상대에게 나올 확률 {rate}',
+      unbeatable: '잡힐 일이 없는 최상위 패예요',
+      lowest: '가장 낮은 끗이에요. 상대가 죽어야 이기는 자리예요',
+    },
+  },
   /** 배너·팝업 공지 (features/promotions). 내용은 DB 가 갖고, 여기는 조작 문구만 둔다. */
   promo: {
     close: '닫기',
