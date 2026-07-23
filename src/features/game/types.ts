@@ -18,6 +18,8 @@ export interface MemberView {
   readonly seatNo: number
   readonly balance: number
   readonly buyInTotal: number
+  /** 입장 시각 (ISO 8601). */
+  readonly joinedAt: string
 }
 
 export interface BetActionView {
@@ -46,12 +48,18 @@ export interface RoomView {
   readonly pointValue: number
   /** 베팅 기본 단위(삥). rulePreset 미지정 시 시작 칩의 1%. */
   readonly baseBet: number
+  /** 최대 인원(2~10). rulePreset 미지정 시 10. */
+  readonly maxMembers: number
+  /** true 면 새 참가자가 관전자로 입장(시작 칩 미지급). */
+  readonly joinAsObserver: boolean
 }
 
 export interface RoundView {
   readonly id: string
   readonly seq: number
   readonly pot: number
+  /** 판 시작 시각 (ISO 8601). */
+  readonly startedAt: string
 }
 
 export interface LastResultView {
@@ -59,6 +67,15 @@ export interface LastResultView {
   readonly winnerId: string | null
   readonly pot: number
   readonly note: string | null
+}
+
+/** 최근 종료·무효 판 요약. 방 화면의 판 히스토리 미리보기용. */
+export interface RecentRoundView {
+  readonly seq: number
+  readonly winnerId: string | null
+  readonly pot: number
+  readonly note: string | null
+  readonly status: 'ended' | 'voided'
 }
 
 export interface RoomSnapshot {
@@ -69,4 +86,6 @@ export interface RoomSnapshot {
   readonly actions: readonly BetActionView[]
   readonly lastResult: LastResultView | null
   readonly endedRounds: number
+  /** 최근 종료·무효 판 최대 5개 (seq 내림차순). */
+  readonly recentRounds: readonly RecentRoundView[]
 }

@@ -49,6 +49,21 @@ export function readBaseBet(rulePreset: unknown): number | null {
   return readRuleNumber(rulePreset, 'baseBet')
 }
 
+/** rulePreset jsonb 에서 방 정원. 2~10 범위 밖이거나 없으면 10. */
+export function readMaxMembers(rulePreset: unknown): number {
+  const value = readRuleNumber(rulePreset, 'maxMembers')
+  return value !== null && value >= 2 && value <= 10 ? value : 10
+}
+
+/** rulePreset jsonb 에서 신규 입장자를 관전자로 받을지 여부. 없으면 false. */
+export function readJoinAsObserver(rulePreset: unknown): boolean {
+  if (rulePreset && typeof rulePreset === 'object' && 'joinAsObserver' in rulePreset) {
+    const value = (rulePreset as Record<string, unknown>).joinAsObserver
+    if (typeof value === 'boolean') return value
+  }
+  return false
+}
+
 function readRuleNumber(rulePreset: unknown, key: string): number | null {
   if (rulePreset && typeof rulePreset === 'object' && key in rulePreset) {
     const value = (rulePreset as Record<string, unknown>)[key]

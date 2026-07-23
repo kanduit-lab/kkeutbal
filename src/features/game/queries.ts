@@ -1,6 +1,12 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
-import { defaultBaseBet, readBaseBet, readPointValue } from './action-helpers'
+import {
+  defaultBaseBet,
+  readBaseBet,
+  readJoinAsObserver,
+  readMaxMembers,
+  readPointValue,
+} from './action-helpers'
 import type {
   BetActionView,
   LastResultView,
@@ -29,6 +35,8 @@ function toRoomView(room: typeof rooms.$inferSelect): RoomView {
     hostId: room.hostId,
     pointValue: readPointValue(room.rulePreset),
     baseBet: readBaseBet(room.rulePreset) ?? defaultBaseBet(room.startingChips),
+    maxMembers: readMaxMembers(room.rulePreset),
+    joinAsObserver: readJoinAsObserver(room.rulePreset),
   }
 }
 
@@ -45,36 +53,38 @@ export async function getMemberRole(
 }
 
 async function getMembers(roomId: string): Promise<MemberView[]> {
-  const memberRows = await db
-    .select({
-      userId: roomMembers.userId,
-      role: roomMembers.role,
-      seatNo: roomMembers.seatNo,
-      displayName: users.displayName,
-      avatarUrl: users.avatarUrl,
-    })
-    .from(roomMembers)
-    .innerJoin(users, eq(users.id, roomMembers.userId))
-    .where(and(eq(roomMembers.roomId, roomId), isNull(roomMembers.leftAt)))
-    .orderBy(asc(roomMembers.seatNo))
-
-  const balanceRows = await db
-    .select({
-      userId: chipLedger.userId,
-      balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int`,
-    })
-    .from(chipLedger)
-    .where(eq(chipLedger.roomId, roomId))
-    .groupBy(chipLedger.userId)
-
-  const buyInRows = await db
-    .select({
-      userId: buyIns.userId,
-      total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int`,
-    })
-    .from(buyIns)
-    .where(eq(buyIns.roomId, roomId))
-    .groupBy(buyIns.userId)
+  // 순수 읽기 3개 — 서로 독립이므로 병렬. 트랜잭션 불필요 (진실은 스냅샷 refetch 가 보장).
+  const [memberRows, balanceRows, buyInRows] = await Promise.all([
+    db
+      .select({
+        userId: roomMembers.userId,
+        role: roomMembers.role,
+        seatNo: roomMembers.seatNo,
+        joinedAt: roomMembers.joinedAt,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(roomMembers)
+      .innerJoin(users, eq(users.id, roomMembers.userId))
+      .where(and(eq(roomMembers.roomId, roomId), isNull(roomMembers.leftAt)))
+      .orderBy(asc(roomMembers.seatNo)),
+    db
+      .select({
+        userId: chipLedger.userId,
+        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int`,
+      })
+      .from(chipLedger)
+      .where(eq(chipLedger.roomId, roomId))
+      .groupBy(chipLedger.userId),
+    db
+      .select({
+        userId: buyIns.userId,
+        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int`,
+      })
+      .from(buyIns)
+      .where(eq(buyIns.roomId, roomId))
+      .groupBy(buyIns.userId),
+  ])
 
   const balanceMap = new Map(balanceRows.map((row) => [row.userId, row.balance]))
   const buyInMap = new Map(buyInRows.map((row) => [row.userId, row.total]))
@@ -87,6 +97,7 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
     seatNo: member.seatNo,
     balance: balanceMap.get(member.userId) ?? 0,
     buyInTotal: buyInMap.get(member.userId) ?? 0,
+    joinedAt: member.joinedAt.toISOString(),
   }))
 }
 
@@ -122,36 +133,68 @@ function toActionView(action: typeof betActions.$inferSelect): BetActionView {
 }
 
 export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | null> {
-  const [room] = await db.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
+  // 순수 읽기 스냅샷 — 독립 쿼리를 병렬로 돌린다. 트랜잭션 불필요 (진실은 refetch 가 보장).
+  const [roomRows, members, currentRoundRows, lastEndedRows, endedCountRows, recentRoundRows] =
+    await Promise.all([
+      db.select().from(rooms).where(eq(rooms.id, roomId)).limit(1),
+      getMembers(roomId),
+      db
+        .select()
+        .from(rounds)
+        .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
+        .orderBy(desc(rounds.seq))
+        .limit(1),
+      db
+        .select()
+        .from(rounds)
+        .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended')))
+        .orderBy(desc(rounds.seq))
+        .limit(1),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(rounds)
+        .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended'))),
+      db
+        .select({
+          seq: rounds.seq,
+          winnerId: rounds.winnerId,
+          pot: rounds.pot,
+          result: rounds.result,
+          status: rounds.status,
+        })
+        .from(rounds)
+        .where(and(eq(rounds.roomId, roomId), inArray(rounds.status, ['ended', 'voided'])))
+        .orderBy(desc(rounds.seq))
+        .limit(5),
+    ])
+
+  const [room] = roomRows
   if (!room) return null
 
-  const members = await getMembers(roomId)
+  const [currentRoundRow] = currentRoundRows
 
-  const [currentRoundRow] = await db
-    .select()
-    .from(rounds)
-    .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
-    .orderBy(desc(rounds.seq))
-    .limit(1)
+  // 2단계 — 현재 판이 있을 때만 필요한 쿼리. 팟·액션은 서로 독립이므로 병렬.
+  const [pot, actionRows]: [number, Array<typeof betActions.$inferSelect>] = currentRoundRow
+    ? await Promise.all([
+        getRoundPot(currentRoundRow.id),
+        db
+          .select()
+          .from(betActions)
+          .where(eq(betActions.roundId, currentRoundRow.id))
+          .orderBy(asc(betActions.seq)),
+      ])
+    : [0, []]
 
   const currentRound = currentRoundRow
-    ? { id: currentRoundRow.id, seq: currentRoundRow.seq, pot: await getRoundPot(currentRoundRow.id) }
+    ? {
+        id: currentRoundRow.id,
+        seq: currentRoundRow.seq,
+        pot,
+        startedAt: currentRoundRow.startedAt.toISOString(),
+      }
     : null
 
-  const actionRows = currentRoundRow
-    ? await db
-        .select()
-        .from(betActions)
-        .where(eq(betActions.roundId, currentRoundRow.id))
-        .orderBy(asc(betActions.seq))
-    : []
-
-  const [lastEnded] = await db
-    .select()
-    .from(rounds)
-    .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended')))
-    .orderBy(desc(rounds.seq))
-    .limit(1)
+  const [lastEnded] = lastEndedRows
 
   const lastResult: LastResultView | null = lastEnded
     ? {
@@ -162,10 +205,7 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
       }
     : null
 
-  const [endedCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(rounds)
-    .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended')))
+  const [endedCount] = endedCountRows
 
   return {
     room: toRoomView(room),
@@ -174,6 +214,13 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
     actions: actionRows.map(toActionView),
     lastResult,
     endedRounds: endedCount?.count ?? 0,
+    recentRounds: recentRoundRows.map((row) => ({
+      seq: row.seq,
+      winnerId: row.winnerId,
+      pot: row.pot,
+      note: readResultNote(row.result),
+      status: row.status as 'ended' | 'voided',
+    })),
   }
 }
 
@@ -243,5 +290,74 @@ export async function getMyActiveRooms(userId: string): Promise<
     gameType: row.gameType,
     status: row.status,
     memberCount: countMap.get(row.roomId) ?? 0,
+  }))
+}
+
+/**
+ * 정산 완료된 방의 내 손익 이력 — 홈/프로필 화면용.
+ * myNet = 칩 잔액(원장 합) - 바이인 합. 랭킹 standings 와 같은 계산식.
+ */
+export async function getMyRecentSessions(
+  userId: string,
+  limit = 10,
+): Promise<
+  Array<{
+    id: string
+    code: string
+    name: string
+    gameType: RoomView['gameType']
+    closedAt: string | null
+    myNet: number
+  }>
+> {
+  const roomRows = await db
+    .select({
+      id: rooms.id,
+      code: rooms.code,
+      name: rooms.name,
+      gameType: rooms.gameType,
+      closedAt: rooms.closedAt,
+    })
+    .from(roomMembers)
+    .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
+    .where(
+      and(eq(roomMembers.userId, userId), inArray(rooms.status, ['settled', 'closed'])),
+    )
+    .orderBy(desc(sql`coalesce(${rooms.closedAt}, ${rooms.createdAt})`))
+    .limit(limit)
+
+  if (roomRows.length === 0) return []
+
+  const roomIds = roomRows.map((row) => row.id)
+
+  const [balanceRows, buyInRows] = await Promise.all([
+    db
+      .select({
+        roomId: chipLedger.roomId,
+        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int`,
+      })
+      .from(chipLedger)
+      .where(and(eq(chipLedger.userId, userId), inArray(chipLedger.roomId, roomIds)))
+      .groupBy(chipLedger.roomId),
+    db
+      .select({
+        roomId: buyIns.roomId,
+        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int`,
+      })
+      .from(buyIns)
+      .where(and(eq(buyIns.userId, userId), inArray(buyIns.roomId, roomIds)))
+      .groupBy(buyIns.roomId),
+  ])
+
+  const balanceMap = new Map(balanceRows.map((row) => [row.roomId, row.balance]))
+  const buyInMap = new Map(buyInRows.map((row) => [row.roomId, row.total]))
+
+  return roomRows.map((row) => ({
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    gameType: row.gameType,
+    closedAt: row.closedAt ? row.closedAt.toISOString() : null,
+    myNet: (balanceMap.get(row.id) ?? 0) - (buyInMap.get(row.id) ?? 0),
   }))
 }

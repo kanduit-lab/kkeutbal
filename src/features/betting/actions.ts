@@ -24,6 +24,24 @@ async function memberRole(tx: Tx, roomId: string, userId: string): Promise<strin
   return member?.role ?? null
 }
 
+/** placeBet 전용 — 역할에 더해 입장 시각·퇴장 여부까지 본다. */
+async function memberInfo(
+  tx: Tx,
+  roomId: string,
+  userId: string,
+): Promise<{ role: string; joinedAt: Date; leftAt: Date | null } | null> {
+  const [member] = await tx
+    .select({
+      role: roomMembers.role,
+      joinedAt: roomMembers.joinedAt,
+      leftAt: roomMembers.leftAt,
+    })
+    .from(roomMembers)
+    .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
+    .limit(1)
+  return member ?? null
+}
+
 async function balanceOf(tx: Tx, roomId: string, userId: string): Promise<number> {
   const [row] = await tx
     .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int` })
@@ -75,17 +93,17 @@ export async function placeBet(
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
 
-      const callerRole = await memberRole(tx, roomId, callerId)
-      if (!callerRole) return fail('이 방의 참가자가 아닙니다')
+      const caller = await memberInfo(tx, roomId, callerId)
+      if (!caller || caller.leftAt) return fail('이 방의 참가자가 아닙니다')
 
       const userId = targetUserId ?? callerId
       const isProxy = userId !== callerId
-      const isDealer = callerRole === 'host' || callerRole === 'dealer'
+      const isDealer = caller.role === 'host' || caller.role === 'dealer'
       if (isProxy && !isDealer) return fail('대리 입력은 딜러만 할 수 있습니다')
 
-      const targetRole = isProxy ? await memberRole(tx, roomId, userId) : callerRole
-      if (!targetRole) return fail('대상이 방 참가자가 아닙니다')
-      if (targetRole === 'observer') return fail('관전자는 베팅할 수 없습니다')
+      const target = isProxy ? await memberInfo(tx, roomId, userId) : caller
+      if (!target || target.leftAt) return fail('대상이 방 참가자가 아닙니다')
+      if (target.role === 'observer') return fail('관전자는 베팅할 수 없습니다')
 
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
       if (!room) return fail('방을 찾을 수 없습니다')
@@ -99,6 +117,11 @@ export async function placeBet(
         .orderBy(desc(rounds.seq))
         .limit(1)
       if (!round) return fail('진행 중인 판이 없습니다')
+
+      // 판 시작 후 입장한 멤버는 이번 판에 참여할 수 없다 — 본인·대리 입력 동일.
+      if (target.joinedAt > round.startedAt) {
+        return fail('이번 판 시작 후 입장했습니다 — 다음 판부터 참여할 수 있어요')
+      }
 
       // 멱등: 같은 actionId 재전송이면 기존 행을 그대로 돌려준다.
       const [existing] = await tx
