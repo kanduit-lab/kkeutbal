@@ -56,6 +56,14 @@ body {
 .font-brush {
   font-family: var(--font-display);
   letter-spacing: 0.02em;
+  /*
+   * 궁서·바탕은 시스템에 굵기가 하나뿐이라 font-weight:700/900 이 합성(synthetic bold)된다.
+   * 명조 계열의 얇은 세로획에 합성이 걸리면 획이 갈라져 깨져 보인다.
+   * 실제 획 두께를 stroke 로 더해 보정한다 — em 단위라 글자 크기에 비례해 커진다.
+   * paint-order 로 stroke 를 fill 아래에 깔아 글자 속이 먹히지 않게 한다.
+   */
+  -webkit-text-stroke: 0.028em currentColor;
+  paint-order: stroke fill;
 }
 
 /* 옻칠 패널: 미세한 금테 + 안쪽 광 */

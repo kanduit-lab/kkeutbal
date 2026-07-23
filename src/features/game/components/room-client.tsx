@@ -265,8 +265,10 @@ export function RoomClient({
     ? (snapshot.members.find((member) => member.userId === seatUserId) ?? null)
     : null
 
+  // 48px 터치 타깃 안에서 아이콘이 너무 작으면 빈 상자처럼 보인다 — 글리프를 키우고
+  // 옅은 배경을 깔아 네 개가 한 묶음으로 읽히게 한다.
   const iconLinkClass =
-    'inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 px-2 py-1.5 text-sm text-muted transition-colors hover:text-text'
+    'inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-lg leading-none transition-colors hover:border-gold/40 hover:bg-white/10'
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 pb-56 pt-5 lg:px-8 lg:pb-12 lg:pt-8">
@@ -283,14 +285,23 @@ export function RoomClient({
             <h1 className="truncate font-brush text-xl font-bold leading-tight lg:text-3xl">
               {snapshot.room.name}
             </h1>
-            <p className="mt-0.5 text-xs text-muted lg:text-sm">
-              {d.room.codeLabel}{' '}
-              <span className="font-mono font-bold tracking-widest">{snapshot.room.code}</span>
-              {' · '}
-              {d.games[snapshot.room.gameType]}
-              {' · '}
-              {snapshot.room.inputMode === 'trust' ? d.inputMode.trust : d.inputMode.approval}
-            </p>
+            {/* 판 진행 상태는 방 정보와 같은 줄에 둔다 — 아이콘 버튼(48px) 옆에 두면
+                뱃지 높이가 맞지 않아 헤더가 들쭉날쭉해진다. */}
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted lg:text-sm">
+              <span>
+                {d.room.codeLabel}{' '}
+                <span className="font-mono font-bold tracking-widest">{snapshot.room.code}</span>
+                {' · '}
+                {d.games[snapshot.room.gameType]}
+                {' · '}
+                {snapshot.room.inputMode === 'trust' ? d.inputMode.trust : d.inputMode.approval}
+              </span>
+              <Badge tone={snapshot.currentRound ? 'win' : 'muted'}>
+                {snapshot.currentRound
+                  ? format(d.room.roundLive, { seq: snapshot.currentRound.seq })
+                  : d.common.waiting}
+              </Badge>
+            </div>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -314,7 +325,7 @@ export function RoomClient({
             aria-pressed={muted}
             aria-label={muted ? d.room.soundOnAria : d.room.soundOffAria}
             suppressHydrationWarning
-            className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 px-2 py-1.5 text-sm transition-colors hover:text-text"
+            className={iconLinkClass}
           >
             {muted ? '🔇' : '🔊'}
           </button>
@@ -344,11 +355,6 @@ export function RoomClient({
               ⚙️
             </Link>
           ) : null}
-          <Badge tone={snapshot.currentRound ? 'win' : 'muted'}>
-            {snapshot.currentRound
-              ? format(d.room.roundLive, { seq: snapshot.currentRound.seq })
-              : d.common.waiting}
-          </Badge>
         </div>
       </header>
 

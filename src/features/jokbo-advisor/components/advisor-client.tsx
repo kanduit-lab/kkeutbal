@@ -104,6 +104,9 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
         <div className="lg:order-2 lg:col-span-5 lg:min-h-0 lg:overflow-y-auto">
           <div className="rise-in rise-in-2 space-y-5">
             {tab === 'seotda' ? <SeotdaResult cards={cards} /> : null}
+            {/* 서열표는 결과 쪽 컬럼에 둔다 — 피커 안에 넣으면 카드 그리드가 반으로 눌리고
+                패널이 좁은 스크롤 상자에 갇힌다. */}
+            {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
             {tab === 'gostop' ? <GostopResult cards={cards} /> : null}
             {tab === 'poker' ? <PokerResult cards={pokerCards} /> : null}
 
@@ -163,26 +166,12 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
                   </Button>
                 ) : null}
               </div>
-              {tab === 'seotda' ? (
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                  <div className="min-w-0 flex-1">
-                    <CardPicker
-                      gameType={hwatuGameType}
-                      selected={selected}
-                      maxSelect={maxSelect}
-                      onToggle={toggle}
-                    />
-                  </div>
-                  <SeotdaRankingPanel cards={cards} />
-                </div>
-              ) : (
-                <CardPicker
-                  gameType={hwatuGameType}
-                  selected={selected}
-                  maxSelect={maxSelect}
-                  onToggle={toggle}
-                />
-              )}
+              <CardPicker
+                gameType={hwatuGameType}
+                selected={selected}
+                maxSelect={maxSelect}
+                onToggle={toggle}
+              />
             </Panel>
           )}
         </div>

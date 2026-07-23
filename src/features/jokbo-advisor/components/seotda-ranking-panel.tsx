@@ -10,7 +10,7 @@ import { SEOTDA_RANK_TABLE } from './seotda-rank-table'
 
 /**
  * 섯다 족보 전체 서열 참고표. 처음 치는 사람도 표를 외우지 않고 지금 든 패가
- * 어디쯤인지 볼 수 있도록 카드 피커 옆(데스크톱)·아래(모바일, 접이식)에 놓는다.
+ * 어디쯤인지 볼 수 있도록 판정 결과 아래(데스크톱)·접이식(모바일)에 놓는다.
  * 2장이 선택되면 해당 등급 행을 강조하고 스크롤로 보여준다.
  *
  * 라벨·서열은 이 파일이 정하지 않는다 — seotda-rank-table.ts 가 엔진 판정 결과를 그대로
@@ -49,7 +49,7 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
   }
 
   return (
-    <div className="lg:w-60 lg:shrink-0">
+    <div>
       <button
         type="button"
         className="flex min-h-12 w-full items-center justify-between rounded-xl bg-white/5 px-3 text-sm font-bold text-muted lg:hidden"
@@ -65,7 +65,9 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
           <p className="hidden px-1 pb-1.5 text-sm font-bold text-muted lg:block">
             {d.advisor.ranking.title}
           </p>
-          <div className="max-h-72 space-y-0.5 overflow-y-auto pr-1 lg:max-h-[30rem]">
+          {/* 데스크톱에서는 바깥 컬럼이 이미 스크롤된다 — 여기서 또 자르면 스크롤바가 둘이 된다.
+              모바일은 접이식이라 펼쳤을 때만 자체 높이 제한을 둔다. */}
+          <div className="max-h-72 space-y-0.5 overflow-y-auto pr-1 lg:max-h-none lg:overflow-visible lg:pr-0">
             {SEOTDA_RANK_TABLE.map((tier, index) => {
               const isActive = tier.rank === currentRank
               const previous = SEOTDA_RANK_TABLE[index - 1]

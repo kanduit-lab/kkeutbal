@@ -19,10 +19,11 @@ next-env.d.ts
 /playwright-report
 /.playwright
 
-# env (keep .env.example tracked)
+# env — .env.example 만 추적한다.
+# 개별 이름을 나열하면 새 파일(.env.production 등)이 조용히 추적돼 비밀값이 커밋된다.
 .env
-.env.local
-.env*.local
+.env.*
+!.env.example
 
 # vercel
 .vercel
