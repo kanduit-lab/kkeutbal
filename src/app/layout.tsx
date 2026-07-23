@@ -11,18 +11,50 @@ const FALLBACK_METADATA = {
   description: '섯다·고스톱·포커 판돈 기록장. 누가 얼마 땄는지 끝까지 남는다.',
 } as const
 
+/**
+ * 링크 미리보기 기준 절대 URL. 카카오톡·슬랙 같은 크롤러는 상대 경로를 읽지 못해서
+ * metadataBase 가 없으면 og 태그가 통째로 무시된다. 값이 없거나 형식이 틀리면 생략한다.
+ */
+function siteUrl(): URL | undefined {
+  const raw = process.env.NEXT_PUBLIC_APP_URL
+  if (!raw) return undefined
+  try {
+    return new URL(raw)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 제목·설명을 og/twitter 까지 함께 채운다.
+ * og:description 이 없으면 크롤러가 자체 기본 문구("여기를 눌러 링크를 확인하세요")로 대체한다.
+ */
+function siteMetadata(title: string, description: string): Metadata {
+  const url = siteUrl()
+  return {
+    title,
+    description,
+    ...(url ? { metadataBase: url } : {}),
+    openGraph: {
+      type: 'website',
+      siteName: title,
+      title,
+      description,
+      ...(url ? { url: url.toString() } : {}),
+    },
+    twitter: { card: 'summary', title, description },
+  }
+}
+
 /** 로케일 사전에서 제목·설명을 뽑는다. 읽기에 실패해도 절대 던지지 않는다. */
 export async function generateMetadata(): Promise<Metadata> {
   try {
     const { d } = await getDict()
-    return {
-      title: d.meta.title,
-      description: d.meta.description,
-    }
+    return siteMetadata(d.meta.title, d.meta.description)
   } catch (error) {
     // metadata 생성 실패가 페이지 렌더를 죽이면 안 된다 — 정적 폴백으로 대체.
     console.error('generateMetadata failed:', error)
-    return { ...FALLBACK_METADATA }
+    return siteMetadata(FALLBACK_METADATA.title, FALLBACK_METADATA.description)
   }
 }
 
