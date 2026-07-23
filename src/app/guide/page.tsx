@@ -53,7 +53,7 @@ export default function GuidePage() {
             가이드<span className="text-accent">.</span>
           </h1>
           <p className="mt-2 text-muted">
-            처음이면 여기부터 봐요. 족보 서열표부터 앱 사용법까지 한 번에 정리했어요
+            족보 서열표와 앱 사용법
           </p>
         </div>
       </header>

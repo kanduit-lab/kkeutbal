@@ -37,7 +37,7 @@ export default function PokerGuidePage() {
         backLabel="가이드 목록으로"
         emoji="♠"
         title="포커"
-        description="텍사스 홀덤 기준 족보 서열표. 5~7장 중 가장 좋은 5장 조합으로 승부해요"
+        description="텍사스 홀덤 기준 족보 서열표. 5~7장 중 가장 좋은 5장 조합으로 승부합니다"
       />
 
       <div className="grid gap-6 lg:grid-cols-12">
@@ -46,8 +46,8 @@ export default function PokerGuidePage() {
             <h2 className="text-xl font-bold">진행 방식</h2>
             <Panel>
               <p className="text-sm text-muted">
-                각자 받은 카드와 공용 카드를 합쳐 5~7장 중 가장 좋은 5장을 골라 족보를 만들어요.
-                아래 표에서 위에 있을수록 강한 패예요
+                각자 받은 카드와 공용 카드를 합쳐 5~7장 중 가장 좋은 5장으로 족보를 만듭니다.
+                표에서 위에 있을수록 강한 패입니다
               </p>
             </Panel>
           </section>

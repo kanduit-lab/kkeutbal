@@ -55,13 +55,13 @@ export default function SeotdaGuidePage() {
             <h2 className="text-xl font-bold">진행 방식</h2>
             <Panel className="space-y-3">
               <ol className="list-inside list-decimal space-y-2 text-sm text-text">
-                <li>각자 화투 두 장씩 받아요. 상대 패는 안 보여요</li>
-                <li>순서대로 베팅해요 — 체크·콜·레이즈·다이·올인 중 하나</li>
-                <li>남은 사람들끼리 패를 공개하고, 서열이 높은 쪽이 판돈을 가져가요</li>
-                <li>특수 판정패(암행어사·땡잡이·구사)가 있으면 서열과 무관하게 결과가 바뀔 수 있어요</li>
+                <li>각자 화투 두 장씩 받습니다. 상대 패는 보이지 않습니다</li>
+                <li>순서대로 베팅합니다 — 체크·콜·올려·다이·올인 중 하나</li>
+                <li>남은 사람끼리 패를 공개하고, 서열이 높은 쪽이 판돈을 가져갑니다</li>
+                <li>특수 판정패(암행어사·땡잡이·구사)가 있으면 서열과 무관하게 결과가 바뀔 수 있습니다</li>
               </ol>
               <p className="text-xs text-muted">
-                같은 족보로 맞붙으면 기본 룰에서는 그 판을 다시 시작해요(재경기)
+                같은 족보로 맞붙으면 기본 룰에서는 재경기합니다
               </p>
             </Panel>
           </section>
@@ -102,27 +102,27 @@ export default function SeotdaGuidePage() {
           <section id="traits" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">특수 판정패</h2>
             <p className="text-sm text-muted">
-              서열표와는 별개로, 특정 상대를 만났을 때만 효력이 생기는 판정패예요. 기본 룰에서는
-              세 가지 모두 켜져 있어요
+              서열표와 별개로, 특정 상대를 만났을 때만 효력이 생기는 판정패입니다. 기본 룰에서는
+              세 가지 모두 켜져 있습니다
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               <TraitCard
                 ids={['04-yeol', '07-yeol']}
                 title="암행어사"
                 badge="4 · 7"
-                description="광땡을 잡아요. 상대가 어떤 광땡이든 이겨요"
+                description="광땡을 잡습니다. 상대가 어떤 광땡이든 이깁니다"
               />
               <TraitCard
                 ids={['03-gwang', '07-tti']}
                 title="땡잡이"
                 badge="3 · 7"
-                description="땡을 잡아요. 단, 광땡에는 효력이 없어요"
+                description="땡을 잡습니다. 단, 광땡에는 효력이 없습니다"
               />
               <TraitCard
                 ids={['04-tti', '09-yeol']}
                 title="구사"
                 badge="4 · 9"
-                description="이 패를 든 사람이 있으면 그 판은 무효 — 다시 시작해요"
+                description="이 패를 든 사람이 있으면 그 판은 무효 — 재경기합니다"
               />
             </div>
           </section>

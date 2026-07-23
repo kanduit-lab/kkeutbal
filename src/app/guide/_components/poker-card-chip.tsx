@@ -12,7 +12,7 @@ export function PokerCardChip({ id }: { id: string }) {
   return (
     <span
       className={clsx(
-        'bg-card inline-flex min-w-9 items-center justify-center rounded-md border border-black/10 px-1.5 py-1 text-sm leading-none font-black',
+        'bg-card inline-flex min-w-11 items-center justify-center rounded-md border border-black/10 px-2 py-1.5 text-base leading-none font-black',
         isRed ? 'text-accent' : 'text-black',
       )}
     >
