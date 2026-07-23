@@ -1,0 +1,18 @@
+# Netlify 빌드 설정.
+# 빌드 명령·publish 디렉터리는 Netlify Next.js 런타임이 잡으므로 여기서 덮어쓰지 않는다.
+
+[build.environment]
+  # Netlify secrets scanning 은 "대시보드에 설정된 모든 env 값"을 빌드 산출물에서 찾아
+  # 하나라도 발견되면 배포를 실패시킨다. 아래 4개는 값이 노출되는 것이 정상이라
+  # 스캔 대상에서 제외한다.
+  #
+  # - NEXT_PUBLIC_* 3종: `NEXT_PUBLIC_` 접두사는 Next.js 가 빌드 시점에 클라이언트 번들로
+  #   인라인하라는 선언이다. 번들에서 발견되는 것이 설계된 동작이며, 특히 Supabase
+  #   publishable 키는 이름 그대로 브라우저에 공개되도록 만들어진 키다(RLS 와 서버
+  #   Server Action 권한 검사가 실제 방어선이다 — docs/07-auth-and-security.md).
+  # - JOKBO_VISION_MODEL: 값이 모델 이름(`claude-sonnet-5`)이라 비밀이 아니다.
+  #   README·CLAUDE.md·docs 에 기본값으로 문서화돼 있어서 저장소 스캔에도 걸린다.
+  #
+  # 여기에 진짜 비밀값(AUTH_SECRET, DATABASE_URL, ANTHROPIC_API_KEY, SSO client secret)을
+  # 절대 추가하지 말 것 — 그 값들이 번들에 나타나면 그건 실제 유출이고, 스캔이 막아야 한다.
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,JOKBO_VISION_MODEL"
