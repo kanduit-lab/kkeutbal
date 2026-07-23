@@ -153,6 +153,8 @@ export const ko = {
     loadNamesFailed: '이름을 불러오지 못했습니다',
   },
   home: {
+    /** {name} 자리에 표시 이름이 들어간다. */
+    greeting: '{name}님, 오늘도 끗발 받으세요',
     joinTitle: '방 입장',
     codePlaceholder: '방 코드 6자리',
     join: '입장',
@@ -429,6 +431,12 @@ export const ko = {
       '실제 돈이나 유가물이 오가지 않는 기록 도구예요. 화투 도안은 CC BY-SA 4.0 라이선스를 따라요.',
     start: '시작하기',
     guideLink: '게임 가이드',
+  },
+  /** 배너·팝업 공지 (features/promotions). 내용은 DB 가 갖고, 여기는 조작 문구만 둔다. */
+  promo: {
+    close: '닫기',
+    dismissFor: '{hours}시간 동안 보지 않기',
+    learnMore: '자세히 보기',
   },
   /** 공용 UI 프리미티브 (components/ui.tsx). */
   ui: {

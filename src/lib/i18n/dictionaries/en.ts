@@ -142,6 +142,7 @@ export const en: Dictionary = {
     loadNamesFailed: 'Could not load names',
   },
   home: {
+    greeting: 'Good luck today, {name}',
     joinTitle: 'Join room',
     codePlaceholder: 'Room code (6 chars)',
     join: 'Join',
@@ -404,6 +405,11 @@ export const en: Dictionary = {
       'A record-keeping tool — no real money or valuables change hands. The 화투 (hwatu) card artwork is licensed under CC BY-SA 4.0.',
     start: 'Get started',
     guideLink: 'Game guide',
+  },
+  promo: {
+    close: 'Close',
+    dismissFor: "Hide for {hours}h",
+    learnMore: 'Learn more',
   },
   ui: {
     processing: 'Processing…',

@@ -9,6 +9,7 @@ import { GAME_BADGE_TONE } from '@/features/game/components/shared'
 import { Badge, Button, ButtonLink, EmptyState, Input, Panel, SubmitButton } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { getDict } from '@/lib/i18n/server'
+import { format } from '@/lib/i18n/format'
 import type { Dictionary } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/config'
 
@@ -54,7 +55,9 @@ export default async function HomePage({
           <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
             {d.common.appName}<span className="text-accent">.</span>
           </h1>
-          <p className="mt-2 text-muted">{session.user.name ?? 'Player'}</p>
+          <p className="mt-2 text-muted">
+            {format(d.home.greeting, { name: session.user.name ?? 'Player' })}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin ? (
