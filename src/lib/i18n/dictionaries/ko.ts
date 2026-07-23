@@ -564,8 +564,6 @@ export const ko = {
     body: '잠시 후 다시 시도해 주세요.',
     retry: '다시 시도',
     notFoundTitle: '페이지를 찾을 수 없어요',
-    /** {hand} 자리에 엔진이 판정한 족보 이름(망통)이 들어간다. */
-    notFoundQuip: '{hand} — 아무것도 없는 패처럼, 이 주소에도 아무것도 없어요',
     notFoundBody: '주소를 확인하거나 홈에서 다시 시작해 주세요.',
   },
   errors: {
