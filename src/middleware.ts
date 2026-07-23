@@ -11,6 +11,8 @@ export default auth((req) => {
   const { pathname } = req.nextUrl
   const isPublic =
     pathname.startsWith('/login') ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/about') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/health')
 

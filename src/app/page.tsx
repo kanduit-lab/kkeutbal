@@ -2,10 +2,11 @@ import Link from 'next/link'
 import type { Route } from 'next'
 import { redirect } from 'next/navigation'
 import { auth, signOut } from '@/lib/auth'
+import { isAdminUser } from '@/features/auth/roles'
 import { joinRoomAndGo } from '@/features/game/actions'
 import { getMyActiveRooms } from '@/features/game/queries'
 import { GAME_BADGE_TONE } from '@/features/game/components/shared'
-import { Badge, Button, EmptyState, Input, Panel } from '@/components/ui'
+import { Badge, Button, ButtonLink, EmptyState, Input, Panel } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { getDict } from '@/lib/i18n/server'
 
@@ -18,8 +19,11 @@ export default async function HomePage({
   if (!session?.user?.id) redirect('/login')
 
   const { error } = await searchParams
-  const myRooms = await getMyActiveRooms(session.user.id)
-  const { d } = await getDict()
+  const [myRooms, isAdmin, { d }] = await Promise.all([
+    getMyActiveRooms(session.user.id),
+    isAdminUser(session.user.id),
+    getDict(),
+  ])
 
   return (
     <main className="mx-auto w-full max-w-6xl px-5 pb-16 pt-8 lg:px-8 lg:pt-12">
@@ -28,11 +32,17 @@ export default async function HomePage({
           <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
             {d.common.appName}<span className="text-accent">.</span>
           </h1>
-          <p className="mt-2 text-muted">
-            {session.user.name ?? 'Player'}{d.home.greeting}
-          </p>
+          <p className="mt-2 text-muted">{session.user.name ?? 'Player'}</p>
         </div>
         <div className="flex items-center gap-2">
+          {isAdmin ? (
+            <Link
+              href={'/admin' as Route}
+              className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-text"
+            >
+              관리자
+            </Link>
+          ) : null}
           <LocaleSwitcher />
           <form
             action={async () => {
@@ -71,11 +81,9 @@ export default async function HomePage({
                 {d.home.join}
               </Button>
             </form>
-            <Link href="/rooms/new" className="block">
-              <Button variant="surface" size="lg" className="w-full">
-                {d.home.newRoom}
-              </Button>
-            </Link>
+            <ButtonLink href="/rooms/new" variant="surface" size="lg" className="w-full">
+              {d.home.newRoom}
+            </ButtonLink>
           </Panel>
 
           <div className="grid grid-cols-3 gap-3">
@@ -83,21 +91,18 @@ export default async function HomePage({
               <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
                 <p className="text-3xl">🔮</p>
                 <p className="font-brush mt-2 text-lg font-bold">{d.home.advisor}</p>
-                <p className="mt-1 text-xs text-muted">{d.home.advisorHint}</p>
               </Panel>
             </Link>
             <Link href="/ranking" className="rise-in rise-in-2 block">
               <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
                 <p className="text-3xl">🏆</p>
                 <p className="font-brush mt-2 text-lg font-bold">{d.home.ranking}</p>
-                <p className="mt-1 text-xs text-muted">{d.home.rankingHint}</p>
               </Panel>
             </Link>
             <Link href={'/guide' as Route} className="rise-in rise-in-2 block">
               <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
                 <p className="text-3xl">📖</p>
                 <p className="font-brush mt-2 text-lg font-bold">{d.home.guide}</p>
-                <p className="mt-1 text-xs text-muted">{d.home.guideHint}</p>
               </Panel>
             </Link>
           </div>
@@ -106,10 +111,7 @@ export default async function HomePage({
         <section className="rise-in rise-in-3 space-y-3 lg:col-span-7">
           <h2 className="px-1 text-lg font-bold">{d.home.activeRooms}</h2>
           {myRooms.length === 0 ? (
-            <EmptyState
-              title={d.home.emptyTitle}
-              hint={d.home.emptyHint}
-            />
+            <EmptyState title={d.home.emptyTitle} />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {myRooms.map((room) => (
@@ -137,6 +139,15 @@ export default async function HomePage({
           )}
         </section>
       </div>
+
+      <footer className="mt-12 text-center">
+        <Link
+          href={'/about' as Route}
+          className="text-xs text-muted underline underline-offset-4 hover:text-text"
+        >
+          끗발 소개
+        </Link>
+      </footer>
     </main>
   )
 }

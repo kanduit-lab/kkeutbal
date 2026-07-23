@@ -25,6 +25,8 @@ const serverSchema = z.object({
   AUTH_AUTHENTIK_ID: z.string().min(1).optional(),
   AUTH_AUTHENTIK_SECRET: z.string().min(1).optional(),
   AUTH_AUTHENTIK_ISSUER: z.string().url().optional(),
+  /** 관리자 부트스트랩 — 쉼표로 구분한 내부 계정 아이디 목록. DB is_admin 과 OR 로 판정한다. */
+  AUTH_ADMIN_USERNAMES: z.string().default(''),
 
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   JOKBO_VISION_MODEL: z.string().default('claude-sonnet-5'),

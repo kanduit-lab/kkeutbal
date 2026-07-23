@@ -1,8 +1,8 @@
 import {
+  boolean,
   index,
   integer,
   jsonb,
-  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -36,41 +36,46 @@ export const chipReason = pgEnum('chip_reason', [
   'correction',
   'settlement',
 ])
-export const handSource = pgEnum('hand_source', ['manual', 'vision'])
 
-/** Authentik 신원의 로컬 미러. 이메일은 저장하지 않는다 (docs/07-auth-and-security.md). */
+/**
+ * 전역 사용자. 이메일은 저장하지 않는다 (docs/07-auth-and-security.md).
+ * `authentik_sub` 는 provider 신원 키다 — OIDC 는 IdP sub, 내부 계정은 `local:{username}`,
+ * 개발 게스트는 `dev:{name}`. SSO 로그인 시 아이디 또는 전화번호가 일치하는 내부 계정이 있으면
+ * 그 행의 `authentik_sub` 를 OIDC sub 로 교체해 같은 계정으로 병합한다.
+ */
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   authentikSub: text('authentik_sub').notNull().unique(),
+  /** 내부 계정 아이디. SSO·게스트 전용 사용자는 null. */
+  username: text('username').unique(),
+  /** bcrypt 해시. 내부 계정만 가진다. */
+  passwordHash: text('password_hash'),
+  /** 전화번호(숫자만, 예: 01012345678). SSO 자동 연동의 병합 기준. */
+  phone: text('phone').unique(),
   displayName: text('display_name').notNull(),
   avatarUrl: text('avatar_url'),
+  /** 관리자 — 게스트 토큰 발급·관리자 지정 권한. 부트스트랩은 AUTH_ADMIN_USERNAMES env. */
+  isAdmin: boolean('is_admin').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-/** 누적 랭킹의 범위 단위. 전역 랭킹은 만들지 않는다. */
-export const groups = pgTable('groups', {
+/**
+ * 게스트 초대 토큰. 관리자가 발급하며, 코드 + 이름만으로 게스트 로그인할 수 있다.
+ * 같은 (토큰, 이름) 조합은 같은 게스트 계정으로 이어진다 — 기기를 바꿔도 전적 유지.
+ */
+export const guestTokens = pgTable('guest_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  ownerId: uuid('owner_id')
+  /** 입장 코드와 같은 문자 집합(혼동 문자 제외) 8자. */
+  code: text('code').notNull().unique(),
+  /** 발급 메모 (예: "2026 여름 MT"). */
+  label: text('label').notNull(),
+  createdBy: uuid('created_by')
     .notNull()
     .references(() => users.id),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
-
-export const groupMembers = pgTable(
-  'group_members',
-  {
-    groupId: uuid('group_id')
-      .notNull()
-      .references(() => groups.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    role: text('role').notNull().default('member'),
-    joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [primaryKey({ columns: [table.groupId, table.userId] })],
-)
 
 export const rooms = pgTable(
   'rooms',
@@ -78,7 +83,6 @@ export const rooms = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     /** 6자 입장 코드. 혼동 문자(0/O, 1/I) 제외. */
     code: text('code').notNull().unique(),
-    groupId: uuid('group_id').references(() => groups.id),
     hostId: uuid('host_id')
       .notNull()
       .references(() => users.id),
@@ -212,26 +216,4 @@ export const buyIns = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('buy_ins_room_user_idx').on(table.roomId, table.userId)],
-)
-
-/** 족보 판독 기록. 기본 가시성은 본인, 판 종료 후 방 공개 (docs/05-jokbo-advisor.md). */
-export const handRecords = pgTable(
-  'hand_records',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    roundId: uuid('round_id')
-      .notNull()
-      .references(() => rounds.id, { onDelete: 'cascade' }),
-    userId: uuid('user_id')
-      .notNull()
-      .references(() => users.id),
-    /** HwatuCard.id 배열. UI·vision·DB 가 같은 키를 쓴다. */
-    cards: jsonb('cards').notNull(),
-    rankLabel: text('rank_label'),
-    rankScore: integer('rank_score'),
-    source: handSource('source').notNull().default('manual'),
-    confidence: numeric('confidence', { precision: 4, scale: 3 }),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  },
-  (table) => [unique('hand_records_round_user_uq').on(table.roundId, table.userId)],
 )
