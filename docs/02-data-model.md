@@ -6,7 +6,7 @@
 | Audience | engineering / reviewers |
 | Status | draft |
 | Source of truth | this document (테이블·관계·RLS 원칙) |
-| Last reviewed | 2026-07-22 |
+| Last reviewed | 2026-07-23 |
 
 구현 스키마는 `drizzle/schema.ts`가 소유한다. RLS·트리거·`keep_alive`·`kkeutbal_app` 권한은
 Supabase 프로젝트에 3개 마이그레이션으로 적용돼 있다: `init_schema`(drizzle 생성 DDL),
@@ -74,9 +74,6 @@ Supabase 프로젝트에 3개 마이그레이션으로 적용돼 있다: `init_s
 
 ```mermaid
 erDiagram
-    users ||--o{ group_members : "속함(미사용)"
-    groups ||--o{ group_members : "보유(미사용)"
-    groups ||--o{ rooms : "개최(선택)"
     users ||--o{ rooms : "host"
     rooms ||--o{ room_members : "참가"
     users ||--o{ room_members : "참가"
@@ -84,10 +81,8 @@ erDiagram
     rooms ||--o{ buy_ins : "바이인"
     rooms ||--o{ chip_ledger : "칩 원장"
     rounds ||--o{ bet_actions : "베팅"
-    rounds ||--o{ hand_records : "손패(미사용)"
     rounds ||--o{ chip_ledger : "정산"
     users ||--o{ bet_actions : "행위자"
-    users ||--o{ hand_records : "소유(미사용)"
 
     users {
         uuid id PK
@@ -96,20 +91,9 @@ erDiagram
         text avatar_url
         timestamptz created_at
     }
-    groups {
-        uuid id PK
-        text name
-        uuid owner_id FK
-    }
-    group_members {
-        uuid group_id FK
-        uuid user_id FK
-        text role
-    }
     rooms {
         uuid id PK
         text code UK
-        uuid group_id FK "nullable"
         uuid host_id FK
         text name
         text game_type
@@ -172,16 +156,6 @@ erDiagram
         uuid created_by FK
         timestamptz created_at
     }
-    hand_records {
-        uuid id PK
-        uuid round_id FK
-        uuid user_id FK
-        jsonb cards
-        text rank_label
-        int rank_score
-        text source
-        numeric confidence
-    }
     keep_alive {
         bigint id PK
         text note
@@ -202,18 +176,11 @@ Authentik이 신원의 소유자다. 이 테이블은 미러이며 비밀번호�
   형태(`src/features/auth`). 같은 sub → 같은 계정. 로그인 시 upsert.
 - 표시 이름·아바타는 로컬 편집 가능(방에서 부르는 별명).
 
-### `groups` / `group_members` — 스키마만 존재, 미사용
-
-누적 랭킹 범위 단위로 설계됐으나 애플리케이션 코드 어디에서도 읽거나 쓰지 않는다
-(`src/features` 전체에 `groups`/`groupMembers` import 없음). `rooms.group_id`는 nullable이라
-지금은 항상 null로 남는다. 사용을 시작하려면 이 문서의 Open Questions 항목을 먼저 정리한다.
-
 ### `rooms`
 
 - `code` — 6자 대문자+숫자 입장 코드.
 - `name` — 방 표시 이름.
-- `group_id` — nullable. 위 사유로 현재 항상 null.
-- `game_type` — `seotda` | `gostop`.
+- `game_type` — `seotda` | `gostop` | `poker`.
 - `status` — `waiting` | `playing` | `settled` | `closed`.
 - `input_mode` — `trust`(즉시 반영) | `approval`(딜러 승인 필요). `host`/대리 입력하는
   `dealer`는 `approval` 모드에서도 자기 자신의 액션은 즉시 확정된다(`placeBet`의
@@ -264,11 +231,13 @@ append-only. UPDATE·DELETE는 트리거로 원천 차단한다(아래 "원장 �
 - `chip_ledger`에 `reason='buy_in'` 행을 함께 남긴다(`addBuyIn`이 같은 트랜잭션에서 두 INSERT를
   수행).
 
-### `hand_records` — 스키마만 존재, 미사용
+### 제거된 테이블 — `groups` / `group_members` / `hand_records` (2026-07-23)
 
-족보 판독 기록을 남기도록 설계됐으나 `jokbo-advisor` 기능은 현재 이 테이블에 쓰지 않는다
-(`src/features/jokbo-advisor`에 `handRecords` import 없음). Vision 인식 결과는 화면에서 카드
-선택 상태로만 쓰이고 DB에 저장되지 않는다 — 자세한 내용은 `05-jokbo-advisor.md`.
+세 테이블 모두 스키마에만 존재하고 어떤 코드도 읽거나 쓰지 않아 제거했다
+(`drizzle/migrations/0001_silent_moondragon.sql` — `rooms.group_id` 컬럼과 `hand_source`
+enum 포함). 이 결정으로 누적 랭킹은 **전역 사용자 단위로 확정**됐고, Advisor 판독 결과는
+**저장하지 않는 것이 확정 동작**이다. 분기 근거·재검토 트리거는 `docs/design-decisions/`
+001이 소유한다.
 
 ### `keep_alive`
 
@@ -289,7 +258,6 @@ REST INSERT 한 행 뒤 7일 지난 행을 DELETE한다. 이 워크플로만 `an
 | `chip_ledger(room_id, created_at)` | 원장 타임라인 |
 | `rounds(room_id, seq)` unique | 판 순서 · 충돌 판정 |
 | `bet_actions(round_id, seq)` | 판 내 액션 순서 |
-| `hand_records(round_id, user_id)` unique | 판당 1인 1손패 (미사용 테이블) |
 | `buy_ins(room_id, user_id)` | 방·사용자별 바이인 합계 |
 
 ## RLS 원칙
@@ -305,15 +273,16 @@ Supabase 테이블 API를 직접 호출하는 가상의 경로다.** 실제 앱 
 | 테이블 | SELECT (authenticated) | INSERT (authenticated) | UPDATE/DELETE (authenticated) | anon |
 |--------|--------|--------|----------------|------|
 | `users` | 본인 + 같은 방 참가자 | — | 본인만 | 없음 |
-| `groups` / `group_members` | 소유자/멤버 | 소유자 자신 | owner만 | 없음 |
 | `rooms` | 참가자 | host 본인 | host만 | 없음 |
 | `room_members` | 같은 방 참가자 | 본인 입장 또는 host | host만 | 없음 |
 | `rounds` | 방 참가자 | host/dealer | host/dealer | 없음 |
 | `bet_actions` | 방 참가자 | 본인 또는 host/dealer(대리) | host/dealer | 없음 |
 | `buy_ins` | 방 참가자 | 본인 또는 host/dealer | 정책 없음(불가) | 없음 |
 | `chip_ledger` | 방 참가자 | **정책 없음(불가)** | **정책 없음(불가)** | 없음 |
-| `hand_records` | 본인, 판 종료 후 방 참가자 | 본인 | 본인, 판 종료 전까지 | 없음 |
 | `keep_alive` | — | — | — | **select/insert/delete 전부 허용** |
+
+`groups`/`group_members`/`hand_records` 정책은 2026-07-23 테이블 제거(CASCADE)와 함께
+소멸했다. `0001_init_rls.sql`의 해당 정책 정의는 이미 적용된 이력으로만 남는다.
 
 `kkeutbal_app`은 위 표와 무관하게 `bypassrls`로 전 테이블 SELECT/INSERT/UPDATE/DELETE 권한을
 가진다(`information_schema.role_table_grants` 확인). `session_standings` 뷰도 동일하게
@@ -349,10 +318,10 @@ UPDATE/DELETE 시도는 예외를 던진다. 정정은 `reverted_of`로 원본�
 - `session_standings(room_id)` — `chip_ledger` 합계 대비 `buy_ins` 합계로 방 참가자별
   `balance`/`buy_in_total`/`net`을 낸다. `security_invoker=true`. **현재 어떤 기능도 조회하지
   않는다** — `game/queries.ts`는 잔액을 이 뷰가 아니라 `chip_ledger`를 직접 집계해서 얻는다.
-- `cumulative_standings(group_id)` — 문서화만 돼 있고 구현되지 않았다. `groups`가 미사용인
-  현재로선 만들 수 없다.
+- `cumulative_standings(group_id)` — 폐기. `groups` 제거(2026-07-23)로 그룹 스코프 자체가
+  없어졌다. 누적 랭킹은 `getCumulativeRanking()`이 전역 사용자 단위로 집계한다.
 
-지표 정의는 `06-features-ranking-budget-betting.md`가 소유한다.
+지표 정의는 구현(`src/features/ranking/queries.ts`)이 소유한다.
 
 ## 불변식
 
@@ -369,8 +338,6 @@ UPDATE/DELETE 시도는 예외를 던진다. 정정은 `reverted_of`로 원본�
 
 ## Open Questions
 
-- [ ] `groups`/`group_members`/`hand_records`를 실제로 쓸지, 아니면 스키마에서 걷어낼지 결정
-      필요. 미사용 테이블이 계속 늘어나면 스키마와 실제 기능의 괴리가 커진다.
 - [ ] `authenticated` 대상 RLS 정책과 `realtime.messages` private 채널 정책을 실제로 쓸
       계획(Auth.js↔Supabase JWT 브리지)이 있는지, 없다면 문서에서 "미래 대비"로 명시할지
       결정 필요.

@@ -6,30 +6,41 @@
 | Audience | engineering / operators / reviewers |
 | Status | active |
 | Source of truth | this document (인증 흐름·역할 권한·보안 경계) |
-| Last reviewed | 2026-07-22 |
+| Last reviewed | 2026-07-23 |
 
 ## Context
 
-전체 로그인이 전제다. 운영자가 Authentik을 운영 중이면 그쪽으로 신원을 일원화하되, 개발·초기 배포
-환경에서는 이름만으로 로그인하는 게스트 경로를 둔다. 인가는 DB 레벨 RLS가 아니라 **Server Action이
-매 호출마다 재검사**하는 방식으로 강제한다 — 이유는 아래 "DB 접근 경로" 참조.
+전체 로그인이 전제다. 1차 신원은 **내부 계정**(아이디·비밀번호·이름·전화번호)이고, 운영자가
+Authentik을 운영 중이면 SSO 로그인 시 아이디 또는 전화번호가 일치하는 내부 계정으로 자동
+연동(병합)한다. 인가는 DB 레벨 RLS가 아니라 **Server Action이 매 호출마다 재검사**하는 방식으로
+강제한다 — 이유는 아래 "DB 접근 경로" 참조.
 
-## 인증 흐름
+## 인증 흐름 (2026-07-23 개편)
 
-두 provider가 조건부로 공존한다. 활성화 여부는 env 값 존재로 결정되고, `src/lib/auth.ts`가
-런타임에 provider 배열을 구성한다.
+4개 로그인 경로가 조건부로 공존한다. `src/lib/auth.ts`가 런타임에 provider 배열을 구성한다.
 
 ```
+password (항상 활성)
+  → 내부 계정. 회원가입은 features/auth/actions.ts registerAndLogin
+  → users.username + bcrypt(password_hash). sub = `local:{username}`
+
 AUTH_AUTHENTIK_ID + AUTH_AUTHENTIK_SECRET + AUTH_AUTHENTIK_ISSUER 모두 설정
   → Authentik OIDC provider 활성 (hasAuthentik())
+  → 자동 연동: sub 일치 행이 없으면 preferred_username/phone_number 클레임으로
+    내부 계정을 찾아 authentik_sub 를 교체해 병합 (resolveProviderUser)
+
+guest-token (항상 활성)
+  → 관리자가 발급한 8자 토큰 + 이름 → sub = `guest:{tokenId}:{name}`
+  → 같은 (토큰, 이름) = 같은 계정. 토큰은 만료·회수 가능 (guest_tokens 테이블)
 
 AUTH_DEV_LOGIN=true
-  → dev-login Credentials provider 활성 (hasDevLogin())
+  → dev-login Credentials provider 활성 (hasDevLogin()) — 개발 전용
   → 이름(1~20자)만 입력 → sub = `dev:{name.toLowerCase()}`
-  → 같은 이름 = 같은 계정 (기기를 바꿔도 전적 유지)
 ```
 
-두 provider는 동시에 켤 수 있다. 로그인 화면은 활성 provider만 노출한다.
+로그인 화면은 활성 provider만 노출한다. 관리자(`users.is_admin` 또는 `AUTH_ADMIN_USERNAMES`
+부트스트랩 목록)는 `/admin`에서 게스트 토큰 발급·회수와 관리자 지정을 한다
+(`features/auth/admin-actions.ts`, 게이트는 `features/auth/roles.ts` `isAdminUser`).
 
 ```
 브라우저 ──► Next.js (Auth.js v5)
@@ -213,13 +224,15 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 
 공통 규칙:
 
-- `host`는 방 생성자. `setMemberRole`로는 `host` 역할 자체를 바꿀 수 없다(`target.role === 'host'`
-  이면 거부) — host 위임 경로는 코드에 없다.
+- `host`는 방 생성자이지만 위임할 수 있다 — `transferHost`(`member-actions.ts`)가 현재
+  host 를 player 로 내리고 대상을 host 로 올린다. `setMemberRole`로는 `host` 역할 자체를
+  바꿀 수 없다(`target.role === 'host'`이면 거부).
 - `dealer`는 여러 명일 수 있다. 승인 요청 시 처리한 딜러가 먼저 락을 잡으면 나머지는
   "이미 처리된 액션입니다"로 실패한다(`approveBet`의 락 후 재조회).
 - 손패 비공개 정책(타인 손패는 판 종료 전 조회 불가)은 `hand_records` 테이블 RLS 정책으로
-  설계되어 있으나(`0001_init_rls.sql`), **`hand_records` 저장 자체가 구현되어 있지 않다**
-  (jokbo-advisor는 인식 결과를 저장하지 않고 화면에만 프리필한다). 이 정책은 현재 죽은 코드다.
+  설계됐었으나, **`hand_records` 테이블 자체가 2026-07-23 제거됐다**(판독 결과를 저장하지
+  않는 것이 확정 동작). 정책은 테이블 제거와 함께 소멸했고,
+  `0001_init_rls.sql`의 정의는 적용 이력으로만 남는다.
 
 권한 검사는 **UI 게이팅과 Server Action 양쪽**에서 한다. UI에서 버튼을 숨기는 것은 편의이지
 보안이 아니다. 위 표의 모든 항목은 대응하는 Server Action이 세션 → 방 소속 → 역할 순으로
@@ -275,6 +288,7 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 - [ ] `addBuyIn`이 `observer` 역할의 본인 바이인을 명시적으로 막지 않는다 — 의도된 동작인지
       확인 필요.
 - [ ] Vision 인식 호출에 rate limit이 없다 — 도입 여부와 방식(사용자당/방당) 결정 필요.
-- [ ] RLS 정책(특히 `hand_records`, realtime private 채널 정책)이 실제로 평가되지 않는 상태로
-      유지할지, 코드 경로를 정책에 맞출지, 아니면 미사용 정책을 정리할지 결정 필요.
+- [ ] realtime private 채널 정책 등 실제로 평가되지 않는 RLS 정책을 유지할지, 코드 경로를
+      정책에 맞출지, 아니면 정리할지 결정 필요 (`hand_records` 정책은 2026-07-23 테이블
+      제거로 해소됨).
 - [ ] Authentik 실등록 시점과 절차 — 스코프 문서(`README.md`) 우선순위 참조.
