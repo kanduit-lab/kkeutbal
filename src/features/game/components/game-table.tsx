@@ -206,39 +206,49 @@ export function GameTable({
       <div className="absolute inset-[7%] rounded-[50%] border-8 border-[#5a3a1e] bg-[radial-gradient(ellipse_at_center,#1d6b45_0%,#145233_55%,#0e3d26_100%)] shadow-[inset_0_0_40px_rgb(0_0_0/0.55),0_6px_24px_rgb(0_0_0/0.45)]" />
       <div className="pointer-events-none absolute inset-[12%] rounded-[50%] border border-white/10" />
 
-      {/* 중앙 팟 */}
-      <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 text-center">
-        <div className="mx-auto mb-1.5 flex h-10 items-end justify-center">
-          {potChips.map((chip, i) => (
-            <span
-              key={i}
-              className={clsx(
-                'block rounded-full border-2 border-dashed',
-                pot > 0 && i === potChips.length - 1 && 'pot-drop',
-              )}
-              style={{
-                width: 24,
-                height: 24,
-                marginLeft: i === 0 ? 0 : -10,
-                backgroundColor: chip.bg,
-                borderColor: chip.rim,
-                boxShadow: '0 1px 2px rgb(0 0 0 / 0.5)',
-              }}
-            />
-          ))}
+      {/* 중앙 팟 — 칩 더미와 금액을 한 덩어리로 읽히게 붙여 둔다. */}
+      <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-end gap-3 text-center">
+        {/*
+         * 칩은 세로로 겹쳐 쌓는다 — 가로로 늘어놓으면 '줄'로 보이고 판돈이 쌓인 느낌이 안 난다.
+         * 아래가 먼저 깔리고 위로 얹히도록 column-reverse 로 그린 뒤, 맨 위(마지막) 칩에만
+         * pot-drop 을 걸어 새로 떨어진 칩처럼 보이게 한다.
+         */}
+        {potChips.length > 0 ? (
+          <div className="flex flex-col-reverse items-center">
+            {potChips.map((chip, i) => (
+              <span
+                key={i}
+                className={clsx(
+                  'block shrink-0 rounded-full border-2 border-dashed',
+                  pot > 0 && i === potChips.length - 1 && 'pot-drop',
+                )}
+                style={{
+                  width: 30,
+                  height: 30,
+                  marginBottom: i === 0 ? 0 : -20,
+                  backgroundColor: chip.bg,
+                  borderColor: chip.rim,
+                  boxShadow: '0 2px 3px rgb(0 0 0 / 0.55)',
+                }}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        <div>
+          <p
+            className={clsx(
+              'gilt font-brush font-black leading-none tabular-nums drop-shadow-[0_2px_8px_rgb(0_0_0/0.6)]',
+              // 자릿수가 길면 한 단계 줄여 테이블 밖으로 넘치지 않게 한다.
+              potText.length >= 7 ? 'text-5xl sm:text-6xl' : 'text-6xl sm:text-7xl',
+            )}
+          >
+            {potText}
+          </p>
+          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.3em] text-white/50">
+            {d.table.potLabel}
+          </p>
         </div>
-        <p
-          className={clsx(
-            'gilt font-brush font-black leading-none tabular-nums',
-            // 자릿수가 길면 한 단계 줄여 테이블 밖으로 넘치지 않게 한다.
-            potText.length >= 7 ? 'text-4xl sm:text-5xl' : 'text-5xl sm:text-6xl',
-          )}
-        >
-          {potText}
-        </p>
-        <p className="text-[11px] font-medium uppercase tracking-[0.3em] text-white/50">
-          {d.table.potLabel}
-        </p>
       </div>
 
       {/* 칩 플라이 */}

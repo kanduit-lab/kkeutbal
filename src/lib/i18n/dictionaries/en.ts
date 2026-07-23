@@ -55,7 +55,7 @@ export const en: Dictionary = {
     seotda: {
       check: 'Check',
       call: 'Call',
-      raise: '올려',
+      raise: 'Raise',
       fold: '다이',
       allin: 'All-in',
     },
@@ -201,7 +201,7 @@ export const en: Dictionary = {
     beforeFirstBet: 'No bets yet',
     raiseAmount: 'Raise amount',
     minRaise: 'Min {n}',
-    confirmAction: 'Confirm {label}',
+    confirmAction: '{label}',
     noRound: 'Betting opens when the dealer starts a round',
     foldedGate: 'You declared 다이 this round — wait for the next one',
     allinGate: 'All-in complete',

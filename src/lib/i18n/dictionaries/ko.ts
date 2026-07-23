@@ -63,7 +63,7 @@ export const ko = {
     seotda: {
       check: '체크',
       call: '콜',
-      raise: '올려',
+      raise: '레이즈',
       fold: '다이',
       allin: '올인',
     },
@@ -220,7 +220,8 @@ export const ko = {
     beforeFirstBet: '첫 베팅 전',
     raiseAmount: '레이즈 금액',
     minRaise: '최소 {n}',
-    confirmAction: '{label} 확정',
+    /** 액션 확정 버튼 — 동작 이름만 단독으로 보여준다. */
+    confirmAction: '{label}',
     noRound: '딜러가 판을 깔면 베팅할 수 있어요',
     foldedGate: '이번 판은 다이했어요 — 다음 판에 다시 들어와요',
     allinGate: '올인 완료',
