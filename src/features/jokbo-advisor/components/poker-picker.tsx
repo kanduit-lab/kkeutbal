@@ -2,13 +2,13 @@
 
 import { clsx } from 'clsx'
 import { useMemo } from 'react'
+import { isRedPokerSuit, PokerCardView } from '@/components/poker-card'
 import { POKER_DECK, SUIT_LABELS } from '@/features/poker/cards'
 import type { PokerCard, PokerSuit } from '@/features/poker/cards'
 
 const SUIT_ORDER: readonly PokerSuit[] = ['s', 'h', 'd', 'c']
-const RED_SUITS: ReadonlySet<PokerSuit> = new Set(['h', 'd'])
 
-/** HwatuCardView 와 톤을 맞춘 트럼프 카드 타일. 화투 그림이 없어 라벨 텍스트로만 표시한다. */
+/** HwatuCardView 와 톤을 맞춘 트럼프 카드 타일 그리드 — 카드 얼굴 렌더링은 PokerCardView 에 위임한다. */
 export function PokerPicker({
   selected,
   maxSelect,
@@ -35,12 +35,13 @@ export function PokerPicker({
           <span
             className={clsx(
               'w-6 shrink-0 pt-1 text-center text-base font-black',
-              RED_SUITS.has(suit) ? 'text-red-500' : 'text-text',
+              isRedPokerSuit(suit) ? 'text-accent' : 'text-text',
             )}
           >
             {SUIT_LABELS[suit]}
           </span>
-          <div className="grid flex-1 grid-cols-7 gap-1.5">
+          {/* auto-fill + minmax(48px,…) — 화면 폭에 맞춰 열 수를 자동 조절하면서 터치 타겟은 항상 48px 이상 유지 */}
+          <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(48px,1fr))] gap-1.5">
             {cards.map((card) => {
               const isSelected = selected.has(card.id)
               const isFull = !isSelected && selected.size >= maxSelect
@@ -52,28 +53,13 @@ export function PokerPicker({
                   onClick={() => onToggle(card.id)}
                   className={clsx('flex justify-center rounded-md transition-opacity', isFull && 'opacity-30')}
                 >
-                  <PokerCardTile card={card} selected={isSelected} />
+                  <PokerCardView card={card} size="xs" selected={isSelected} />
                 </button>
               )
             })}
           </div>
         </div>
       ))}
-    </div>
-  )
-}
-
-function PokerCardTile({ card, selected }: { card: PokerCard; selected: boolean }) {
-  const red = RED_SUITS.has(card.suit)
-  return (
-    <div
-      className={clsx(
-        'flex aspect-[2/3] w-full items-center justify-center rounded-md border-2 border-black/80 bg-[#fbf3e3] text-[11px] font-black shadow-sm',
-        red ? 'text-red-600' : 'text-black',
-        selected && 'ring-2 ring-accent ring-offset-1 ring-offset-bg',
-      )}
-    >
-      {card.label}
     </div>
   )
 }
