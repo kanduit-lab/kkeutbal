@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { approveBet, rejectBet, revertBet } from '@/features/betting/actions'
 import { format, useDict } from '@/lib/i18n/client'
 import { closeRoom } from '../actions'
 import { endRound, startRound, voidRound } from '../round-actions'
 import type { BetActionView, RoomSnapshot } from '../types'
-import { Button, ConfirmDialog, Input, Panel, useModalBehavior } from '@/components/ui'
+import { Button, ConfirmDialog, Input, Panel } from '@/components/ui'
 import type { RunAction } from './shared'
+import { VoidRoundDialog, type VoidReason } from './dealer-panel-void-dialog'
+import { PendingApprovalQueue } from './dealer-panel-pending-queue'
+import { RevertList } from './dealer-panel-revert-list'
 import {
   GostopScoreForm,
   gostopEffectiveScore,
@@ -17,18 +19,6 @@ import {
 } from './gostop-score-form'
 
 type PanelMode = 'idle' | 'pickWinner'
-
-/**
- * 무효 사유 프리셋 — value 는 서버 voidRound reason 과 round.voided 브로드캐스트에
- * 실리는 정본(한국어) 값, labelKey 는 로케일별 표시용. 저장·중계되는 값은 보는 사람의
- * 로케일과 무관해야 하므로 분리한다.
- */
-const VOID_REASONS = [
-  { value: '재경기', labelKey: 'voidReasonRematch' },
-  { value: '오입력', labelKey: 'voidReasonMisentry' },
-  { value: '패 노출', labelKey: 'voidReasonExposed' },
-] as const
-type VoidReason = (typeof VOID_REASONS)[number]['value']
 
 /**
  * 딜러/방장 전용 컨트롤 — 판 시작·종료·무효, 승인 대기열, 정정, 세션 정산.
@@ -55,8 +45,6 @@ export function DealerPanel({
   /** 무효 확인 대상 — 'current' 진행 중 판, 'last' 마지막으로 끝난 판(승자 오입력 복구). */
   const [voidTarget, setVoidTarget] = useState<'current' | 'last' | null>(null)
   const [voidReason, setVoidReason] = useState<VoidReason>('재경기')
-  const [rejectingId, setRejectingId] = useState<string | null>(null)
-  const [rejectReason, setRejectReason] = useState('')
   const [isPending, startTransition] = useTransition()
 
   const roomId = snapshot.room.id
@@ -298,247 +286,18 @@ export function DealerPanel({
       />
 
       {/* ── 승인 대기열 ── */}
-      {pendingActions.length > 0 ? (
-        <div className="space-y-1.5">
-          <p className="text-sm font-bold text-warn">
-            {format(d.dealer.pendingCount, { n: pendingActions.length })}
-          </p>
-          {pendingActions.map((action) => (
-            <div key={action.id} className="rounded-xl bg-bg-deep/60 px-3 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm">
-                  <span className="font-medium">{nameOf(action.userId)}</span>{' '}
-                  <span className="font-bold">{betLabels[action.action]}</span>{' '}
-                  {action.amount > 0 ? (
-                    <span className="tabular-nums text-warn">{action.amount.toLocaleString()}</span>
-                  ) : null}
-                </span>
-                <span className="flex gap-1.5">
-                  <Button
-                    size="md"
-                    variant="win"
-                    disabled={isPending}
-                    onClick={() =>
-                      run(() =>
-                        runAction(
-                          () => approveBet({ actionId: action.id }),
-                          () => ({
-                            event: 'bet.approved',
-                            payload: { actionId: action.id, approvedBy: selfId },
-                          }),
-                        ),
-                      )
-                    }
-                  >
-                    {d.dealer.approve}
-                  </Button>
-                  <Button
-                    size="md"
-                    variant="danger"
-                    disabled={isPending}
-                    onClick={() => {
-                      setRejectingId(rejectingId === action.id ? null : action.id)
-                      setRejectReason('')
-                    }}
-                  >
-                    {d.dealer.reject}
-                  </Button>
-                </span>
-              </div>
-              {rejectingId === action.id ? (
-                <div className="mt-2 flex gap-1.5">
-                  <Input
-                    value={rejectReason}
-                    onChange={(event) => setRejectReason(event.target.value)}
-                    placeholder={d.dealer.rejectReasonPlaceholder}
-                    maxLength={200}
-                    className="min-h-11 text-base"
-                  />
-                  <Button
-                    size="md"
-                    variant="danger"
-                    disabled={isPending || rejectReason.trim().length === 0}
-                    disabledReason={
-                      rejectReason.trim().length === 0 ? d.dealer.reasonRequired : undefined
-                    }
-                    onClick={() =>
-                      run(async () => {
-                        const reason = rejectReason.trim()
-                        const success = await runAction(
-                          () => rejectBet({ actionId: action.id, reason }),
-                          () => ({
-                            event: 'bet.rejected',
-                            payload: { actionId: action.id, rejectedBy: selfId, reason },
-                          }),
-                        )
-                        if (success) setRejectingId(null)
-                      })
-                    }
-                  >
-                    {d.common.confirm}
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          ))}
-        </div>
-      ) : null}
+      <PendingApprovalQueue
+        pendingActions={pendingActions}
+        selfId={selfId}
+        runAction={runAction}
+        nameOf={nameOf}
+        betLabels={betLabels}
+      />
 
       {/* ── 확정 액션 정정 ── */}
       <RevertList snapshot={snapshot} selfId={selfId} runAction={runAction} />
 
       <p className="text-xs text-muted">{d.dealer.memberActionsHint}</p>
     </Panel>
-  )
-}
-
-/**
- * 판 무효 확인 다이얼로그 — ConfirmDialog 는 본문 슬롯이 없어 같은 레이아웃으로 별도 구현.
- * 사유 칩(재경기·오입력·패 노출)을 골라 확정한다. 기본값은 재경기.
- */
-function VoidRoundDialog({
-  open,
-  title,
-  body,
-  reason,
-  onReasonChange,
-  onConfirm,
-  onClose,
-}: {
-  open: boolean
-  title: string
-  body: string
-  reason: VoidReason
-  onReasonChange: (reason: VoidReason) => void
-  onConfirm: () => void
-  onClose: () => void
-}) {
-  const { d } = useDict()
-  const panelRef = useModalBehavior(open, onClose)
-  if (!open) return null
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-    >
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="lacquer w-full max-w-sm rounded-2xl p-5 focus:outline-none"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <p className="font-bold">{title}</p>
-        <p className="mt-1.5 text-sm text-muted">{body}</p>
-        <div
-          className="mt-3 grid grid-cols-3 gap-2"
-          role="group"
-          aria-label={d.dealer.voidReasonAria}
-        >
-          {VOID_REASONS.map((item) => (
-            <Button
-              key={item.value}
-              variant={reason === item.value ? 'primary' : 'surface'}
-              className={reason === item.value ? undefined : 'border border-white/10'}
-              pressed={reason === item.value}
-              onClick={() => onReasonChange(item.value)}
-            >
-              {d.dealer[item.labelKey]}
-            </Button>
-          ))}
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <Button variant="ghost" onClick={onClose}>
-            {d.common.cancel}
-          </Button>
-          <Button variant="danger" onClick={onConfirm}>
-            {d.dealer.voidConfirm}
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function RevertList({
-  snapshot,
-  selfId,
-  runAction,
-}: {
-  snapshot: RoomSnapshot
-  selfId: string
-  runAction: RunAction
-}) {
-  const { d } = useDict()
-  const [isPending, startTransition] = useTransition()
-  const [revertTarget, setRevertTarget] = useState<BetActionView | null>(null)
-  const accepted = snapshot.actions.filter((action) => action.status === 'accepted').slice(-5)
-  if (accepted.length === 0) return null
-
-  const betLabels = d.bet[snapshot.room.gameType === 'poker' ? 'poker' : 'seotda']
-  const nameOf = (userId: string) =>
-    snapshot.members.find((member) => member.userId === userId)?.displayName ?? '?'
-
-  const revertTitle = revertTarget
-    ? format(d.dealer.revertConfirmTitle, {
-        target: format(d.dealer.revertTarget, {
-          name: nameOf(revertTarget.userId),
-          label: betLabels[revertTarget.action],
-          amount: revertTarget.amount > 0 ? revertTarget.amount.toLocaleString() : '',
-        }).trim(),
-      })
-    : ''
-
-  return (
-    <>
-      <details className="rounded-xl bg-bg-deep/60 px-3 py-2">
-        <summary className="cursor-pointer text-sm font-medium text-muted">
-          {d.dealer.revertSection}
-        </summary>
-        <div className="mt-2 space-y-1.5">
-          {accepted.map((action) => (
-            <div key={action.id} className="flex items-center justify-between text-sm">
-              <span>
-                #{action.seq} {nameOf(action.userId)} {betLabels[action.action]}{' '}
-                {action.amount > 0 ? action.amount.toLocaleString() : ''}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={isPending}
-                onClick={() => setRevertTarget(action)}
-              >
-                {d.dealer.revert}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </details>
-      <ConfirmDialog
-        open={revertTarget !== null}
-        title={revertTitle}
-        body={d.dealer.revertConfirmBody}
-        confirmLabel={d.dealer.revert}
-        cancelLabel={d.common.cancel}
-        onConfirm={() => {
-          const target = revertTarget
-          setRevertTarget(null)
-          if (!target || isPending) return
-          startTransition(async () => {
-            await runAction(
-              // reason 은 원장·브로드캐스트에 저장되는 정본 값 — 로케일과 무관하게 한국어 유지.
-              () => revertBet({ actionId: target.id, reason: '딜러 정정' }),
-              () => ({
-                event: 'bet.reverted',
-                payload: { actionId: target.id, revertedBy: selfId, reason: '딜러 정정' },
-              }),
-            )
-          })
-        }}
-        onClose={() => setRevertTarget(null)}
-      />
-    </>
   )
 }

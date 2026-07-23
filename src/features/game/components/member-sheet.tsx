@@ -1,76 +1,17 @@
 'use client'
 
-import { clsx } from 'clsx'
-import { useMemo, useRef, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import type { ReactNode } from 'react'
-import { placeBet } from '@/features/betting/actions'
-import { addBuyIn, undoLastBuyIn } from '@/features/budget/actions'
+import { undoLastBuyIn } from '@/features/budget/actions'
 import { format, useDict } from '@/lib/i18n/client'
-import { leaveRoom, removeMember, setMemberRole, transferHost } from '../member-actions'
-import type { BetActionKind, MemberView, RoomSnapshot } from '../types'
-import {
-  Avatar,
-  Badge,
-  Button,
-  ConfirmDialog,
-  Stepper,
-  useModalBehavior,
-  useToast,
-} from '@/components/ui'
+import { leaveRoom, removeMember, transferHost } from '../member-actions'
+import type { MemberView, RoomSnapshot } from '../types'
+import { Avatar, Badge, Button, ConfirmDialog, useModalBehavior, useToast } from '@/components/ui'
 import type { RunAction } from './shared'
-
-/** 역할 선택지 — 라벨은 사전(d.roles)에서 가져온다. */
-const ROLE_OPTIONS = [
-  { role: 'dealer', emoji: '🎩' },
-  { role: 'player', emoji: '🎮' },
-  { role: 'observer', emoji: '👀' },
-] as const
-
-/** 시트 내부 섹션 — 아이콘·제목·힌트가 있는 카드. */
-function Section({
-  icon,
-  title,
-  hint,
-  children,
-}: {
-  icon: string
-  title: string
-  hint?: string
-  children: ReactNode
-}) {
-  return (
-    <section className="space-y-2.5 rounded-2xl border border-white/5 bg-bg-deep/50 p-4">
-      <div>
-        <p className="flex items-center gap-1.5 text-sm font-bold">
-          <span aria-hidden>{icon}</span>
-          {title}
-        </p>
-        {hint ? <p className="mt-0.5 text-xs text-muted">{hint}</p> : null}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function StatTile({
-  label,
-  value,
-  valueClass,
-}: {
-  label: string
-  value: string
-  valueClass?: string
-}) {
-  return (
-    <div className="rounded-xl bg-bg-deep/60 px-2 py-2.5 text-center">
-      <p className="text-[11px] font-medium text-muted">{label}</p>
-      <p className={clsx('mt-0.5 text-lg font-black tabular-nums leading-tight', valueClass)}>
-        {value}
-      </p>
-    </div>
-  )
-}
+import { StatTile } from './member-sheet-parts'
+import { ProxyBetSection } from './member-sheet-proxy-bet'
+import { BuyInSection } from './member-sheet-buy-in'
+import { RoleSection } from './member-sheet-role'
 
 /**
  * 좌석 탭 → 멤버 시트. 권한별로 노출이 다르다:
@@ -97,20 +38,10 @@ export function MemberSheet({
   const { d } = useDict()
   const [isPending, startTransition] = useTransition()
   const startingChips = snapshot.room.startingChips
-  const [buyInAmount, setBuyInAmount] = useState(startingChips)
-  const [raiseOpen, setRaiseOpen] = useState(false)
-  const [raiseAmount, setRaiseAmount] = useState(snapshot.room.baseBet)
   const [transferOpen, setTransferOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [undoOpen, setUndoOpen] = useState(false)
-
-  /**
-   * 대리 베팅 멱등키 — 같은 의도(대상·액션·금액)의 재시도는 같은 actionId 로 재전송한다.
-   * 타임아웃 후 재탭이 서버에 이중 기록되는 것을 placeBet 멱등 처리로 흡수하기 위함이다.
-   * 성공(확정 응답)하면 비우고, 실패는 타임아웃일 수 있어 키를 유지한다.
-   */
-  const proxyIntentRef = useRef<{ key: string; id: string } | null>(null)
 
   const anyConfirmOpen = transferOpen || removeOpen || leaveOpen || undoOpen
   const panelRef = useModalBehavior(true, () => {
@@ -127,14 +58,6 @@ export function MemberSheet({
   const round = snapshot.currentRound
   const net = member.balance - member.buyInTotal
 
-  const buyInPresets = useMemo(() => {
-    const half = Math.max(1, Math.round(startingChips / 2))
-    return [
-      { label: d.memberSheet.presetStartingChips, amount: startingChips },
-      { label: d.memberSheet.presetHalf, amount: half },
-    ]
-  }, [startingChips, d])
-
   const lastBet = useMemo(() => {
     const accepted = snapshot.actions.filter(
       (action) => action.status === 'accepted' && action.amount > 0,
@@ -147,39 +70,6 @@ export function MemberSheet({
     startTransition(async () => {
       const success = await task()
       if (success && closeAfter) onClose()
-    })
-  }
-
-  function proxyBet(action: BetActionKind, amount: number) {
-    const key = `${member.userId}:${action}:${amount}`
-    const intent =
-      proxyIntentRef.current?.key === key
-        ? proxyIntentRef.current
-        : { key, id: crypto.randomUUID() }
-    proxyIntentRef.current = intent
-    run(async () => {
-      const success = await runAction(
-        () =>
-          placeBet({
-            actionId: intent.id,
-            roomId: snapshot.room.id,
-            action,
-            amount,
-            targetUserId: member.userId,
-          }),
-        (data) => ({
-          event: 'bet.placed',
-          payload: {
-            actionId: data.action.id,
-            roundId: data.action.roundId,
-            action: data.action.action,
-            amount: data.action.amount,
-            seq: data.action.seq,
-          },
-        }),
-      )
-      if (success) proxyIntentRef.current = null
-      return success
     })
   }
 
@@ -237,186 +127,43 @@ export function MemberSheet({
           </div>
 
           {canProxy ? (
-            <Section
-              icon="🃏"
-              title={d.memberSheet.proxyTitle}
-              hint={`${d.memberSheet.proxyHint}${
-                lastBet > 0
-                  ? ` · ${format(d.memberSheet.toCallAmount, { n: lastBet.toLocaleString() })}`
-                  : ''
-              }`}
-            >
-              <div className="grid grid-cols-4 gap-2">
-                <Button
-                  variant="surface"
-                  className="border border-white/10"
-                  disabled={isPending || lastBet !== 0}
-                  disabledReason={lastBet !== 0 ? d.memberSheet.checkBlocked : undefined}
-                  onClick={() => proxyBet('check', 0)}
-                >
-                  {labels.check}
-                </Button>
-                <Button
-                  variant="win"
-                  className="flex-col gap-0"
-                  disabled={isPending || lastBet === 0 || member.balance < lastBet}
-                  disabledReason={
-                    lastBet === 0
-                      ? d.memberSheet.noBetToCall
-                      : member.balance < lastBet
-                        ? d.actionBar.insufficientBalance
-                        : undefined
-                  }
-                  onClick={() => proxyBet('call', lastBet)}
-                >
-                  <span>{labels.call}</span>
-                  {lastBet > 0 ? (
-                    <span className="tabular-nums text-[11px] leading-tight opacity-90">
-                      {lastBet.toLocaleString()}
-                    </span>
-                  ) : null}
-                </Button>
-                <Button
-                  variant={raiseOpen ? 'primary' : 'surface'}
-                  className={raiseOpen ? '' : 'border border-white/10'}
-                  disabled={isPending}
-                  onClick={() => setRaiseOpen((open) => !open)}
-                >
-                  {labels.raise}
-                </Button>
-                <Button variant="danger" disabled={isPending} onClick={() => proxyBet('fold', 0)}>
-                  {labels.fold}
-                </Button>
-              </div>
-              {raiseOpen ? (
-                <div className="flex gap-2">
-                  <Stepper
-                    value={raiseAmount}
-                    onChange={setRaiseAmount}
-                    min={1}
-                    max={member.balance}
-                    step={snapshot.room.baseBet}
-                    ariaLabel={d.memberSheet.proxyRaiseAria}
-                    className="flex-1"
-                  />
-                  <Button
-                    variant="primary"
-                    disabled={isPending || raiseAmount < 1 || raiseAmount > member.balance}
-                    onClick={() => proxyBet('raise', raiseAmount)}
-                  >
-                    {d.common.confirm}
-                  </Button>
-                </div>
-              ) : null}
-            </Section>
+            <ProxyBetSection
+              roomId={snapshot.room.id}
+              memberId={member.userId}
+              memberBalance={member.balance}
+              baseBet={snapshot.room.baseBet}
+              labels={labels}
+              lastBet={lastBet}
+              isPending={isPending}
+              run={run}
+              runAction={runAction}
+            />
           ) : null}
 
           {isDealer ? (
-            <Section icon="💰" title={d.memberSheet.buyInTitle} hint={d.memberSheet.buyInHint}>
-              <div className="grid grid-cols-2 gap-2">
-                {buyInPresets.map((preset) => (
-                  <Button
-                    key={preset.label}
-                    size="sm"
-                    variant={buyInAmount === preset.amount ? 'primary' : 'surface'}
-                    className={clsx('flex-col gap-0', buyInAmount !== preset.amount && 'border border-white/10')}
-                    onClick={() => setBuyInAmount(preset.amount)}
-                  >
-                    {preset.label}
-                    <span className="tabular-nums text-[11px] leading-tight opacity-80">
-                      +{preset.amount.toLocaleString()}
-                    </span>
-                  </Button>
-                ))}
-              </div>
-              <Stepper
-                value={buyInAmount}
-                onChange={setBuyInAmount}
-                min={1}
-                max={1_000_000}
-                step={snapshot.room.baseBet}
-                ariaLabel={d.memberSheet.buyInAria}
-              />
-              <Button
-                variant="win"
-                size="lg"
-                className="w-full"
-                disabled={isPending}
-                onClick={() =>
-                  run(() =>
-                    runAction(() =>
-                      addBuyIn({
-                        roomId: snapshot.room.id,
-                        amount: buyInAmount,
-                        targetUserId: member.userId,
-                      }),
-                    ),
-                  )
-                }
-              >
-                💰 {format(d.memberSheet.grant, { n: buyInAmount.toLocaleString() })}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full"
-                disabled={isPending || member.buyInTotal <= 0}
-                disabledReason={member.buyInTotal <= 0 ? d.memberSheet.nothingToUndo : undefined}
-                onClick={() => setUndoOpen(true)}
-              >
-                ↩ {d.memberSheet.undoLast}
-              </Button>
-            </Section>
+            <BuyInSection
+              roomId={snapshot.room.id}
+              memberId={member.userId}
+              memberBuyInTotal={member.buyInTotal}
+              startingChips={startingChips}
+              baseBet={snapshot.room.baseBet}
+              isPending={isPending}
+              run={run}
+              runAction={runAction}
+              onUndoRequest={() => setUndoOpen(true)}
+            />
           ) : null}
 
           {isHost && !isSelf && member.role !== 'host' ? (
-            <Section icon="🎭" title={d.memberSheet.roleTitle} hint={d.memberSheet.roleHint}>
-              <div className="grid grid-cols-3 gap-2">
-                {ROLE_OPTIONS.map((option) => {
-                  const selected = member.role === option.role
-                  return (
-                    <Button
-                      key={option.role}
-                      variant={selected ? 'primary' : 'surface'}
-                      className={clsx('min-h-16 flex-col gap-0.5', !selected && 'border border-white/10')}
-                      disabled={isPending}
-                      pressed={selected}
-                      onClick={() => {
-                        // 이미 선택된 역할 — 재전송할 것이 없다. 시각은 pressed 로 유지된다.
-                        if (selected) return
-                        run(() =>
-                          runAction(
-                            () =>
-                              setMemberRole({
-                                roomId: snapshot.room.id,
-                                targetUserId: member.userId,
-                                role: option.role,
-                              }),
-                            () => ({
-                              event: 'member.role_changed',
-                              payload: { userId: member.userId, role: option.role },
-                            }),
-                          ),
-                        )
-                      }}
-                    >
-                      <span className="text-xl leading-none" aria-hidden>
-                        {option.emoji}
-                      </span>
-                      <span className="text-sm">{d.roles[option.role]}</span>
-                    </Button>
-                  )
-                })}
-              </div>
-              <Button
-                variant="danger"
-                className="w-full"
-                disabled={isPending}
-                onClick={() => setTransferOpen(true)}
-              >
-                👑 {d.memberSheet.transferHost}
-              </Button>
-            </Section>
+            <RoleSection
+              roomId={snapshot.room.id}
+              memberId={member.userId}
+              memberRole={member.role}
+              isPending={isPending}
+              run={run}
+              runAction={runAction}
+              onTransferRequest={() => setTransferOpen(true)}
+            />
           ) : null}
 
           {showRemove ? (

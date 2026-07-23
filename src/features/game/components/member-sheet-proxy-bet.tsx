@@ -1,0 +1,154 @@
+'use client'
+
+import { useRef, useState } from 'react'
+import { placeBet } from '@/features/betting/actions'
+import { format, useDict } from '@/lib/i18n/client'
+import type { BetActionKind } from '../types'
+import { Button, Stepper } from '@/components/ui'
+import type { RunAction } from './shared'
+import { Section } from './member-sheet-parts'
+
+/**
+ * 대리 베팅 섹션 — 딜러가 멤버 대신 체크/콜/레이즈/폴드를 입력한다.
+ * MemberSheet 의 canProxy 게이팅 블록에서 그대로 옮겨왔다.
+ */
+export function ProxyBetSection({
+  roomId,
+  memberId,
+  memberBalance,
+  baseBet,
+  labels,
+  lastBet,
+  isPending,
+  run,
+  runAction,
+}: {
+  roomId: string
+  memberId: string
+  memberBalance: number
+  baseBet: number
+  labels: Record<BetActionKind, string>
+  lastBet: number
+  isPending: boolean
+  run: (task: () => Promise<boolean>, closeAfter?: boolean) => void
+  runAction: RunAction
+}) {
+  const { d } = useDict()
+  const [raiseOpen, setRaiseOpen] = useState(false)
+  const [raiseAmount, setRaiseAmount] = useState(baseBet)
+
+  /**
+   * 대리 베팅 멱등키 — 같은 의도(대상·액션·금액)의 재시도는 같은 actionId 로 재전송한다.
+   * 타임아웃 후 재탭이 서버에 이중 기록되는 것을 placeBet 멱등 처리로 흡수하기 위함이다.
+   * 성공(확정 응답)하면 비우고, 실패는 타임아웃일 수 있어 키를 유지한다.
+   */
+  const proxyIntentRef = useRef<{ key: string; id: string } | null>(null)
+
+  function proxyBet(action: BetActionKind, amount: number) {
+    const key = `${memberId}:${action}:${amount}`
+    const intent =
+      proxyIntentRef.current?.key === key
+        ? proxyIntentRef.current
+        : { key, id: crypto.randomUUID() }
+    proxyIntentRef.current = intent
+    run(async () => {
+      const success = await runAction(
+        () =>
+          placeBet({
+            actionId: intent.id,
+            roomId,
+            action,
+            amount,
+            targetUserId: memberId,
+          }),
+        (data) => ({
+          event: 'bet.placed',
+          payload: {
+            actionId: data.action.id,
+            roundId: data.action.roundId,
+            action: data.action.action,
+            amount: data.action.amount,
+            seq: data.action.seq,
+          },
+        }),
+      )
+      if (success) proxyIntentRef.current = null
+      return success
+    })
+  }
+
+  return (
+    <Section
+      icon="🃏"
+      title={d.memberSheet.proxyTitle}
+      hint={`${d.memberSheet.proxyHint}${
+        lastBet > 0
+          ? ` · ${format(d.memberSheet.toCallAmount, { n: lastBet.toLocaleString() })}`
+          : ''
+      }`}
+    >
+      <div className="grid grid-cols-4 gap-2">
+        <Button
+          variant="surface"
+          className="border border-white/10"
+          disabled={isPending || lastBet !== 0}
+          disabledReason={lastBet !== 0 ? d.memberSheet.checkBlocked : undefined}
+          onClick={() => proxyBet('check', 0)}
+        >
+          {labels.check}
+        </Button>
+        <Button
+          variant="win"
+          className="flex-col gap-0"
+          disabled={isPending || lastBet === 0 || memberBalance < lastBet}
+          disabledReason={
+            lastBet === 0
+              ? d.memberSheet.noBetToCall
+              : memberBalance < lastBet
+                ? d.actionBar.insufficientBalance
+                : undefined
+          }
+          onClick={() => proxyBet('call', lastBet)}
+        >
+          <span>{labels.call}</span>
+          {lastBet > 0 ? (
+            <span className="tabular-nums text-[11px] leading-tight opacity-90">
+              {lastBet.toLocaleString()}
+            </span>
+          ) : null}
+        </Button>
+        <Button
+          variant={raiseOpen ? 'primary' : 'surface'}
+          className={raiseOpen ? '' : 'border border-white/10'}
+          disabled={isPending}
+          onClick={() => setRaiseOpen((open) => !open)}
+        >
+          {labels.raise}
+        </Button>
+        <Button variant="danger" disabled={isPending} onClick={() => proxyBet('fold', 0)}>
+          {labels.fold}
+        </Button>
+      </div>
+      {raiseOpen ? (
+        <div className="flex gap-2">
+          <Stepper
+            value={raiseAmount}
+            onChange={setRaiseAmount}
+            min={1}
+            max={memberBalance}
+            step={baseBet}
+            ariaLabel={d.memberSheet.proxyRaiseAria}
+            className="flex-1"
+          />
+          <Button
+            variant="primary"
+            disabled={isPending || raiseAmount < 1 || raiseAmount > memberBalance}
+            onClick={() => proxyBet('raise', raiseAmount)}
+          >
+            {d.common.confirm}
+          </Button>
+        </div>
+      ) : null}
+    </Section>
+  )
+}
