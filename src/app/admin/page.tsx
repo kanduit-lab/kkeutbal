@@ -10,6 +10,8 @@ import {
 } from '@/features/auth/admin-queries'
 import { serverEnv } from '@/lib/env'
 import { AdminClient } from '@/features/auth/components/admin-client'
+import { PromotionsAdmin } from '@/features/promotions/components/promotions-admin'
+import { listPromotions } from '@/features/promotions/queries'
 import { Badge, ButtonLink, Panel } from '@/components/ui'
 
 export const dynamic = 'force-dynamic'
@@ -42,11 +44,12 @@ export default async function AdminPage() {
     )
   }
 
-  const [tokens, registrationCodes, users, rooms] = await Promise.all([
+  const [tokens, registrationCodes, users, rooms, promotions] = await Promise.all([
     listGuestTokens(),
     listRegistrationCodes(),
     listUsers(),
     listActiveRooms(),
+    listPromotions(),
   ])
 
   return (
@@ -65,6 +68,7 @@ export default async function AdminPage() {
         selfId={session.user.id}
         bootstrapRegistrationCodeEnabled={Boolean(serverEnv().AUTH_REGISTRATION_CODE)}
       />
+      <PromotionsAdmin promotions={promotions} />
     </main>
   )
 }

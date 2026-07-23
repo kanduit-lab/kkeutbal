@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { ToastProvider } from '@/components/ui'
 import { I18nProvider } from '@/lib/i18n/client'
+import { PromotionHost } from '@/features/promotions/components/promotion-host'
+import { listActivePromotions } from '@/features/promotions/queries'
 import { getDict } from '@/lib/i18n/server'
 import './globals.css'
 
@@ -34,12 +36,15 @@ export const viewport: Viewport = {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const { locale, d } = await getDict()
+  const [{ locale, d }, promotions] = await Promise.all([getDict(), listActivePromotions()])
   return (
     <html lang={locale}>
       <body>
         <I18nProvider locale={locale} dict={d}>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <PromotionHost promotions={promotions} />
+            {children}
+          </ToastProvider>
         </I18nProvider>
       </body>
     </html>

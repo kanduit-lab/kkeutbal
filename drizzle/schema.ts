@@ -29,6 +29,7 @@ export const actionStatus = pgEnum('action_status', [
   'rejected',
   'reverted',
 ])
+export const promotionKind = pgEnum('promotion_kind', ['banner', 'popup'])
 export const chipReason = pgEnum('chip_reason', [
   'buy_in',
   'bet',
@@ -96,6 +97,37 @@ export const registrationCodes = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('registration_codes_expires_at_idx').on(table.expiresAt)],
+)
+
+/**
+ * 공지·광고 슬롯. `banner` 는 화면 상단 띠, `popup` 은 진입 시 모달로 뜬다.
+ * 노출 조건은 `is_active` + `starts_at`/`ends_at` 창이며, 같은 kind 안에서는
+ * `priority` 가 큰 행이 먼저다 — 배너는 전부, 팝업은 가장 앞의 하나만 띄운다.
+ * "N시간 동안 보지 않기" 의 N 이 `dismiss_hours` 다. 닫음 상태는 서버에 두지 않고
+ * 브라우저 localStorage 에만 남긴다 — 비로그인 게스트도 같은 규칙으로 동작한다.
+ */
+export const promotions = pgTable(
+  'promotions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    kind: promotionKind('kind').notNull(),
+    title: text('title').notNull(),
+    body: text('body'),
+    /** 눌렀을 때 이동할 주소. 없으면 링크 없이 문구만 보여준다. */
+    linkUrl: text('link_url'),
+    linkLabel: text('link_label'),
+    isActive: boolean('is_active').notNull().default(true),
+    startsAt: timestamp('starts_at', { withTimezone: true }),
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    priority: integer('priority').notNull().default(0),
+    dismissHours: integer('dismiss_hours').notNull().default(24),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('promotions_kind_active_idx').on(table.kind, table.isActive)],
 )
 
 export const rooms = pgTable(
