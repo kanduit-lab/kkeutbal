@@ -62,7 +62,7 @@ export function Button({
       aria-pressed={pressed}
       title={!showReasonAsToast && blockedReason ? blockedReason : title}
       className={clsx(
-        'inline-flex items-center justify-center gap-1.5 rounded-xl font-semibold transition-colors',
+        'inline-flex items-center justify-center gap-1.5 rounded-xl font-semibold transition duration-100',
         'disabled:cursor-not-allowed disabled:opacity-40',
         // aria-disabled 는 실제 disabled 가 아니라 탭 가능하므로 흐림 처리를 직접 준다.
         showReasonAsToast && 'cursor-not-allowed opacity-40',
@@ -73,10 +73,13 @@ export function Button({
           'bg-accent text-white shadow-[0_2px_0_rgb(0_0_0/0.35)] hover:brightness-110 active:translate-y-px active:shadow-none',
         variant === 'win' &&
           'bg-win text-white shadow-[0_2px_0_rgb(0_0_0/0.35)] hover:brightness-110 active:translate-y-px active:shadow-none',
-        variant === 'danger' && 'bg-[#471a17] text-[#ff9a94] hover:brightness-125',
+        // 터치 기기엔 hover 가 없다 — 모든 변형이 눌린 순간의 피드백을 갖게 한다.
+        variant === 'danger' &&
+          'bg-[#471a17] text-[#ff9a94] hover:brightness-125 active:translate-y-px active:brightness-90',
         variant === 'surface' &&
-          'bg-surface-raised text-text border border-gold/15 hover:border-gold/40',
-        variant === 'ghost' && 'bg-transparent text-muted hover:text-text',
+          'bg-surface-raised text-text border border-gold/15 hover:border-gold/40 active:translate-y-px active:brightness-95',
+        variant === 'ghost' &&
+          'bg-transparent text-muted hover:text-text active:translate-y-px active:brightness-90',
         className,
       )}
     />
@@ -123,7 +126,7 @@ export function ButtonLink({
     <a
       {...props}
       className={clsx(
-        'inline-flex items-center justify-center gap-1.5 rounded-xl font-semibold transition-colors',
+        'inline-flex items-center justify-center gap-1.5 rounded-xl font-semibold transition duration-100',
         size === 'lg' && 'min-h-14 px-5 text-lg',
         size === 'md' && 'min-h-12 px-4 text-base',
         size === 'sm' && 'min-h-9 px-3 text-sm',
@@ -131,10 +134,13 @@ export function ButtonLink({
           'bg-accent text-white shadow-[0_2px_0_rgb(0_0_0/0.35)] hover:brightness-110 active:translate-y-px active:shadow-none',
         variant === 'win' &&
           'bg-win text-white shadow-[0_2px_0_rgb(0_0_0/0.35)] hover:brightness-110 active:translate-y-px active:shadow-none',
-        variant === 'danger' && 'bg-[#471a17] text-[#ff9a94] hover:brightness-125',
+        // 터치 기기엔 hover 가 없다 — 모든 변형이 눌린 순간의 피드백을 갖게 한다.
+        variant === 'danger' &&
+          'bg-[#471a17] text-[#ff9a94] hover:brightness-125 active:translate-y-px active:brightness-90',
         variant === 'surface' &&
-          'bg-surface-raised text-text border border-gold/15 hover:border-gold/40',
-        variant === 'ghost' && 'bg-transparent text-muted hover:text-text',
+          'bg-surface-raised text-text border border-gold/15 hover:border-gold/40 active:translate-y-px active:brightness-95',
+        variant === 'ghost' &&
+          'bg-transparent text-muted hover:text-text active:translate-y-px active:brightness-90',
         className,
       )}
     />
@@ -229,7 +235,7 @@ export function ConfirmDialog({
   if (!open) return null
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -238,7 +244,7 @@ export function ConfirmDialog({
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="lacquer w-full max-w-sm rounded-2xl p-5 focus:outline-none"
+        className="lacquer panel-pop-in w-full max-w-sm rounded-2xl p-5 focus:outline-none"
         onClick={(event) => event.stopPropagation()}
       >
         <p className="font-bold">{title}</p>
@@ -510,7 +516,7 @@ export function Badge({
 export function Spinner({ label }: { label?: string }) {
   return (
     <span className="inline-flex items-center gap-2 text-muted" role="status">
-      <span className="size-4 animate-spin rounded-full border-2 border-muted/40 border-t-text" />
+      <span className="size-4 motion-safe:animate-spin rounded-full border-2 border-muted/40 border-t-text" />
       {label ? <span className="text-sm">{label}</span> : null}
     </span>
   )
@@ -578,7 +584,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={item.id}
             role={item.tone === 'error' ? 'alert' : undefined}
             className={clsx(
-              'w-full max-w-sm rounded-xl px-4 py-3 text-sm font-medium shadow-lg',
+              'toast-in w-full max-w-sm rounded-xl px-4 py-3 text-sm font-medium shadow-lg',
               item.tone === 'info' && 'bg-surface-raised text-text border border-gold/20',
               item.tone === 'error' && 'bg-[#471a17] text-[#ff9a94] border border-accent/30',
               item.tone === 'success' && 'bg-[#123c26] text-[#7ad9a2] border border-win/30',

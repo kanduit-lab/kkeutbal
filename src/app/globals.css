@@ -149,6 +149,63 @@ body {
   animation: winner-glow 1.2s ease-in-out 3;
 }
 
+/* 모달·시트·토스트 등장 — 진입만 연출한다. 퇴장은 React 가 즉시 unmount 해서 별도 상태기계가 필요하다 */
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.overlay-in {
+  animation: overlay-in 0.15s ease-out both;
+}
+
+@keyframes panel-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.panel-pop-in {
+  animation: panel-pop-in 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes sheet-slide-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.sheet-slide-in {
+  animation: sheet-slide-in 0.25s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.toast-in {
+  animation: toast-in 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
 /* 인사말 교체 — 위에서 아래로 내려오며 바뀐다 */
 @keyframes greeting-in {
   from {
@@ -174,7 +231,11 @@ body {
   .chip-fly,
   .pot-drop,
   .winner-glow,
-  .greeting-in {
+  .greeting-in,
+  .overlay-in,
+  .panel-pop-in,
+  .sheet-slide-in,
+  .toast-in {
     animation: none;
   }
 }
