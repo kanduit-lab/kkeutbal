@@ -3,6 +3,7 @@
 import { useRef, useTransition } from 'react'
 import type { CardId, GameType } from '@/features/hwatu/types'
 import { Button, Spinner, useToast } from '@/components/ui'
+import { useDict } from '@/lib/i18n/client'
 import { recognizeHand } from '../vision/actions'
 
 /** 사진 인식 버튼 — 촬영 → 1568px 다운스케일 → recognizeHand Server Action. */
@@ -18,6 +19,7 @@ export function VisionCapture({
   const inputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
   const { toast } = useToast()
+  const { d } = useDict()
 
   function handleFile(file: File) {
     startTransition(async () => {
@@ -27,7 +29,7 @@ export function VisionCapture({
         dataUrl = await downscale(file, 1568)
       } catch (error) {
         console.error('downscale failed:', error)
-        toast('사진을 읽을 수 없습니다. 다른 사진으로 시도하세요', 'error')
+        toast(d.advisor.vision.downscaleFailed, 'error')
         return
       }
       const result = await recognizeHand({ imageDataUrl: dataUrl, gameType })
@@ -36,7 +38,7 @@ export function VisionCapture({
         return
       }
       if (result.data.cardIds.length === 0) {
-        toast('카드를 인식하지 못했습니다. 더 밝은 곳에서 다시 찍으세요', 'error')
+        toast(d.advisor.vision.noCardsDetected, 'error')
         return
       }
       onRecognized(result.data.cardIds, result.data.confidence)
@@ -63,10 +65,10 @@ export function VisionCapture({
         size="lg"
         className="w-full border border-white/10"
         disabled={!enabled || isPending}
-        disabledReason={!enabled ? '사진 인식 비활성 (ANTHROPIC_API_KEY 필요)' : undefined}
+        disabledReason={!enabled ? d.advisor.vision.disabledReason : undefined}
         onClick={() => inputRef.current?.click()}
       >
-        {isPending ? <Spinner label="확인하는 중…" /> : '📷 사진으로 확인'}
+        {isPending ? <Spinner label={d.advisor.vision.checking} /> : d.advisor.vision.captureButton}
       </Button>
     </div>
   )

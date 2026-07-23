@@ -416,6 +416,33 @@ export const ko = {
     copied: '복사됨',
     copyFailed: '복사가 안 돼요',
   },
+  /** 누적 랭킹 페이지 + 개인 전적 페이지 (ranking/page, ranking/player/[id]/page). */
+  ranking: {
+    subtitle: '정산이 끝난 세션만 집계합니다',
+    filterNavAria: '랭킹 필터',
+    filterGameAll: '전체',
+    filterPeriodAll: '전체 기간',
+    filterPeriod7d: '최근 7일',
+    filterPeriod30d: '최근 30일',
+    emptyFilteredTitle: '조건에 맞는 기록이 없습니다',
+    emptyFilteredHint: '필터를 전체로 바꾸면 다른 기록을 볼 수 있습니다',
+    emptyTitle: '아직 정산된 세션이 없습니다',
+    emptyHint: '방을 정산하면 여기에 누적 전적이 쌓입니다',
+    sessionsAndWins: '{sessions}세션 · {wins}승',
+    backAria: '랭킹으로 돌아가기',
+    overallSummaryAria: '전체 요약',
+    statSessions: '세션',
+    statWins: '승리',
+    statNet: '순손익',
+    perGameTitle: '게임별 전적',
+    roundsNote: '판수는 참가한 방에서 끝난 판 기준',
+    sessionsBadge: '{n}세션',
+    statRounds: '판수',
+    statGameWins: '승수',
+    statWinRate: '승률',
+    recentSessionsTitle: '최근 세션',
+    playerEmptyHint: '방을 정산하면 여기에 전적이 쌓입니다',
+  },
   /** 소개 페이지 (about). */
   about: {
     tagline:
@@ -472,6 +499,43 @@ export const ko = {
       categoryTtaeng: '땡',
       categorySpecial: '특수패',
       categoryKkeut: '끗',
+    },
+    /** 카드 선택 헤더 (advisor-client) — 화투·트럼프 두 탭이 공유하는 템플릿. */
+    cardSelectionCount: '카드 선택 ({n}/{max})',
+    /** 판정 결과 패널 (advisor-results) — 선택 안내·판정 불가 메시지. */
+    selectTwoCards: '카드 2장을 선택하세요',
+    invalidCombination: '판정할 수 없는 조합입니다',
+    selectCapturedCards: '획득한 패를 선택하세요',
+    noScoreYet: '아직 점수가 나지 않았습니다',
+    pokerMoreCards: '카드 {n}장 더 선택',
+    /** 섯다 결과 — 서열·승/재경기/패 확률. */
+    winRateLabel: '이길 확률 {rate}',
+    replayRateLabel: '재경기 {rate}',
+    loseRateLabel: '질 확률 {rate}',
+    tierPosition: '서열 {position}위 / {total}단계',
+    sameTierCount: '동급 조합 {n}개',
+    remainingCardsFootnote: '남은 18장으로 상대가 받을 수 있는 153가지 패와 모두 겨룬 결과입니다',
+    /** 고스톱 결과 — 획득 패 요약·점수. */
+    gostopScorePoints: '{n}점',
+    gostopCaptureLine: '광 {gwang} · 열끗 {yeol} · 띠 {tti} · 피 {pi}',
+    chongtongSuffix: ' · 총통!',
+    canStopSuffix: ' · 스톱 선언 가능',
+    goCountLabel: '고',
+    shakeCountLabel: '흔들기',
+    bombCountLabel: '폭탄',
+    countDecreaseAria: '{label} 감소',
+    countIncreaseAria: '{label} 증가',
+    /** 포커 결과. */
+    pokerRankPosition: '족보 {position}위 / 10',
+    pokerProbability: '5장을 뽑았을 때 나올 확률 {probability}',
+    /** 사진 인식 버튼 (vision-capture). */
+    vision: {
+      captureButton: '📷 사진으로 확인',
+      checking: '확인하는 중…',
+      disabledReason: '사진 인식 기능을 지금은 쓸 수 없어요',
+      downscaleFailed: '사진을 읽을 수 없습니다. 다른 사진으로 시도하세요',
+      noCardsDetected: '카드를 인식하지 못했습니다. 더 밝은 곳에서 다시 찍으세요',
+      recognizedToast: '카드 {n}장 인식 (정확도 {confidence}%). 틀린 카드는 직접 수정하세요',
     },
   },
   /** 배너·팝업 공지 (features/promotions). 내용은 DB 가 갖고, 여기는 조작 문구만 둔다. */

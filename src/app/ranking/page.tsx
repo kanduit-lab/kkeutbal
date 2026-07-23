@@ -6,6 +6,8 @@ import type { ReactNode } from 'react'
 import { auth } from '@/lib/auth'
 import { getCumulativeRanking } from '@/features/ranking/queries'
 import { EmptyState, Panel } from '@/components/ui'
+import { getDict, format } from '@/lib/i18n/server'
+import type { Dictionary } from '@/lib/i18n/server'
 
 /** searchParams 는 외부 입력 — 화이트리스트 밖 값은 전부 '전체'로 폴백한다. */
 const filterSchema = z.object({
@@ -16,18 +18,22 @@ const filterSchema = z.object({
 type GameFilter = z.infer<typeof filterSchema>['game']
 type PeriodFilter = z.infer<typeof filterSchema>['period']
 
-const GAME_CHIPS: ReadonlyArray<{ value: GameFilter; label: string }> = [
-  { value: 'all', label: '전체' },
-  { value: 'seotda', label: '섯다' },
-  { value: 'gostop', label: '고스톱' },
-  { value: 'poker', label: '포커' },
-]
+function gameChips(d: Dictionary): ReadonlyArray<{ value: GameFilter; label: string }> {
+  return [
+    { value: 'all', label: d.ranking.filterGameAll },
+    { value: 'seotda', label: d.games.seotda },
+    { value: 'gostop', label: d.games.gostop },
+    { value: 'poker', label: d.games.poker },
+  ]
+}
 
-const PERIOD_CHIPS: ReadonlyArray<{ value: PeriodFilter; label: string }> = [
-  { value: 'all', label: '전체 기간' },
-  { value: '7d', label: '최근 7일' },
-  { value: '30d', label: '최근 30일' },
-]
+function periodChips(d: Dictionary): ReadonlyArray<{ value: PeriodFilter; label: string }> {
+  return [
+    { value: 'all', label: d.ranking.filterPeriodAll },
+    { value: '7d', label: d.ranking.filterPeriod7d },
+    { value: '30d', label: d.ranking.filterPeriod30d },
+  ]
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -83,10 +89,13 @@ export default async function RankingPage({
   const { game, period } = filterSchema.parse(await searchParams)
   const filtered = game !== 'all' || period !== 'all'
 
-  const ranking = await getCumulativeRanking({
-    gameType: game === 'all' ? undefined : game,
-    since: periodToSince(period),
-  })
+  const [ranking, { d }] = await Promise.all([
+    getCumulativeRanking({
+      gameType: game === 'all' ? undefined : game,
+      since: periodToSince(period),
+    }),
+    getDict(),
+  ])
 
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8">
@@ -95,14 +104,14 @@ export default async function RankingPage({
           ←
         </Link>
         <div>
-          <h1 className="font-brush text-4xl font-black lg:text-5xl">누적 랭킹</h1>
-          <p className="text-xs text-muted">정산이 끝난 세션만 집계합니다</p>
+          <h1 className="font-brush text-4xl font-black lg:text-5xl">{d.home.ranking}</h1>
+          <p className="text-xs text-muted">{d.ranking.subtitle}</p>
         </div>
       </header>
 
-      <nav className="space-y-2" aria-label="랭킹 필터">
+      <nav className="space-y-2" aria-label={d.ranking.filterNavAria}>
         <div className="flex flex-wrap gap-2">
-          {GAME_CHIPS.map((chip) => (
+          {gameChips(d).map((chip) => (
             <FilterChip
               key={chip.value}
               href={filterHref(chip.value, period)}
@@ -113,7 +122,7 @@ export default async function RankingPage({
           ))}
         </div>
         <div className="flex flex-wrap gap-2">
-          {PERIOD_CHIPS.map((chip) => (
+          {periodChips(d).map((chip) => (
             <FilterChip
               key={chip.value}
               href={filterHref(game, chip.value)}
@@ -127,15 +136,9 @@ export default async function RankingPage({
 
       {ranking.length === 0 ? (
         filtered ? (
-          <EmptyState
-            title="조건에 맞는 기록이 없습니다"
-            hint="필터를 전체로 바꾸면 다른 기록을 볼 수 있습니다"
-          />
+          <EmptyState title={d.ranking.emptyFilteredTitle} hint={d.ranking.emptyFilteredHint} />
         ) : (
-          <EmptyState
-            title="아직 정산된 세션이 없습니다"
-            hint="방을 정산하면 여기에 누적 전적이 쌓입니다"
-          />
+          <EmptyState title={d.ranking.emptyTitle} hint={d.ranking.emptyHint} />
         )
       ) : (
         <section className="space-y-2">
@@ -154,7 +157,7 @@ export default async function RankingPage({
                   <div className="min-w-0">
                     <p className="truncate font-bold">{row.displayName}</p>
                     <p className="text-xs text-muted">
-                      {row.sessions}세션 · {row.wins}승
+                      {format(d.ranking.sessionsAndWins, { sessions: row.sessions, wins: row.wins })}
                     </p>
                   </div>
                 </div>

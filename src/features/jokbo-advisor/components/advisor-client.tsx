@@ -7,6 +7,7 @@ import type { CardId, GameType, HwatuCard } from '@/features/hwatu/types'
 import { findPokerCard } from '@/features/poker/cards'
 import type { PokerCard } from '@/features/poker/cards'
 import { Button, Panel, useToast } from '@/components/ui'
+import { format, useDict } from '@/lib/i18n/client'
 import { CardPicker } from './card-picker'
 import { PokerPicker } from './poker-picker'
 import { GostopResult, PokerResult, SeotdaResult } from './advisor-results'
@@ -15,10 +16,11 @@ import { VisionCapture } from './vision-capture'
 
 type AdvisorTab = 'seotda' | 'gostop' | 'poker'
 
-const TAB_LABELS: Record<AdvisorTab, string> = {
-  seotda: '🎴 섯다',
-  gostop: '🌸 고스톱',
-  poker: '♠ 포커',
+/** 탭 이모지 — 게임 이름 텍스트는 사전 games.* 를 그대로 쓴다 (중복 정의 금지). */
+const TAB_EMOJI: Record<AdvisorTab, string> = {
+  seotda: '🎴',
+  gostop: '🌸',
+  poker: '♠',
 }
 
 const POKER_MAX_SELECT = 7
@@ -29,6 +31,7 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
   const [selected, setSelected] = useState<ReadonlySet<CardId>>(new Set())
   const [pokerSelected, setPokerSelected] = useState<ReadonlySet<string>>(new Set())
   const { toast } = useToast()
+  const { d } = useDict()
 
   const hwatuGameType: GameType = tab === 'gostop' ? 'gostop' : 'seotda'
   const maxSelect = hwatuGameType === 'seotda' ? 2 : 30
@@ -80,7 +83,7 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
           ←
         </Link>
         <div>
-          <h1 className="font-brush text-3xl font-black lg:text-4xl">족보 판독</h1>
+          <h1 className="font-brush text-3xl font-black lg:text-4xl">{d.home.advisor}</h1>
         </div>
       </header>
 
@@ -92,7 +95,7 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
             variant={tab === type ? 'primary' : 'surface'}
             onClick={() => switchTab(type)}
           >
-            {TAB_LABELS[type]}
+            {TAB_EMOJI[type]} {d.games[type]}
           </Button>
         ))}
       </div>
@@ -111,7 +114,10 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
                 onRecognized={(ids, confidence) => {
                   setSelected(new Set(ids.slice(0, maxSelect)))
                   toast(
-                    `카드 ${ids.length}장 인식 (정확도 ${(confidence * 100).toFixed(0)}%). 틀린 카드는 직접 수정하세요`,
+                    format(d.advisor.vision.recognizedToast, {
+                      n: ids.length,
+                      confidence: (confidence * 100).toFixed(0),
+                    }),
                     confidence >= 0.9 ? 'success' : 'info',
                   )
                 }}
@@ -125,11 +131,14 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
             <Panel className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-muted">
-                  카드 선택 ({pokerSelected.size}/{POKER_MAX_SELECT})
+                  {format(d.advisor.cardSelectionCount, {
+                    n: pokerSelected.size,
+                    max: POKER_MAX_SELECT,
+                  })}
                 </h2>
                 {pokerSelected.size > 0 ? (
                   <Button size="sm" variant="ghost" onClick={() => setPokerSelected(new Set())}>
-                    전체 해제
+                    {d.common.clearAll}
                   </Button>
                 ) : null}
               </div>
@@ -143,11 +152,14 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
             <Panel className="space-y-3">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-bold text-muted">
-                  카드 선택 ({selected.size}/{hwatuGameType === 'seotda' ? 2 : '∞'})
+                  {format(d.advisor.cardSelectionCount, {
+                    n: selected.size,
+                    max: hwatuGameType === 'seotda' ? 2 : '∞',
+                  })}
                 </h2>
                 {selected.size > 0 ? (
                   <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-                    전체 해제
+                    {d.common.clearAll}
                   </Button>
                 ) : null}
               </div>

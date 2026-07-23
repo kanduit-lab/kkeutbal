@@ -10,6 +10,8 @@ import {
 } from '@/features/ranking/queries'
 import { GAME_BADGE_TONE, GAME_LABELS } from '@/features/game/labels'
 import { Avatar, Badge, EmptyState, Panel } from '@/components/ui'
+import { getDict, format } from '@/lib/i18n/server'
+import type { Locale } from '@/lib/i18n/config'
 
 /** params 는 외부 입력 — uuid 가 아니면 DB 캐스트 오류 대신 404 로 보낸다. */
 const paramsSchema = z.object({ id: z.string().uuid() })
@@ -22,9 +24,12 @@ function netLabel(net: number): string {
   return `${net > 0 ? '+' : ''}${net.toLocaleString()}`
 }
 
-function formatSessionDate(iso: string | null): string | null {
+function formatSessionDate(iso: string | null, locale: Locale): string | null {
   if (!iso) return null
-  return new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+  return new Date(iso).toLocaleDateString(locale === 'ko' ? 'ko-KR' : 'en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
 }
 
 function StatTile({ label, children }: { label: string; children: ReactNode }) {
@@ -60,9 +65,10 @@ export default async function PlayerStatsPage({
   const profile = await getPlayerProfile(id)
   if (!profile) notFound()
 
-  const [stats, recentSessions] = await Promise.all([
+  const [stats, recentSessions, { locale, d }] = await Promise.all([
     getPlayerStats(id),
     getPlayerRecentSessions(id),
+    getDict(),
   ])
 
   return (
@@ -70,7 +76,7 @@ export default async function PlayerStatsPage({
       <header className="flex items-center gap-3">
         <Link
           href="/ranking"
-          aria-label="랭킹으로 돌아가기"
+          aria-label={d.ranking.backAria}
           className="flex min-h-11 min-w-11 items-center justify-center text-2xl text-muted"
         >
           ←
@@ -80,29 +86,28 @@ export default async function PlayerStatsPage({
           <h1 className="truncate font-brush text-4xl font-black lg:text-5xl">
             {profile.displayName}
           </h1>
-          <p className="text-xs text-muted">정산이 끝난 세션만 집계합니다</p>
+          <p className="text-xs text-muted">{d.ranking.subtitle}</p>
         </div>
       </header>
 
-      <section className="grid grid-cols-3 gap-2" aria-label="전체 요약">
-        <StatTile label="세션">{stats.totals.sessions.toLocaleString()}</StatTile>
-        <StatTile label="승리">{stats.totals.wins.toLocaleString()}</StatTile>
-        <StatTile label="순손익">
+      <section className="grid grid-cols-3 gap-2" aria-label={d.ranking.overallSummaryAria}>
+        <StatTile label={d.ranking.statSessions}>
+          {stats.totals.sessions.toLocaleString()}
+        </StatTile>
+        <StatTile label={d.ranking.statWins}>{stats.totals.wins.toLocaleString()}</StatTile>
+        <StatTile label={d.ranking.statNet}>
           <span className={netClass(stats.totals.net)}>{netLabel(stats.totals.net)}</span>
         </StatTile>
       </section>
 
       {stats.perGame.length === 0 ? (
-        <EmptyState
-          title="아직 정산된 세션이 없습니다"
-          hint="방을 정산하면 여기에 전적이 쌓입니다"
-        />
+        <EmptyState title={d.ranking.emptyTitle} hint={d.ranking.playerEmptyHint} />
       ) : (
         <section className="space-y-2">
           <div className="px-1">
-            <h2 className="text-sm font-bold text-muted">게임별 전적</h2>
+            <h2 className="text-sm font-bold text-muted">{d.ranking.perGameTitle}</h2>
             {/* 판 단위 참가자는 저장하지 않는다 — 판수는 참가한 방에서 끝난 판 전체 기준 */}
-            <p className="text-xs text-muted/70">판수는 참가한 방에서 끝난 판 기준</p>
+            <p className="text-xs text-muted/70">{d.ranking.roundsNote}</p>
           </div>
           {stats.perGame.map((game) => (
             <Panel key={game.gameType} className="space-y-3 py-4">
@@ -110,16 +115,18 @@ export default async function PlayerStatsPage({
                 <div className="flex min-w-0 items-center gap-2">
                   <span className="text-xl">{GAME_LABELS[game.gameType].emoji}</span>
                   <p className="truncate font-bold">{GAME_LABELS[game.gameType].name}</p>
-                  <Badge tone={GAME_BADGE_TONE[game.gameType]}>{game.sessions}세션</Badge>
+                  <Badge tone={GAME_BADGE_TONE[game.gameType]}>
+                    {format(d.ranking.sessionsBadge, { n: game.sessions })}
+                  </Badge>
                 </div>
                 <p className={`shrink-0 text-lg font-black tabular-nums ${netClass(game.net)}`}>
                   {netLabel(game.net)}
                 </p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <GameStat label="판수">{game.rounds.toLocaleString()}</GameStat>
-                <GameStat label="승수">{game.wins.toLocaleString()}</GameStat>
-                <GameStat label="승률">
+                <GameStat label={d.ranking.statRounds}>{game.rounds.toLocaleString()}</GameStat>
+                <GameStat label={d.ranking.statGameWins}>{game.wins.toLocaleString()}</GameStat>
+                <GameStat label={d.ranking.statWinRate}>
                   {game.rounds > 0 ? `${Math.round((game.wins / game.rounds) * 100)}%` : '–'}
                 </GameStat>
               </div>
@@ -131,7 +138,7 @@ export default async function PlayerStatsPage({
       {/* 최근 세션 — 이력이 없으면 섹션 자체를 그리지 않는다 (홈 화면과 같은 규칙). */}
       {recentSessions.length > 0 ? (
         <section className="space-y-2">
-          <h2 className="px-1 text-sm font-bold text-muted">최근 세션</h2>
+          <h2 className="px-1 text-sm font-bold text-muted">{d.ranking.recentSessionsTitle}</h2>
           <div className="grid gap-2">
             {recentSessions.map((past) => (
               <Link key={past.id} href={`/rooms/${past.code}/result`} className="block">
@@ -143,7 +150,9 @@ export default async function PlayerStatsPage({
                     </Badge>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-xs text-muted">{formatSessionDate(past.closedAt)}</span>
+                    <span className="text-xs text-muted">
+                      {formatSessionDate(past.closedAt, locale)}
+                    </span>
                     <span className={`font-black tabular-nums ${netClass(past.myNet)}`}>
                       {netLabel(past.myNet)}
                     </span>
