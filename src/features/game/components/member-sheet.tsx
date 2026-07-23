@@ -44,7 +44,8 @@ export function MemberSheet({
   const [undoOpen, setUndoOpen] = useState(false)
 
   const anyConfirmOpen = transferOpen || removeOpen || leaveOpen || undoOpen
-  const panelRef = useModalBehavior(true, () => {
+  // 시트 자체의 마운트는 부모(room-client)가 소유한다 — 여기서는 항상 열린 상태다.
+  const { panelRef } = useModalBehavior(true, () => {
     // 중첩 확인 다이얼로그가 열려 있으면 Escape 는 그쪽만 닫는다 — 시트까지 닫히면 흐름이 끊긴다.
     if (!anyConfirmOpen) onClose()
   })

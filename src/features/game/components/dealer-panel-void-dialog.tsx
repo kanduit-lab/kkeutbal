@@ -1,6 +1,7 @@
 'use client'
 
 import { useDict } from '@/lib/i18n/client'
+import { clsx } from 'clsx'
 import { Button, useModalBehavior } from '@/components/ui'
 
 /**
@@ -37,11 +38,14 @@ export function VoidRoundDialog({
   onClose: () => void
 }) {
   const { d } = useDict()
-  const panelRef = useModalBehavior(open, onClose)
-  if (!open) return null
+  const { panelRef, rendered, closing } = useModalBehavior(open, onClose)
+  if (!rendered) return null
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className={clsx(
+        'overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4',
+        closing && 'overlay-out',
+      )}
       role="dialog"
       aria-modal="true"
       aria-label={title}

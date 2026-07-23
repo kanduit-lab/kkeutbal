@@ -1,5 +1,6 @@
 'use client'
 
+import { clsx } from 'clsx'
 import { useEffect, useState } from 'react'
 import { Button, useModalBehavior } from '@/components/ui'
 import { useDict, format } from '@/lib/i18n/client'
@@ -94,12 +95,15 @@ function PromotionPopup({
   const { d } = useDict()
   // 이번 방문에만 숨기는 닫기 — localStorage 를 건드리지 않는다.
   const [closed, setClosed] = useState(false)
-  const panelRef = useModalBehavior(!closed, () => setClosed(true))
-  if (closed) return null
+  const { panelRef, rendered, closing } = useModalBehavior(!closed, () => setClosed(true))
+  if (!rendered) return null
 
   return (
     <div
-      className="overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className={clsx(
+        'overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4',
+        closing && 'overlay-out',
+      )}
       role="dialog"
       aria-modal="true"
       aria-label={promotion.title}

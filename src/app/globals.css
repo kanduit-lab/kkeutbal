@@ -206,6 +206,38 @@ body {
   animation: toast-in 0.2s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/* 퇴장 — 지속시간은 ui/modal.tsx 의 EXIT_MS 와 같아야 한다 (180ms) */
+@keyframes overlay-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.overlay-out {
+  animation: overlay-out 0.18s ease-in both;
+}
+
+@keyframes panel-pop-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+.panel-pop-out {
+  animation: panel-pop-out 0.18s ease-in both;
+}
+
+@keyframes sheet-slide-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+.sheet-slide-out {
+  animation: sheet-slide-out 0.18s ease-in both;
+}
+
 /* 인사말 교체 — 위에서 아래로 내려오며 바뀐다 */
 @keyframes greeting-in {
   from {
@@ -235,7 +267,10 @@ body {
   .overlay-in,
   .panel-pop-in,
   .sheet-slide-in,
-  .toast-in {
+  .toast-in,
+  .overlay-out,
+  .panel-pop-out,
+  .sheet-slide-out {
     animation: none;
   }
 }
