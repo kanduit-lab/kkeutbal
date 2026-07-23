@@ -516,6 +516,7 @@ export const en: Dictionary = {
     body: 'Please try again in a moment.',
     retry: 'Try again',
     notFoundTitle: 'Page not found',
+    notFoundQuip: '{hand} — an empty hand, and an empty address',
     notFoundBody: 'Check the address or start again from home.',
   },
   errors: {
