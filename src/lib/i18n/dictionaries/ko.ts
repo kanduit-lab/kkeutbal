@@ -21,7 +21,7 @@
 export const ko = {
   meta: {
     title: '끗발',
-    description: '판돈 없이 치는 섯다·고스톱·포커. 누가 얼마 땄는지 끗발이 끝까지 기억해요.',
+    description: '판돈 없이 즐기는 섯다·고스톱·포커 판 기록',
   },
   common: {
     appName: '끗발',
@@ -94,7 +94,7 @@ export const ko = {
   },
   /** 로그인·회원가입 페이지 카피. */
   auth: {
-    tagline: '오늘 끗발, 누구한테 붙었을까',
+    tagline: '섯다·고스톱·포커 판 기록',
     aboutLink: '이 앱 소개',
     passwordLoginTitle: '아이디 로그인',
     usernamePlaceholder: '아이디',
@@ -153,19 +153,6 @@ export const ko = {
     loadNamesFailed: '이름을 불러오지 못했습니다',
   },
   home: {
-    /**
-     * 홈 인사말 프리셋 — 한 개를 골라 일정 시간마다 바꿔 보여준다 (GreetingRotator).
-     * `{name}` 자리에 표시 이름이 들어간다. 키 이름은 노출되지 않으니 자유롭게 늘려도 된다.
-     */
-    greetings: {
-      luck: '{name}님, 오늘도 끗발 받으세요',
-      asking: '{name}님, 오늘 끗발 좀 붙었나요?',
-      ready: '{name}님, 판 벌일 준비 됐나요?',
-      goodHand: '{name}님, 좋은 패 받으세요',
-      warmHands: '{name}님, 오늘은 손이 좀 따뜻한가요?',
-      goBig: '{name}님, 한 판 크게 가볼까요?',
-      catchGwang: '{name}님, 오늘 광 좀 잡아보세요',
-    },
     joinTitle: '방 입장',
     codePlaceholder: '방 코드 6자리',
     join: '입장',
@@ -446,26 +433,21 @@ export const ko = {
   },
   /** 소개 페이지 (about). */
   about: {
-    tagline:
-      '판돈 없이 즐기는 섯다·고스톱·포커 실시간 판 기록. 방 코드 하나로 모여서 각자 폰으로 베팅하면, 끝나고 손익이랑 랭킹이 자동으로 남아요.',
+    tagline: '섯다·고스톱·포커의 베팅과 결과를 기록합니다.',
     featureRealtimeTitle: '실시간 테이블',
-    featureRealtimeBody:
-      '방에 모인 사람들이 각자 폰으로 베팅을 넣으면 모두의 화면이 곧바로 맞춰져요. 테이블 위 칩이랑 팟이 그대로 보여요.',
+    featureRealtimeBody: '각자 휴대폰으로 베팅을 기록하고, 방 참여자의 화면을 동기화합니다.',
     featureSettleTitle: '자동 정산',
-    featureSettleBody:
-      '판마다 승패랑 칩 이동이 원장에 남고, 세션이 끝나면 손익이 자동으로 집계돼요. 공용 칩만 쓰다 보면 나오는 "누가 얼마 땄더라"가 사라져요.',
+    featureSettleBody: '판별 승패와 칩 이동을 기록하고 세션 손익을 집계합니다.',
     featureRankingTitle: '누적 랭킹',
-    featureRankingBody:
-      '방이 끝나도 전적은 계정에 쌓여요. 다음 모임에서 지난 전적을 이어서 겨뤄요.',
+    featureRankingBody: '정산된 세션의 전적을 계정별로 집계합니다.',
     featureAdvisorTitle: '족보 판독',
-    featureAdvisorBody:
-      '들고 있는 패를 고르거나 사진을 찍으면 족보랑 서열을 알려줘요. 처음 치는 사람도 표를 외울 필요 없어요.',
-    howTitle: '이렇게 써요',
-    step1: '한 명이 방을 만들고, 섯다·고스톱·포커 중 하나랑 시작 칩을 정해요',
-    step2: '나머지는 6자리 코드나 링크로 들어와요 — 자리는 자동으로 생겨요',
-    step3: '실물 카드로 치면서 베팅만 각자 폰으로 넣어요',
-    step4: '판이 끝나면 딜러가 승자를 확정하고, 칩이 알아서 이동해요',
-    step5: '세션 정산을 누르면 전체 손익이랑 랭킹이 나와요',
+    featureAdvisorBody: '카드를 선택하거나 사진을 찍어 족보와 서열을 확인합니다.',
+    howTitle: '사용 순서',
+    step1: '방을 만들고 게임과 시작 칩을 정합니다',
+    step2: '참가자는 6자리 코드나 링크로 입장합니다',
+    step3: '베팅을 각자 휴대폰으로 기록합니다',
+    step4: '판이 끝나면 딜러가 승자를 확정합니다',
+    step5: '세션을 정산해 손익과 랭킹을 확인합니다',
     disclaimer:
       '실제 돈이나 유가물이 오가지 않는 기록 도구예요. 화투 도안은 CC BY-SA 4.0 라이선스를 따라요.',
     start: '시작하기',
@@ -479,14 +461,13 @@ export const ko = {
    */
   advisor: {
     advice: {
-      gusaReplay: '멍텅구리 구사예요. 이 패가 나오면 판이 무효가 되고 재경기로 갑니다',
-      amhaengeosaCatches: '암행어사예요. 상대가 광땡이면 이 패로 뒤집을 수 있어요',
-      ttaengjabiCatches:
-        '땡잡이예요. 상대가 땡이면 이 패로 뒤집을 수 있어요 — 광땡은 못 잡아요',
-      caughtByAmhaengeosa: '암행어사(4·7 열끗)에게 잡힐 수 있어요 · 상대에게 나올 확률 {rate}',
-      caughtByTtaengjabi: '땡잡이(3·7)에게 잡힐 수 있어요 · 상대에게 나올 확률 {rate}',
-      unbeatable: '잡힐 일이 없는 최상위 패예요',
-      lowest: '가장 낮은 끗이에요. 상대가 죽어야 이기는 자리예요',
+      gusaReplay: '멍텅구리 구사 · 재경기',
+      amhaengeosaCatches: '암행어사 · 광땡 잡음',
+      ttaengjabiCatches: '땡잡이 · 땡 잡음 · 광땡 제외',
+      caughtByAmhaengeosa: '암행어사(4·7 열끗) 가능 · 상대 패 확률 {rate}',
+      caughtByTtaengjabi: '땡잡이(3·7) 가능 · 상대 패 확률 {rate}',
+      unbeatable: '38광땡 · 최상위 패',
+      lowest: '망통 · 최하위 끗',
     },
     /** 카드 피커의 월별 그룹 라벨. `{month}` 자리에 1~12 숫자가 들어간다. */
     monthLabel: '{month}월',
@@ -515,7 +496,7 @@ export const ko = {
     loseRateLabel: '질 확률 {rate}',
     tierPosition: '서열 {position}위 / {total}단계',
     sameTierCount: '동급 조합 {n}개',
-    remainingCardsFootnote: '남은 18장으로 상대가 받을 수 있는 153가지 패와 모두 겨룬 결과입니다',
+    remainingCardsFootnote: '남은 18장 기준 · 상대 패 153가지',
     /** 고스톱 결과 — 획득 패 요약·점수. */
     gostopScorePoints: '{n}점',
     gostopCaptureLine: '광 {gwang} · 열끗 {yeol} · 띠 {tti} · 피 {pi}',
@@ -533,10 +514,10 @@ export const ko = {
     vision: {
       captureButton: '📷 사진으로 확인',
       checking: '확인하는 중…',
-      disabledReason: '사진 인식 기능을 지금은 쓸 수 없어요',
+      disabledReason: '사진 인식이 비활성화되어 있습니다',
       downscaleFailed: '사진을 읽을 수 없습니다. 다른 사진으로 시도하세요',
-      noCardsDetected: '카드를 인식하지 못했습니다. 더 밝은 곳에서 다시 찍으세요',
-      recognizedToast: '카드 {n}장 인식 (정확도 {confidence}%). 틀린 카드는 직접 수정하세요',
+      noCardsDetected: '카드를 인식하지 못했습니다',
+      recognizedToast: '카드 {n}장 인식 · 정확도 {confidence}%',
     },
   },
   /** 배너·팝업 공지 (features/promotions). 내용은 DB 가 갖고, 여기는 조작 문구만 둔다. */

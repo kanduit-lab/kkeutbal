@@ -14,8 +14,7 @@ import type { Dictionary } from './ko'
 export const en: Dictionary = {
   meta: {
     title: 'Kkeutbal',
-    description:
-      'A no-stakes chip ledger for Seotda, Go-Stop, and Poker. It remembers who won how much, right to the end.',
+    description: 'No-stakes score tracking for Seotda, Go-Stop, and Poker',
   },
   common: {
     appName: 'Kkeutbal',
@@ -83,7 +82,7 @@ export const en: Dictionary = {
     approvalHint: 'Only bets the dealer approves apply',
   },
   auth: {
-    tagline: "Who's got the luck today?",
+    tagline: 'Seotda, Go-Stop, and Poker score tracking',
     aboutLink: 'About this app',
     passwordLoginTitle: 'Sign in with username',
     usernamePlaceholder: 'Username',
@@ -142,15 +141,6 @@ export const en: Dictionary = {
     loadNamesFailed: 'Could not load names',
   },
   home: {
-    greetings: {
-      luck: 'Good luck today, {name}',
-      asking: 'Feeling lucky today, {name}?',
-      ready: 'Ready to deal, {name}?',
-      goodHand: 'May the cards be kind, {name}',
-      warmHands: 'Hot hands tonight, {name}?',
-      goBig: 'Going big this round, {name}?',
-      catchGwang: 'Go catch a 광, {name}',
-    },
     joinTitle: 'Join room',
     codePlaceholder: 'Room code (6 chars)',
     join: 'Join',
@@ -415,26 +405,21 @@ export const en: Dictionary = {
     playerEmptyHint: 'Records show up here once a room is settled',
   },
   about: {
-    tagline:
-      'Realtime score tracking for Seotda, Go-Stop, and Poker — no real stakes. Gather with one room code, bet from your own phones, and profits and rankings are saved when you finish.',
+    tagline: 'Records bets and results for Seotda, Go-Stop, and Poker.',
     featureRealtimeTitle: 'Realtime table',
-    featureRealtimeBody:
-      'Everyone at the table enters bets on their own phone and every screen syncs instantly. The chips and pot on the table are right there.',
+    featureRealtimeBody: 'Players record bets on their phones, and room screens stay in sync.',
     featureSettleTitle: 'Automatic settlement',
-    featureSettleBody:
-      'Every round records wins and chip movements in a ledger, and profits are tallied automatically when the session ends. No more "who won how much" with shared chips.',
+    featureSettleBody: 'Records wins and chip movements for each round and totals session results.',
     featureRankingTitle: 'Lifetime ranking',
-    featureRankingBody:
-      'Your record stays on your account after the room ends. Pick up right where you left off at the next gathering.',
+    featureRankingBody: 'Totals settled session records by account.',
     featureAdvisorTitle: '족보 reader',
-    featureAdvisorBody:
-      'Pick the cards in your hand or snap a photo to see your 족보 (jokbo, hand ranking). Beginners never need to memorize the tables.',
-    howTitle: 'How it works',
-    step1: 'One person creates a room and picks the game — Seotda, Go-Stop, or Poker — and the starting chips',
-    step2: 'Everyone else joins with the 6-character code or link — seats are created automatically',
-    step3: 'Play with real cards; only the betting goes through each phone',
-    step4: 'When a round ends, the dealer confirms the winner and chips move automatically',
-    step5: 'Press session settlement to see overall profits and rankings',
+    featureAdvisorBody: 'Select cards or take a photo to check 족보 (jokbo, hand ranking).',
+    howTitle: 'How to use',
+    step1: 'Create a room and choose a game and starting chips',
+    step2: 'Join with the 6-character code or link',
+    step3: 'Record bets on each player’s phone',
+    step4: 'The dealer confirms the winner after each round',
+    step5: 'Settle the session to view results and rankings',
     disclaimer:
       'A record-keeping tool — no real money or valuables change hands. The 화투 (hwatu) card artwork is licensed under CC BY-SA 4.0.',
     start: 'Get started',
@@ -442,13 +427,13 @@ export const en: Dictionary = {
   },
   advisor: {
     advice: {
-      gusaReplay: 'This is 구사 — the round is voided and replayed',
-      amhaengeosaCatches: 'This is 암행어사. If someone has 광땡, this hand beats it',
-      ttaengjabiCatches: 'This is 땡잡이. It beats any 땡 — but not 광땡',
-      caughtByAmhaengeosa: '암행어사 (4·7 열끗) beats this · {rate} chance an opponent holds it',
-      caughtByTtaengjabi: '땡잡이 (3·7) beats this · {rate} chance an opponent holds it',
-      unbeatable: 'Nothing can catch this hand',
-      lowest: 'The lowest 끗 — you only win if everyone else folds',
+      gusaReplay: '멍텅구리 구사 · rematch',
+      amhaengeosaCatches: '암행어사 · catches 광땡',
+      ttaengjabiCatches: '땡잡이 · catches 땡 · not 광땡',
+      caughtByAmhaengeosa: '암행어사 (4·7 열끗) possible · opponent chance {rate}',
+      caughtByTtaengjabi: '땡잡이 (3·7) possible · opponent chance {rate}',
+      unbeatable: '38광땡 · highest hand',
+      lowest: '망통 · lowest 끗',
     },
     monthLabel: 'Month {month}',
     ranking: {
@@ -472,8 +457,7 @@ export const en: Dictionary = {
     loseRateLabel: 'Lose probability {rate}',
     tierPosition: 'Rank {position} of {total}',
     sameTierCount: '{n} hands in this tier',
-    remainingCardsFootnote:
-      'Calculated against all 153 possible hands an opponent could draw from the remaining 18 cards',
+    remainingCardsFootnote: '18 cards remaining · 153 possible opponent hands',
     gostopScorePoints: '{n} pts',
     gostopCaptureLine: '광 {gwang} · 열끗 {yeol} · 띠 {tti} · 피 {pi}',
     chongtongSuffix: ' · 총통!',
@@ -488,10 +472,10 @@ export const en: Dictionary = {
     vision: {
       captureButton: '📷 Check by photo',
       checking: 'Checking…',
-      disabledReason: 'Photo recognition is unavailable right now',
+      disabledReason: 'Photo recognition is disabled',
       downscaleFailed: 'Could not read the photo. Try a different one',
-      noCardsDetected: 'Could not recognize any cards. Try again in better light',
-      recognizedToast: 'Recognized {n} cards (confidence {confidence}%). Fix any that are wrong',
+      noCardsDetected: 'Could not recognize any cards',
+      recognizedToast: 'Recognized {n} cards · confidence {confidence}%',
     },
   },
   promo: {
