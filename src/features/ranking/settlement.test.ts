@@ -123,19 +123,28 @@ describe('computeSettlementTransfers', () => {
     expect(transfers[0]).toEqual({ fromId: 'big-loser', toId: 'big-winner', amount: 8 })
   })
 
-  it('비영합 입력 — 상계 가능한 만큼만 정산하고 나머지는 남긴다 (던지지 않음)', () => {
-    // 선택한 동작: 데이터가 어긋나도(net 합 != 0) 결과 화면이 죽지 않도록
-    // 맞아떨어지는 부분만 정산한다. 남은 잔액은 이체 없이 그대로 둔다.
+  it('비영합 입력은 불완전한 정산표 대신 예외를 던진다', () => {
     const rows = [
       { userId: 'creditor', net: 10 },
       { userId: 'debtor', net: -4 },
     ]
-    const transfers = computeSettlementTransfers(rows)
-    expect(transfers).toEqual([{ fromId: 'debtor', toId: 'creditor', amount: 4 }])
+    expect(() => computeSettlementTransfers(rows)).toThrow(/net total/)
+  })
 
-    const residual = residualNets(rows, transfers)
-    expect(residual.get('debtor')).toBe(0)
-    expect(residual.get('creditor')).toBe(6)
+  it('중복 사용자·빈 id·안전하지 않은 정수를 거부한다', () => {
+    expect(() =>
+      computeSettlementTransfers([
+        { userId: 'a', net: 1 },
+        { userId: 'a', net: -1 },
+      ]),
+    ).toThrow(/unique/)
+    expect(() => computeSettlementTransfers([{ userId: ' ', net: 0 }])).toThrow(/empty/)
+    expect(() =>
+      computeSettlementTransfers([
+        { userId: 'a', net: Number.MAX_SAFE_INTEGER + 1 },
+        { userId: 'b', net: -(Number.MAX_SAFE_INTEGER + 1) },
+      ]),
+    ).toThrow(/safe integer/)
   })
 
   it('입력 배열과 행을 변형하지 않는다', () => {

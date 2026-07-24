@@ -1,15 +1,32 @@
 'use server'
 
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
-import { balanceInRoom, lockRoom, requireRole, type Tx } from './action-helpers'
+import { lockRoom, requireRole, type Tx } from './action-helpers'
 
 /** 멤버 역할 액션 — 방장 위임·역할 변경·내보내기·나가기. */
 
-const { rooms, roomMembers, rounds, betActions, chipLedger, buyIns } = schema
+const { rooms, roomMembers, rounds, roundParticipants } = schema
+
+/** 판 참가자는 종료·무효 전까지 멤버십을 고정한다 — 중도 퇴장은 승자·정산 대상의 기준을 흔든다. */
+async function isActiveRoundParticipant(tx: Tx, roomId: string, userId: string): Promise<boolean> {
+  const [participant] = await tx
+    .select({ roundId: roundParticipants.roundId })
+    .from(roundParticipants)
+    .innerJoin(rounds, eq(rounds.id, roundParticipants.roundId))
+    .where(
+      and(
+        eq(rounds.roomId, roomId),
+        eq(rounds.status, 'playing'),
+        eq(roundParticipants.userId, userId),
+      ),
+    )
+    .limit(1)
+  return Boolean(participant)
+}
 
 const transferHostSchema = z.object({
   roomId: z.string().uuid(),
@@ -41,6 +58,7 @@ export async function transferHost(
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, targetUserId)))
         .limit(1)
       if (!target || target.leftAt) return fail('errors.targetNotMember')
+      if (target.role === 'observer') return fail('errors.observerCannotBecomeHost')
 
       await tx
         .update(roomMembers)
@@ -85,12 +103,31 @@ export async function setMemberRole(
       }
 
       const [target] = await tx
-        .select({ role: roomMembers.role })
+        .select({
+          role: roomMembers.role,
+          leftAt: roomMembers.leftAt,
+        })
         .from(roomMembers)
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, targetUserId)))
         .limit(1)
-      if (!target) return fail('errors.targetNotMember')
+      if (!target || target.leftAt) return fail('errors.targetNotMember')
       if (target.role === 'host') return fail('errors.cannotChangeHostRole')
+
+      if (target.role === 'observer' || role === 'observer') {
+        const [participating] = await tx
+          .select({ id: rounds.id })
+          .from(rounds)
+          .innerJoin(roundParticipants, eq(roundParticipants.roundId, rounds.id))
+          .where(
+            and(
+              eq(rounds.roomId, roomId),
+              eq(rounds.status, 'playing'),
+              eq(roundParticipants.userId, targetUserId),
+            ),
+          )
+          .limit(1)
+        if (participating) return fail('errors.cannotChangeParticipationDuringRound')
+      }
 
       await tx
         .update(roomMembers)
@@ -105,72 +142,12 @@ export async function setMemberRole(
   }
 }
 
-/** 이번 판(진행 중)에 확정 베팅이 있으면 퇴장할 수 없다 — 팟 정합성이 깨진다. */
-async function hasAcceptedBetInPlayingRound(
-  tx: Tx,
-  roomId: string,
-  userId: string,
-): Promise<boolean> {
-  const [playing] = await tx
-    .select({ id: rounds.id })
-    .from(rounds)
-    .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
-    .limit(1)
-  if (!playing) return false
-
-  const [bet] = await tx
-    .select({ id: betActions.id })
-    .from(betActions)
-    .where(
-      and(
-        eq(betActions.roundId, playing.id),
-        eq(betActions.userId, userId),
-        eq(betActions.status, 'accepted'),
-      ),
-    )
-    .limit(1)
-  return Boolean(bet)
-}
-
-/**
- * 퇴장 공통 처리 — leftAt 을 기록하고, 잔액은 correction(-balance)·바이인 총액은
- * 음수 buy_ins(-buyInTotal) 상쇄 행으로 0 으로 맞춘다. 원본 행은 고치지 않는다 (append-only).
- * buy_ins.amount 에는 양수 제약이 없어 음수 상쇄 행이 유효하다.
- * 이렇게 하면 나간 멤버는 모든 집계(세션 순위·누적 랭킹)에 net 0 으로 잡혀,
- * 활동 멤버만 세는 화면과 전체를 세는 화면이 서로 일관된다. 남은 멤버들의 net 합에
- * 나간 멤버의 손익이 반대 부호로 남는 것은 실제 칩 이동의 결과라 의도된 동작이다.
- */
-async function retireMember(
-  tx: Tx,
-  roomId: string,
-  targetUserId: string,
-  callerId: string,
-): Promise<void> {
-  const balance = await balanceInRoom(tx, roomId, targetUserId)
-  const [buyInRow] = await tx
-    .select({ total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int` })
-    .from(buyIns)
-    .where(and(eq(buyIns.roomId, roomId), eq(buyIns.userId, targetUserId)))
-  const buyInTotal = buyInRow?.total ?? 0
-
+/** 퇴장은 멤버 상태만 바꾼다. 칩·바이인 기록은 최종 제로섬 정산과 전적을 위해 보존한다. */
+async function retireMember(tx: Tx, roomId: string, targetUserId: string): Promise<void> {
   await tx
     .update(roomMembers)
     .set({ leftAt: new Date() })
     .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, targetUserId)))
-
-  if (balance !== 0) {
-    await tx.insert(chipLedger).values({
-      roomId,
-      userId: targetUserId,
-      delta: -balance,
-      reason: 'correction',
-    })
-  }
-  if (buyInTotal !== 0) {
-    await tx
-      .insert(buyIns)
-      .values({ roomId, userId: targetUserId, amount: -buyInTotal, createdBy: callerId })
-  }
 }
 
 const removeMemberSchema = z.object({
@@ -213,12 +190,11 @@ export async function removeMember(
       if (!target) return fail('errors.targetNotMember')
       if (target.leftAt) return fail('errors.alreadyLeft')
       if (target.role === 'host') return fail('errors.cannotRemoveHost')
-
-      if (await hasAcceptedBetInPlayingRound(tx, roomId, targetUserId)) {
-        return fail('errors.cannotRemoveHasAcceptedBet')
+      if (await isActiveRoundParticipant(tx, roomId, targetUserId)) {
+        return fail('errors.cannotRemoveDuringRound')
       }
 
-      await retireMember(tx, roomId, targetUserId, userId)
+      await retireMember(tx, roomId, targetUserId)
       return ok({ targetUserId })
     })
   } catch (error) {
@@ -260,12 +236,11 @@ export async function leaveRoom(
         .limit(1)
       if (!room) return fail('errors.roomNotFound')
       if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
-
-      if (await hasAcceptedBetInPlayingRound(tx, roomId, userId)) {
-        return fail('errors.cannotLeaveHasAcceptedBet')
+      if (await isActiveRoundParticipant(tx, roomId, userId)) {
+        return fail('errors.cannotLeaveDuringRound')
       }
 
-      await retireMember(tx, roomId, userId, userId)
+      await retireMember(tx, roomId, userId)
       return ok({ roomId })
     })
   } catch (error) {

@@ -36,6 +36,9 @@ export function ProxyBetSection({
   const { d } = useDict()
   const [raiseOpen, setRaiseOpen] = useState(false)
   const [raiseAmount, setRaiseAmount] = useState(baseBet)
+  const callAmount = Math.min(lastBet, memberBalance)
+  const callIsAllIn = lastBet > 0 && memberBalance <= lastBet
+  const minRaise = lastBet > 0 ? lastBet + 1 : baseBet
 
   /**
    * 대리 베팅 멱등키 — 같은 의도(대상·액션·금액)의 재시도는 같은 actionId 로 재전송한다.
@@ -100,20 +103,20 @@ export function ProxyBetSection({
         <Button
           variant="win"
           className="flex-col gap-0"
-          disabled={isPending || lastBet === 0 || memberBalance < lastBet}
+          disabled={isPending || lastBet === 0 || callAmount < 1}
           disabledReason={
             lastBet === 0
               ? d.memberSheet.noBetToCall
-              : memberBalance < lastBet
+              : callAmount < 1
                 ? d.actionBar.insufficientBalance
                 : undefined
           }
-          onClick={() => proxyBet('call', lastBet)}
+          onClick={() => proxyBet(callIsAllIn ? 'allin' : 'call', callAmount)}
         >
-          <span>{labels.call}</span>
-          {lastBet > 0 ? (
+          <span>{callIsAllIn ? labels.allin : labels.call}</span>
+          {callAmount > 0 ? (
             <span className="tabular-nums text-[11px] leading-tight opacity-90">
-              {lastBet.toLocaleString()}
+              {callAmount.toLocaleString()}
             </span>
           ) : null}
         </Button>
@@ -121,7 +124,10 @@ export function ProxyBetSection({
           variant={raiseOpen ? 'primary' : 'surface'}
           className={raiseOpen ? '' : 'border border-white/10'}
           disabled={isPending}
-          onClick={() => setRaiseOpen((open) => !open)}
+          onClick={() => {
+            if (!raiseOpen) setRaiseAmount(Math.min(memberBalance, Math.max(baseBet, minRaise)))
+            setRaiseOpen((open) => !open)
+          }}
         >
           {labels.raise}
         </Button>
@@ -134,7 +140,7 @@ export function ProxyBetSection({
           <Stepper
             value={raiseAmount}
             onChange={setRaiseAmount}
-            min={1}
+            min={minRaise}
             max={memberBalance}
             step={baseBet}
             ariaLabel={d.memberSheet.proxyRaiseAria}
@@ -142,8 +148,17 @@ export function ProxyBetSection({
           />
           <Button
             variant="primary"
-            disabled={isPending || raiseAmount < 1 || raiseAmount > memberBalance}
-            onClick={() => proxyBet('raise', raiseAmount)}
+            disabled={isPending || raiseAmount < minRaise || raiseAmount > memberBalance}
+            disabledReason={
+              raiseAmount < minRaise
+                ? format(d.actionBar.minRaise, { n: minRaise.toLocaleString() })
+                : raiseAmount > memberBalance
+                  ? d.actionBar.insufficientBalance
+                  : undefined
+            }
+            onClick={() =>
+              proxyBet(raiseAmount >= memberBalance ? 'allin' : 'raise', raiseAmount)
+            }
           >
             {d.common.confirm}
           </Button>

@@ -11,6 +11,7 @@ import { getRoomSnapshot } from './queries'
 import {
   isUniqueViolation,
   lockRoom,
+  netTotalInRoom,
   readJoinAsObserver,
   readMaxMembers,
   requireRole,
@@ -45,11 +46,7 @@ export async function createRoom(
   if (!parsed.success) return fail('errors.invalidInput')
   const { name, gameType, inputMode, startingChips, pointValue, baseBet } = parsed.data
   const rulePreset =
-    gameType === 'gostop'
-      ? { pointValue: pointValue ?? 10 }
-      : baseBet
-        ? { baseBet }
-        : {}
+    gameType === 'gostop' ? { pointValue: pointValue ?? 10 } : baseBet ? { baseBet } : {}
 
   // 코드 충돌은 UNIQUE 가 잡는다. 확률상 1~2회 재시도면 충분하다.
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -68,14 +65,17 @@ export async function createRoom(
           role: 'host',
           seatNo: 0,
         })
-        await tx
+        const [initialBuyIn] = await tx
           .insert(buyIns)
           .values({ roomId: room.id, userId, amount: startingChips, createdBy: userId })
+          .returning({ id: buyIns.id })
+        if (!initialBuyIn) throw new Error('initial buy-in insert failed')
         await tx.insert(chipLedger).values({
           roomId: room.id,
           userId,
           delta: startingChips,
           reason: 'buy_in',
+          refBuyInId: initialBuyIn.id,
         })
         return room.code
       })
@@ -139,8 +139,8 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
       const entryRole = joinAsObserver ? 'observer' : 'player'
 
       if (existing) {
-        // 재합류 — 좌석은 유지, 역할은 입장 옵션 기준으로 초기화, 시작 칩은 새로 지급한다.
-        // joinedAt 을 갱신해야 "판 시작 후 입장" 베팅 가드가 재합류자에게도 적용된다.
+        // 재합류 — 좌석·기존 원장 잔액은 유지하고 역할만 현재 입장 옵션에 맞춘다.
+        // 시작 칩을 다시 주면 나갔다 들어올 때마다 의도하지 않은 바이인이 생긴다.
         await tx
           .update(roomMembers)
           .set({ leftAt: null, role: entryRole, joinedAt: new Date() })
@@ -156,16 +156,20 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
           .values({ roomId: room.id, userId, role: entryRole, seatNo: seat?.next ?? 0 })
       }
 
-      // observer 입장(신규·재합류 모두)은 시작 칩 지급 없음 — player 승격 시 바이인으로 받는다.
-      if (!joinAsObserver) {
-        await tx
+      // 시작 칩은 신규 player 에게만 한 번 지급한다. 재합류자는 기존 스택을 이어 쓴다.
+      // 신규 observer 는 지급하지 않고, player 승격 후 명시적 바이인을 사용한다.
+      if (!existing && !joinAsObserver) {
+        const [initialBuyIn] = await tx
           .insert(buyIns)
           .values({ roomId: room.id, userId, amount: room.startingChips, createdBy: userId })
+          .returning({ id: buyIns.id })
+        if (!initialBuyIn) throw new Error('initial buy-in insert failed')
         await tx.insert(chipLedger).values({
           roomId: room.id,
           userId,
           delta: room.startingChips,
           reason: 'buy_in',
+          refBuyInId: initialBuyIn.id,
         })
       }
 
@@ -247,8 +251,7 @@ export async function updateRoomSettings(
       // 시작 칩 변경은 첫 판 전에만 — 판이 시작된 뒤에는 손익·팟 계산의 기준이 흔들린다.
       // 같은 값 재전송은 no-op 으로 통과시킨다 (설정 폼이 현재 값을 항상 보내도 안전).
       const startingChips =
-        parsed.data.startingChips !== undefined &&
-        parsed.data.startingChips !== room.startingChips
+        parsed.data.startingChips !== undefined && parsed.data.startingChips !== room.startingChips
           ? parsed.data.startingChips
           : undefined
       if (startingChips !== undefined) {
@@ -261,6 +264,16 @@ export async function updateRoomSettings(
           .where(eq(rounds.roomId, roomId))
           .limit(1)
         if (anyRound) return fail('errors.startingChipsHasRounds')
+      }
+
+      if (maxMembers !== undefined) {
+        const [activeMembers] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(roomMembers)
+          .where(and(eq(roomMembers.roomId, roomId), isNull(roomMembers.leftAt)))
+        if ((activeMembers?.count ?? 0) > maxMembers) {
+          return fail('errors.maxMembersBelowCurrent')
+        }
       }
 
       const preset =
@@ -286,27 +299,21 @@ export async function updateRoomSettings(
         .where(eq(rooms.id, roomId))
 
       if (startingChips !== undefined) {
-        // 시작 칩을 이미 받은 활동 멤버 전원에게 차액(new - old)을 같은 트랜잭션에서 정정한다
-        // — buy_ins 합계와 chip_ledger 잔액이 새 시작 칩과 일치하게 유지된다.
+        // 시작 칩을 이미 받은 멤버 전원에게 차액(new - old)을 같은 트랜잭션에서 정정한다.
+        // 나간 player도 재입장 시 기존 스택을 이어 쓰므로 반드시 함께 조정해야 한다.
         // observer 는 시작 칩을 받지 않았으므로 제외 (승격 시 바이인으로 받는다).
         const delta = startingChips - room.startingChips
         const targets = await tx
           .select({
             userId: roomMembers.userId,
             balance: sql<number>`(
-              select coalesce(sum(${chipLedger.delta}), 0)::int from ${chipLedger}
+              select coalesce(sum(${chipLedger.delta}), 0)::float8 from ${chipLedger}
               where ${chipLedger.roomId} = ${roomId}
                 and ${chipLedger.userId} = ${roomMembers.userId}
             )`,
           })
           .from(roomMembers)
-          .where(
-            and(
-              eq(roomMembers.roomId, roomId),
-              isNull(roomMembers.leftAt),
-              ne(roomMembers.role, 'observer'),
-            ),
-          )
+          .where(and(eq(roomMembers.roomId, roomId), ne(roomMembers.role, 'observer')))
 
         // 시작 칩을 낮추면 전원에게서 차액을 회수한다 — 회수액이 잔액을 넘으면 원장 잔액이
         // 음수가 된다. voidRound·undoLastBuyIn 과 같은 기준으로 미리 막는다.
@@ -315,21 +322,32 @@ export async function updateRoomSettings(
         }
 
         if (targets.length > 0) {
-          await tx.insert(buyIns).values(
-            targets.map((member) => ({
-              roomId,
-              userId: member.userId,
-              amount: delta,
-              createdBy: userId,
-            })),
+          const adjustments = await tx
+            .insert(buyIns)
+            .values(
+              targets.map((member) => ({
+                roomId,
+                userId: member.userId,
+                amount: delta,
+                createdBy: userId,
+              })),
+            )
+            .returning({ id: buyIns.id, userId: buyIns.userId })
+          const adjustmentByUser = new Map(
+            adjustments.map((adjustment) => [adjustment.userId, adjustment.id]),
           )
           await tx.insert(chipLedger).values(
-            targets.map((member) => ({
-              roomId,
-              userId: member.userId,
-              delta,
-              reason: 'buy_in' as const,
-            })),
+            targets.map((member) => {
+              const refBuyInId = adjustmentByUser.get(member.userId)
+              if (!refBuyInId) throw new Error('buy-in adjustment insert failed')
+              return {
+                roomId,
+                userId: member.userId,
+                delta,
+                reason: 'buy_in' as const,
+                refBuyInId,
+              }
+            }),
           )
         }
       }
@@ -360,6 +378,9 @@ export async function closeRoom(roomId: string): Promise<ActionResult<{ code: st
         .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
         .limit(1)
       if (playing) return fail('errors.activeRoundBeforeSettle')
+      if ((await netTotalInRoom(tx, roomId)) !== 0) {
+        return fail('errors.settlementNotBalanced')
+      }
 
       const [room] = await tx
         .update(rooms)

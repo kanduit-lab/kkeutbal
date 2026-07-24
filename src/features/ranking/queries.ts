@@ -1,11 +1,39 @@
-import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import { getMyRecentSessions } from '@/features/game/queries'
 import type { RoundPenaltyView } from '@/features/game/types'
 
-const { rooms, roomMembers, rounds, betActions, chipLedger, buyIns, users } = schema
+const {
+  rooms,
+  roomMembers,
+  rounds,
+  roundParticipants,
+  betActions,
+  chipLedger,
+  buyIns,
+  users,
+} = schema
 
 /** net = balance - buyInTotal. 방 전체 net 합은 0 (칩 보존 불변식). */
+
+/** 순수 관전자는 전적에서 제외하되, 역할 변경 뒤에도 바이인·판 참가 이력이 있으면 포함한다. */
+function hasPlayedSession(): ReturnType<typeof sql> {
+  return sql`(
+    ${roomMembers.role} <> 'observer'
+    or exists (
+      select 1 from ${buyIns} played_buy_in
+      where played_buy_in.room_id = ${roomMembers.roomId}
+        and played_buy_in.user_id = ${roomMembers.userId}
+    )
+    or exists (
+      select 1
+      from ${roundParticipants} played_participant
+      inner join ${rounds} played_round on played_round.id = played_participant.round_id
+      where played_round.room_id = ${roomMembers.roomId}
+        and played_participant.user_id = ${roomMembers.userId}
+    )
+  )`
+}
 
 export interface StandingRow {
   readonly userId: string
@@ -26,15 +54,16 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
       userId: roomMembers.userId,
       displayName: users.displayName,
       avatarUrl: users.avatarUrl,
+      role: roomMembers.role,
     })
     .from(roomMembers)
     .innerJoin(users, eq(users.id, roomMembers.userId))
-    .where(and(eq(roomMembers.roomId, roomId), isNull(roomMembers.leftAt)))
+    .where(eq(roomMembers.roomId, roomId))
 
   const balances = await db
     .select({
       userId: chipLedger.userId,
-      balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int`,
+      balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
     })
     .from(chipLedger)
     .where(eq(chipLedger.roomId, roomId))
@@ -43,7 +72,7 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
   const buyInTotals = await db
     .select({
       userId: buyIns.userId,
-      total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int`,
+      total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
     })
     .from(buyIns)
     .where(eq(buyIns.roomId, roomId))
@@ -53,7 +82,7 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
     .select({
       winnerId: rounds.winnerId,
       wins: sql<number>`count(*)::int`,
-      biggestPot: sql<number>`coalesce(max(${rounds.pot}), 0)::int`,
+      biggestPot: sql<number>`coalesce(max(${rounds.pot}), 0)::float8`,
     })
     .from(rounds)
     .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended')))
@@ -82,6 +111,15 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
   }
 
   return members
+    .filter(
+      (member) =>
+        member.role !== 'observer' ||
+        balanceMap.has(member.userId) ||
+        buyInMap.has(member.userId) ||
+        winMap.has(member.userId) ||
+        raiseMap.has(member.userId) ||
+        foldMap.has(member.userId),
+    )
     .map((member) => {
       const balance = balanceMap.get(member.userId) ?? 0
       const buyInTotal = buyInMap.get(member.userId) ?? 0
@@ -134,7 +172,7 @@ export async function getCumulativeRanking(
   const chipRows = await db
     .select({
       userId: chipLedger.userId,
-      balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int`,
+      balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
     })
     .from(chipLedger)
     .where(inArray(chipLedger.roomId, settledRooms))
@@ -143,7 +181,7 @@ export async function getCumulativeRanking(
   const buyInRows = await db
     .select({
       userId: buyIns.userId,
-      total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int`,
+      total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
     })
     .from(buyIns)
     .where(inArray(buyIns.roomId, settledRooms))
@@ -164,7 +202,7 @@ export async function getCumulativeRanking(
       sessions: sql<number>`count(*)::int`,
     })
     .from(roomMembers)
-    .where(inArray(roomMembers.roomId, settledRooms))
+    .where(and(inArray(roomMembers.roomId, settledRooms), hasPlayedSession()))
     .groupBy(roomMembers.userId)
 
   const userIds = sessionRows.map((row) => row.userId)
@@ -283,10 +321,7 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfile | 
 export interface PlayerGameStats {
   readonly gameType: 'seotda' | 'gostop' | 'poker'
   readonly sessions: number
-  /**
-   * 참가 판 수의 근사치 — 판 단위 참가자를 저장하지 않으므로(rounds 에 참가자 컬럼 없음),
-   * 멤버였던 방에서 끝난(ended) 판 전체를 센다.
-   */
+  /** round_participants 스냅샷으로 집계한 실제 참가 판 수. */
   readonly rounds: number
   readonly wins: number
   readonly net: number
@@ -307,7 +342,7 @@ const GAME_ORDER: ReadonlyArray<PlayerGameStats['gameType']> = ['seotda', 'gosto
 
 /**
  * 개인 누적 전적 — 정산 완료(settled/closed)된 방만, 게임별로 집계한다.
- * 멤버 행은 soft leave(leftAt)라 지워지지 않고, 중도 퇴장자는 상쇄 행으로 net 0 이 되므로
+ * 멤버 행과 재무 기록은 soft leave 뒤에도 보존되므로 중도 퇴장자의 실제 손익까지
  * 누적 랭킹(getCumulativeRanking)과 같은 기준으로 잡힌다.
  */
 export async function getPlayerStats(userId: string): Promise<PlayerStats> {
@@ -316,7 +351,13 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
     .select({ id: roomMembers.roomId })
     .from(roomMembers)
     .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
-    .where(and(eq(roomMembers.userId, userId), inArray(rooms.status, ['settled', 'closed'])))
+    .where(
+      and(
+        eq(roomMembers.userId, userId),
+        inArray(rooms.status, ['settled', 'closed']),
+        hasPlayedSession(),
+      ),
+    )
 
   // 순수 읽기 5개 — 서로 독립이므로 병렬.
   const [sessionRows, roundRows, winRows, balanceRows, buyInRows] = await Promise.all([
@@ -324,13 +365,26 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
       .select({ gameType: rooms.gameType, sessions: sql<number>`count(*)::int` })
       .from(roomMembers)
       .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
-      .where(and(eq(roomMembers.userId, userId), inArray(rooms.status, ['settled', 'closed'])))
+      .where(
+        and(
+          eq(roomMembers.userId, userId),
+          inArray(rooms.status, ['settled', 'closed']),
+          hasPlayedSession(),
+        ),
+      )
       .groupBy(rooms.gameType),
     db
       .select({ gameType: rooms.gameType, rounds: sql<number>`count(*)::int` })
-      .from(rounds)
+      .from(roundParticipants)
+      .innerJoin(rounds, eq(rounds.id, roundParticipants.roundId))
       .innerJoin(rooms, eq(rooms.id, rounds.roomId))
-      .where(and(eq(rounds.status, 'ended'), inArray(rounds.roomId, memberRoomIds)))
+      .where(
+        and(
+          eq(roundParticipants.userId, userId),
+          eq(rounds.status, 'ended'),
+          inArray(rounds.roomId, memberRoomIds),
+        ),
+      )
       .groupBy(rooms.gameType),
     db
       .select({ gameType: rooms.gameType, wins: sql<number>`count(*)::int` })
@@ -347,7 +401,7 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
     db
       .select({
         gameType: rooms.gameType,
-        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int`,
+        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
       })
       .from(chipLedger)
       .innerJoin(rooms, eq(rooms.id, chipLedger.roomId))
@@ -356,7 +410,7 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
     db
       .select({
         gameType: rooms.gameType,
-        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int`,
+        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
       })
       .from(buyIns)
       .innerJoin(rooms, eq(rooms.id, buyIns.roomId))

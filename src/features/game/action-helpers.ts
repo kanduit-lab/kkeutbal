@@ -1,9 +1,9 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 
 /** game 도메인 Server Action 공통 헬퍼. 'use server' 파일이 아니므로 직접 노출되지 않는다. */
 
-const { roomMembers, chipLedger } = schema
+const { roomMembers, chipLedger, buyIns } = schema
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -21,7 +21,13 @@ export async function requireRole(
   const [member] = await tx
     .select({ role: roomMembers.role })
     .from(roomMembers)
-    .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
+    .where(
+      and(
+        eq(roomMembers.roomId, roomId),
+        eq(roomMembers.userId, userId),
+        isNull(roomMembers.leftAt),
+      ),
+    )
     .limit(1)
   return member ? roles.includes(member.role) : false
 }
@@ -32,10 +38,23 @@ export function isUniqueViolation(error: unknown): boolean {
 
 export async function balanceInRoom(tx: Tx, roomId: string, userId: string): Promise<number> {
   const [row] = await tx
-    .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int` })
+    .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8` })
     .from(chipLedger)
     .where(and(eq(chipLedger.roomId, roomId), eq(chipLedger.userId, userId)))
   return row?.balance ?? 0
+}
+
+/** 세션 손익 합계. 정상 원장은 전체 잔액 합과 전체 바이인 합이 같으므로 항상 0이다. */
+export async function netTotalInRoom(tx: Tx, roomId: string): Promise<number> {
+  const [ledger] = await tx
+    .select({ total: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8` })
+    .from(chipLedger)
+    .where(eq(chipLedger.roomId, roomId))
+  const [buyIn] = await tx
+    .select({ total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8` })
+    .from(buyIns)
+    .where(eq(buyIns.roomId, roomId))
+  return (ledger?.total ?? 0) - (buyIn?.total ?? 0)
 }
 
 /** rulePreset jsonb 에서 고스톱 점당 칩. 없으면 10. */

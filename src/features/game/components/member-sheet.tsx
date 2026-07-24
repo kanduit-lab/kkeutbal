@@ -7,7 +7,7 @@ import { format, useDict } from '@/lib/i18n/client'
 import { leaveRoom, removeMember, transferHost } from '../member-actions'
 import type { MemberView, RoomSnapshot } from '../types'
 import { Avatar, Badge, Button, ConfirmDialog, useModalBehavior, useToast } from '@/components/ui'
-import type { RunAction } from './shared'
+import { highestAcceptedWager, type RunAction } from './shared'
 import { StatTile } from './member-sheet-parts'
 import { ProxyBetSection } from './member-sheet-proxy-bet'
 import { BuyInSection } from './member-sheet-buy-in'
@@ -59,12 +59,7 @@ export function MemberSheet({
   const round = snapshot.currentRound
   const net = member.balance - member.buyInTotal
 
-  const lastBet = useMemo(() => {
-    const accepted = snapshot.actions.filter(
-      (action) => action.status === 'accepted' && action.amount > 0,
-    )
-    return accepted.length > 0 ? accepted[accepted.length - 1]!.amount : 0
-  }, [snapshot.actions])
+  const lastBet = useMemo(() => highestAcceptedWager(snapshot.actions), [snapshot.actions])
 
   const run = (task: () => Promise<boolean>, closeAfter = true) => {
     if (isPending) return
@@ -271,11 +266,13 @@ export function MemberSheet({
           run(
             () =>
               runAction(
-                () =>
-                  undoLastBuyIn({ roomId: snapshot.room.id, targetUserId: member.userId }),
+                () => undoLastBuyIn({ roomId: snapshot.room.id, targetUserId: member.userId }),
                 (data) => {
                   // 취소된 실제 금액은 서버 응답에서만 안다 — 성공 토스트로 알려준다.
-                  toast(format(d.memberSheet.undoneToast, { n: data.amount.toLocaleString() }), 'success')
+                  toast(
+                    format(d.memberSheet.undoneToast, { n: data.amount.toLocaleString() }),
+                    'success',
+                  )
                 },
               ),
             // 시트를 열어 둬 잔액이 줄어든 것을 바로 확인하게 한다.

@@ -1,6 +1,6 @@
 'use server'
 
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
@@ -34,21 +34,32 @@ export async function addBuyIn(
       const [caller] = await tx
         .select({ role: roomMembers.role })
         .from(roomMembers)
-        .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, callerId)))
+        .where(
+          and(
+            eq(roomMembers.roomId, roomId),
+            eq(roomMembers.userId, callerId),
+            isNull(roomMembers.leftAt),
+          ),
+        )
         .limit(1)
       if (!caller) return fail('errors.notMember')
 
       const isDealer = caller.role === 'host' || caller.role === 'dealer'
       if (userId !== callerId && !isDealer) return fail('errors.proxyBuyInDealerOnly')
 
-      if (userId !== callerId) {
-        const [target] = await tx
-          .select({ userId: roomMembers.userId })
-          .from(roomMembers)
-          .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
-          .limit(1)
-        if (!target) return fail('errors.targetNotMember')
-      }
+      const [target] = await tx
+        .select({ userId: roomMembers.userId, role: roomMembers.role })
+        .from(roomMembers)
+        .where(
+          and(
+            eq(roomMembers.roomId, roomId),
+            eq(roomMembers.userId, userId),
+            isNull(roomMembers.leftAt),
+          ),
+        )
+        .limit(1)
+      if (!target) return fail('errors.targetNotMember')
+      if (target.role === 'observer') return fail('errors.observerCannotBuyIn')
 
       const [room] = await tx
         .select({ status: rooms.status })
@@ -58,11 +69,17 @@ export async function addBuyIn(
       if (!room) return fail('errors.roomNotFound')
       if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
-      await tx.insert(buyIns).values({ roomId, userId, amount, createdBy: callerId })
-      await tx.insert(chipLedger).values({ roomId, userId, delta: amount, reason: 'buy_in' })
+      const [buyIn] = await tx
+        .insert(buyIns)
+        .values({ roomId, userId, amount, createdBy: callerId })
+        .returning({ id: buyIns.id })
+      if (!buyIn) return fail('errors.addBuyInFailed')
+      await tx
+        .insert(chipLedger)
+        .values({ roomId, userId, delta: amount, reason: 'buy_in', refBuyInId: buyIn.id })
 
       const [balanceRow] = await tx
-        .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int` })
+        .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8` })
         .from(chipLedger)
         .where(and(eq(chipLedger.roomId, roomId), eq(chipLedger.userId, userId)))
 
@@ -117,7 +134,7 @@ export async function undoLastBuyIn(
 
       // 최신 행이 음수(이미 취소분)면 되돌릴 지급이 없다 — 연쇄 취소 방지.
       const [lastBuyIn] = await tx
-        .select({ amount: buyIns.amount })
+        .select({ id: buyIns.id, amount: buyIns.amount })
         .from(buyIns)
         .where(and(eq(buyIns.roomId, roomId), eq(buyIns.userId, targetUserId)))
         .orderBy(desc(buyIns.createdAt))
@@ -129,8 +146,8 @@ export async function undoLastBuyIn(
         return fail('errors.buyInAlreadySpent')
       }
 
-      // buy_ins 와 chip_ledger 는 FK 로 연결되지 않는다 — 같은 금액의 최신 buy_in
-      // 원장 행을 원본으로 추정해 revertedOf 로 가리킨다 (없으면 null).
+      // 신규 데이터는 refBuyInId 로 정확히 연결된다. 마이그레이션 전 레거시 행만
+      // 같은 금액의 최신 원장을 호환 경로로 찾는다.
       const [originalLedger] = await tx
         .select({ id: chipLedger.id })
         .from(chipLedger)
@@ -140,19 +157,29 @@ export async function undoLastBuyIn(
             eq(chipLedger.userId, targetUserId),
             eq(chipLedger.reason, 'buy_in'),
             eq(chipLedger.delta, lastBuyIn.amount),
+            sql`(${chipLedger.refBuyInId} = ${lastBuyIn.id} or ${chipLedger.refBuyInId} is null)`,
           ),
         )
-        .orderBy(desc(chipLedger.createdAt))
+        .orderBy(sql`${chipLedger.refBuyInId} is not null desc`, desc(chipLedger.createdAt))
         .limit(1)
 
-      await tx
+      const [reversal] = await tx
         .insert(buyIns)
-        .values({ roomId, userId: targetUserId, amount: -lastBuyIn.amount, createdBy: callerId })
+        .values({
+          roomId,
+          userId: targetUserId,
+          amount: -lastBuyIn.amount,
+          createdBy: callerId,
+          revertedOf: lastBuyIn.id,
+        })
+        .returning({ id: buyIns.id })
+      if (!reversal) throw new Error('buy-in reversal insert failed')
       await tx.insert(chipLedger).values({
         roomId,
         userId: targetUserId,
         delta: -lastBuyIn.amount,
         reason: 'correction',
+        refBuyInId: reversal.id,
         revertedOf: originalLedger?.id ?? null,
       })
 

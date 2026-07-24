@@ -16,7 +16,26 @@ import type {
   RoundPenaltyView,
 } from './types'
 
-const { rooms, roomMembers, users, rounds, betActions, chipLedger, buyIns } = schema
+const { rooms, roomMembers, users, rounds, roundParticipants, betActions, chipLedger, buyIns } =
+  schema
+
+function hasPlayedSession(): ReturnType<typeof sql> {
+  return sql`(
+    ${roomMembers.role} <> 'observer'
+    or exists (
+      select 1 from ${buyIns} played_buy_in
+      where played_buy_in.room_id = ${roomMembers.roomId}
+        and played_buy_in.user_id = ${roomMembers.userId}
+    )
+    or exists (
+      select 1
+      from ${roundParticipants} played_participant
+      inner join ${rounds} played_round on played_round.id = played_participant.round_id
+      where played_round.room_id = ${roomMembers.roomId}
+        and played_participant.user_id = ${roomMembers.userId}
+    )
+  )`
+}
 
 export async function findRoomByCode(code: string): Promise<RoomView | null> {
   const [room] = await db.select().from(rooms).where(eq(rooms.code, code)).limit(1)
@@ -48,7 +67,13 @@ export async function getMemberRole(
   const [member] = await db
     .select({ role: roomMembers.role })
     .from(roomMembers)
-    .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
+    .where(
+      and(
+        eq(roomMembers.roomId, roomId),
+        eq(roomMembers.userId, userId),
+        isNull(roomMembers.leftAt),
+      ),
+    )
     .limit(1)
   return member?.role ?? null
 }
@@ -72,7 +97,7 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
     db
       .select({
         userId: chipLedger.userId,
-        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int`,
+        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
       })
       .from(chipLedger)
       .where(eq(chipLedger.roomId, roomId))
@@ -80,7 +105,7 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
     db
       .select({
         userId: buyIns.userId,
-        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int`,
+        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
       })
       .from(buyIns)
       .where(eq(buyIns.roomId, roomId))
@@ -106,7 +131,7 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
 export async function getRoundPot(roundId: string): Promise<number> {
   const [row] = await db
     .select({
-      pot: sql<number>`coalesce(-sum(${chipLedger.delta}), 0)::int`,
+      pot: sql<number>`coalesce(-sum(${chipLedger.delta}), 0)::float8`,
     })
     .from(chipLedger)
     .where(
@@ -340,7 +365,11 @@ export async function getMyRecentSessions(
     .from(roomMembers)
     .innerJoin(rooms, eq(rooms.id, roomMembers.roomId))
     .where(
-      and(eq(roomMembers.userId, userId), inArray(rooms.status, ['settled', 'closed'])),
+      and(
+        eq(roomMembers.userId, userId),
+        inArray(rooms.status, ['settled', 'closed']),
+        hasPlayedSession(),
+      ),
     )
     .orderBy(desc(sql`coalesce(${rooms.closedAt}, ${rooms.createdAt})`))
     .limit(limit)
@@ -353,7 +382,7 @@ export async function getMyRecentSessions(
     db
       .select({
         roomId: chipLedger.roomId,
-        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int`,
+        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
       })
       .from(chipLedger)
       .where(and(eq(chipLedger.userId, userId), inArray(chipLedger.roomId, roomIds)))
@@ -361,7 +390,7 @@ export async function getMyRecentSessions(
     db
       .select({
         roomId: buyIns.roomId,
-        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::int`,
+        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
       })
       .from(buyIns)
       .where(and(eq(buyIns.userId, userId), inArray(buyIns.roomId, roomIds)))

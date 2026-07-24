@@ -1,6 +1,6 @@
 'use server'
 
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
@@ -11,7 +11,7 @@ import type { RoundPenaltyView } from './types'
 
 /** 판 진행 액션 — 시작·종료·무효. 방 수명주기는 actions.ts. */
 
-const { rooms, roomMembers, rounds, chipLedger } = schema
+const { rooms, roomMembers, rounds, roundParticipants, chipLedger } = schema
 
 export async function startRound(
   roomId: string,
@@ -29,6 +29,18 @@ export async function startRound(
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
       if (!room) return fail('errors.roomNotFound')
       if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
+
+      const participants = await tx
+        .select({ userId: roomMembers.userId })
+        .from(roomMembers)
+        .where(
+          and(
+            eq(roomMembers.roomId, roomId),
+            isNull(roomMembers.leftAt),
+            ne(roomMembers.role, 'observer'),
+          ),
+        )
+      if (participants.length < 2) return fail('errors.roundNeedsTwoPlayers')
 
       const [playing] = await tx
         .select({ id: rounds.id })
@@ -48,6 +60,12 @@ export async function startRound(
         .values({ roomId, seq })
         .returning({ id: rounds.id, seq: rounds.seq })
       if (!round) return fail('errors.createRoundFailed')
+      await tx.insert(roundParticipants).values(
+        participants.map((participant) => ({
+          roundId: round.id,
+          userId: participant.userId,
+        })),
+      )
 
       if (room.status === 'waiting') {
         await tx.update(rooms).set({ status: 'playing' }).where(eq(rooms.id, roomId))
@@ -77,7 +95,13 @@ const endRoundSchema = z.object({
    * 고스톱 패자별 박 배수. 목록에 없는 패자는 1배.
    * 흔들기·총통 같은 공통 배수는 딜러 UI가 score에 미리 곱해서 보낸다.
    */
-  loserPenalties: z.array(loserPenaltySchema).max(9).optional(),
+  loserPenalties: z
+    .array(loserPenaltySchema)
+    .max(9)
+    .refine(
+      (penalties) => new Set(penalties.map((penalty) => penalty.userId)).size === penalties.length,
+    )
+    .optional(),
 })
 
 export async function endRound(
@@ -111,11 +135,41 @@ export async function endRound(
       if (!round) return fail('errors.noActiveRound')
 
       const [winner] = await tx
-        .select({ userId: roomMembers.userId })
-        .from(roomMembers)
-        .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, winnerId)))
+        .select({ userId: roundParticipants.userId })
+        .from(roundParticipants)
+        .innerJoin(
+          roomMembers,
+          and(
+            eq(roomMembers.roomId, roomId),
+            eq(roomMembers.userId, roundParticipants.userId),
+          ),
+        )
+        .where(
+          and(
+            eq(roundParticipants.roundId, round.id),
+            eq(roundParticipants.userId, winnerId),
+            isNull(roomMembers.leftAt),
+            ne(roomMembers.role, 'observer'),
+          ),
+        )
         .limit(1)
-      if (!winner) return fail('errors.winnerMustBeMember')
+      if (!winner) return fail('errors.winnerNotEligible')
+
+      if (!isGostop) {
+        const [winnerLastAction] = await tx
+          .select({ action: schema.betActions.action })
+          .from(schema.betActions)
+          .where(
+            and(
+              eq(schema.betActions.roundId, round.id),
+              eq(schema.betActions.userId, winnerId),
+              eq(schema.betActions.status, 'accepted'),
+            ),
+          )
+          .orderBy(desc(schema.betActions.seq))
+          .limit(1)
+        if (winnerLastAction?.action === 'fold') return fail('errors.foldedPlayerCannotWin')
+      }
 
       // 승인 대기 중인 액션이 남아 있으면 팟이 확정되지 않는다.
       const [pending] = await tx
@@ -135,40 +189,22 @@ export async function endRound(
         const pointValue = readPointValue(room.rulePreset)
 
         const penalties = loserPenalties ?? []
-        if (penalties.length > 0) {
-          const memberRows = await tx
-            .select({ userId: roomMembers.userId })
-            .from(roomMembers)
-            .where(
-              and(
-                eq(roomMembers.roomId, roomId),
-                inArray(
-                  roomMembers.userId,
-                  penalties.map((penalty) => penalty.userId),
-                ),
-              ),
-            )
-          const memberIds = new Set(memberRows.map((row) => row.userId))
-          if (penalties.some((penalty) => !memberIds.has(penalty.userId))) {
-            return fail('errors.invalidLoserData')
-          }
+        const losers = await tx
+          .select({ userId: roundParticipants.userId })
+          .from(roundParticipants)
+          .where(
+            and(
+              eq(roundParticipants.roundId, round.id),
+              ne(roundParticipants.userId, winnerId),
+            ),
+          )
+        const loserIds = new Set(losers.map((loser) => loser.userId))
+        if (penalties.some((penalty) => !loserIds.has(penalty.userId))) {
+          return fail('errors.invalidLoserData')
         }
-        // 실제 패자가 아닌 항목(승자·관전자·퇴장자)은 아래 패자 순회에서만 조회되므로 조용히 무시된다.
         const factorByLoser = new Map(
           penalties.map((penalty) => [penalty.userId, penalty.factor] as const),
         )
-
-        const losers = await tx
-          .select({ userId: roomMembers.userId })
-          .from(roomMembers)
-          .where(
-            and(
-              eq(roomMembers.roomId, roomId),
-              sql`${roomMembers.leftAt} is null`,
-              sql`${roomMembers.role} <> 'observer'`,
-              sql`${roomMembers.userId} <> ${winnerId}`,
-            ),
-          )
 
         let collected = 0
         for (const loser of losers) {
@@ -187,9 +223,8 @@ export async function endRound(
         }
         // 표시용 기록 — 실제 패자에게 적용된 박(factor>1)만 남긴다. 지급액이 올인으로 깎여도
         // "박이 적용됐다"는 사실 자체는 바뀌지 않으므로 owed/pay 와 무관하게 입력값 기준으로 남긴다.
-        const loserIds = new Set(losers.map((loser) => loser.userId))
         persistedPenalties = penalties.flatMap((penalty) => {
-          if (penalty.factor === 1 || !loserIds.has(penalty.userId)) return []
+          if (penalty.factor === 1) return []
           return [{ userId: penalty.userId, factor: penalty.factor }]
         })
         if (collected > 0) {

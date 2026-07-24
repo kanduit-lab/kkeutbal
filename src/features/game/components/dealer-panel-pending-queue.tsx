@@ -61,10 +61,20 @@ export function PendingApprovalQueue({
                   run(() =>
                     runAction(
                       () => approveBet({ actionId: action.id }),
-                      () => ({
-                        event: 'bet.approved',
-                        payload: { actionId: action.id, approvedBy: selfId },
-                      }),
+                      (data) =>
+                        data.action.status === 'accepted'
+                          ? {
+                              event: 'bet.approved',
+                              payload: { actionId: action.id, approvedBy: selfId },
+                            }
+                          : {
+                              event: 'bet.rejected',
+                              payload: {
+                                actionId: action.id,
+                                rejectedBy: selfId,
+                                reason: data.action.reason ?? 'errors.approveBetFailed',
+                              },
+                            },
                     ),
                   )
                 }

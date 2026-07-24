@@ -6,9 +6,8 @@
  * 그리디: 최대 채무자 → 최대 채권자 순으로 상계해 이체 수를 인원-1 이하로 줄인다.
  * 정렬 기준(net → userId)이 고정이라 입력 순서와 무관하게 결과가 결정적이다.
  *
- * net 합이 0이 아닌 입력(부분 데이터·집계 오류)은 던지지 않는다 — 상계 가능한
- * 만큼만 정산하고 나머지 잔액은 이체 없이 남긴다. 결과 화면이 죽는 것보다
- * 부분 정산이 낫다. net 합 0 불변식 보장은 호출자(칩 원장 집계) 몫이다.
+ * net 합이 0이 아니면 완전한 정산이 불가능하므로 예외를 던진다.
+ * 일부만 맞춰 주는 이체 목록은 실제 채권·채무를 누락하므로 생성하지 않는다.
  */
 
 export interface SettlementTransfer {
@@ -25,6 +24,26 @@ interface Party {
 export function computeSettlementTransfers(
   rows: readonly { readonly userId: string; readonly net: number }[],
 ): SettlementTransfer[] {
+  const seen = new Set<string>()
+  let netTotal = 0
+  for (const row of rows) {
+    if (!row.userId.trim()) throw new TypeError('Settlement userId must not be empty')
+    if (seen.has(row.userId)) {
+      throw new TypeError(`Settlement userId must be unique, received ${row.userId}`)
+    }
+    if (!Number.isSafeInteger(row.net)) {
+      throw new RangeError(`Settlement net must be a safe integer, received ${row.net}`)
+    }
+    seen.add(row.userId)
+    netTotal += row.net
+    if (!Number.isSafeInteger(netTotal)) {
+      throw new RangeError('Settlement net total exceeds the safe integer range')
+    }
+  }
+  if (netTotal !== 0) {
+    throw new RangeError(`Settlement net total must be zero, received ${netTotal}`)
+  }
+
   // net 0은 정산 대상이 아니다. 입력은 변형하지 않고 로컬 사본으로만 계산한다.
   const debtors: Party[] = rows
     .filter((row) => row.net < 0)

@@ -10,6 +10,7 @@ import { format, useDict } from '@/lib/i18n/client'
 import {
   betLabelsFor,
   formatChips,
+  highestAcceptedWager,
   lastAcceptedByUser,
   raisePresets,
   type RunAction,
@@ -78,13 +79,8 @@ export function ActionBar({
           ? d.actionBar.pendingGate
           : null
 
-  /** 직전 확정 베팅 금액 — 콜 기준. */
-  const lastBet = useMemo(() => {
-    const accepted = snapshot.actions.filter(
-      (action) => action.status === 'accepted' && action.amount > 0,
-    )
-    return accepted.length > 0 ? accepted[accepted.length - 1]!.amount : 0
-  }, [snapshot.actions])
+  /** 확정된 최고 베팅 금액 — 짧은 올인 뒤에도 콜 기준은 낮아지지 않는다. */
+  const lastBet = useMemo(() => highestAcceptedWager(snapshot.actions), [snapshot.actions])
 
   const base = snapshot.room.baseBet
   const canCheck = lastBet === 0
@@ -205,7 +201,9 @@ export function ActionBar({
         <div className="flex items-center justify-between text-sm font-medium text-muted">
           <span>
             {d.actionBar.myChips}{' '}
-            <span className="gilt text-base font-black tabular-nums">{formatChips(balance, locale)}</span>
+            <span className="gilt text-base font-black tabular-nums">
+              {formatChips(balance, locale)}
+            </span>
           </span>
           {lastBet > 0 ? (
             <span>
@@ -229,14 +227,22 @@ export function ActionBar({
               <span>{d.actionBar.raiseAmount}</span>
               <span>{format(d.actionBar.minRaise, { n: formatChips(minRaise, locale) })}</span>
             </div>
-            <div className={presets.length > 4 ? 'grid grid-cols-5 gap-1.5' : 'grid grid-cols-4 gap-1.5'}>
+            <div
+              className={
+                presets.length > 4 ? 'grid grid-cols-5 gap-1.5' : 'grid grid-cols-4 gap-1.5'
+              }
+            >
               {presets.map((preset) => (
                 <Button
                   key={preset.label}
                   type="button"
                   size="sm"
                   variant={raiseAmount === preset.amount ? 'primary' : 'surface'}
-                  className={raiseAmount === preset.amount ? 'flex-col gap-0' : 'flex-col gap-0 border border-white/10'}
+                  className={
+                    raiseAmount === preset.amount
+                      ? 'flex-col gap-0'
+                      : 'flex-col gap-0 border border-white/10'
+                  }
                   disabled={preset.amount > balance}
                   disabledReason={
                     preset.amount > balance ? d.actionBar.insufficientBalance : undefined
@@ -306,7 +312,9 @@ export function ActionBar({
               disabledReason={reason ?? (callAmount < 1 ? d.actionBar.noBalance : undefined)}
               onClick={() => fire(callIsAllin ? 'allin' : 'call', callAmount)}
             >
-              <span className="text-lg leading-tight">{callIsAllin ? labels.allin : labels.call}</span>
+              <span className="text-lg leading-tight">
+                {callIsAllin ? labels.allin : labels.call}
+              </span>
               <span className="tabular-nums text-xs leading-tight opacity-90">
                 {formatChips(callAmount, locale)}
               </span>

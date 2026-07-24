@@ -1,53 +1,37 @@
 'use server'
 
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
+import {
+  balanceInRoom,
+  defaultBaseBet,
+  lockRoom,
+  readBaseBet,
+  requireRole,
+  type Tx,
+} from '../game/action-helpers'
 import type { BetActionView } from '../game/types'
 
-const { rooms, roomMembers, rounds, betActions, chipLedger } = schema
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
-
-async function lockRoom(tx: Tx, roomId: string): Promise<void> {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${roomId}, 42))`)
-}
-
-async function memberRole(tx: Tx, roomId: string, userId: string): Promise<string | null> {
-  const [member] = await tx
-    .select({ role: roomMembers.role })
-    .from(roomMembers)
-    .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
-    .limit(1)
-  return member?.role ?? null
-}
+const { rooms, roomMembers, rounds, roundParticipants, betActions, chipLedger } = schema
 
 /** placeBet 전용 — 역할에 더해 입장 시각·퇴장 여부까지 본다. */
 async function memberInfo(
   tx: Tx,
   roomId: string,
   userId: string,
-): Promise<{ role: string; joinedAt: Date; leftAt: Date | null } | null> {
+): Promise<{ role: string; leftAt: Date | null } | null> {
   const [member] = await tx
     .select({
       role: roomMembers.role,
-      joinedAt: roomMembers.joinedAt,
       leftAt: roomMembers.leftAt,
     })
     .from(roomMembers)
     .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
     .limit(1)
   return member ?? null
-}
-
-async function balanceOf(tx: Tx, roomId: string, userId: string): Promise<number> {
-  const [row] = await tx
-    .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::int` })
-    .from(chipLedger)
-    .where(and(eq(chipLedger.roomId, roomId), eq(chipLedger.userId, userId)))
-  return row?.balance ?? 0
 }
 
 function toView(action: typeof betActions.$inferSelect): BetActionView {
@@ -74,6 +58,75 @@ const placeBetSchema = z.object({
   /** 대리 입력 대상. 생략하면 본인. */
   targetUserId: z.string().uuid().optional(),
 })
+
+type BetKind = z.infer<typeof placeBetSchema>['action']
+
+async function validateBetSemantics(
+  tx: Tx,
+  input: {
+    room: typeof rooms.$inferSelect
+    roundId: string
+    userId: string
+    action: BetKind
+    amount: number
+    beforeSeq?: number
+  },
+): Promise<string | null> {
+  const { room, roundId, userId, action, amount, beforeSeq } = input
+  const before = beforeSeq === undefined ? undefined : lt(betActions.seq, beforeSeq)
+
+  const [lastUserAction] = await tx
+    .select({ action: betActions.action })
+    .from(betActions)
+    .where(
+      and(
+        eq(betActions.roundId, roundId),
+        eq(betActions.userId, userId),
+        eq(betActions.status, 'accepted'),
+        before,
+      ),
+    )
+    .orderBy(desc(betActions.seq))
+    .limit(1)
+  if (lastUserAction?.action === 'fold') return 'errors.cannotBetAfterFold'
+  if (lastUserAction?.action === 'allin') return 'errors.cannotBetAfterAllIn'
+
+  // 올인은 잔액만큼의 짧은 베팅일 수 있어도, 이미 형성된 콜 기준을 낮추면 안 된다.
+  // 이 단순 베팅 모델의 현재 콜 기준은 확정된 베팅 중 최댓값으로 단조 증가한다.
+  const [highestWager] = await tx
+    .select({ amount: sql<number>`coalesce(max(${betActions.amount}), 0)::int` })
+    .from(betActions)
+    .where(
+      and(
+        eq(betActions.roundId, roundId),
+        eq(betActions.status, 'accepted'),
+        gt(betActions.amount, 0),
+        before,
+      ),
+    )
+
+  const lastBet = highestWager?.amount ?? 0
+  const balance = await balanceInRoom(tx, room.id, userId)
+  if (action === 'check') return lastBet === 0 ? null : 'errors.cannotCheckAfterBet'
+  if (action === 'fold') return null
+  if (balance < 1) return 'errors.insufficientBalance'
+
+  if (action === 'allin') {
+    return amount === balance ? null : 'errors.allInMustUseFullBalance'
+  }
+  if (amount > balance) return 'errors.insufficientBalance'
+
+  if (action === 'call') {
+    if (lastBet === 0) return 'errors.noBetToCall'
+    return amount === Math.min(lastBet, balance) ? null : 'errors.invalidCallAmount'
+  }
+
+  const baseBet = readBaseBet(room.rulePreset) ?? defaultBaseBet(room.startingChips)
+  const minRaise = lastBet > 0 ? lastBet + 1 : baseBet
+  if (amount < minRaise) return 'errors.raiseBelowMinimum'
+  if (amount === balance) return 'errors.allInMustUseAllInAction'
+  return null
+}
 
 export async function placeBet(
   input: z.infer<typeof placeBetSchema>,
@@ -105,6 +158,25 @@ export async function placeBet(
       if (!target || target.leftAt) return fail('errors.targetNotMember')
       if (target.role === 'observer') return fail('errors.observerCannotBet')
 
+      const [existing] = await tx
+        .select()
+        .from(betActions)
+        .where(eq(betActions.id, actionId))
+        .limit(1)
+      if (existing) {
+        const enteredBy = isProxy ? callerId : null
+        if (
+          existing.roomId !== roomId ||
+          existing.userId !== userId ||
+          existing.enteredBy !== enteredBy ||
+          existing.action !== action ||
+          existing.amount !== amount
+        ) {
+          return fail('errors.actionIdConflict')
+        }
+        return ok({ action: toView(existing) })
+      }
+
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
       if (!room) return fail('errors.roomNotFound')
       // 고스톱은 베팅 없이 판 종료 시 점수로 정산한다.
@@ -118,26 +190,47 @@ export async function placeBet(
         .limit(1)
       if (!round) return fail('errors.noActiveRound')
 
-      // 판 시작 후 입장한 멤버는 이번 판에 참여할 수 없다 — 본인·대리 입력 동일.
-      if (target.joinedAt > round.startedAt) {
+      const [participant] = await tx
+        .select({ userId: roundParticipants.userId })
+        .from(roundParticipants)
+        .where(and(eq(roundParticipants.roundId, round.id), eq(roundParticipants.userId, userId)))
+        .limit(1)
+      if (!participant) {
         return fail('errors.joinedAfterRoundStart')
       }
 
-      // 멱등: 같은 actionId 재전송이면 기존 행을 그대로 돌려준다.
-      const [existing] = await tx
-        .select()
+      const [pending] = await tx
+        .select({ id: betActions.id })
         .from(betActions)
-        .where(eq(betActions.id, actionId))
+        .where(
+          and(
+            eq(betActions.roundId, round.id),
+            eq(betActions.userId, userId),
+            eq(betActions.status, 'pending'),
+          ),
+        )
         .limit(1)
-      if (existing) return ok({ action: toView(existing) })
+      if (pending) return fail('errors.pendingActionExists')
 
-      if (movesChips) {
-        const balance = await balanceOf(tx, roomId, userId)
-        if (balance < amount) return fail('errors.insufficientBalance')
-      }
+      const semanticError = await validateBetSemantics(tx, {
+        room,
+        roundId: round.id,
+        userId,
+        action,
+        amount,
+      })
+      if (semanticError) return fail(semanticError)
 
       // 신뢰 모드는 즉시 확정. 승인 모드에서도 딜러 본인/대리 입력은 즉시 확정.
       const autoAccept = room.inputMode === 'trust' || isDealer
+      if (autoAccept && room.inputMode === 'approval') {
+        const [earlierPending] = await tx
+          .select({ id: betActions.id })
+          .from(betActions)
+          .where(and(eq(betActions.roundId, round.id), eq(betActions.status, 'pending')))
+          .limit(1)
+        if (earlierPending) return fail('errors.pendingBetsBeforeNewAction')
+      }
 
       const [seqRow] = await tx
         .select({ max: sql<number>`coalesce(max(${betActions.seq}), 0)` })
@@ -203,8 +296,7 @@ export async function approveBet(
 
       await lockRoom(tx, target.roomId)
 
-      const callerRole = await memberRole(tx, target.roomId, callerId)
-      if (callerRole !== 'host' && callerRole !== 'dealer') {
+      if (!(await requireRole(tx, target.roomId, callerId, ['host', 'dealer']))) {
         return fail('errors.dealerOrHostOnlyApprove')
       }
 
@@ -223,22 +315,60 @@ export async function approveBet(
         .limit(1)
       if (round?.status !== 'playing') return fail('errors.roundAlreadyEnded')
 
+      const [earlierPending] = await tx
+        .select({ id: betActions.id })
+        .from(betActions)
+        .where(
+          and(
+            eq(betActions.roundId, fresh.roundId),
+            eq(betActions.status, 'pending'),
+            lt(betActions.seq, fresh.seq),
+          ),
+        )
+        .limit(1)
+      if (earlierPending) return fail('errors.approvePendingInOrder')
+
+      const [activeTarget] = await tx
+        .select({ id: roomMembers.userId })
+        .from(roomMembers)
+        .innerJoin(
+          roundParticipants,
+          and(
+            eq(roundParticipants.roundId, fresh.roundId),
+            eq(roundParticipants.userId, roomMembers.userId),
+          ),
+        )
+        .where(
+          and(
+            eq(roomMembers.roomId, fresh.roomId),
+            eq(roomMembers.userId, fresh.userId),
+            isNull(roomMembers.leftAt),
+          ),
+        )
+        .limit(1)
+
       const movesChips =
         fresh.action === 'call' || fresh.action === 'raise' || fresh.action === 'allin'
 
-      if (movesChips) {
-        const balance = await balanceOf(tx, fresh.roomId, fresh.userId)
-        if (balance < fresh.amount) {
-          // 잔액이 사이에 줄었으면 자동 거절 — 사유를 남긴다.
-          const [rejected] = await tx
-            .update(betActions)
-            .set({ status: 'rejected', approvedBy: callerId, reason: '잔액 부족 (자동 거절)' })
-            .where(eq(betActions.id, fresh.id))
-            .returning()
-          return rejected
-            ? ok({ action: toView(rejected) })
-            : fail('errors.approveBetProcessFailed')
-        }
+      const [room] = await tx.select().from(rooms).where(eq(rooms.id, fresh.roomId)).limit(1)
+      if (!room) return fail('errors.roomNotFound')
+      const semanticError = activeTarget
+        ? await validateBetSemantics(tx, {
+            room,
+            roundId: fresh.roundId,
+            userId: fresh.userId,
+            action: fresh.action,
+            amount: fresh.amount,
+            beforeSeq: fresh.seq,
+          })
+        : 'errors.targetNotMember'
+      if (semanticError) {
+        const [rejected] = await tx
+          .update(betActions)
+          .set({ status: 'rejected', approvedBy: callerId, reason: semanticError })
+          .where(and(eq(betActions.id, fresh.id), eq(betActions.status, 'pending')))
+          .returning()
+        return rejected ? ok({ action: toView(rejected) }) : fail('errors.approveBetProcessFailed')
       }
 
       const [updated] = await tx
@@ -293,8 +423,7 @@ export async function rejectBet(
 
       await lockRoom(tx, target.roomId)
 
-      const callerRole = await memberRole(tx, target.roomId, callerId)
-      if (callerRole !== 'host' && callerRole !== 'dealer') {
+      if (!(await requireRole(tx, target.roomId, callerId, ['host', 'dealer']))) {
         return fail('errors.dealerOrHostOnlyReject')
       }
 
@@ -339,8 +468,7 @@ export async function revertBet(
 
       await lockRoom(tx, target.roomId)
 
-      const callerRole = await memberRole(tx, target.roomId, callerId)
-      if (callerRole !== 'host' && callerRole !== 'dealer') {
+      if (!(await requireRole(tx, target.roomId, callerId, ['host', 'dealer']))) {
         return fail('errors.dealerOrHostOnlyRevert')
       }
 
@@ -352,6 +480,21 @@ export async function revertBet(
       if (round?.status !== 'playing') {
         return fail('errors.cannotRevertEndedRound')
       }
+
+      // 뒤 액션은 이 액션을 전제로 콜·레이즈됐을 수 있다. 역순으로만 정정해야
+      // 남은 액션의 의미와 팟 원장이 일치한다.
+      const [laterAccepted] = await tx
+        .select({ id: betActions.id })
+        .from(betActions)
+        .where(
+          and(
+            eq(betActions.roundId, target.roundId),
+            eq(betActions.status, 'accepted'),
+            gt(betActions.seq, target.seq),
+          ),
+        )
+        .limit(1)
+      if (laterAccepted) return fail('errors.revertLatestFirst')
 
       const [updated] = await tx
         .update(betActions)

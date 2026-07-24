@@ -67,12 +67,22 @@ export function RoomClient({
           break
         case 'bet.rejected':
           if (isMyAction(event.payload.actionId)) {
-            toast(format(d.room.toastBetRejected, { reason: event.payload.reason }), 'error')
+            toast(
+              format(d.room.toastBetRejected, {
+                reason: translateError(d, event.payload.reason),
+              }),
+              'error',
+            )
           }
           break
         case 'bet.reverted':
           if (isMyAction(event.payload.actionId)) {
-            toast(format(d.room.toastBetReverted, { reason: event.payload.reason }), 'error')
+            toast(
+              format(d.room.toastBetReverted, {
+                reason: translateError(d, event.payload.reason),
+              }),
+              'error',
+            )
           }
           break
         case 'round.started':

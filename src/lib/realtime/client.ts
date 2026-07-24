@@ -33,12 +33,16 @@ export function createRoomChannel(roomId: string, userId: string): RealtimeChann
 /** 검증 통과한 이벤트만 handler 에 전달한다. 실패 payload 는 조용히 버린다. */
 export function onRoomEvent(
   channel: RealtimeChannel,
+  roomId: string,
   handler: (event: RoomEvent, envelope: Envelope) => void,
 ): void {
   for (const name of Object.keys(eventPayloads) as EventName[]) {
     channel.on('broadcast', { event: name }, (message) => {
       const parsed = parseEvent(name, message.payload)
       if (!parsed) return
+      // 공개 채널의 envelope 는 신뢰 경계 밖이다. 구독 토픽과 다른 방 이벤트는
+      // refetch·효과음·오류 토스트의 힌트로도 쓰지 않는다.
+      if (parsed.envelope.roomId !== roomId) return
       // parseEvent 가 name 별 스키마로 검증했으므로 name-payload 짝은 정확하다.
       // 루프 변수 name 이 유니온으로 넓혀져 상관관계를 잃은 것뿐이라 캐스트가 안전하다.
       handler({ name, payload: parsed.payload } as RoomEvent, parsed.envelope)

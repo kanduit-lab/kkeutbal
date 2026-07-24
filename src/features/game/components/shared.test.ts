@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { formatChips } from './shared'
+import {
+  betLabelsFor,
+  formatChips,
+  highestAcceptedWager,
+  lastAcceptedByUser,
+  raisePresets,
+} from './shared'
+import type { BetActionView } from '../types'
 
 /**
  * formatChips 로케일별 축약 테스트.
@@ -47,5 +54,58 @@ describe('formatChips', () => {
     it('음수도 부호를 유지한 채 축약한다', () => {
       expect(formatChips(-12_500, 'en')).toBe('-12.5k')
     })
+  })
+})
+
+describe('베팅 UI 파생 규칙', () => {
+  it('게임별 기본 라벨을 고르고 고스톱은 섯다 라벨로 폴백한다', () => {
+    expect(betLabelsFor('seotda').fold).toBe('다이')
+    expect(betLabelsFor('poker').fold).toBe('폴드')
+    expect(betLabelsFor('gostop').raise).toBe('올려')
+  })
+
+  it('사용자별 마지막 accepted 액션만 남긴다', () => {
+    const base = {
+      roundId: '00000000-0000-4000-8000-000000000001',
+      enteredBy: null,
+      amount: 0,
+      reason: null,
+      createdAt: new Date(0).toISOString(),
+    }
+    const actions: BetActionView[] = [
+      { ...base, id: 'a', userId: 'u1', action: 'check', status: 'accepted', seq: 1 },
+      { ...base, id: 'b', userId: 'u1', action: 'raise', status: 'rejected', seq: 2 },
+      { ...base, id: 'c', userId: 'u2', action: 'fold', status: 'accepted', seq: 3 },
+      { ...base, id: 'd', userId: 'u1', action: 'call', status: 'accepted', seq: 4 },
+    ]
+    const result = lastAcceptedByUser(actions)
+    expect(result.get('u1')?.id).toBe('d')
+    expect(result.get('u2')?.id).toBe('c')
+  })
+
+  it('짧은 올인 뒤에도 확정된 최고 베팅을 콜 기준으로 유지한다', () => {
+    const base = {
+      roundId: '00000000-0000-4000-8000-000000000001',
+      enteredBy: null,
+      userId: 'u1',
+      reason: null,
+      createdAt: new Date(0).toISOString(),
+    }
+    expect(
+      highestAcceptedWager([
+        { ...base, id: 'raise', action: 'raise', amount: 100, status: 'accepted', seq: 1 },
+        { ...base, id: 'short-allin', action: 'allin', amount: 50, status: 'accepted', seq: 2 },
+      ]),
+    ).toBe(100)
+  })
+
+  it('섯다·포커 프리셋을 팟과 직전 베팅에서 계산하고 0원 항목은 버린다', () => {
+    expect(
+      raisePresets('seotda', { lastBet: 100, pot: 450, base: 50 }).map((x) => x.amount),
+    ).toEqual([50, 200, 225, 450])
+    expect(
+      raisePresets('poker', { lastBet: 100, pot: 450, base: 50 }).map((x) => x.amount),
+    ).toEqual([200, 225, 450])
+    expect(raisePresets('poker', { lastBet: 0, pot: 0, base: 50 })).toEqual([])
   })
 })

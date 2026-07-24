@@ -31,7 +31,8 @@ export default async function RoomResultPage({
   const mostFolds = [...standings].sort((a, b) => b.folds - a.folds)[0]
   const mostRaises = [...standings].sort((a, b) => b.raises - a.raises)[0]
 
-  const transfers = computeSettlementTransfers(standings)
+  const netTotal = standings.reduce((total, row) => total + row.net, 0)
+  const transfers = netTotal === 0 ? computeSettlementTransfers(standings) : []
   const nameById = new Map(standings.map((row) => [row.userId, row.displayName]))
   const displayName = (userId: string) => nameById.get(userId) ?? d.common.unknownPlayer
 
@@ -82,7 +83,11 @@ export default async function RoomResultPage({
       {standings.length > 0 ? (
         <section className="space-y-1">
           <h2 className="px-1 text-sm font-bold text-muted">{d.result.settlementTitle}</h2>
-          {transfers.length === 0 ? (
+          {netTotal !== 0 ? (
+            <Panel className="border border-accent/40 bg-accent/10 text-sm text-accent">
+              {format(d.result.settlementImbalanced, { n: netTotal.toLocaleString() })}
+            </Panel>
+          ) : transfers.length === 0 ? (
             <EmptyState title={d.result.nothingToSettle} />
           ) : (
             <ul className="space-y-1">
@@ -194,11 +199,19 @@ export default async function RoomResultPage({
           />
         ) : null}
         <div className="grid grid-cols-2 gap-2">
-          <Link href={`/rooms/${room.code}`} className="block">
-            <Button variant="surface" className="w-full border border-white/10">
-              {d.result.toRoom}
-            </Button>
-          </Link>
+          {room.status !== 'settled' && room.status !== 'closed' ? (
+            <Link href={`/rooms/${room.code}`} className="block">
+              <Button variant="surface" className="w-full border border-white/10">
+                {d.result.toRoom}
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/ranking" className="block">
+              <Button variant="surface" className="w-full border border-white/10">
+                {d.home.ranking}
+              </Button>
+            </Link>
+          )}
           <Link href="/" className="block">
             <Button variant="primary" className="w-full">
               {d.common.home}

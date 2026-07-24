@@ -80,6 +80,15 @@ export function lastAcceptedByUser(actions: readonly BetActionView[]): Map<strin
   return byUser
 }
 
+/** 짧은 올인도 콜 기준을 낮추지 않도록, 확정된 베팅 중 가장 큰 금액을 사용한다. */
+export function highestAcceptedWager(actions: readonly BetActionView[]): number {
+  return actions.reduce(
+    (highest, action) =>
+      action.status === 'accepted' && action.amount > highest ? action.amount : highest,
+    0,
+  )
+}
+
 /** 레이즈 프리셋 라벨 폴백 — 사전 없이 호출되는 경로에서 쓰는 한국어 상수. */
 const PRESET_LABELS_FALLBACK: Dictionary['presets'] = {
   pping: '삥',

@@ -21,6 +21,7 @@ export function RevertList({
   const [revertTarget, setRevertTarget] = useState<BetActionView | null>(null)
   const accepted = snapshot.actions.filter((action) => action.status === 'accepted').slice(-5)
   if (accepted.length === 0) return null
+  const latestAcceptedId = accepted[accepted.length - 1]?.id
 
   const betLabels = d.bet[snapshot.room.gameType === 'poker' ? 'poker' : 'seotda']
   const nameOf = (userId: string) =>
@@ -52,7 +53,10 @@ export function RevertList({
               <Button
                 size="sm"
                 variant="ghost"
-                disabled={isPending}
+                disabled={isPending || action.id !== latestAcceptedId}
+                disabledReason={
+                  action.id !== latestAcceptedId ? d.errors.revertLatestFirst : undefined
+                }
                 onClick={() => setRevertTarget(action)}
               >
                 {d.dealer.revert}

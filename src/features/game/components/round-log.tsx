@@ -3,7 +3,7 @@
 import { clsx } from 'clsx'
 import type { BetActionView, MemberView, RoomGameType } from '../types'
 import { Badge, EmptyState } from '@/components/ui'
-import { format, useDict } from '@/lib/i18n/client'
+import { format, translateError, useDict } from '@/lib/i18n/client'
 import { betLabelsFor } from './shared'
 
 /** 전광판은 스크롤이 없다 — 최근 몇 개만 크게 보여준다. */
@@ -86,7 +86,9 @@ export function RoundLog({
                 </div>
                 {showReason ? (
                   <p className={clsx('mt-0.5 text-muted', board ? 'text-sm' : 'text-[11px]')}>
-                    {format(d.roundLog.reasonLine, { reason: action.reason ?? '' })}
+                    {format(d.roundLog.reasonLine, {
+                      reason: translateError(d, action.reason ?? ''),
+                    })}
                   </p>
                 ) : null}
               </li>

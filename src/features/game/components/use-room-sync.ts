@@ -147,9 +147,11 @@ export function useRoomSync({
 
   /** 수동 재접속 — 죽은 웹소켓을 끊고 새 소켓으로 즉시 다시 구독한다. */
   const reconnect = useCallback(() => {
+    // 이전 채널의 true 값을 들고 있으면 새 구독의 timeout 이 실패를 감지하지 못한다.
+    setConnectedBoth(false)
     resetRealtimeSocket()
     setEpoch((current) => current + 1)
-  }, [])
+  }, [setConnectedBoth])
 
   /** 채널 구독 + Presence + 생명주기 리스너. 재연결 시 스냅샷을 다시 당겨 공백을 메운다. */
   useEffect(() => {
@@ -164,7 +166,7 @@ export function useRoomSync({
       if (!disposed && !connectedRef.current) setConnectTimedOut(true)
     }, CONNECT_TIMEOUT_MS)
 
-    onRoomEvent(channel, (event) => {
+    onRoomEvent(channel, roomId, (event) => {
       onEventRef.current?.(event, snapshotRef.current)
       debouncedRefetch()
     })
