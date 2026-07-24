@@ -1,3 +1,4 @@
+import { findCard } from '../hwatu/cards'
 import type { HwatuCard, Month } from '../hwatu/types'
 import type {
   GostopCapture,
@@ -50,12 +51,13 @@ const GUKJIN_PI_VALUE = 2
  * 기본 점수 최대화를 결정 규칙으로 삼는다. 명시 선택이 필요해지면 상태머신에서 확장.)
  */
 export function captureOf(cards: readonly HwatuCard[], rules: GostopRules): GostopCapture {
-  const asYeol = classify(cards, false)
-  if (!rules.gukjinAsSsangpi || !cards.some((card) => card.id === GUKJIN_ID)) {
+  const canonical = normalizeCards(cards, 'captureOf')
+  const asYeol = classify(canonical, false)
+  if (!rules.gukjinAsSsangpi || !canonical.some((card) => card.id === GUKJIN_ID)) {
     return asYeol
   }
 
-  const asPi = classify(cards, true)
+  const asPi = classify(canonical, true)
   const yeolScore = sumPoints(baseLines(asYeol, rules))
   const piScore = sumPoints(baseLines(asPi, rules))
   return piScore >= yeolScore ? asPi : asYeol
@@ -72,35 +74,54 @@ export function scoreGostop(
   context: GostopContext,
   rules: GostopRules,
 ): GostopScore {
-  const cardLines = baseLines(capture, rules)
+  validateRules(rules)
+  validateCount('goCount', context.goCount)
+  validateCount('shakeCount', context.shakeCount)
+  validateCount('bombCount', context.bombCount)
+
+  // 호출자가 만든 분류·piValue 를 신뢰하지 않고 카드 id에서 다시 집계한다.
+  const canonicalCapture = normalizeCapture(capture, rules, 'capture')
+  const canonicalContext: GostopContext = {
+    ...context,
+    opponents: context.opponents.map((opponent, index) =>
+      normalizeCapture(opponent, rules, `opponents[${index}]`),
+    ),
+  }
+
+  const cardLines = baseLines(canonicalCapture, rules)
   const base = sumPoints(cardLines)
 
-  const goLine = goBonusLine(context.goCount, rules)
+  const goLine = goBonusLine(canonicalContext.goCount, rules)
   const breakdown = goLine === null ? cardLines : [...cardLines, goLine]
 
   // 배수 순서 = 파이프라인 순서: 고 배수 → 박 배수 → 선언 배수
   const multipliers: GostopMultiplier[] = []
-  const goMul = goMultiplier(context.goCount, rules)
+  const goMul = goMultiplier(canonicalContext.goCount, rules)
   if (goMul !== null) multipliers.push(goMul)
-  multipliers.push(...bakMultipliers(capture, context, rules))
-  multipliers.push(...declarationMultipliers(context, rules))
+  multipliers.push(...bakMultipliers(canonicalCapture, canonicalContext, rules))
+  multipliers.push(...declarationMultipliers(canonicalContext, rules))
 
   const additive = base + (goLine?.points ?? 0)
   const factor = multipliers.reduce((acc, mul) => acc * mul.factor, 1)
+  const total = additive * factor
+  if (!Number.isSafeInteger(factor) || !Number.isSafeInteger(total)) {
+    throw new RangeError('고스톱 점수가 안전한 정수 범위를 벗어났다')
+  }
 
   return {
     breakdown,
     base,
     multipliers,
-    total: additive * factor,
+    total,
     canStop: base >= rules.baseWinScore,
   }
 }
 
 /** 같은 월 4장 보유 여부 (총통). 손패 기준 판정 — 즉시 승리 처리는 게임 상태머신 소관. */
 export function hasChongtong(cards: readonly HwatuCard[]): boolean {
+  const canonical = normalizeCards(cards, 'hasChongtong')
   const counts = new Map<Month, number>()
-  for (const card of cards) {
+  for (const card of canonical) {
     const next = (counts.get(card.month) ?? 0) + 1
     if (next >= 4) return true
     counts.set(card.month, next)
@@ -109,6 +130,59 @@ export function hasChongtong(cards: readonly HwatuCard[]): boolean {
 }
 
 // ── 내부 헬퍼 ──────────────────────────────────────────────────────────
+
+function normalizeCards(cards: readonly HwatuCard[], caller: string): readonly HwatuCard[] {
+  const seen = new Set<string>()
+  return cards.map((card) => {
+    if (seen.has(card.id)) {
+      throw new Error(`${caller}: 중복된 카드 — ${card.id}`)
+    }
+    const canonical = findCard(card.id)
+    if (!canonical) {
+      throw new Error(`${caller}: 화투 덱에 없는 카드 — ${card.id}`)
+    }
+    seen.add(card.id)
+    return canonical
+  })
+}
+
+function normalizeCapture(
+  capture: GostopCapture,
+  rules: GostopRules,
+  caller: string,
+): GostopCapture {
+  return captureOf(
+    normalizeCards(
+      [...capture.gwang, ...capture.yeol, ...capture.tti, ...capture.pi],
+      `scoreGostop ${caller}`,
+    ),
+    rules,
+  )
+}
+
+function validateCount(name: string, value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`${name}은 0 이상의 안전한 정수여야 한다`)
+  }
+}
+
+function validateRules(rules: GostopRules): void {
+  validateCount('baseWinScore', rules.baseWinScore)
+  if (!Number.isSafeInteger(rules.goMultiplierFrom) || rules.goMultiplierFrom < 1) {
+    throw new RangeError('goMultiplierFrom은 1 이상의 안전한 정수여야 한다')
+  }
+  for (const [index, value] of rules.goBonusFlat.entries()) {
+    validateCount(`goBonusFlat[${index}]`, value)
+  }
+  for (const [name, value] of [
+    ['shakeMultiplier', rules.shakeMultiplier],
+    ['bombMultiplier', rules.bombMultiplier],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new RangeError(`${name}는 1 이상의 안전한 정수여야 한다`)
+    }
+  }
+}
 
 /** kind 기준 분류. `gukjinAsPi` 면 국진을 쌍피로 취급한다. */
 function classify(cards: readonly HwatuCard[], gukjinAsPi: boolean): GostopCapture {

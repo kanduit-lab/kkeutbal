@@ -195,17 +195,19 @@ export function resolveSeotdaShowdown(
   if (hands.length < 2) {
     throw new Error('resolveSeotdaShowdown: 맞대결에는 손패가 2개 이상 필요하다')
   }
-  assertNoDuplicateCards(hands)
+  // 저장된/외부 계산 결과의 rank·traits 를 신뢰하지 않고 정본 덱에서 항상 다시 계산한다.
+  const canonicalHands = hands.map((hand) => evaluateSeotdaHand(hand.cards))
+  assertNoDuplicateCards(canonicalHands)
 
   // 1. 구사 — 판 무효
   if (rules.gusa) {
-    const gusaIndex = hands.findIndex((hand) => hand.traits.includes('gusa'))
+    const gusaIndex = canonicalHands.findIndex((hand) => hand.traits.includes('gusa'))
     if (gusaIndex !== -1) {
       return { kind: 'replay', reason: `구사(4·9) 보유 — 판 무효, 재경기` }
     }
   }
 
-  const entries: readonly HandEntry[] = hands.map((hand, index) => ({ hand, index }))
+  const entries: readonly HandEntry[] = canonicalHands.map((hand, index) => ({ hand, index }))
   const top = strongestOf(entries)
   const leader = top[0]
   if (!leader) {

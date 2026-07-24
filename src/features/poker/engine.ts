@@ -1,3 +1,4 @@
+import { findPokerCard } from './cards'
 import type { PokerCard } from './cards'
 
 export type PokerCategory =
@@ -217,25 +218,32 @@ function compareRankVectors(a: readonly number[], b: readonly number[]): number 
   return 0
 }
 
-function validateInput(cards: readonly PokerCard[]): void {
+function normalizeInput(cards: readonly PokerCard[]): readonly PokerCard[] {
   if (cards.length < 5 || cards.length > 7) {
     throw new Error(`포커 핸드 평가는 5~7장이 필요하다 (입력: ${cards.length}장)`)
   }
 
   const ids = new Set<string>()
+  const canonical: PokerCard[] = []
   for (const card of cards) {
     if (ids.has(card.id)) {
       throw new Error(`중복된 카드: ${card.id}`)
     }
+    const deckCard = findPokerCard(card.id)
+    if (!deckCard) {
+      throw new Error(`표준 덱에 없는 카드: ${card.id}`)
+    }
     ids.add(card.id)
+    canonical.push(deckCard)
   }
+  return canonical
 }
 
 /** 5~7장 중 최선의 5장 조합으로 족보를 판정한다. */
 export function evaluatePokerHand(cards: readonly PokerCard[]): PokerHand {
-  validateInput(cards)
+  const canonical = normalizeInput(cards)
 
-  const candidates = combinationsOf5(cards).map(evaluateFiveCards)
+  const candidates = combinationsOf5(canonical).map(evaluateFiveCards)
 
   // 로컬 accumulator — 함수 밖으로 새지 않으므로 reduce 대신 변형 루프 사용 (coding-style 예외 규정)
   let best = candidates[0]
