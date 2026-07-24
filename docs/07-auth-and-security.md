@@ -109,9 +109,9 @@ SSO 설정에서 새 secret을 다시 저장해야 한다.
 `src/proxy.ts`는 `authConfigBase`로 JWT 쿠키를 해독해 로그인 여부만 본다. 결과로 하는 일은
 리다이렉트뿐이다:
 
-- 미로그인 + 비공개 경로 → `/login`으로 리다이렉트 (`next` 쿼리로 원래 경로 보존)
+- 미로그인 + 실제 인증 경로(`/`, `/rooms`, `/ranking`, `/advisor`, `/admin`) → `/login`으로 리다이렉트 (`next` 쿼리로 원래 경로 보존)
 - 로그인 + `/login` 접근 → `/`로 리다이렉트
-- 공개 경로: `/login`, `/register`, `/about`, `/api/auth`, `/api/health`
+- 그 밖의 경로는 프록시가 선점하지 않는다. 공개 문서는 그대로 보이고, 존재하지 않는 URL은 App Router 404가 처리한다.
 
 **역할·방 소속 검사는 하지 않는다.** 여기를 통과했다고 해서 어떤 Server Action도 자동으로
 허용되지 않는다 — 각 Server Action이 세션에서 `userId`를 다시 뽑고, DB에서 방 멤버십과 역할을

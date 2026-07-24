@@ -87,6 +87,10 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
 트레이드오프다.
 
 커넥션은 `globalThis` 캐시로 dev HMR 재생성을 막고, 두 모드 모두 `idle_timeout: 30s`를 둔다.
+공지·SSO 노출 여부·첫 계정 안내처럼 **읽기 실패가 공개 로그인 화면을 막으면 안 되는** 기능만
+`src/lib/optional-database.ts`를 통해 DB 모듈을 지연 로드한다. 초기화 실패는 프로세스당 한 번만
+경고하고 빈 공지·SSO 미설정·첫 계정 아님으로 폴백한다. 쓰기·권한 검사 경로는 이 폴백을 쓰지
+않으며 DB 오류를 일반 실패로 처리한다.
 
 ### Auth — 관리자 설정 SSO, 가입코드 검증
 
@@ -104,7 +108,8 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
   쓴다.
 - `authConfigBase`(`auth-config.ts`)는 edge-safe 부분만 분리해 둔 것 — DB(postgres-js)를 물지
   않아 proxy 번들에 안전하게 들어간다. `src/proxy.ts`는 이 설정만으로 NextAuth 인스턴스를
-  만들어 JWT 쿠키 유무만 검사하고 `/login`으로 리다이렉트한다. **미들웨어는 UX 게이트일 뿐이며
+  만들어 JWT 쿠키 유무만 검사한다. `/`, `/rooms`, `/ranking`, `/advisor`, `/admin`만 로그인으로
+  유도하고 나머지 경로는 공개 페이지 또는 App Router 404로 둔다. **미들웨어는 UX 게이트일 뿐이며
   실제 권한 검사는 하지 않는다** — 각 Server Action이 다시 세션을 확인한다.
 
 ### 실시간 전략 — 공개 Broadcast 채널 + 클라이언트 send + 스냅샷 truth

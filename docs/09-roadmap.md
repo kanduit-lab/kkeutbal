@@ -45,7 +45,7 @@
 | 정산 · 랭킹 | 구현 완료 | `src/features/ranking/queries.ts`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
 | CI/CD | production 배포 활성, staging/preview 대기 | `.github/workflows/deploy.yml`, `.deploy.yml`(`preview.enabled: false`, `staging.enabled: false`) |
 | Keep-alive | 배포 환경 secret 설정 대기 | `.github/workflows/keep-alive.yml`, `/api/keep-alive` |
-| E2E | 공개 화면 모바일 스모크 구현, 인증 후 전체 흐름 미구현 | `playwright.config.ts`, `e2e/public-surfaces.spec.ts` |
+| E2E | 모바일 Chromium 공개 플로우 7개(로그인·안전한 next·오류 폴백·소개·가이드·언어·404·보호 경로) 구현, 인증 후 전체 흐름 미구현 | `playwright.config.ts`, `e2e/public-surfaces.spec.ts` |
 | 미사용 스키마 | 제거 확정(2026-07-23) — `groups`/`group_members`/`hand_records` 스키마에서 삭제 | `drizzle/schema.ts`, 근거는 `docs/design-decisions/` 001 |
 
 이 표가 코드와 어긋나면 **코드를 따른다.**
@@ -108,8 +108,8 @@ Authentik은 초기 관리자 로그인 뒤 `/admin`의 SSO 설정에서 Issuer 
 
 ### P2 — 자동화·배포 확장
 
-1. **Playwright E2E 전체 흐름 확장** — 공개 로그인·소개 화면 모바일 스모크는 구현됐다.
-   가입코드/로그인 fixture를 마련해 2컨텍스트 동기화, 재접속 복원, 정산 흐름을 자동화한다.
+1. **Playwright E2E 전체 흐름 확장** — 공개 모바일 플로우 7개는 DB 없이 실행된다.
+   격리된 가입코드/로그인 fixture를 마련해 2컨텍스트 동기화, 재접속 복원, 정산 흐름을 자동화한다.
 2. **staging/preview 채널 전환** — `ENV_FILE_BASE64` 시크릿 구성 후 `.deploy.yml`의
    `preview.enabled`/`staging.enabled`를 `true`로. MT를 게이팅하지 않는 개발 편의 항목.
 

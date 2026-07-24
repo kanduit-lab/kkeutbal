@@ -123,7 +123,7 @@ pnpm dev            # 개발 서버
 pnpm typecheck      # tsc --noEmit
 pnpm lint           # eslint
 pnpm test           # vitest (단위)
-pnpm test:e2e       # Playwright 공개 화면 스모크 (로컬 DB 환경 필요)
+pnpm test:e2e       # Playwright 모바일 공개 화면 스모크 (DB 없이 실행)
 pnpm db:generate    # drizzle 마이그레이션 생성
 pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 ```
