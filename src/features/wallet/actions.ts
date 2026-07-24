@@ -6,7 +6,6 @@ import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { isAdminUser } from '../auth/roles'
 import { currentUserId } from '../auth/session'
-import { adminAdjustmentEntries } from './ledger'
 
 const WALLET_HISTORY_LIMIT = 50
 
@@ -63,8 +62,8 @@ const adminAdjustCreditsSchema = z.object({
 })
 
 /**
- * 관리자 가상 크레딧 지급/회수. 잔액을 직접 UPDATE하지 않고 발행 계정과 대상 계정의
- * 복식 엔트리를 posting 함수에 전달한다. 회수는 사용 가능 잔액만 대상으로 하며 음수는 DB가 거부한다.
+ * 관리자 가상 크레딧 지급/회수. 서버는 인증·입력 경계만 맡고, 발행 계정과 대상 계정의
+ * 복식 엔트리 구성·posting은 DB 전용 RPC가 원자적으로 수행한다. 회수의 음수 잔액도 DB가 거부한다.
  */
 export async function adminAdjustCredits(
   input: z.infer<typeof adminAdjustCreditsSchema>,
@@ -80,35 +79,25 @@ export async function adminAdjustCredits(
   try {
     return await db.transaction(async (tx) => {
       const [target] = await tx
-        .select({ id: users.id, displayName: users.displayName })
+        .select({ id: users.id })
         .from(users)
         .where(eq(users.id, targetUserId))
         .limit(1)
       if (!target) return fail('대상 사용자를 찾을 수 없습니다')
 
-      const targetAccountId = await ensureCreditAccount(tx, targetUserId)
-      const kind = amount > 0 ? 'admin_grant' : 'admin_revoke'
-      const entries = adminAdjustmentEntries(targetAccountId, amount)
-      await tx.execute(sql`
-        select public.post_credit_transaction(
-          ${kind}::public.credit_transaction_kind,
-          ${requestId},
-          ${adminId}::uuid,
-          null,
-          null,
-          ${reason},
-          ${JSON.stringify({ targetUserId, targetDisplayName: target.displayName })}::jsonb,
-          ${JSON.stringify(entries)}::jsonb
-        )
+      const [transaction] = await tx.execute(sql<{ transactionId: string }>`
+        select public.admin_adjust_credit(
+          ${targetUserId}::uuid,
+          ${amount}::bigint,
+          ${reason}::text,
+          ${requestId}::text,
+          ${adminId}::uuid
+        ) as "transactionId"
       `)
-
-      const [transaction] = await tx
-        .select({ id: creditTransactions.id })
-        .from(creditTransactions)
-        .where(eq(creditTransactions.idempotencyKey, requestId))
-        .limit(1)
-      if (!transaction) throw new Error('credit transaction was not posted')
-      return ok({ transactionId: transaction.id, targetUserId })
+      const transactionId =
+        transaction && typeof transaction.transactionId === 'string' ? transaction.transactionId : null
+      if (!transactionId) throw new Error('credit transaction was not posted')
+      return ok({ transactionId, targetUserId })
     })
   } catch (error) {
     console.error('adminAdjustCredits failed:', error)
