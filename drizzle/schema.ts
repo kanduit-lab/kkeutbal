@@ -3,6 +3,7 @@ import {
   bigint,
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -44,6 +45,13 @@ export const creditTransactionKind = pgEnum('credit_transaction_kind', [
   'room_lock',
   'room_settlement',
   'correction',
+])
+/** 공정 딜 라운드의 공개 가능한 단계. 비밀 seed·패는 이 단계와 별도 행에 둔다. */
+export const fairRoundPhase = pgEnum('fair_round_phase', [
+  'collecting_seeds',
+  'sealed',
+  'revealed',
+  'aborted',
 ])
 
 /** Drizzle이 bigint를 number로 읽는 동안 표현 가능한 정수 경계. */
@@ -318,6 +326,153 @@ export const roundParticipants = pgTable(
   (table) => [
     primaryKey({ columns: [table.roundId, table.userId] }),
     index('round_participants_user_idx').on(table.userId),
+  ],
+)
+
+/**
+ * 검증 가능한 딜의 라운드 헤더. 서버 seed는 종료 전까지 암호문으로만 남고, 브라우저·방 스냅샷에
+ * 실을 수 있는 값은 commitment와 publicReceipt뿐이다.
+ */
+export const roundFairness = pgTable(
+  'round_fairness',
+  {
+    roundId: uuid('round_id')
+      .primaryKey()
+      .references(() => rounds.id, { onDelete: 'cascade' }),
+    /** 프로토콜 변경 뒤에도 기존 판을 같은 규칙으로 재검증할 수 있는 버전 식별자. */
+    algorithmVersion: text('algorithm_version').notNull(),
+    /** 안전한 공개 영수증 형식의 버전. */
+    receiptVersion: text('receipt_version').notNull(),
+    phase: fairRoundPhase('phase').notNull().default('collecting_seeds'),
+    /** AES-GCM 등 서버 전용 암호문. 평문 server seed는 여기에 저장하지 않는다. */
+    serverSeedCiphertext: text('server_seed_ciphertext').notNull(),
+    serverSeedCommitment: text('server_seed_commitment').notNull(),
+    /** 서버 DB 시간이 이 시각에 도달하면 미제출 참가자를 timeout으로 봉인할 수 있다. */
+    seedDeadline: timestamp('seed_deadline', { withTimezone: true }).notNull(),
+    seedCollectionSealedAt: timestamp('seed_collection_sealed_at', { withTimezone: true }),
+    /** sealed 이후에만 존재하는 셔플 덱 hash. 덱 원문·손패는 포함하지 않는다. */
+    shuffledDeckCommitment: text('shuffled_deck_commitment'),
+    publicReceipt: jsonb('public_receipt'),
+    revealedAt: timestamp('revealed_at', { withTimezone: true }),
+    abortedAt: timestamp('aborted_at', { withTimezone: true }),
+    abortReason: text('abort_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('round_fairness_phase_deadline_idx').on(table.phase, table.seedDeadline),
+    check('round_fairness_algorithm_version_present_ck', sql`length(trim(${table.algorithmVersion})) between 1 and 120`),
+    check('round_fairness_receipt_version_present_ck', sql`length(trim(${table.receiptVersion})) between 1 and 120`),
+    check('round_fairness_server_seed_ciphertext_present_ck', sql`length(trim(${table.serverSeedCiphertext})) > 0`),
+    check('round_fairness_server_seed_commitment_hash_ck', sql`${table.serverSeedCommitment} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'round_fairness_sealed_deck_commitment_hash_ck',
+      sql`${table.shuffledDeckCommitment} is null or ${table.shuffledDeckCommitment} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'round_fairness_public_receipt_object_ck',
+      sql`${table.publicReceipt} is null or jsonb_typeof(${table.publicReceipt}) = 'object'`,
+    ),
+    check(
+      'round_fairness_phase_shape_ck',
+      sql`(
+        ${table.phase} = 'collecting_seeds'
+        and ${table.seedCollectionSealedAt} is null
+        and ${table.shuffledDeckCommitment} is null
+        and ${table.publicReceipt} is null
+        and ${table.revealedAt} is null
+        and ${table.abortedAt} is null
+        and ${table.abortReason} is null
+      ) or (
+        ${table.phase} = 'sealed'
+        and ${table.seedCollectionSealedAt} is not null
+        and ${table.shuffledDeckCommitment} is not null
+        and ${table.publicReceipt} is not null
+        and ${table.revealedAt} is null
+        and ${table.abortedAt} is null
+        and ${table.abortReason} is null
+      ) or (
+        ${table.phase} = 'revealed'
+        and ${table.seedCollectionSealedAt} is not null
+        and ${table.shuffledDeckCommitment} is not null
+        and ${table.publicReceipt} is not null
+        and ${table.revealedAt} is not null
+        and ${table.abortedAt} is null
+        and ${table.abortReason} is null
+      ) or (
+        ${table.phase} = 'aborted'
+        and ${table.seedCollectionSealedAt} is null
+        and ${table.shuffledDeckCommitment} is null
+        and ${table.publicReceipt} is null
+        and ${table.revealedAt} is null
+        and ${table.abortedAt} is not null
+        and length(trim(${table.abortReason})) between 1 and 200
+      )`,
+    ),
+  ],
+)
+
+/**
+ * 판 시작 당시의 확정 좌석 순서와 client seed commitment. 원문 client seed는 DB에 저장하지
+ * 않으며, timeout도 명시적으로 남겨 "누가 참여하지 않았는가"를 사후 검증할 수 있다.
+ */
+export const roundFairnessParticipants = pgTable(
+  'round_fairness_participants',
+  {
+    roundId: uuid('round_id')
+      .notNull()
+      .references(() => roundFairness.roundId, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    /** 딜 순서 snapshot. 현재 room_members 좌석을 나중에 다시 읽지 않는다. */
+    dealOrder: integer('deal_order').notNull(),
+    clientSeedHash: text('client_seed_hash'),
+    seedSubmittedAt: timestamp('seed_submitted_at', { withTimezone: true }),
+    seedTimedOutAt: timestamp('seed_timed_out_at', { withTimezone: true }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.roundId, table.userId] }),
+    unique('round_fairness_participants_deal_order_uq').on(table.roundId, table.dealOrder),
+    index('round_fairness_participants_user_idx').on(table.userId),
+    foreignKey({
+      columns: [table.roundId, table.userId],
+      foreignColumns: [roundParticipants.roundId, roundParticipants.userId],
+      name: 'round_fairness_participants_round_participant_fk',
+    }).onDelete('cascade'),
+    check('round_fairness_participants_deal_order_nonnegative_ck', sql`${table.dealOrder} >= 0`),
+    check(
+      'round_fairness_participants_seed_submission_shape_ck',
+      sql`(
+        ${table.clientSeedHash} is null and ${table.seedSubmittedAt} is null
+      ) or (
+        ${table.clientSeedHash} ~ '^[0-9a-f]{64}$' and ${table.seedSubmittedAt} is not null
+      )`,
+    ),
+    check(
+      'round_fairness_participants_seed_terminal_exclusive_ck',
+      sql`not (${table.seedSubmittedAt} is not null and ${table.seedTimedOutAt} is not null)`,
+    ),
+  ],
+)
+
+/**
+ * 종료 뒤에만 생성되는 완전 영수증. server seed 평문은 이 append-only 행에만 들어가며,
+ * `round_fairness.revealed_at`와 함께 접근을 열어야 한다.
+ */
+export const roundFairnessReveals = pgTable(
+  'round_fairness_reveals',
+  {
+    roundId: uuid('round_id')
+      .primaryKey()
+      .references(() => roundFairness.roundId, { onDelete: 'cascade' }),
+    serverSeed: text('server_seed').notNull(),
+    fullReceipt: jsonb('full_receipt').notNull(),
+    revealedBy: uuid('revealed_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('round_fairness_reveals_server_seed_hash_ck', sql`${table.serverSeed} ~ '^[0-9a-f]{64}$'`),
+    check('round_fairness_reveals_full_receipt_object_ck', sql`jsonb_typeof(${table.fullReceipt}) = 'object'`),
   ],
 )
 
