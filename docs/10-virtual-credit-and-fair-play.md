@@ -5,7 +5,7 @@
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
 | Status | in-progress |
-| Source of truth | credit 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0012`, 공개 공정 영수증은 `src/features/fairness/`; 실제 카드 배분은 이 문서의 후속 설계 |
+| Source of truth | credit·fair round 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0013`, 공정 딜 상태기는 `src/features/fairness/round-state.ts`; 실제 카드 배분은 이 문서의 후속 설계 |
 | Last reviewed | 2026-07-24 |
 
 ## 목적과 경계
@@ -67,9 +67,9 @@ erDiagram
     credit_transactions ||--o{ credit_entries : contains
     rooms ||--o{ room_credit_locks : reserves
     users ||--o{ room_credit_locks : reserves
-    rounds ||--|| fairness_rounds : proves
-    fairness_rounds ||--o{ fairness_client_seeds : includes
-    rounds ||--o{ dealt_cards : distributes
+    rounds ||--|| round_fairness : commits
+    round_fairness ||--o{ round_fairness_participants : snapshots
+    round_fairness ||--o| round_fairness_reveals : reveals
 ```
 
 ### `credit_accounts` — 계정별 현재 잔액 (Entity)
@@ -146,35 +146,37 @@ erDiagram
 거래를 `reverses_transaction_id`로 가리킨다. `closeRoom`은 `settle_room_credits(...)`로 남은 모든
 active lock을 최종 세션 스택에 맞춰 풀고 방을 settled로 바꾼다.
 
-### `fairness_rounds` — 커밋-리빌 영수증 (`[TX]`)
+### `round_fairness` — 커밋-리빌 상태 헤더 (`[TX]`)
 
 | Column | Type | Constraint | 설명 |
 |---|---|---|---|
 | `round_id` | uuid | PK/FK rounds | 판당 한 영수증 |
-| `algorithm_version` | text | not null | 고정 알고리즘 식별자 |
-| `server_seed_commitment` | char(64) | not null | 시작 전에 공개한 SHA-256 해시 |
-| `server_seed_ciphertext` | text | not null | 종료 전에는 서버만 복호화 가능한 시드 |
-| `seed_deadline_at` | timestamptz | not null | 참가자 시드 제출 마감 |
-| `deck_commitment` | char(64)? | null until deal | 확정 셔플 순서 해시 |
-| `final_seed_hash` | char(64)? | null until deal | 결합 시드 해시 |
-| `server_seed_revealed_at` | timestamptz? | null until end/void | 공개 시각 |
-| `void_reason` | text? | required when voided | 공정 배분 중단의 근거 |
+| `algorithm_version` / `receipt_version` | text | non-empty | 검증·공개 영수증 버전 |
+| `phase` | enum | collecting_seeds → sealed → revealed, 또는 aborted | 단방향 수명주기 |
+| `server_seed_commitment` | char(64) | SHA-256 hex | 시작 전에 공개할 서버 시드 commitment |
+| `server_seed_ciphertext` | text | non-empty | 종료 전에는 서버 전용 암호문 |
+| `seed_deadline` | timestamptz | not null | 참가자 seed hash 제출 마감 |
+| `seed_collection_sealed_at` | timestamptz? | sealed 뒤 필수 | timeout 또는 전원 제출 후 봉인 시각 |
+| `shuffled_deck_commitment` / `public_receipt` | hash / jsonb? | sealed 뒤 필수 | 공개 가능한 덱·배분 규칙 commitment |
+| `revealed_at` / `aborted_at` / `abort_reason` | nullable | phase shape check | 종료 reveal 또는 deal 전 취소 감사 근거 |
 | `created_at` | timestamptz | not null | 커밋 생성 시각 |
 
-서버 시드는 `AUTH_SECRET`에서 파생한 별도 AES-256-GCM 키로 암호화한다. 이 암호화는 DB dump의
-평문 노출을 줄이는 방어층일 뿐, 운영 서버 자체가 완전히 탈취된 경우의 공정성을 보장하지는 않는다.
+DB check constraint가 각 phase의 필수/금지 필드를 강제한다. 서버 시드는 `AUTH_SECRET`에서 파생한
+별도 AES-256-GCM 키로 암호화할 예정이며, 이 암호화는 DB dump의 평문 노출을 줄이는 방어층일 뿐
+운영 서버 자체가 완전히 탈취된 경우의 공정성을 보장하지는 않는다.
 
-### `fairness_client_seeds` — 참가자 기여 (`[LOG]`)
+### `round_fairness_participants` — 확정 좌석·seed hash (`[LOG]`)
 
-`(round_id, user_id)`를 PK로 하고 `seed_hash char(64)`, `submitted_at`만 저장한다. 원본
-client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시드를 브라우저에 보관하거나 종료 후
-영수증의 해시와 대조할 수 있다.
+`(round_id, user_id)`를 PK로 하고 `(round_id, deal_order)`를 unique로 둔다. 이 행은
+`round_participants`를 복합 FK로 가리켜서 다른 사용자를 나중에 삽입하지 못한다. `client_seed_hash`와
+`seed_submitted_at`은 함께 null 또는 함께 존재하고, `seed_timed_out_at`과 동시 존재할 수 없다.
+원본 client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시드를 보관해 종료 후 hash를 대조한다.
 
-### `dealt_cards` — 비공개 카드 배분 (`[TX]`)
+### `round_fairness_reveals` — 종료 후 full reveal (`[LOG]`)
 
-`round_id`, `recipient_user_id?`, `position`, `visibility`, `card_ciphertext`, `revealed_card_id?`를
-둔다. 진행 중에는 비공개 카드 ID를 응답·Broadcast·공개 스냅샷에 절대 포함하지 않는다. 종료/무효
-뒤에만 카드 ID를 공개해 전체 덱 순서를 검증한다.
+판당 하나의 append-only reveal 기록이다. `server_seed`, strict full receipt JSON, 공개 실행자와 시각을
+보존한다. 진행 중 개인 패 테이블은 아직 만들지 않았다. 실제 섯다 배분을 연결할 때도 private hand는
+서버 액션 응답으로만 전달하고 Broadcast·공개 스냅샷에는 넣지 않는다.
 
 ## 원자 처리와 잠금
 
@@ -212,8 +214,9 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
   여러 lock을 함께 release하므로 이 열은 unique가 아니다.
 - 관리자 지급·회수·정정은 관리자 Server Action만 호출할 수 있고 `reason`·`initiated_by`를
   필수로 남긴다. UI는 실제 원장을 수정하는 버튼을 제공하지 않고 새 거래를 만든다.
-- `fairness_rounds`의 commitment, deadline, algorithm version은 첫 카드 배분 뒤 변경할 수 없다.
-  판 무효도 행 삭제가 아니라 사유와 공개 시드 기록으로 남긴다.
+- `round_fairness`의 phase shape·hash 형식은 DB 제약으로, seed 제출·timeout·seal·reveal 순서는
+  `round-state.ts` 순수 상태기로 검증한다. 이 테이블은 server-only지만 아직 수동 게임 흐름에는
+  연결하지 않아 `verified` 옵션을 UI에 노출하지 않는다.
 
 ## 공정 셔플 프로토콜
 
@@ -316,7 +319,8 @@ Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairnes
 
 ## 구현 순서와 완료 조건
 
-1. [x] 공정 셔플 순수 모듈과 벡터 테스트, 공개 안전 영수증 경계를 추가한다.
+1. [x] 공정 셔플 순수 모듈·공개 안전 영수증·commit/timeout/seal/reveal 순수 상태기와 DB snapshot
+   제약을 추가한다.
 2. [x] 계정 지갑 테이블/enum/제약의 Drizzle DDL 및 Supabase 권한·함수 migration을 추가한다.
 3. [x] 계정 지갑·관리자 지급/회수·거래 내역을 구현하고, 원격 DB rollback 트랜잭션으로 RPC를 검증한다.
 4. [x] account-credit 방의 lock/buy-in/release/settlement 연결과 원격 rollback lifecycle 검증을 구현한다.
@@ -330,3 +334,5 @@ Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairnes
 
 - 2026-07-24: account-credit 방 생성 선택, buy-in lock·취소 release·종료 settlement을 live DB RPC와
   Server Action 트랜잭션으로 연결했다. full reveal 없는 공정 영수증은 여전히 검증 완료로 표시하지 않는다.
+- 2026-07-24: `round_fairness*` server-only schema와 commit/timeout/seal/reveal 상태기를 추가했다.
+  수동 판에 실제 verified deal·private hand를 연결하기 전에는 이 상태를 사용자 설정으로 노출하지 않는다.

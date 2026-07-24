@@ -306,6 +306,10 @@ Supabase 테이블 API를 직접 호출하는 가상의 경로다.** 실제 앱 
 실행할 수 없다. TRUNCATE·TRIGGER·REFERENCES 권한은 주지 않는다. `session_standings` 뷰도
 브라우저에는 열지 않으며, 현재 앱 기능은 이 뷰를 읽지 않는다.
 
+공정 딜 기반 테이블 `round_fairness`, `round_fairness_participants`, `round_fairness_reveals`도
+동일하게 RLS를 켠 server-only 표면이다. 이 테이블은 아직 수동 게임의 공개 스냅샷에 연결하지
+않았으므로 `anon`·`authenticated`에는 권한이 없고, 향후 전용 Server Action만 상태 전이를 수행한다.
+
 `chip_ledger` INSERT를 `authenticated`에 열지 않은 이유: 칩 생성은 게임 규칙 판정 결과여야
 한다. 정책이 없다는 것 자체가 방어층이고, 실제 쓰기는 Server Action이 엔진 검증 후
 `kkeutbal_app`으로 수행한다(과거 이 문서가 "service role"이라 서술한 것은 오기 — service role

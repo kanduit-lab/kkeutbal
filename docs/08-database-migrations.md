@@ -42,17 +42,22 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    pnpm db:migrate
    ```
 
-   live DB는 2026-07-24 기준 `0000`~`0015` 이력이 동기화되어 있다. 전역 가상 크레딧과
-   게임·credit FK 인덱스, credit 안전 정수 제약을 포함하는 버전은 `0015`까지 적용하므로 같은 커밋에서
+   live DB는 2026-07-24 기준 `0000`~`0016` 이력이 동기화되어 있다. 전역 가상 크레딧과
+   게임·credit FK 인덱스, credit 안전 정수 제약, 공정 딜 라운드 상태 테이블을 포함하는 버전은
+   `0016`까지 적용하므로 같은 커밋에서
    재실행하면 새 마이그레이션만 적용된다.
 
 3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`,
    `0009_virtual_credits_security.sql`, `0010_credit_posting_hardening.sql`,
-   `0011_room_credit_lifecycle.sql`, `0012_room_credit_reversals.sql`을 번호순으로 적용한다.
+   `0011_room_credit_lifecycle.sql`, `0012_room_credit_reversals.sql`,
+   `0013_admin_room_credit_settlement.sql`, `0014_fair_round_security.sql`,
+   `0015_fair_reveal_immutability.sql`을 번호순으로 적용한다.
    0009는 **Drizzle** `0012` credit DDL 뒤에만 실행하며 credit 테이블의 직접 DML을 회수하고
    posting primitive·append-only 트리거를 만든다. 0010은 앱 롤의 generic posting 실행 권한을
    회수하고 관리자 조정 전용 RPC를 부여한다. 0011·0012는 account-credit 방의 buy-in 잠금,
-   취소 release, 종료 정산 전용 RPC를 부여한다.
+   취소 release, 종료 정산 전용 RPC를 부여한다. 0013은 호스트를 잃은 account-credit 방을
+   관리자 강제 정산할 때 DB에서 관리자 권한을 재검증한다. 0014는 Drizzle 0016의 공정 딜 상태
+   테이블을 server-only로 잠그고, 0015는 종료 뒤 full reveal 행의 수정·삭제를 막는다.
 
 4. 아래 Verification을 수행한 뒤 앱을 다시 연다.
 5. 관리자 계정으로 `/admin`에 한 번 로그인해 `0011` 이전 게스트 토큰 원문을
@@ -110,7 +115,8 @@ order by p.proname;
 ```
 
 추가로 `rate_limit_buckets`, `round_participants`, `credit_accounts`, `credit_transactions`,
-`credit_entries`, `room_credit_locks`가 존재하고 `chip_ledger.delta`, `rounds.pot`이 `bigint`인지
+`credit_entries`, `room_credit_locks`, `round_fairness`, `round_fairness_participants`,
+`round_fairness_reveals`가 존재하고 `chip_ledger.delta`, `rounds.pot`이 `bigint`인지
 확인한다. `kkeutbal_app`은 credit 테이블에 SELECT만, `ensure_credit_account`,
 `admin_adjust_credit`, `lock_room_credit_buy_in`, `release_room_credit_buy_in`,
 `settle_room_credits`에는 EXECUTE를 가져야 한다. generic `post_credit_transaction`에는 EXECUTE가
@@ -153,3 +159,8 @@ order by p.proname;
 - 2026-07-24: `0015` credit 거래/lock의 남은 FK 역방향 조회 인덱스를 추가.
 - 2026-07-24: Supabase 0011·0012로 account-credit 방의 buy-in lock·취소 release·종료 정산 RPC와
   앱 롤 실행 권한을 추가. 원격 rollback 트랜잭션으로 lifecycle 보존식을 확인.
+- 2026-07-24: Drizzle 0016의 공정 딜 라운드 상태·참가자 snapshot·reveal 테이블과 Supabase 0014
+  server-only RLS/권한을 추가. 원격 rollback 트랜잭션으로 FK·phase 초기 상태를 확인.
+- 2026-07-24: Supabase 0013으로 관리자 강제 정산도 account-credit lock을 release하게 보완하고,
+  비참가 관리자 rollback lifecycle로 권한·정산 귀속을 확인.
+- 2026-07-24: Supabase 0015로 `round_fairness_reveals` full reveal의 update/delete를 차단했다.
