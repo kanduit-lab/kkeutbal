@@ -18,22 +18,13 @@
   - 완료 기준: 개발자 콘솔·DB 직접 수정 없이 완주. 한 손 조작·어두운 조명 조건도 함께 확인(구 "실기기 리허설" 흡수)
   - 참조: `docs/09-roadmap.md` P0-3. 섯다 픽스처 검증(아래) 완료 후 진행해야 판정 대조에 의미가 있음
 
-### Medium — P1 정확도 검증 · P2 자동화
+### Medium — P2 자동화
 
-- [ ] **섯다 엔진 검증**: `evaluateSeotdaHand` · `resolveSeotdaShowdown`은 구현됐지만 테스트가 비어 있다
-  - 변경 범위: `src/features/seotda/engine.test.ts`, 신규 `src/features/seotda/seotda.fixtures.ts`
-  - 완료 기준: 190조합(20장 중 2장) 전수 기대값 테이블을 사람이 직접 작성(엔진 출력으로 생성 금지) 후, `engine.test.ts`의 `it.todo` 19건을 실제 테스트로 전환해 전부 통과, 커버리지 90%+
-  - 참조: `src/features/seotda/engine.ts`(구현 완료), `docs/04-game-engines.md` 서열표. 실물 리허설(P0-3) 전 완료가 이상적
-
-- [ ] **고스톱 엔진 테스트**: `captureOf` · `scoreGostop` · `hasChongtong`은 구현됐지만 테스트가 없다
-  - 변경 범위: 신규 `src/features/gostop/scoring.test.ts`
-  - 완료 기준: 경계값(4/5/9/10장)·배수 조합 테스트 통과, `breakdown` 근거 표시 검증
-  - 참조: `src/features/gostop/scoring.ts`(278줄, 구현 완료)
-
-- [ ] **E2E 테스트 스위트**: Playwright 자동화가 아직 없다
-  - 변경 범위: `e2e/` (신규)
+- [ ] **E2E 전체 사용자 흐름 확장**: 공개 로그인·소개 화면 모바일 스모크는 구현됐고, 인증 후
+  방 흐름 자동화가 남아 있다
+  - 변경 범위: `e2e/`, 테스트용 가입코드·계정 fixture
   - 완료 기준: 2컨텍스트 동기화, 재접속 복원, 정산 흐름에 대해 `pnpm test:e2e` 통과 — P0 스모크에서 수동으로 밟은 경로의 스크립트화
-  - 참조: `package.json`의 `test:e2e` 스크립트는 정의돼 있으나 대상 디렉터리 없음
+  - 참조: `playwright.config.ts`, `e2e/public-surfaces.spec.ts`
 
 - [ ] **staging 배포 시크릿 구성**: `ENV_FILE_BASE64` 등록 후 `.deploy.yml` staging/preview 활성화
   - 변경 범위: GitHub repo secrets, `.deploy.yml`
@@ -87,6 +78,24 @@
 - [x] **성능**: `getRoomSnapshot` 2단계 병렬화(~8RTT→~2RTT), `chip_ledger(round_id, reason)`
   인덱스(live 적용), 스프라이트 816KB→471KB(알파 제거), ActionBar 단일 인스턴스
 
+### 핵심 무결성 강화 (2026-07-24)
+
+- [x] **판 참가자 스냅샷**: 시작 시 활성 플레이어를 `round_participants`에 고정하고, 중도 퇴장·
+  역할 변경으로 베팅/승패/박 정산을 회피하지 못하게 했다. 판 시작 최소 인원도 DB 기준으로 검증한다.
+- [x] **베팅 상태머신**: check/call/raise/all-in 금액 의미, fold/all-in 이후 잠금, 차례 계산,
+  멱등 요청 fingerprint, stale 승인 자동 거절, 최신 승인 액션만 정정하는 규칙을 서버에서 강제한다.
+- [x] **원장·정산**: `bigint` 칩 금액, 바이인-원장 직접 참조, 중복 정정 방지, 방 손익 합계
+  0 불변식을 스키마와 액션 양쪽에서 검증한다.
+- [x] **인증·남용 방지**: 가입코드 재검증/소비, 게스트 토큰 HMAC 저장 및 기존 평문 지연 이전,
+  안전한 내부 redirect, DB 기반 HMAC rate limit을 로그인·가입·코드·Vision 경로에 적용했다.
+- [x] **엔진 신뢰 경계와 테스트**: 섯다 190조합, 고스톱 경계·배수, 포커 10개 카테고리를
+  검증하고 호출자가 위조한 카드 속성 대신 표준 덱 id로 다시 계산한다.
+- [x] **기본 E2E 기반**: Next 16 `proxy.ts`와 Turbopack 설정, Playwright 모바일 공개 화면
+  스모크를 추가했다. 인증 후 2컨텍스트 전체 흐름은 Medium 항목에서 계속 추적한다.
+- [x] **운영 DB 반영**: Supabase MCP로 Drizzle `0006`~`0011`, 보안 SQL `0007`~`0008`을
+  적용하고 Drizzle 이력 12건을 실제 SQL 해시와 동기화했다. bigint·인덱스·제약·RLS·
+  append-only 트리거·제로섬·레거시 바이인 참조를 DB에서 검증했다.
+
 ### 개선 스윕 Low 후속 처리 (2026-07-23)
 
 - [x] **서버 액션 에러 errors.* 키 전환**: 주 플로우 액션 전부(game/actions·round-actions·
@@ -129,11 +138,11 @@
 
 - [x] 섯다 판정 엔진 구현: `evaluateSeotdaHand` · `resolveSeotdaShowdown` · `describeSeotdaHand`
   - `src/features/seotda/engine.ts` — 암행어사·땡잡이·구사 룰 토글, 동급 처리(`replay` / `dealer-wins`) 포함
-  - 테스트는 아직 `it.todo` 상태 — Medium "섯다 엔진 검증" 항목에서 별도 추적
+  - `engine.test.ts`에서 190조합 전수·특수 상대 판정·위조 입력 방어 검증
 
 - [x] 고스톱 점수 엔진 구현: `captureOf` · `scoreGostop` · `hasChongtong`
   - `src/features/gostop/scoring.ts` — 분류 집계 → 기본 점수 → 조합 보너스 → 고 가산·배수 → 박 배수 → 선언 배수 순, `breakdown` 근거 포함
-  - 테스트는 없음 — Medium "고스톱 엔진 테스트" 항목에서 별도 추적
+  - `scoring.test.ts`에서 분류·점수 경계·배수·안전 정수·위조 입력 방어 검증
 
 ### 데이터베이스
 
@@ -202,15 +211,18 @@
 
 ## Notes
 
-- **DB 반영 완료 (2026-07-23)**: 스키마 제거(0001)·users 확장·`guest_tokens`(0002)·
+- **기존 DB 반영 완료 (2026-07-23)**: 스키마 제거(0001)·users 확장·`guest_tokens`(0002)·
   `chip_ledger_round_reason_idx`(0003) 전부 live DB 적용됨 — `kkeutbal_app` 롤엔 DDL 권한이 없어
-  Supabase Management API(`/database/query`) 경유로 적용했다. `pnpm db:push`는 비대화형에서
-  rename 프롬프트로 행 걸리니 쓰지 말 것.
+  Supabase Management API(`/database/query`) 경유로 적용했다.
+- **신규 DB 반영 완료 (2026-07-24)**: Drizzle `0006`~`0011`과 Supabase 보안 SQL
+  `0007`~`0008`을 live DB에 적용하고 `drizzle.__drizzle_migrations` 이력도 동기화했다.
+  이후 변경은 `db:push`가 아니라
+  [`docs/08-database-migrations.md`](docs/08-database-migrations.md)의 순서와 검증 절차를 따른다.
 - **우선순위 재정렬 (2026-07-23)**: 엔진 검증(P0)→라이브 경로(P1)이던 순서를 뒤집었다. 근거는
   `docs/09-roadmap.md` 전제 — 수동 대체 경로 없는 것부터. 섯다/고스톱 정확도는 사람이 육안 교정 가능,
   라이브 경로는 대체 불가.
-- **섯다·고스톱 엔진 구현·검증 순서 역전**: `engine.ts`/`scoring.ts`가 먼저 구현되고 테스트가 뒤처졌다.
-  190조합 전수 대조 전까지 버그 없음을 보증할 수 없다 — Medium 최상단에서 추적.
+- **엔진 검증 완료 (2026-07-24)**: 섯다 190조합 전수, 고스톱 경계·배수, 포커 카테고리와
+  입력 신뢰 경계를 단위 테스트로 검증했다. 실제 그룹의 지역 룰 대조는 실물 리허설에서 수행한다.
 - **실시간 프로토콜 문서 갱신 완료 (2026-07-23)**: `docs/03-realtime-protocol.md`가 이벤트 12종·
   재접속 백오프 정책·실패 표면화 표를 포함해 실제 구현과 일치한다.
 - **빌드 실행**: `pnpm build` 등 무거운 빌드는 사용자가 실행한다. 단위 테스트·lint·typecheck는 에이전트가 직접 돌려도 된다. 자세한 분업은 `CLAUDE.md`.

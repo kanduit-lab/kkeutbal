@@ -6,7 +6,7 @@
 | Audience | engineering |
 | Status | active |
 | Source of truth | this document (단계 구분·MVP 경계) |
-| Last reviewed | 2026-07-23 |
+| Last reviewed | 2026-07-24 |
 
 실행 단위 잔여 작업은 [`TODO.md`](../TODO.md)가 소유한다. 이 문서는 **순서와 경계**만 정한다.
 
@@ -27,16 +27,17 @@
 
 ## 현재 상태 요약
 
-기능 코드 대부분이 이미 구현돼 있다. 남은 것은 신규 기능이 아니라
-**외부 설정 확정(Authentik, staging), 검증 공백 메우기(190 픽스처, E2E), 미사용 스키마 정리**다.
+핵심 기능과 순수 엔진 검증은 구현돼 있다. 남은 것은
+**신규 DB 마이그레이션 적용, 실배포 라이브 경로 검증, 전체 사용자 흐름 E2E 확장**이다.
 
 | 영역 | 상태 | 근거 |
 |------|------|------|
 | 화투 카드 모델 | 구현 완료 | `src/features/hwatu/cards.ts` |
-| 섯다 엔진 | 구현 완료, 190 픽스처 검증 미실행 | `src/features/seotda/engine.ts`, `engine.test.ts`(`it.todo`), `seotda.fixtures.ts` 부재 |
-| 고스톱 엔진 | 구현 완료, 테스트 없음 | `src/features/gostop/scoring.ts` — 테스트 파일 자체가 없음 |
+| 섯다 엔진 | 구현·190조합 전수 테스트 완료 | `src/features/seotda/engine.ts`, `engine.test.ts` |
+| 고스톱 엔진 | 구현·경계/배수 테스트 완료 | `src/features/gostop/scoring.ts`, `scoring.test.ts` |
+| 포커 엔진 | 구현·10개 카테고리/입력 방어 테스트 완료 | `src/features/poker/engine.ts`, `engine.test.ts` |
 | 인증 | Auth.js v5 내부 계정·게스트 토큰 동작, SSO는 관리자 화면에서 연결 가능 | `src/lib/auth.ts`, `registration_codes`/`auth_settings` |
-| DB · RLS | hardened baseline 적용 대기 | `supabase/migrations/0007_database_hardening.sql` |
+| DB · RLS | 무결성 마이그레이션·RLS live 적용 완료 | `drizzle/migrations/0006`~`0011`, `supabase/migrations/0007`~`0008` |
 | 방 · 실시간 | 구현 완료 | `src/features/game/`(actions·queries·room-client), `src/lib/realtime/` |
 | 베팅 · 칩 원장 | 구현 완료 | `src/features/betting/actions.ts`, `src/features/budget/actions.ts` |
 | 족보 Advisor 수동 피커 | 구현 완료 | `src/features/jokbo-advisor/components/` |
@@ -44,7 +45,7 @@
 | 정산 · 랭킹 | 구현 완료 | `src/features/ranking/queries.ts`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
 | CI/CD | production 배포 활성, staging/preview 대기 | `.github/workflows/deploy.yml`, `.deploy.yml`(`preview.enabled: false`, `staging.enabled: false`) |
 | Keep-alive | 배포 환경 secret 설정 대기 | `.github/workflows/keep-alive.yml`, `/api/keep-alive` |
-| E2E | 미착수 | `e2e/` 디렉터리 없음 |
+| E2E | 공개 화면 모바일 스모크 구현, 인증 후 전체 흐름 미구현 | `playwright.config.ts`, `e2e/public-surfaces.spec.ts` |
 | 미사용 스키마 | 제거 확정(2026-07-23) — `groups`/`group_members`/`hand_records` 스키마에서 삭제 | `drizzle/schema.ts`, 근거는 `docs/design-decisions/` 001 |
 
 이 표가 코드와 어긋나면 **코드를 따른다.**
@@ -66,7 +67,7 @@ MVP는 "고스톱과 vision 없이도 그날 판이 돌아가는가" 기준으�
 └─────────────────────────────────────────────────────┘
    사진 인식 (vision)        ← 꺼도 수동으로 됨
    고스톱 엔진                ← 꺼도 섯다만 진행
-   E2E · 리허설 · 폴리시      ← 배포 전 필수, 아직 공백
+   전체 흐름 E2E · 리허설      ← 배포 전 검증 필요
 ```
 
 ---
@@ -100,18 +101,15 @@ Authentik은 초기 관리자 로그인 뒤 `/admin`의 SSO 설정에서 Issuer 
    실기기 조건(한 손 조작, 어두운 조명)도 여기서 함께 확인한다. 지연·재접속·정산 오류는
    코드 리뷰로 못 잡는다.
 
-### P1 — 정확도 검증 (사람이 룰을 알아 육안 교정 가능 — 그래도 배포 전 완료가 목표)
+### P1 — 정확도 검증
 
-1. **섯다 190 픽스처 검증** — `seotda.fixtures.ts` 사람이 직접 작성(엔진 출력으로 생성 금지)
-   후 `engine.test.ts`의 `it.todo` 19건을 실제 테스트로 전환. 어긋나면 게임 결과 자체가
-   틀리므로 실물 리허설(P0-3) 전 완료가 이상적이다.
-2. **고스톱 테스트 부재 해소** — `scoring.ts` 테스트 파일이 아예 없다. 경계값(4/5/9/10장)·
-   배수 조합·`breakdown` 근거를 검증하는 테스트 작성.
+섯다 190조합, 고스톱 경계·배수, 포커 10개 카테고리의 순수 엔진 자동 검증은 완료했다.
+남은 정확도 검증은 실제 플레이 그룹 룰과 점수표를 대조하는 실물 리허설에 포함한다.
 
 ### P2 — 자동화·배포 확장
 
-1. **Playwright E2E 스위트** — `e2e/` 디렉터리 자체가 없다. 2컨텍스트 동기화, 재접속 복원,
-   정산 흐름을 자동화. P0-2 스모크에서 수동으로 밟은 경로를 그대로 스크립트화한다.
+1. **Playwright E2E 전체 흐름 확장** — 공개 로그인·소개 화면 모바일 스모크는 구현됐다.
+   가입코드/로그인 fixture를 마련해 2컨텍스트 동기화, 재접속 복원, 정산 흐름을 자동화한다.
 2. **staging/preview 채널 전환** — `ENV_FILE_BASE64` 시크릿 구성 후 `.deploy.yml`의
    `preview.enabled`/`staging.enabled`를 `true`로. MT를 게이팅하지 않는 개발 편의 항목.
 
@@ -135,7 +133,7 @@ Authentik은 초기 관리자 로그인 뒤 `/admin`의 SSO 설정에서 Issuer 
    여기가 죽으면 대체 경로가 없다 — 종이 기록으로 회귀 (P0-2).
 2. **인증 경로 미검증** — 가입코드 확인부터 내부 계정 로그인까지 실배포 왕복이 아직 없다.
    P0 전체의 선행 조건 (P0-1).
-3. **섯다·고스톱 규칙 정확도** — 190 픽스처 대조·고스톱 테스트가 없다. 틀려도 사람이 그
-   자리에서 교정 가능하지만, 앱 신뢰는 깎인다 (P1).
+3. **향후 DB 마이그레이션 드리프트** — 현재 live DB와 Drizzle 이력은 동기화됐다. 이후 변경도
+   `docs/08-database-migrations.md` 순서로만 적용해 SQL과 이력이 갈라지지 않게 해야 한다.
 4. **현장 네트워크** — 실물 리허설에서만 드러난다. 완화책은 로컬 큐 + 스냅샷 복원
    (이미 구현됨, `src/lib/realtime/`).

@@ -6,11 +6,11 @@
 | Audience | engineering / QA |
 | Status | active |
 | Source of truth | this document (카드 모델·족보 규칙) + 구현 코드 (계산 순서·경계값) |
-| Last reviewed | 2026-07-23 |
+| Last reviewed | 2026-07-24 |
 
 구현: `src/features/hwatu/`, `src/features/seotda/`, `src/features/gostop/`, `src/features/poker/`.
-섯다 테스트 계약: `src/features/seotda/engine.test.ts` (현재 `it.todo` — Phase 1 착수 전 스텁, 190조합
-전수 검증은 아직 구현되지 않았다). 고스톱·포커는 아직 테스트 파일이 없다.
+섯다·고스톱·포커 순수 엔진 테스트는 각 기능 폴더의 `*.test.ts`에 있으며, 섯다는 20장 중
+2장을 뽑는 190조합을 독립 규칙 분기로 전수 대조한다.
 
 ## 설계 원칙
 
@@ -290,8 +290,8 @@ interface GostopScore {
 - 흔들기·총통 같은 **전원 공통 배수는 딜러 UI가 score에 미리 곱해서** 보낸다 — 액션은
   받은 score를 그대로 쓴다
 - 잔액 상한(올인)은 배수 적용 뒤의 지불액에 적용된다 — 원장 음수 금지 불변식 유지
-- `loserPenalties`의 userId가 방 멤버가 아니면 판 종료 전체가 실패한다. 멤버지만 실제
-  패자가 아닌 항목(승자·관전자·퇴장자)은 조용히 무시된다
+- `loserPenalties`의 userId가 이번 판 참가자이자 실제 패자가 아니면 판 종료 전체가 실패한다.
+  중도 퇴장해도 `round_participants`에 남으므로 정산 대상에서 빠지지 않는다
 - **경계**: `gostop/scoring.ts` 순수 엔진은 이 정산에 관여하지 않는다(변경 없음).
   `scoreGostop`의 multipliers는 점수 계산·Advisor 표시용이고, 칩 정산의 factor 적용은
   액션 레이어 소관이다
@@ -331,7 +331,8 @@ interface PokerCard {
 
 ### 5~7장 → best-5 (`evaluatePokerHand`)
 
-- 입력 검증(`validateInput`): 5~7장, 카드 id 중복 금지. 벗어나면 예외를 던진다.
+- 입력 정규화(`normalizeInput`): 5~7장, 카드 id 중복 금지, 표준 52장 덱에 없는 id 거부.
+  랭크·무늬·라벨은 호출자 객체를 신뢰하지 않고 `findPokerCard(id)`의 정본으로 다시 계산한다.
 - `combinationsOf5`가 입력 카드 중 5장을 고르는 모든 조합을 만든다(최대 `C(7,5)=21`개, 재귀
   백트래킹).
 - 각 조합을 `evaluateFiveCards`로 채점하고 `compareRankVectors`로 최댓값을 고른다.
@@ -403,23 +404,19 @@ Advisor 화면이 판정과 함께 보여주는 파생 통계. 섯다·고스톱
 | 대상 | 방식 | 기준 | 상태 |
 |------|------|------|------|
 | 섯다 서열 상수 | `SEOTDA_RANK`/`SEOTDA_SPECIALS`/`SEOTDA_TRAIT_COMBOS` 구조 검증 | 구간 분리·중복 없음 | 구현됨 (`engine.test.ts`) |
-| 섯다 족보 190조합 | 사람이 작성한 기대값 테이블 대조 | 100% 일치 | `it.todo` — 미구현 |
-| 섯다 상대 판정 | 암행어사·땡잡이·구사 시나리오 | 각 룰 on/off 양쪽 | `it.todo` — 미구현 |
-| 고스톱 기본 점수 | 분류별 경계값(4/5장, 9/10 피) | 경계 오차 0 | 미구현 (테스트 파일 없음) |
-| 고스톱 배수 | 고 1~5, 피박·광박·멍박 조합 | 순서 의존성 검증 | 미구현 |
-| 포커 카테고리 판정 | 10개 카테고리 대표 5~7장 시나리오 + 백스트레이트(A-2-3-4-5) | 카테고리·서열 벡터 일치 | 미구현 (테스트 파일 없음) |
-| 포커 5~7장 best-5 | 7장 입력에서 다른 5장 조합보다 항상 최댓값을 고르는지 | `combinationsOf5` 전 조합 대조 | 미구현 |
+| 섯다 족보 190조합 | 엔진과 독립된 규칙 분기로 전수 대조 | 100% 일치 | 구현됨 (`engine.test.ts`) |
+| 섯다 상대 판정 | 암행어사·땡잡이·구사 시나리오 | 룰 on/off 및 위조 입력 방어 | 구현됨 (`engine.test.ts`) |
+| 고스톱 기본 점수 | 분류·광·열끗·띠·피 경계값 | 경계 오차 0 | 구현됨 (`scoring.test.ts`) |
+| 고스톱 배수 | 고·피박·흔들기·폭탄 조합 | 누적 순서·안전 정수 검증 | 구현됨 (`scoring.test.ts`) |
+| 포커 카테고리 판정 | 10개 카테고리 + 백스트레이트(A-2-3-4-5) | 카테고리·서열 벡터 일치 | 구현됨 (`engine.test.ts`) |
+| 포커 5~7장 best-5 | 대표 7장 시나리오에서 최강 조합 선택 | full-house·키커 일치 | 구현됨 (`engine.test.ts`) |
 | Advisor 통계(`stats.ts`) | 섯다 190조합 tier 집합 크기·포커 확률표 합이 100%인지 | 구조 검증 | 미구현 |
 
-섯다 190조합은 엔진 출력이 아니라 **사람이 만든 기대값 테이블**(`seotda.fixtures.ts`, 미작성)을
-소스로 삼는다 — 엔진 출력으로 기대값을 생성하면 버그가 그대로 고정된다.
+섯다 190조합의 기대값은 `evaluateSeotdaHand` 출력으로 생성하지 않는다. 테스트 안에서 카드의
+광 여부·동월 여부·특수 월 조합·끗 계산을 독립적으로 분기해 엔진 결과와 대조한다.
 
 ## Open Questions
 
-- [ ] 고스톱 테스트 스위트 부재 — `gostop/scoring.test.ts` 없음. `seotda/engine.test.ts` 수준의
-      경계값·배수 시나리오 커버리지 확보 필요.
-- [ ] 포커 테스트 스위트 부재 — `poker/engine.test.ts` 없음. 10개 카테고리·백스트레이트·
-      best-5 선택 로직 검증 필요.
 - [ ] `chongtongInstantWin` 소비 위치 — `features/game/`에 즉시 승리 처리가 아직 없다. 상태머신
       설계 시 `hasChongtong` 호출 지점을 확정할 것.
 - [x] 고스톱 입력 방식 확정(2026-07-23): "최종 점수만 입력" 간이 모드가 기본이다.

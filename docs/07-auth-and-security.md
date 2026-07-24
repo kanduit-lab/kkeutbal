@@ -6,7 +6,7 @@
 | Audience | engineering / operators / reviewers |
 | Status | active |
 | Source of truth | this document (인증 흐름·역할 권한·보안 경계) |
-| Last reviewed | 2026-07-23 |
+| Last reviewed | 2026-07-24 |
 
 ## Context
 
@@ -31,7 +31,8 @@ password (항상 활성)
 
 guest-token (항상 활성)
   → 관리자가 발급한 8자 토큰 + 이름 → sub = `guest:{tokenId}:{name}`
-  → 같은 (토큰, 이름) = 같은 계정. 토큰은 만료·회수 가능 (guest_tokens 테이블)
+  → 같은 (토큰, 이름) = 같은 계정. 토큰은 만료·회수 가능
+  → 신규 토큰은 `guest_tokens.code_hash` HMAC만 저장, 레거시 원문은 관리자 콘솔 최초 진입 시 일괄 해시 전환
 
 ```
 
@@ -64,8 +65,9 @@ guest-token (항상 활성)
 
 관리자가 `/admin`에서 발급한 가입코드는 `registration_codes.code_hash`로만 저장된다. 로그인
 카드의 가입코드 폼이 `verifyRegistrationCode` Server Action으로 코드를 전송하고, 활성·미만료·미회수
-코드인지 확인한다. 일치하면 `AUTH_SECRET`으로 서명한 10분짜리 HTTP-only 쿠키를 `/register`
-경로에 발급한다. `/register` 페이지와 `registerAndLogin` 액션은 모두 이 쿠키를 검증하므로
+코드인지 확인한다. 일치하면 코드 id와 만료 시각을 `AUTH_SECRET`으로 서명한 10분짜리 HTTP-only
+쿠키를 `/register` 경로에 발급한다. 페이지와 가입 액션은 코드가 아직 활성인지 DB에서 다시
+확인하고 가입 성공 후 쿠키를 폐기하므로,
 URL 직접 접근이나 폼 직접 제출로는 가입할 수 없다. 원문 코드는 발급 직후에만 관리자에게
 반환되고, 이후에는 회수·만료 상태만 관리한다. 단, 계정이 없는 새 인스턴스에서는 `/register`가
 바로 열리고 첫 가입자가 관리자가 된다. 이 승격은 `registerAndLogin` 트랜잭션 안에서 직렬화한다.
@@ -203,13 +205,8 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 | 대리 입력 (타인 대신 `placeBet`) | ✅ | ✅ | — | — | `placeBet` (`isProxy && isDealer`) |
 | 본인 베팅 제출 (`placeBet`) | ✅ | ✅ | ✅ | — (거부) | `placeBet` (`targetRole !== 'observer'`) |
 | 타인 바이인 추가 (`addBuyIn`) | ✅ | ✅ | — | — | `addBuyIn` |
-| 본인 바이인 추가 (`addBuyIn`) | ✅ | ✅ | ✅ | — (참가자만 가능, observer 불허 안 됨*) | `addBuyIn` |
-| 방 스냅샷 조회 (`refreshRoom`) | ✅ | ✅ | ✅ | ✅ | 참가자 여부만 확인, 역할 무관 |
-
-\* `addBuyIn`은 대상이 방 참가자인지만 확인하고 `observer` 역할을 명시적으로 막지 않는다
-(`src/features/budget/actions.ts`). observer가 바이인을 넣는 것을 금지하려면 이 Server Action에
-`memberRole !== 'observer'` 체크를 추가해야 한다 — 현재 코드 기준의 사실이며, 의도적 설계인지
-누락인지는 확인 필요.
+| 본인 바이인 추가 (`addBuyIn`) | ✅ | ✅ | ✅ | — (명시적 거부) | `addBuyIn` |
+| 방 스냅샷 조회 (`refreshRoom`) | ✅ | ✅ | ✅ | ✅ | 로그인 사용자 전광판 조회 허용, 쓰기는 별도 검사 |
 
 공통 규칙:
 
@@ -240,15 +237,16 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 | 데이터 격리 | RLS는 전 테이블에 활성화되어 있으나 정상 경로에서 평가되지 않음(위 "RLS는 방어층" 절). 실질 격리는 Server Action의 방 소속 검사 | `requireRole` / `memberRole` 패턴 |
 
 Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/png/webp)이 있다.
-**호출 빈도 상한(rate limit)은 코드에 없다** — 로그인 사용자면 누구나 반복 호출로
-`ANTHROPIC_API_KEY` 사용량을 소모시킬 수 있다. 현재 미구현.
+Vision은 사용자당 분당 6회·시간당 30회로 제한한다. 비밀번호·게스트·회원가입·가입코드 경로도
+`rate_limit_buckets`의 고정 창 카운터를 사용하며 식별자는 `AUTH_SECRET` HMAC으로만 저장한다
+(`src/lib/rate-limit.ts`).
 
 ### 체크리스트 (커밋 전 / 배포 전)
 
 - [ ] 하드코딩된 비밀값 없음 (`.env.example`에 키 이름만)
 - [ ] `NEXT_PUBLIC_` 접두사가 붙은 서버 전용 값 없음
 - [ ] `registration_codes`와 `auth_settings` 마이그레이션이 적용되어 있고, 운영용 활성 가입코드가 발급되어 있음
-- [ ] `0007_database_hardening.sql`이 적용되어 있고, `keep_alive` 테이블에 anon 권한이 없음
+- [x] `0007_database_hardening.sql` 적용 및 `keep_alive` 제거, 내부 테이블 anon 권한 없음
 - [ ] `DATABASE_CA_CERT_BASE64`가 Supabase CA와 일치하고 `KEEP_ALIVE_SECRET`이 GitHub Actions secret과 일치함
 - [ ] 모든 신규 Server Action이 세션·방 소속·역할을 재검증
 - [ ] 모든 외부 입력(폼·realtime·vision)이 zod 통과
@@ -257,8 +255,8 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 
 ## 개인정보
 
-- 저장하는 개인정보는 표시 이름과 아바타 URL(`users.displayName`, `users.avatarUrl`)뿐이다.
-  이메일은 저장하지 않는다.
+- 저장하는 개인정보는 표시 이름, 전화번호, 내부 계정 아이디와 아바타 URL이다. 이메일은 저장하지
+  않는다. 가입 실패 redirect에는 전화번호를 싣지 않는다.
 - 사진 인식 업로드 이미지는 Server Action 호출 한 번 처리 후 보존하지 않는다. 인식 결과 자체도
   DB에 저장되지 않는다(위 참조) — 현재는 신뢰도 로그도 남지 않는다.
 
@@ -277,9 +275,6 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 
 ## Open Questions
 
-- [ ] `addBuyIn`이 `observer` 역할의 본인 바이인을 명시적으로 막지 않는다 — 의도된 동작인지
-      확인 필요.
-- [ ] Vision 인식 호출에 rate limit이 없다 — 도입 여부와 방식(사용자당/방당) 결정 필요.
 - [ ] realtime private 채널 정책 등 실제로 평가되지 않는 RLS 정책을 유지할지, 코드 경로를
       정책에 맞출지, 아니면 정리할지 결정 필요 (`hand_records` 정책은 2026-07-23 테이블
       제거로 해소됨).

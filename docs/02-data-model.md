@@ -9,7 +9,8 @@
 | Last reviewed | 2026-07-24 |
 
 구현 스키마는 `drizzle/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
-`supabase/migrations/0007_database_hardening.sql`이 소유한다. 실제 적용 상태는
+`supabase/migrations/0007_database_hardening.sql`과 신규 테이블 보강용 `0008`이 소유한다.
+적용 순서는 [`08-database-migrations.md`](08-database-migrations.md)가 소유한다. 실제 상태는
 `pg_policies`, `information_schema.role_table_grants`, `pg_class.relrowsecurity`로 확인한다.
 
 ## Context
@@ -71,6 +72,7 @@ erDiagram
     rooms ||--o{ room_members : "참가"
     users ||--o{ room_members : "참가"
     rooms ||--o{ rounds : "판"
+    rounds ||--o{ round_participants : "참가자 스냅샷"
     rooms ||--o{ buy_ins : "바이인"
     rooms ||--o{ chip_ledger : "칩 원장"
     rounds ||--o{ bet_actions : "베팅"
@@ -110,7 +112,7 @@ erDiagram
         uuid room_id FK
         int seq
         text status
-        int pot
+        bigint pot
         uuid winner_id FK
         jsonb result
         timestamptz started_at
@@ -135,10 +137,11 @@ erDiagram
         uuid room_id FK
         uuid round_id FK "nullable"
         uuid user_id FK
-        int delta
+        bigint delta
         text reason
         uuid ref_action_id FK
-        uuid reverted_of
+        uuid ref_buy_in_id FK
+        uuid reverted_of FK
         timestamptz created_at
     }
     buy_ins {
@@ -147,6 +150,7 @@ erDiagram
         uuid user_id FK
         int amount
         uuid created_by FK
+        uuid reverted_of FK
         timestamptz created_at
     }
 ```
@@ -155,11 +159,18 @@ erDiagram
 
 ### `users`
 
-Authentik이 신원의 소유자다. 이 테이블은 미러이며 비밀번호·이메일을 보관하지 않는다.
+내부 계정·Authentik·게스트 신원을 하나의 사용자로 해석한다. 이메일은 보관하지 않으며 내부
+계정만 bcrypt `password_hash`와 숫자 정규화한 전화번호를 가진다.
 
 - `authentik_sub` — 유일 키. OIDC `sub` 클레임 또는 내부 계정의 `local:{username}` 형태.
   같은 sub → 같은 계정. 로그인 시 upsert.
 - 표시 이름·아바타는 로컬 편집 가능(방에서 부르는 별명).
+
+### `guest_tokens`
+
+- 신규 발급은 `code_hash`에 `AUTH_SECRET` HMAC만 저장하고 원문은 발급 응답에서 한 번만 보여준다.
+- 구버전 `code` 원문 행은 로그인 또는 이름 조회 성공 시 해시로 전환하고 원문을 지운다.
+- `expires_at`·`revoked_at`으로 새 로그인을 차단한다.
 
 ### `registration_codes`
 
@@ -167,6 +178,11 @@ Authentik이 신원의 소유자다. 이 테이블은 미러이며 비밀번호�
 - `label` — 발급 목적을 식별하는 운영 메모.
 - `expires_at` / `revoked_at` — 만료 또는 회수된 코드는 회원가입에 사용할 수 없다.
 - `/admin`의 관리자 액션만 생성·회수하며, 원문은 발급 응답에서만 한 번 반환된다.
+
+### `rate_limit_buckets`
+
+로그인·가입·가입코드·게스트·Vision 남용 방지용 고정 창 카운터다. IP·아이디·토큰 원문 대신
+scope와 식별자를 `AUTH_SECRET`으로 HMAC한 `key_hash`만 저장하고 만료 인덱스로 정리한다.
 
 ### `rooms`
 
@@ -193,6 +209,12 @@ Authentik이 신원의 소유자다. 이 테이블은 미러이며 비밀번호�
 - `result` — 게임별 결과 상세 jsonb. `note` 필드를 `readResultNote`가 읽어 마지막 결과 요약에
   쓴다.
 
+### `round_participants`
+
+판 시작 시점의 활성 비관전자 목록을 `(round_id, user_id)`로 저장한다. 재입장으로
+`room_members.joined_at`이 바뀌거나 현재 역할이 달라져도 실제 판 참가·베팅 자격·전적 집계는
+이 스냅샷을 기준으로 유지한다.
+
 ### `bet_actions`
 
 - `id` — **클라이언트가 생성한 UUID**. 멱등키. `placeBet`은 같은 `id`가 이미 있으면 재삽입하지
@@ -212,6 +234,7 @@ append-only. UPDATE·DELETE는 트리거로 원천 차단한다(아래 "원장 �
 - `delta` — 부호 있는 정수. 지출 음수, 획득 양수.
 - `reason` — `buy_in` | `bet` | `pot_win` | `correction` | `settlement`.
 - `ref_action_id` — 이 원장 행을 만든 `bet_actions.id`(있는 경우).
+- `ref_buy_in_id` — 바이인 또는 바이인 취소가 만든 원장 행의 정확한 `buy_ins.id`.
 - `reverted_of` — 정정 행이 원본 원장 행을 가리킨다. 원본은 그대로 둔다.
 - 쓰기 경로는 오직 Server Action(`kkeutbal_app`, bypassrls)이다. `authenticated`용
   INSERT/UPDATE/DELETE RLS 정책이 없어 브라우저가 Supabase REST/클라이언트로 직접 쓰는 것은
@@ -220,6 +243,7 @@ append-only. UPDATE·DELETE는 트리거로 원천 차단한다(아래 "원장 �
 ### `buy_ins`
 
 - `created_by` — 실제 입력자. 본인 또는 host/dealer.
+- `reverted_of` — 바이인 취소 행이 원본 바이인을 가리킨다. 한 원본은 한 번만 취소할 수 있다.
 - `chip_ledger`에 `reason='buy_in'` 행을 함께 남긴다(`addBuyIn`이 같은 트랜잭션에서 두 INSERT를
   수행).
 
@@ -240,8 +264,11 @@ enum 포함). 이 결정으로 누적 랭킹은 **전역 사용자 단위로 확
 | `room_members(room_id, seat_no)` unique | 좌석 중복 방지 |
 | `chip_ledger(room_id, user_id)` | 잔액 집계 |
 | `chip_ledger(room_id, created_at)` | 원장 타임라인 |
+| `chip_ledger(ref_buy_in_id)` | 바이인과 원장 직접 연결 |
 | `rounds(room_id, seq)` unique | 판 순서 · 충돌 판정 |
-| `bet_actions(round_id, seq)` | 판 내 액션 순서 |
+| `rounds(room_id) where status='playing'` unique | 방마다 진행 중 판 하나 |
+| `bet_actions(round_id, seq)` unique | 판 내 액션 순서 |
+| `round_participants(round_id, user_id)` PK | 판 참가자 정본 |
 | `buy_ins(room_id, user_id)` | 방·사용자별 바이인 합계 |
 
 ## RLS 원칙
@@ -293,7 +320,7 @@ UPDATE/DELETE 시도는 예외를 던진다. 정정은 `reverted_of`로 원본�
 
 구현·테스트가 지켜야 할 조건.
 
-1. `SUM(chip_ledger.delta)` per room = 0 (정산 완료 시점).
+1. `SUM(chip_ledger.delta) - SUM(buy_ins.amount) = 0` (정산 완료 시점).
 2. 어떤 사용자의 방 내 잔액도 음수가 될 수 없다 — `placeBet`/`approveBet`은 쓰기 전에
    `balanceOf`로 확인한다.
 3. `bet_actions.id`는 클라이언트 생성 UUID이며 재삽입은 무시된다(기존 행 반환, 멱등).
@@ -301,6 +328,7 @@ UPDATE/DELETE 시도는 예외를 던진다. 정정은 `reverted_of`로 원본�
 5. `rounds(room_id, seq)`는 빈 번호 없이 1부터 증가한다.
 6. 동시 쓰기는 방 단위 `pg_advisory_xact_lock`으로 직렬화된다 — 락 밖에서 읽은 잔액/상태로
    커밋하지 않는다.
+7. 방마다 `playing` 판은 최대 하나이며, 판 참가자는 `round_participants`로 고정한다.
 
 ## Open Questions
 

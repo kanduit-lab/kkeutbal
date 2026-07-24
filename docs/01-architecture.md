@@ -50,7 +50,7 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
         │ HTTPS (SSR/RSC, Server Actions)
         ▼
  ┌────────────────────────────────────────┐
- │  Next.js 15 (standalone) 컨테이너       │
+ │  Next.js 16 (standalone) 컨테이너       │
  │  docker-deploy-control-hub 로 배포      │
  │  도메인: kkeutbal.kanduit.app           │
  └──────┬───────────────────────────────┬──┘
@@ -189,7 +189,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 | 레이어 | 선택 | 근거 |
 |--------|------|------|
-| 앱 프레임워크 | Next.js 15 App Router, `output: 'standalone'` | SSR로 초기 방 상태를 즉시 그림. standalone 산출물을 docker 이미지에 그대로 담는다 |
+| 앱 프레임워크 | Next.js 16 App Router, `output: 'standalone'` | SSR로 초기 방 상태를 즉시 그림. standalone 산출물을 docker 이미지에 그대로 담는다 |
 | 언어 | TypeScript strict | 카드 배열 인덱싱이 많아 undefined 누락이 실제 버그 원인이 됨 |
 | 실시간 | Supabase Realtime Broadcast(공개 채널) + Presence | 전용 서버 불필요, 저지연. 인증 연동은 안 함 — obscurity + 스냅샷 재검증으로 대체 |
 | DB 접근 | Drizzle ORM + postgres-js, 전용 롤(bypassrls) | 스키마를 타입 소스로. service role key/JWT 브리지 없이 커넥션 문자열 하나로 통제 |
@@ -234,9 +234,10 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 ## Migration And Rollout
 
-1. `pnpm db:generate` / `pnpm db:push`로 drizzle 스키마 반영.
-2. `supabase/migrations/0007_database_hardening.sql` 적용 — 현재 스키마 RLS baseline, 앱 롤 최소
-   DML 권한, 원장 append-only 트리거를 한 번에 적용한다.
+1. [`08-database-migrations.md`](08-database-migrations.md) 순서로 `pnpm db:migrate`와
+   Supabase 보안 SQL을 적용한다. `db:push`는 운영 반영 경로로 사용하지 않는다.
+2. `supabase/migrations/0007_database_hardening.sql`은 새 DB의 현재 RLS baseline이고,
+   `0008_rate_limit_buckets_rls.sql`은 기존 DB에 신규 내부 테이블 권한을 보강한다.
 3. Authentik 애플리케이션에 `{APP_URL}/api/auth/callback/authentik`을 Redirect URI로 등록하고,
    초기 관리자 계정으로 `/admin`의 SSO 설정을 저장·활성화.
 4. `.deploy.yml` — `preview`/`staging`는 `enabled: false`(ENV_FILE_BASE64 시크릿 구성 전).

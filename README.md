@@ -9,7 +9,7 @@
 [![CI](https://github.com/kanduit-lab/kkeutbal/actions/workflows/ci.yml/badge.svg)](https://github.com/kanduit-lab/kkeutbal/actions/workflows/ci.yml)
 [![Deploy](https://github.com/kanduit-lab/kkeutbal/actions/workflows/deploy.yml/badge.svg)](https://github.com/kanduit-lab/kkeutbal/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-![Next.js 15](https://img.shields.io/badge/Next.js-15-black?logo=next.js)
+![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
 
 </div>
@@ -49,7 +49,7 @@ MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 �
 
 | 레이어 | 선택 |
 |--------|------|
-| 앱 | Next.js 15 App Router · TypeScript strict · RSC + Server Actions · `output: 'standalone'` |
+| 앱 | Next.js 16 App Router · TypeScript strict · RSC + Server Actions · `output: 'standalone'` |
 | 실시간 | Supabase Realtime **Broadcast** 공개 채널 + 스냅샷 refetch — [`docs/03-realtime-protocol.md`](docs/03-realtime-protocol.md) |
 | DB | PostgreSQL(Supabase) · Drizzle ORM · 전용 롤 `kkeutbal_app` — [`docs/02-data-model.md`](docs/02-data-model.md) |
 | 인증 | Auth.js v5 — 내부 계정(bcrypt) · Authentik OIDC 자동 연동 · 게스트 토큰 — [`docs/07-auth-and-security.md`](docs/07-auth-and-security.md) |
@@ -63,7 +63,7 @@ MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 �
 ```bash
 pnpm install
 cp .env.example .env.local   # 아래 환경변수 표 참고
-pnpm db:push                 # drizzle 스키마 반영 (개발용)
+pnpm db:migrate              # 생성된 drizzle 마이그레이션 순차 적용
 pnpm dev                     # http://localhost:3000
 ```
 
@@ -122,9 +122,9 @@ pnpm dev            # 개발 서버
 pnpm typecheck      # tsc --noEmit
 pnpm lint           # eslint
 pnpm test           # vitest (단위)
-pnpm test:e2e       # playwright (스위트 미작성)
+pnpm test:e2e       # Playwright 공개 화면 스모크 (로컬 DB 환경 필요)
 pnpm db:generate    # drizzle 마이그레이션 생성
-pnpm db:push        # 스키마 반영
+pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 ```
 
 ## 📦 배포
@@ -143,6 +143,7 @@ pnpm db:push        # 스키마 반영
 | [`docs/03-realtime-protocol.md`](docs/03-realtime-protocol.md) | 채널·이벤트 스키마·상태 동기화 |
 | [`docs/04-game-engines.md`](docs/04-game-engines.md) | 화투 카드 모델·섯다 끗·고스톱 점수 |
 | [`docs/07-auth-and-security.md`](docs/07-auth-and-security.md) | 인증·역할·보안 경계 |
+| [`docs/08-database-migrations.md`](docs/08-database-migrations.md) | DB 적용·검증·복구 런북 |
 | [`docs/09-roadmap.md`](docs/09-roadmap.md) | 우선순위·마일스톤 |
 
 실행 잔여 작업: [`TODO.md`](TODO.md) · 에이전트 가이드: [`CLAUDE.md`](CLAUDE.md)
