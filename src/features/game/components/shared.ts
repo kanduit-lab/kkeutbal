@@ -80,13 +80,19 @@ export function lastAcceptedByUser(actions: readonly BetActionView[]): Map<strin
   return byUser
 }
 
-/** 짧은 올인도 콜 기준을 낮추지 않도록, 확정된 베팅 중 가장 큰 금액을 사용한다. */
-export function highestAcceptedWager(actions: readonly BetActionView[]): number {
-  return actions.reduce(
-    (highest, action) =>
-      action.status === 'accepted' && action.amount > highest ? action.amount : highest,
-    0,
-  )
+/**
+ * 승자 후보에서 다이/폴드한 참가자를 뺀다.
+ *
+ * 서버도 `endRound`에서 같은 불변식을 검사한다. 이 함수는 현재 스냅샷을 바탕으로 딜러가
+ * 잘못된 대상을 고르지 않게 하는 표시용 파생값이다. 정정(revert)된 액션은 accepted가 아니므로
+ * 자연히 후보를 다시 살린다.
+ */
+export function nonFoldedParticipantIds(
+  participantIds: readonly string[],
+  actions: readonly BetActionView[],
+): readonly string[] {
+  const lastAccepted = lastAcceptedByUser(actions)
+  return participantIds.filter((userId) => lastAccepted.get(userId)?.action !== 'fold')
 }
 
 /** 레이즈 프리셋 라벨 폴백 — 사전 없이 호출되는 경로에서 쓰는 한국어 상수. */

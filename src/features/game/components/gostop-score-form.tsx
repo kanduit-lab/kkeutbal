@@ -6,22 +6,17 @@ import type { MemberView } from '../types'
 import { formatChips } from './shared'
 
 /**
- * 고스톱 승자 확정 점수 폼 — 기본 점수 스테퍼 + 공통 배수(흔들기·총통) +
- * 패자별 박(피박·광박) 토글.
- * 공통 배수는 제출 score 에 미리 곱해서 보내고(서버는 최종 점수만 받는다),
- * 박은 endRound loserPenalties(한 개 = 2배, 둘 다 = 4배)로 보낸다.
- * 상태는 부모(dealer-panel)가 소유한다 — 이 컴포넌트는 표시·토글만 담당.
+ * 고스톱 승자 확정 점수 폼.
+ *
+ * 이 화면은 획득 패를 다시 판정하는 엔진이 아니라, 딜러가 확인한 카드 점수에 판 상황의
+ * 선언(고·흔들기·폭탄)을 적용한다. 계산 규칙은 `gostop/scoring.ts`의 표준 프리셋과 같다.
+ * 총통은 점수 배수가 아닌 즉시 승리 규칙이므로 여기에서 ×2로 취급하지 않는다.
  */
 
-/** 서버 endRoundSchema 의 score 상한 — 배수 적용 후에도 넘지 않게 기본 점수를 조인다. */
+/** 서버 endRoundSchema의 score 상한. */
 const MAX_GOSTOP_SCORE = 999
-
-/** 공통 배수 — 각 ×2, 둘 다 켜면 ×4. 게임 용어라 번역하지 않는다. */
-const GOSTOP_MULTIPLIERS = [
-  { id: 'heundeulgi', label: '흔들기' },
-  { id: 'chongtong', label: '총통' },
-] as const
-type GostopMultiplierId = (typeof GOSTOP_MULTIPLIERS)[number]['id']
+/** 비정상적인 긴 선언으로 점수가 급격히 커지는 것을 UI에서 막는 상한. */
+const MAX_DECLARATION_COUNT = 8
 
 /** 패자별 박 — 각 ×2, 둘 다면 ×4 (endRound loserPenalties factor). */
 const PENALTY_FLAGS = [
@@ -31,25 +26,46 @@ const PENALTY_FLAGS = [
 type PenaltyFlagId = (typeof PENALTY_FLAGS)[number]['id']
 
 export interface GostopScoreState {
+  /** 카드에서 나온 기본 점수. 고 가산점은 별도로 계산한다. */
   readonly base: number
-  readonly multipliers: readonly GostopMultiplierId[]
+  readonly goCount: number
+  readonly shakeCount: number
+  readonly bombCount: number
   /** 패자 userId → 켜진 박 플래그. 승자로 바뀐 멤버의 플래그는 제출 시 자연히 제외된다. */
   readonly penalties: Readonly<Record<string, readonly PenaltyFlagId[]>>
 }
 
 export const initialGostopScore: GostopScoreState = {
   base: 3,
-  multipliers: [],
+  goCount: 0,
+  shakeCount: 0,
+  bombCount: 0,
   penalties: {},
 }
 
-function commonFactor(state: GostopScoreState): number {
-  return 2 ** state.multipliers.length
+/** 표준 룰: 1고 +1, 2고 이상 +2점(그 이상은 점수 가산 없이 배수만 누적). */
+function goBonus(goCount: number): number {
+  if (goCount <= 0) return 0
+  return goCount === 1 ? 1 : 2
 }
 
-/** 제출용 최종 점수 — 기본 점수 × 공통 배수. */
+/** 표준 룰: 3고부터 고당 ×2, 흔들기/폭탄은 선언 1회마다 ×2. */
+function commonFactor(state: GostopScoreState): number {
+  const goDoublings = Math.max(0, state.goCount - 2)
+  return 2 ** (goDoublings + state.shakeCount + state.bombCount)
+}
+
+/** 제출용 최종 점수 — (카드 기본 점수 + 고 가산) × 선언 배수. */
 export function gostopEffectiveScore(state: GostopScoreState): number {
-  return state.base * commonFactor(state)
+  return (state.base + goBonus(state.goCount)) * commonFactor(state)
+}
+
+function maxBaseFor(state: GostopScoreState): number {
+  return Math.max(1, Math.floor(MAX_GOSTOP_SCORE / commonFactor(state)) - goBonus(state.goCount))
+}
+
+function normalizedState(state: GostopScoreState): GostopScoreState {
+  return { ...state, base: Math.min(state.base, maxBaseFor(state)) }
 }
 
 function penaltyFactorOf(flags: readonly PenaltyFlagId[]): 1 | 2 | 4 {
@@ -81,18 +97,14 @@ export function GostopScoreForm({
   pointValue: number
 }) {
   const { d, locale } = useDict()
+  const bonus = goBonus(state.goCount)
   const factor = commonFactor(state)
   const total = gostopEffectiveScore(state)
   /** 박 없는 패자 1명이 내는 칩. */
   const perLoserPay = total * pointValue
 
-  const toggleMultiplier = (id: GostopMultiplierId) => {
-    const multipliers = state.multipliers.includes(id)
-      ? state.multipliers.filter((item) => item !== id)
-      : [...state.multipliers, id]
-    // 배수를 켠 뒤에도 최종 점수가 서버 상한(999)을 넘지 않게 기본 점수를 함께 조인다.
-    const maxBase = Math.floor(MAX_GOSTOP_SCORE / 2 ** multipliers.length)
-    onChange({ ...state, multipliers, base: Math.min(state.base, maxBase) })
+  const updateCount = (key: 'goCount' | 'shakeCount' | 'bombCount', value: number) => {
+    onChange(normalizedState({ ...state, [key]: value }))
   }
 
   const togglePenalty = (userId: string, flag: PenaltyFlagId) => {
@@ -111,32 +123,36 @@ export function GostopScoreForm({
           value={state.base}
           onChange={(base) => onChange({ ...state, base })}
           min={1}
-          max={Math.floor(MAX_GOSTOP_SCORE / factor)}
+          max={maxBaseFor(state)}
           ariaLabel={d.dealer.scoreAria}
           className="flex-1"
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-2" role="group" aria-label={d.dealer.gostopMultiplierAria}>
-        {GOSTOP_MULTIPLIERS.map((item) => {
-          const active = state.multipliers.includes(item.id)
-          return (
-            <Button
-              key={item.id}
-              variant={active ? 'primary' : 'surface'}
-              className={active ? undefined : 'border border-white/10'}
-              pressed={active}
-              onClick={() => toggleMultiplier(item.id)}
-            >
-              {item.label} ×2
-            </Button>
-          )
-        })}
+      <div className="space-y-2" role="group" aria-label={d.dealer.gostopDeclarationAria}>
+        {([
+          ['goCount', d.dealer.gostopGoLabel, d.dealer.gostopGoAria],
+          ['shakeCount', d.dealer.gostopShakeLabel, d.dealer.gostopShakeAria],
+          ['bombCount', d.dealer.gostopBombLabel, d.dealer.gostopBombAria],
+        ] as const).map(([key, label, ariaLabel]) => (
+          <div key={key} className="flex items-center gap-2">
+            <p className="w-14 shrink-0 text-sm font-medium text-muted">{label}</p>
+            <Stepper
+              value={state[key]}
+              onChange={(value) => updateCount(key, value)}
+              min={0}
+              max={MAX_DECLARATION_COUNT}
+              ariaLabel={ariaLabel}
+              className="flex-1"
+            />
+          </div>
+        ))}
       </div>
 
       <p className="text-sm font-medium">
         {format(d.dealer.gostopTotalLine, {
           base: state.base,
+          bonus,
           factor,
           total,
           chips: formatChips(perLoserPay, locale),

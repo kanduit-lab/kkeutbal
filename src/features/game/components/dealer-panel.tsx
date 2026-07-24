@@ -6,7 +6,7 @@ import { closeRoom } from '../actions'
 import { endRound, startRound, voidRound } from '../round-actions'
 import type { BetActionView, RoomSnapshot } from '../types'
 import { Button, ConfirmDialog, Input, Panel } from '@/components/ui'
-import type { RunAction } from './shared'
+import { nonFoldedParticipantIds, type RunAction } from './shared'
 import { VoidRoundDialog, type VoidReason } from './dealer-panel-void-dialog'
 import { PendingApprovalQueue } from './dealer-panel-pending-queue'
 import { RevertList } from './dealer-panel-revert-list'
@@ -52,6 +52,17 @@ export function DealerPanel({
   const isHost = snapshot.members.find((member) => member.userId === selfId)?.role === 'host'
   const players = snapshot.members.filter((member) => member.role !== 'observer')
   const isGostop = snapshot.room.gameType === 'gostop'
+  // 다이/폴드는 그 판의 승자 후보가 아니다. 서버도 endRound에서 재검증하므로, 이 값은
+  // 스냅샷이 잠시 오래됐더라도 권한 경계를 대신하지 않는다.
+  const eligibleWinnerIds = new Set(
+    nonFoldedParticipantIds(
+      players.map((member) => member.userId),
+      snapshot.actions,
+    ),
+  )
+  const eligiblePlayers = players.filter((member) => eligibleWinnerIds.has(member.userId))
+  const foldWinWinner = !isGostop && eligiblePlayers.length === 1 ? eligiblePlayers[0] : null
+  const selectedWinnerIsEligible = winnerId !== null && eligibleWinnerIds.has(winnerId)
   /** 승자를 뺀 플레이어 — 고스톱 패자별 박 행과 loserPenalties 페이로드의 대상. */
   const gostopLosers =
     isGostop && winnerId ? players.filter((member) => member.userId !== winnerId) : []
@@ -138,7 +149,8 @@ export function DealerPanel({
                 disabled={isPending || pendingActions.length > 0}
                 disabledReason={pendingActions.length > 0 ? d.dealer.pendingFirst : undefined}
                 onClick={() => {
-                  setWinnerId(null)
+                  // 마지막 한 명만 남았다면 다이 승리를 미리 선택해 딜러의 한 단계를 줄인다.
+                  setWinnerId(foldWinWinner?.userId ?? null)
                   setNote('')
                   // 배수·박은 판마다 초기화하고 기본 점수는 유지한다 (연속 입력 편의).
                   setGostop((current) => ({ ...initialGostopScore, base: current.base }))
@@ -182,8 +194,13 @@ export function DealerPanel({
               </>
             )}
           </p>
+          {foldWinWinner ? (
+            <p className="rounded-md border border-win/30 bg-win/10 px-3 py-2 text-xs text-win">
+              {format(d.dealer.foldWinHint, { winner: foldWinWinner.displayName })}
+            </p>
+          ) : null}
           <div className="grid grid-cols-2 gap-2">
-            {players.map((member) => (
+            {eligiblePlayers.map((member) => (
               <Button
                 key={member.userId}
                 variant={winnerId === member.userId ? 'win' : 'surface'}
@@ -215,10 +232,10 @@ export function DealerPanel({
             <Button
               variant="win"
               size="lg"
-              disabled={!winnerId || isPending}
-              disabledReason={!winnerId ? d.dealer.pickWinnerFirst : undefined}
+              disabled={!selectedWinnerIsEligible || isPending}
+              disabledReason={!selectedWinnerIsEligible ? d.dealer.pickWinnerFirst : undefined}
               onClick={() => {
-                if (!winnerId) return
+                if (!winnerId || !eligibleWinnerIds.has(winnerId)) return
                 const roundId = round.id
                 const penalties = gostopLoserPenalties(
                   gostop,

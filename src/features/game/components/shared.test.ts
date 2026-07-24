@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   betLabelsFor,
   formatChips,
-  highestAcceptedWager,
   lastAcceptedByUser,
+  nonFoldedParticipantIds,
   raisePresets,
 } from './shared'
 import type { BetActionView } from '../types'
@@ -83,20 +83,21 @@ describe('베팅 UI 파생 규칙', () => {
     expect(result.get('u2')?.id).toBe('c')
   })
 
-  it('짧은 올인 뒤에도 확정된 최고 베팅을 콜 기준으로 유지한다', () => {
+  it('다이한 참가자는 승자 후보에서 빼고 정정된 다이는 다시 포함한다', () => {
     const base = {
       roundId: '00000000-0000-4000-8000-000000000001',
       enteredBy: null,
-      userId: 'u1',
+      amount: 0,
       reason: null,
       createdAt: new Date(0).toISOString(),
     }
-    expect(
-      highestAcceptedWager([
-        { ...base, id: 'raise', action: 'raise', amount: 100, status: 'accepted', seq: 1 },
-        { ...base, id: 'short-allin', action: 'allin', amount: 50, status: 'accepted', seq: 2 },
-      ]),
-    ).toBe(100)
+    const actions: BetActionView[] = [
+      { ...base, id: 'check', userId: 'u1', action: 'check', status: 'accepted', seq: 1 },
+      { ...base, id: 'fold', userId: 'u2', action: 'fold', status: 'accepted', seq: 2 },
+      { ...base, id: 'reverted-fold', userId: 'u3', action: 'fold', status: 'reverted', seq: 3 },
+    ]
+
+    expect(nonFoldedParticipantIds(['u1', 'u2', 'u3'], actions)).toEqual(['u1', 'u3'])
   })
 
   it('섯다·포커 프리셋을 팟과 직전 베팅에서 계산하고 0원 항목은 버린다', () => {
