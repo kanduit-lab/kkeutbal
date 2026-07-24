@@ -47,10 +47,12 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    재실행하면 새 마이그레이션만 적용된다.
 
 3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`,
-   `0009_virtual_credits_security.sql`, `0010_credit_posting_hardening.sql`을 번호순으로 적용한다.
-   0009는 `0012` DDL 뒤에만 실행하며 credit 테이블의 직접 DML을 회수하고 posting primitive·
-   append-only 트리거를 만든다. 0010은 앱 롤의 generic posting 실행 권한을 회수하고 관리자
-   조정 전용 RPC를 부여한다.
+   `0009_virtual_credits_security.sql`, `0010_credit_posting_hardening.sql`,
+   `0011_room_credit_lifecycle.sql`, `0012_room_credit_reversals.sql`을 번호순으로 적용한다.
+   0009는 **Drizzle** `0012` credit DDL 뒤에만 실행하며 credit 테이블의 직접 DML을 회수하고
+   posting primitive·append-only 트리거를 만든다. 0010은 앱 롤의 generic posting 실행 권한을
+   회수하고 관리자 조정 전용 RPC를 부여한다. 0011·0012는 account-credit 방의 buy-in 잠금,
+   취소 release, 종료 정산 전용 RPC를 부여한다.
 
 4. 아래 Verification을 수행한 뒤 앱을 다시 연다.
 5. 관리자 계정으로 `/admin`에 한 번 로그인해 `0011` 이전 게스트 토큰 원문을
@@ -96,14 +98,22 @@ select p.proname,
        has_function_privilege('kkeutbal_app', p.oid, 'EXECUTE') as app_can_execute
 from pg_proc p
 where p.pronamespace = 'public'::regnamespace
-  and p.proname in ('ensure_credit_account', 'admin_adjust_credit', 'post_credit_transaction')
+  and p.proname in (
+    'ensure_credit_account',
+    'admin_adjust_credit',
+    'lock_room_credit_buy_in',
+    'release_room_credit_buy_in',
+    'settle_room_credits',
+    'post_credit_transaction'
+  )
 order by p.proname;
 ```
 
 추가로 `rate_limit_buckets`, `round_participants`, `credit_accounts`, `credit_transactions`,
 `credit_entries`, `room_credit_locks`가 존재하고 `chip_ledger.delta`, `rounds.pot`이 `bigint`인지
-확인한다. `kkeutbal_app`은 credit 테이블에 SELECT만, `ensure_credit_account`과
-`admin_adjust_credit`에는 EXECUTE를 가져야 한다. generic `post_credit_transaction`에는 EXECUTE가
+확인한다. `kkeutbal_app`은 credit 테이블에 SELECT만, `ensure_credit_account`,
+`admin_adjust_credit`, `lock_room_credit_buy_in`, `release_room_credit_buy_in`,
+`settle_room_credits`에는 EXECUTE를 가져야 한다. generic `post_credit_transaction`에는 EXECUTE가
 없어야 하며 `anon`·`authenticated`에는 앱 테이블 권한이 없어야 한다.
 
 ## Rollback
@@ -124,8 +134,9 @@ order by p.proname;
 - unique/check 제약 추가 실패: 기존 데이터가 새 불변식을 위반한다. 위반 행을 백업·분석한 뒤
   정정 행으로 복구하고 마이그레이션을 재실행한다.
 - 앱 로그인 전체 실패: `rate_limit_buckets` DDL 또는 0008 권한 적용이 빠졌는지 확인한다.
-- 가상 크레딧 조회·지급 실패: `0012` 뒤에 0009·0010을 적용했는지, `credit_accounts` 직접 DML이나
-  generic `post_credit_transaction`이 아니라 `admin_adjust_credit` RPC 경로를 쓰는지 확인한다.
+- 가상 크레딧 조회·지급·방 정산 실패: Drizzle `0012` 뒤에 Supabase 0009~0012를 적용했는지,
+  `credit_accounts` 직접 DML이나 generic `post_credit_transaction`이 아니라 목적별 RPC 경로를 쓰는지
+  확인한다.
 
 ## Contacts Or Owners
 
@@ -140,3 +151,5 @@ order by p.proname;
 - 2026-07-24: `0013` FK 조회 인덱스, `0014` credit 안전 정수 제약, 0010 관리자 전용 credit RPC를
   Supabase와 Drizzle 이력에 함께 적용.
 - 2026-07-24: `0015` credit 거래/lock의 남은 FK 역방향 조회 인덱스를 추가.
+- 2026-07-24: Supabase 0011·0012로 account-credit 방의 buy-in lock·취소 release·종료 정산 RPC와
+  앱 롤 실행 권한을 추가. 원격 rollback 트랜잭션으로 lifecycle 보존식을 확인.

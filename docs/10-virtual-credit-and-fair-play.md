@@ -5,7 +5,7 @@
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
 | Status | in-progress |
-| Source of truth | 구현된 지갑·관리자 조정은 `drizzle/schema.ts`·`src/features/wallet/`, 공개 공정 영수증은 `src/features/fairness/`; 방 연동·실제 카드 배분은 이 문서의 후속 설계 |
+| Source of truth | credit 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0012`, 공개 공정 영수증은 `src/features/fairness/`; 실제 카드 배분은 이 문서의 후속 설계 |
 | Last reviewed | 2026-07-24 |
 
 ## 목적과 경계
@@ -33,8 +33,8 @@
 따라서 전환은 아래 원칙을 따른다.
 
 1. 기존 `chip_ledger`/`buy_ins`는 수정하거나 재작성하지 않는다. 과거 세션 기록으로 계속 읽는다.
-2. 전역 크레딧 방은 `account_credit` 모드로 **추가할 예정**이고, 기존 방은 `legacy_session`으로
-   남긴다. 현재 앱에서 실제로 열 수 있는 방은 아직 모두 `legacy_session`이다.
+2. 새 방은 `rule_preset.fundingMode`으로 `session` 또는 `account_credit`을 고른다. 기존 방과
+   값이 없거나 손상된 preset은 안전하게 `session`으로 해석한다. 생성 뒤 재원은 바꾸지 않는다.
 3. 기존 계정의 전역 잔액은 자동 이관하지 않는다. 새 지갑은 0 크레딧으로 만들고 관리자가
    명시적인 사유와 함께 지급한다.
 4. 모든 이관 정책은 별도 데이터 감사와 운영자 승인 뒤에만 forward migration으로 추가한다.
@@ -126,7 +126,7 @@ erDiagram
 발행 계정과 상대 엔트리를 만들며, 일반 사용자 잔액은 절대 음수가 될 수 없다. 이 구조는
 단순 `amount` 로그보다 크레딧 생성·소멸과 방 간 이동을 감사하기 쉽다.
 
-### `room_credit_locks` — 방별 잠금 근거 (`[TX]`, 예약됨)
+### `room_credit_locks` — 방별 잠금 근거 (`[TX]`)
 
 | Column | Type | Constraint | 설명 |
 |---|---|---|---|
@@ -140,10 +140,11 @@ erDiagram
 | `created_at` | timestamptz | not null | 잠금 시각 |
 
 새 account-credit 방에서는 `buy_ins`를 세션 칩 발행 내역으로 유지하되, 반드시 이 잠금 행과
-1:1로 연결한다. 이 테이블과 순수 명령 구성기(`src/features/game/credit-room.ts`)는 이미
-준비됐지만, **현재 앱은 아직 이 행을 쓰지 않는다.** `buy_in`·잠금 원장·lock 행 생성, 종료 정산·
-release 표기는 서로 다른 Server Action으로 나누지 않고 전용 `SECURITY DEFINER` 프로시저 하나에서
-방/계정 행 잠금과 함께 처리해야 라이브 연결이 가능하다.
+1:1로 연결한다. `createRoom`, `joinRoom`, `addBuyIn`은 세션 `buy_ins`·`chip_ledger` INSERT와
+`lock_room_credit_buy_in(...)`을 같은 DB 트랜잭션에서 실행한다. `undoLastBuyIn`은 반대 부호
+세션 행과 `release_room_credit_buy_in(...)`을 같은 트랜잭션에서 실행하고, release 거래는 원 lock
+거래를 `reverses_transaction_id`로 가리킨다. `closeRoom`은 `settle_room_credits(...)`로 남은 모든
+active lock을 최종 세션 스택에 맞춰 풀고 방을 settled로 바꾼다.
 
 ### `fairness_rounds` — 커밋-리빌 영수증 (`[TX]`)
 
@@ -177,9 +178,12 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 
 ## 원자 처리와 잠금
 
-잔액을 바꾸는 외부 Server Action은 개별 INSERT/UPDATE를 조합하지 않는다. 현재 라이브 write
-경로는 관리자 조정 전용 `admin_adjust_credit(...)` RPC 하나이며, 이 함수가 내부
+전역 잔액을 바꾸는 앱 경로는 목적별 `SECURITY DEFINER` RPC만 호출한다. 관리자 조정은
+`admin_adjust_credit(...)`, 방 재원은 `lock_room_credit_buy_in(...)`,
+`release_room_credit_buy_in(...)`, `settle_room_credits(...)`가 담당하며 모두 내부
 `post_credit_transaction(...)` primitive를 호출한다. 앱 롤은 primitive를 직접 실행할 수 없다.
+세션 원장 INSERT와 RPC 호출은 같은 `db.transaction`에 있어 잔액 부족·권한·보존식 검증이 실패하면
+세션 행도 함께 rollback 된다.
 
 1. `idempotency_key`를 먼저 조회한다. 이미 확정된 거래면 기존 거래 ID를 반환한다.
 2. 대상 `credit_accounts`를 `account_id` 오름차순으로 `FOR UPDATE` 잠근다.
@@ -196,15 +200,16 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 
 - 브라우저는 Supabase 테이블 API로 이 테이블을 읽거나 쓸 수 없다. 현재 앱 경계와 같다.
 - `kkeutbal_app`에는 credit 테이블의 직접 INSERT·UPDATE·DELETE 권한을 주지 않는다. 조회와
-  `ensure_credit_account`, `admin_adjust_credit`만 허용하고 `post_credit_transaction` 실행 권한은
+  `ensure_credit_account`, `admin_adjust_credit`, `lock_room_credit_buy_in`,
+  `release_room_credit_buy_in`, `settle_room_credits`만 허용하고 `post_credit_transaction` 실행 권한은
   주지 않는다.
 - `credit_entries`와 `credit_transactions`에는 `BEFORE UPDATE OR DELETE` 거부 트리거를 둔다.
 - `credit_accounts` 직접 UPDATE에는 거부 트리거를 두고, posting 함수가 설정하는 트랜잭션 로컬
   플래그가 있을 때만 통과시킨다.
-- `room_credit_locks`의 release 연결은 아직 라이브 write 경로가 없다. 이후 전용 정산 RPC가
-  buy-in의 room/user/amount, lock 거래 kind/room, release 거래 kind/room을 모두 대조하고
-  `released_transaction_id`의 null→값 단방향 전이만 허용한다. 한 정산 거래가 여러 lock을 함께
-  release하므로 이 열은 unique가 아니다.
+- `room_credit_locks`는 전용 RPC만 null→값 release 전이를 수행한다. lock RPC는 room/user/buy-in/
+  amount와 역할을 확인하고, release RPC는 원 buy-in과 reversal buy-in·원 lock 거래를 모두 대조한다.
+  settlement RPC는 모든 active lock 합계와 room `chip_ledger` 합계를 대조한다. 한 정산 거래가
+  여러 lock을 함께 release하므로 이 열은 unique가 아니다.
 - 관리자 지급·회수·정정은 관리자 Server Action만 호출할 수 있고 `reason`·`initiated_by`를
   필수로 남긴다. UI는 실제 원장을 수정하는 버튼을 제공하지 않고 새 거래를 만든다.
 - `fairness_rounds`의 commitment, deadline, algorithm version은 첫 카드 배분 뒤 변경할 수 없다.
@@ -237,11 +242,19 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 
 ## 방 설정과 타임아웃
 
-새 `rule_preset.fair_play`는 게임별 숨은 기본값이 아닌 검증된 구조로 저장한다.
+현재 라이브 preset에는 아래 재원 필드만 저장한다. `src/features/game/funding-mode.ts`가 과거·손상
+preset을 `session`으로 해석하므로 기존 방이 우연히 전역 잔액을 쓰지 않는다.
+
+```ts
+{ fundingMode: 'session' | 'account_credit' }
+```
+
+공정 배분 설정은 아직 DB/화면에 노출하지 않는다. `src/features/game/fair-play-settings.ts`의 순수
+검증기는 다음 후속 preset 구조를 고정하지만, verified deal 상태기계가 없는 동안 `verified`를
+선택할 수 있게 만들지 않는다.
 
 ```ts
 {
-  mode: 'legacy_session' | 'account_credit',
   dealing: 'manual' | 'verified',
   seedCollectionSeconds: 10..120,
   turnTimeoutSeconds: 15..180,
@@ -249,8 +262,7 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 }
 ```
 
-- `account_credit + verified`는 새 방에서만 선택할 수 있다. 한 번 판이 시작되면 mode/dealing/
-  seed timeout은 바꾸지 못한다.
+- `verified`는 섯다·포커만 지원 후보이며, 한 번 판이 시작되면 dealing·seed timeout은 바꾸지 못한다.
 - 기본 timeout 정책은 `pause`다. 네트워크 끊김을 패배·자동 베팅으로 바꾸지 않는다.
 - 추후 게임별로 안전성이 증명된 경우에만 `auto_check_or_fold`를 추가한다. 섯다·포커·고스톱은
   타임아웃에서 가능한 행동이 서로 다르므로 공통 자동 행동을 지금 넣지 않는다.
@@ -307,9 +319,14 @@ Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairnes
 1. [x] 공정 셔플 순수 모듈과 벡터 테스트, 공개 안전 영수증 경계를 추가한다.
 2. [x] 계정 지갑 테이블/enum/제약의 Drizzle DDL 및 Supabase 권한·함수 migration을 추가한다.
 3. [x] 계정 지갑·관리자 지급/회수·거래 내역을 구현하고, 원격 DB rollback 트랜잭션으로 RPC를 검증한다.
-4. account-credit 방의 lock/buy-in/settlement 연결을 구현한다.
+4. [x] account-credit 방의 lock/buy-in/release/settlement 연결과 원격 rollback lifecycle 검증을 구현한다.
 5. 섯다 verified deal, private hand action, fairness receipt 화면을 구현한다.
 6. 2인 인증 E2E에서 시드 제출·타임아웃·정산·공개 검증을 확인한다.
 
 각 단계는 현재 수동 기록 방을 깨지 않아야 한다. 2~4단계는 기존 잔액을 이관하지 않는 기본 정책을
 전제로 하며, 이관이 필요해지면 별도 승인된 설계 변경으로 다룬다.
+
+## Change History
+
+- 2026-07-24: account-credit 방 생성 선택, buy-in lock·취소 release·종료 settlement을 live DB RPC와
+  Server Action 트랜잭션으로 연결했다. full reveal 없는 공정 영수증은 여전히 검증 완료로 표시하지 않는다.

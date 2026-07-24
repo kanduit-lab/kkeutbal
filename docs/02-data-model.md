@@ -31,7 +31,8 @@
    postgres-js로 Supabase pooler에 붙는다. 포트 5432(session)는 `max: 5`와 prepared statement를,
    포트 6543(transaction)는 `max: 1`과 `prepare: false`를 자동 적용하며 Supabase CA를 검증한다.
    모든 읽기·쓰기가 이 경로를 지난다. 단, 전역 credit 테이블은 이 롤의 직접 DML을 막고 전용
-   RPC(`ensure_credit_account`, `admin_adjust_credit`)로만 변경한다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
+   RPC(`ensure_credit_account`, `admin_adjust_credit`, `lock_room_credit_buy_in`,
+   `release_room_credit_buy_in`, `settle_room_credits`)로만 변경한다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
    RLS가 아니라 각 Server Action이 쿼리로 직접 한다 (`src/features/betting/actions.ts`,
    `src/features/budget/actions.ts` 등).
 2. **브라우저 → Supabase publishable key**. `src/lib/supabase/client.ts`가 명시하듯 이 클라이언트는
@@ -299,9 +300,11 @@ Supabase 테이블 API를 직접 호출하는 가상의 경로다.** 실제 앱 
 따라서 Auth.js 사용자라도 Supabase Data API로는 어떤 앱 테이블도 읽거나 쓸 수 없다.
 
 `kkeutbal_app`은 `bypassrls`이지만 일반 게임 테이블에는 SELECT/INSERT/UPDATE/DELETE만,
-시퀀스에는 USAGE/SELECT만 가진다. credit 4개 테이블에는 SELECT만 주고 write는 관리자 전용
-`admin_adjust_credit` RPC가 내부 primitive로 처리한다. TRUNCATE·TRIGGER·REFERENCES 권한은
-주지 않는다. `session_standings` 뷰도 브라우저에는 열지 않으며, 현재 앱 기능은 이 뷰를 읽지 않는다.
+시퀀스에는 USAGE/SELECT만 가진다. credit 4개 테이블에는 SELECT만 주고 write는 관리자 조정
+`admin_adjust_credit`과 방 재원 수명주기 `lock_room_credit_buy_in`·`release_room_credit_buy_in`·
+`settle_room_credits` RPC가 내부 primitive로 처리한다. `post_credit_transaction`은 앱 롤이 직접
+실행할 수 없다. TRUNCATE·TRIGGER·REFERENCES 권한은 주지 않는다. `session_standings` 뷰도
+브라우저에는 열지 않으며, 현재 앱 기능은 이 뷰를 읽지 않는다.
 
 `chip_ledger` INSERT를 `authenticated`에 열지 않은 이유: 칩 생성은 게임 규칙 판정 결과여야
 한다. 정책이 없다는 것 자체가 방어층이고, 실제 쓰기는 Server Action이 엔진 검증 후
