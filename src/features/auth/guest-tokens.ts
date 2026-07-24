@@ -2,7 +2,6 @@ import 'server-only'
 
 import { createHmac } from 'node:crypto'
 import { eq, isNotNull } from 'drizzle-orm'
-import { db, schema } from '@/lib/db'
 import { serverEnv } from '@/lib/env'
 
 /** 게스트 토큰 원문을 저장하지 않기 위한 AUTH_SECRET 기반 안정 해시. */
@@ -16,6 +15,7 @@ export function guestTokenHash(code: string, secret: string): string {
  */
 export async function migrateLegacyGuestTokenSecrets(): Promise<void> {
   const secret = serverEnv().AUTH_SECRET
+  const { db, schema } = await import('@/lib/db')
   await db.transaction(async (tx) => {
     const legacyTokens = await tx
       .select({ id: schema.guestTokens.id, code: schema.guestTokens.code })

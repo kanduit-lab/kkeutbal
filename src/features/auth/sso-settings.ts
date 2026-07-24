@@ -2,8 +2,8 @@ import 'server-only'
 
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { eq } from 'drizzle-orm'
-import { db, schema } from '@/lib/db'
 import { serverEnv } from '@/lib/env'
+import { getOptionalDatabase } from '@/lib/optional-database'
 
 const SETTINGS_ID = 'default'
 const CIPHER_VERSION = 'v1'
@@ -71,6 +71,9 @@ const SSO_DISABLED: SsoSettingsView = Object.freeze({
  */
 export async function getSsoSettings(): Promise<SsoSettingsView> {
   try {
+    const database = await getOptionalDatabase()
+    if (!database) return SSO_DISABLED
+    const { db, schema } = database
     const [settings] = await db
       .select({
         enabled: schema.authSettings.ssoEnabled,
@@ -100,6 +103,9 @@ export async function getActiveSsoSettings(): Promise<ActiveSsoSettings | null> 
   if (!settings.enabled || !settings.issuer || !settings.clientId) return null
 
   try {
+    const database = await getOptionalDatabase()
+    if (!database) return null
+    const { db, schema } = database
     const [row] = await db
       .select({ clientSecretCiphertext: schema.authSettings.ssoClientSecretCiphertext })
       .from(schema.authSettings)

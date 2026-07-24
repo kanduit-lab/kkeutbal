@@ -1,7 +1,8 @@
 import 'server-only'
 
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
-import { db, schema } from '@/lib/db'
+import type * as schema from '../../../drizzle/schema'
+import { getOptionalDatabase } from '@/lib/optional-database'
 
 /** 첫 관리자 승격 직렬화용 고정 락 키 — 방 단위 락과 네임스페이스가 겹치지 않는다. */
 const BOOTSTRAP_LOCK_KEY = 'kkeutbal:bootstrap-admin'
@@ -15,6 +16,9 @@ const BOOTSTRAP_LOCK_KEY = 'kkeutbal:bootstrap-admin'
  */
 export async function isFirstAccount(): Promise<boolean> {
   try {
+    const database = await getOptionalDatabase()
+    if (!database) return false
+    const { db, schema } = database
     const [row] = await db.select({ id: schema.users.id }).from(schema.users).limit(1)
     return !row
   } catch (error) {
@@ -41,6 +45,7 @@ export async function createUserGrantingFirstAdmin(
     registrationCodeId?: string | null
   } = {},
 ): Promise<{ id: string }> {
+  const { db, schema } = await import('@/lib/db')
   return await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${BOOTSTRAP_LOCK_KEY}, 42))`)
     const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)

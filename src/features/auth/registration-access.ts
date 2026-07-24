@@ -3,7 +3,6 @@ import 'server-only'
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { cookies } from 'next/headers'
 import { and, eq, gt, isNull, or } from 'drizzle-orm'
-import { db, schema } from '@/lib/db'
 import { serverEnv } from '@/lib/env'
 import { isFirstAccount } from './bootstrap'
 import { registrationCodeHash, registrationCodeSchema } from './registration-codes'
@@ -27,6 +26,7 @@ function matches(expected: string, received: string): boolean {
 
 /** 가입코드가 맞으면 10분 동안만 유효한, 위조 방지 서명 쿠키를 발급한다. */
 async function activeDatabaseCodeId(code: string, secret: string): Promise<string | null> {
+  const { db, schema } = await import('@/lib/db')
   const now = new Date()
   const [row] = await db
     .select({ id: schema.registrationCodes.id })
@@ -43,6 +43,7 @@ async function activeDatabaseCodeId(code: string, secret: string): Promise<strin
 }
 
 async function hasActiveDatabaseCode(): Promise<boolean> {
+  const { db, schema } = await import('@/lib/db')
   const [row] = await db
     .select({ id: schema.registrationCodes.id })
     .from(schema.registrationCodes)
@@ -108,6 +109,7 @@ export async function registrationAccessCodeId(): Promise<string | null> {
   if (!matches(signature(signedValue, env.AUTH_SECRET), receivedSignature)) return null
 
   try {
+    const { db, schema } = await import('@/lib/db')
     const [active] = await db
       .select({ id: schema.registrationCodes.id })
       .from(schema.registrationCodes)

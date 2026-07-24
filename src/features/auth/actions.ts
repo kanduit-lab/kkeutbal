@@ -7,7 +7,6 @@ import { redirect } from 'next/navigation'
 import { AuthError } from 'next-auth'
 import { and, eq, isNull, like, or } from 'drizzle-orm'
 import { z } from 'zod'
-import { db, schema } from '@/lib/db'
 import { signIn } from '@/lib/auth'
 import { clientAddressFromHeaders, consumeRateLimits } from '@/lib/rate-limit'
 import {
@@ -136,6 +135,7 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
   ])
   if (!registrationRate.allowed) backTo('/register', 'register_failed', fields)
 
+  const { db, schema } = await import('@/lib/db')
   const [taken] = await db
     .select({ username: schema.users.username, phone: schema.users.phone })
     .from(schema.users)
@@ -294,6 +294,7 @@ export async function getGuestNamesForToken(code: string): Promise<GuestNamesRes
     if (!rate.allowed) return GUEST_NAMES_INVALID
 
     const codeHash = guestTokenHash(parsed.data, serverEnv().AUTH_SECRET)
+    const { db, schema } = await import('@/lib/db')
     const [token] = await db
       .select({
         id: schema.guestTokens.id,

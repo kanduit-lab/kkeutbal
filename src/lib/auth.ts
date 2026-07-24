@@ -6,7 +6,6 @@ import bcrypt from 'bcryptjs'
 import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { authConfigBase } from './auth-config'
-import { db, schema } from './db'
 import { serverEnv } from './env'
 import { clientAddressFromHeaders, consumeRateLimits } from './rate-limit'
 import { getActiveSsoSettings, type ActiveSsoSettings } from '@/features/auth/sso-settings'
@@ -87,6 +86,7 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
         ])
         if (!rate.allowed) return null
 
+        const { db, schema } = await import('./db')
         const [row] = await db
           .select()
           .from(schema.users)
@@ -132,6 +132,7 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
         ])
         if (!rate.allowed) return null
 
+        const { db, schema } = await import('./db')
         const codeHash = guestTokenHash(code, serverEnv().AUTH_SECRET)
         // 회수와 신규 로그인을 같은 토큰 행 잠금으로 직렬화한다. 조회 뒤 회수가 커밋되면
         // 새 세션을 발급하는 경쟁 조건이 생기므로 레거시 원문 해시 전환도 이 트랜잭션에 둔다.
@@ -201,6 +202,7 @@ async function resolveProviderUser(input: {
   hints: { username: string | null; phone: string | null }
 }): Promise<{ id: string }> {
   const { sub, displayName, avatarUrl, hints } = input
+  const { db, schema } = await import('./db')
 
   const [bySub] = await db
     .select({ id: schema.users.id })

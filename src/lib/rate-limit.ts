@@ -2,7 +2,6 @@ import 'server-only'
 
 import { createHmac } from 'node:crypto'
 import { lt, sql } from 'drizzle-orm'
-import { db, schema } from './db'
 import { serverEnv } from './env'
 
 export interface RateLimitRule {
@@ -35,6 +34,7 @@ export async function consumeRateLimits(
 ): Promise<RateLimitResult> {
   if (rules.length === 0) return { allowed: true, retryAfterSeconds: 0 }
 
+  const { db, schema } = await import('./db')
   return await db.transaction(async (tx) => {
     const nowDate = new Date(now)
     await tx

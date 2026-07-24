@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { and, desc, eq, gt, isNull, lte, or } from 'drizzle-orm'
-import { db, schema } from '@/lib/db'
+import { getOptionalDatabase } from '@/lib/optional-database'
 import type { AdminPromotionView, PromotionView } from './types'
 
 /**
@@ -11,6 +11,12 @@ import type { AdminPromotionView, PromotionView } from './types'
 export async function listActivePromotions(): Promise<PromotionView[]> {
   const now = new Date()
   try {
+    // 루트 레이아웃에서 호출한다. DB 모듈을 지연 로드해야 환경 검증·연결 실패도 이
+    // 경계에서 빈 슬롯으로 강등할 수 있다. 최상단 import면 catch에 도달하기 전에
+    // 모든 공개 페이지가 죽는다.
+    const database = await getOptionalDatabase()
+    if (!database) return []
+    const { db, schema } = database
     return await db
       .select({
         id: schema.promotions.id,
@@ -40,6 +46,7 @@ export async function listActivePromotions(): Promise<PromotionView[]> {
 /** 관리자 목록 — 비활성·예약·종료분까지 전부. 호출 전 isAdminUser 게이트를 통과해야 한다. */
 export async function listPromotions(): Promise<AdminPromotionView[]> {
   const now = Date.now()
+  const { db, schema } = await import('@/lib/db')
   const rows = await db
     .select({
       id: schema.promotions.id,
