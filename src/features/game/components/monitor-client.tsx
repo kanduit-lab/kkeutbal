@@ -171,29 +171,35 @@ export function MonitorClient({
               <h2 className="px-1 text-sm font-bold text-muted">{d.monitor.recentRounds}</h2>
               <ul className="space-y-1.5">
                 {snapshot.recentRounds.map((round) => (
-                  <li
-                    key={round.seq}
-                    className="flex items-center justify-between rounded-xl bg-surface px-3 py-2 text-sm"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span className="shrink-0 text-muted">
-                        {format(d.monitor.roundN, { seq: round.seq })}
+                  <li key={round.seq} className="rounded-xl bg-surface px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="shrink-0 text-muted">
+                          {format(d.monitor.roundN, { seq: round.seq })}
+                        </span>
+                        {round.status === 'voided' ? (
+                          <Badge tone="muted">{d.monitor.voided}</Badge>
+                        ) : (
+                          <>
+                            <span className="truncate font-medium">{nameOf(round.winnerId)}</span>
+                            <span className="shrink-0 tabular-nums font-bold text-warn">
+                              +{round.pot.toLocaleString()}
+                            </span>
+                          </>
+                        )}
                       </span>
-                      {round.status === 'voided' ? (
-                        <Badge tone="muted">{d.monitor.voided}</Badge>
-                      ) : (
-                        <>
-                          <span className="truncate font-medium">{nameOf(round.winnerId)}</span>
-                          <span className="shrink-0 tabular-nums font-bold text-warn">
-                            +{round.pot.toLocaleString()}
-                          </span>
-                        </>
-                      )}
-                    </span>
-                    {round.note ? (
-                      <span className="ml-2 max-w-[40%] truncate text-xs text-muted">
-                        {round.note}
-                      </span>
+                      {round.note ? (
+                        <span className="ml-2 max-w-[40%] truncate text-xs text-muted">
+                          {round.note}
+                        </span>
+                      ) : null}
+                    </div>
+                    {round.status === 'ended' && round.penalties.length > 0 ? (
+                      <p className="mt-0.5 text-xs text-muted">
+                        {round.penalties
+                          .map((penalty) => `${nameOf(penalty.userId)} 박×${penalty.factor}`)
+                          .join(' · ')}
+                      </p>
                     ) : null}
                   </li>
                 ))}
