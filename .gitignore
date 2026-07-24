@@ -50,6 +50,9 @@ pnpm-debug.log*
 # Claude Code local settings (never commit)
 .claude/
 
+# Local Codex project settings (never commit)
+/.codex/
+
 # Design decision records — portfolio / local only, git-untracked by rule
 docs/design-decisions/
 
