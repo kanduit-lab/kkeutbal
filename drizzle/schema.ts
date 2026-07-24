@@ -345,6 +345,7 @@ export const creditTransactions = pgTable(
   },
   (table) => [
     index('credit_transactions_room_time_idx').on(table.roomId, table.createdAt),
+    index('credit_transactions_round_time_idx').on(table.roundId, table.createdAt),
     index('credit_transactions_initiator_time_idx').on(table.initiatedBy, table.createdAt),
     uniqueIndex('credit_transactions_reverses_uq')
       .on(table.reversesTransactionId)
@@ -522,6 +523,8 @@ export const roomCreditLocks = pgTable(
     unique('room_credit_locks_buy_in_uq').on(table.buyInId),
     index('room_credit_locks_released_transaction_idx').on(table.releasedTransactionId),
     index('room_credit_locks_room_user_idx').on(table.roomId, table.userId),
+    index('room_credit_locks_user_idx').on(table.userId),
+    index('room_credit_locks_lock_transaction_idx').on(table.lockTransactionId),
     check('room_credit_locks_amount_positive_ck', sql`${table.amount} > 0`),
     check(
       'room_credit_locks_amount_number_safe_ck',
