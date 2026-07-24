@@ -13,6 +13,7 @@ import { getSsoSettings } from '@/features/auth/sso-settings'
 import { migrateLegacyGuestTokenSecrets } from '@/features/auth/guest-tokens'
 import { PromotionsAdmin } from '@/features/promotions/components/promotions-admin'
 import { listPromotions } from '@/features/promotions/queries'
+import { CreditAdmin } from '@/features/wallet/components/credit-admin'
 import { Badge, ButtonLink, Panel } from '@/components/ui'
 
 export const dynamic = 'force-dynamic'
@@ -73,6 +74,7 @@ export default async function AdminPage() {
         selfId={session.user.id}
         ssoSettings={ssoSettings}
       />
+      <CreditAdmin users={users} />
       <PromotionsAdmin promotions={promotions} />
     </main>
   )

@@ -56,6 +56,12 @@ export default async function HomePage({
           </h1>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={'/wallet' as Route}
+            className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-text"
+          >
+            내 크레딧
+          </Link>
           {isAdmin ? (
             <Link
               href={'/admin' as Route}

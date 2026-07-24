@@ -71,3 +71,9 @@ test('실제 인증 경로는 로그인으로 유도한다', async ({ page }) =>
 
   await expect(page).toHaveURL(/\/login\?next=%2Frooms%2Fnew$/)
 })
+
+test('가상 크레딧 지갑도 로그인 뒤에만 접근할 수 있다', async ({ page }) => {
+  await page.goto('/wallet')
+
+  await expect(page).toHaveURL(/\/login\?next=%2Fwallet$/)
+})

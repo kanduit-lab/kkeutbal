@@ -21,7 +21,8 @@ function requiresAuthentication(pathname: string): boolean {
     isPathOrDescendant(pathname, '/rooms') ||
     isPathOrDescendant(pathname, '/ranking') ||
     isPathOrDescendant(pathname, '/advisor') ||
-    isPathOrDescendant(pathname, '/admin')
+    isPathOrDescendant(pathname, '/admin') ||
+    isPathOrDescendant(pathname, '/wallet')
   )
 }
 
