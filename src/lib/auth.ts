@@ -7,8 +7,11 @@ import { and, eq, isNull, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { authConfigBase } from './auth-config'
 import { db, schema } from './db'
+import { serverEnv } from './env'
+import { clientAddressFromHeaders, consumeRateLimits } from './rate-limit'
 import { getActiveSsoSettings, type ActiveSsoSettings } from '@/features/auth/sso-settings'
 import { createUserGrantingFirstAdmin } from '@/features/auth/bootstrap'
+import { guestTokenHash } from '@/features/auth/guest-tokens'
 
 /**
  * Auth.js v5 — 3개 로그인 경로.
@@ -58,9 +61,32 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
         username: { label: '아이디' },
         password: { label: '비밀번호', type: 'password' },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = passwordSchema.safeParse(credentials)
         if (!parsed.success) return null
+        const address = clientAddressFromHeaders(request.headers)
+        const rate = await consumeRateLimits([
+          {
+            scope: 'auth.password.address',
+            identifier: address,
+            limit: 30,
+            windowMs: 15 * 60 * 1000,
+          },
+          {
+            scope: 'auth.password.account_address',
+            identifier: `${parsed.data.username}\0${address}`,
+            limit: 10,
+            windowMs: 15 * 60 * 1000,
+          },
+          {
+            scope: 'auth.password.account',
+            identifier: parsed.data.username,
+            limit: 100,
+            windowMs: 60 * 60 * 1000,
+          },
+        ])
+        if (!rate.allowed) return null
+
         const [row] = await db
           .select()
           .from(schema.users)
@@ -79,17 +105,63 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
       id: 'guest-token',
       name: '게스트 토큰',
       credentials: { code: { label: '토큰' }, name: { label: '이름' } },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = guestTokenSchema.safeParse(credentials)
         if (!parsed.success) return null
         const { code, name } = parsed.data
-        const [token] = await db
-          .select({ id: schema.guestTokens.id, expiresAt: schema.guestTokens.expiresAt })
-          .from(schema.guestTokens)
-          .where(and(eq(schema.guestTokens.code, code), isNull(schema.guestTokens.revokedAt)))
-          .limit(1)
+        const address = clientAddressFromHeaders(request.headers)
+        const rate = await consumeRateLimits([
+          {
+            scope: 'auth.guest.address',
+            identifier: address,
+            limit: 40,
+            windowMs: 15 * 60 * 1000,
+          },
+          {
+            scope: 'auth.guest.token_address',
+            identifier: `${code}\0${address}`,
+            limit: 20,
+            windowMs: 15 * 60 * 1000,
+          },
+          {
+            scope: 'auth.guest.token',
+            identifier: code,
+            limit: 200,
+            windowMs: 15 * 60 * 1000,
+          },
+        ])
+        if (!rate.allowed) return null
+
+        const codeHash = guestTokenHash(code, serverEnv().AUTH_SECRET)
+        // 회수와 신규 로그인을 같은 토큰 행 잠금으로 직렬화한다. 조회 뒤 회수가 커밋되면
+        // 새 세션을 발급하는 경쟁 조건이 생기므로 레거시 원문 해시 전환도 이 트랜잭션에 둔다.
+        const token = await db.transaction(async (tx) => {
+          const [active] = await tx
+            .select({
+              id: schema.guestTokens.id,
+              code: schema.guestTokens.code,
+              expiresAt: schema.guestTokens.expiresAt,
+            })
+            .from(schema.guestTokens)
+            .where(
+              and(
+                or(eq(schema.guestTokens.codeHash, codeHash), eq(schema.guestTokens.code, code)),
+                isNull(schema.guestTokens.revokedAt),
+              ),
+            )
+            .limit(1)
+            .for('update')
+          if (!active) return null
+          if (active.expiresAt && active.expiresAt.getTime() < Date.now()) return null
+          if (active.code) {
+            await tx
+              .update(schema.guestTokens)
+              .set({ code: null, codeHash })
+              .where(eq(schema.guestTokens.id, active.id))
+          }
+          return active
+        })
         if (!token) return null
-        if (token.expiresAt && token.expiresAt.getTime() < Date.now()) return null
         // 같은 (토큰, 이름)이면 같은 게스트 계정 — 기기를 바꿔도 전적이 이어진다.
         return { id: `guest:${token.id}:${name.toLowerCase()}`, name }
       },
@@ -148,17 +220,45 @@ async function resolveProviderUser(input: {
       hints.username ? eq(schema.users.username, hints.username) : sql`false`,
       hints.phone ? eq(schema.users.phone, hints.phone) : sql`false`,
     ]
-    const [linked] = await db
-      .update(schema.users)
-      .set({ authentikSub: sub, displayName, avatarUrl })
+    const matches = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
       .where(or(...conditions))
-      .returning({ id: schema.users.id })
-    if (linked) return linked
+      .limit(2)
+
+    // 아이디와 전화번호가 서로 다른 두 계정을 가리키면 어느 쪽도 자동 병합하지 않는다.
+    // OR UPDATE 로 둘 다 갱신하면 계정을 잘못 합치거나 authentik_sub UNIQUE 충돌이 난다.
+    const [onlyMatch] = matches
+    if (matches.length === 1 && onlyMatch) {
+      const [linked] = await db
+        .update(schema.users)
+        .set({ authentikSub: sub, displayName, avatarUrl })
+        .where(eq(schema.users.id, onlyMatch.id))
+        .returning({ id: schema.users.id })
+      if (linked) return linked
+    }
   }
 
   // 첫 계정이면 관리자로 승격한다. SSO 가 유일한 로그인 수단인 인스턴스에서도 관리자를
   // 세울 수 있어야 하므로, 비밀번호 가입과 똑같은 함수를 쓴다.
-  return await createUserGrantingFirstAdmin({ authentikSub: sub, displayName, avatarUrl })
+  try {
+    return await createUserGrantingFirstAdmin({ authentikSub: sub, displayName, avatarUrl })
+  } catch (error) {
+    // 같은 provider 신원의 최초 로그인 두 건이 겹치면, 한 요청이 먼저 사용자 행을 만들고
+    // 다른 요청은 authentik_sub UNIQUE 충돌을 받는다. 충돌한 쪽도 이미 확정된 정본 행을
+    // 사용해야 재시도 가능한 로그인 오류로 바뀌지 않는다.
+    const isUniqueViolation =
+      typeof error === 'object' && error !== null && 'code' in error && error.code === '23505'
+    if (!isUniqueViolation) throw error
+
+    const [createdByConcurrentRequest] = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.authentikSub, sub))
+      .limit(1)
+    if (createdByConcurrentRequest) return createdByConcurrentRequest
+    throw error
+  }
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth(async () => {

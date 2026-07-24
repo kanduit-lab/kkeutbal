@@ -10,6 +10,7 @@ import {
 } from '@/features/auth/admin-queries'
 import { AdminClient } from '@/features/auth/components/admin-client'
 import { getSsoSettings } from '@/features/auth/sso-settings'
+import { migrateLegacyGuestTokenSecrets } from '@/features/auth/guest-tokens'
 import { PromotionsAdmin } from '@/features/promotions/components/promotions-admin'
 import { listPromotions } from '@/features/promotions/queries'
 import { Badge, ButtonLink, Panel } from '@/components/ui'
@@ -43,6 +44,9 @@ export default async function AdminPage() {
       </main>
     )
   }
+
+  // 0011 이전 토큰 원문은 관리자 첫 진입 때 HMAC으로 일괄 전환한다.
+  await migrateLegacyGuestTokenSecrets()
 
   const [tokens, registrationCodes, users, rooms, promotions, ssoSettings] = await Promise.all([
     listGuestTokens(),

@@ -1,5 +1,5 @@
 -- 현재 Drizzle 스키마를 대상으로 한 DB 보안 baseline.
--- 적용 전제: `pnpm db:push`가 현 테이블을 만든 뒤 이 파일을 실행한다.
+-- 적용 전제: `pnpm db:migrate`가 Drizzle DDL을 적용한 뒤 이 파일을 실행한다.
 
 begin;
 
@@ -9,6 +9,7 @@ alter table public.users enable row level security;
 alter table public.rooms enable row level security;
 alter table public.room_members enable row level security;
 alter table public.rounds enable row level security;
+alter table public.round_participants enable row level security;
 alter table public.bet_actions enable row level security;
 alter table public.chip_ledger enable row level security;
 alter table public.buy_ins enable row level security;
@@ -16,6 +17,7 @@ alter table public.guest_tokens enable row level security;
 alter table public.registration_codes enable row level security;
 alter table public.auth_settings enable row level security;
 alter table public.promotions enable row level security;
+alter table public.rate_limit_buckets enable row level security;
 
 drop policy if exists users_select on public.users;
 drop policy if exists users_update_self on public.users;

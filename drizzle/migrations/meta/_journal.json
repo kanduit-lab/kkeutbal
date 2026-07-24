@@ -43,6 +43,48 @@
       "when": 1784815990793,
       "tag": "0005_nasty_kat_farrell",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784888859848,
+      "tag": "0006_left_wiccan",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784889124609,
+      "tag": "0007_goofy_kabuki",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784889753624,
+      "tag": "0008_flippant_amphibian",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784889855904,
+      "tag": "0009_perfect_molly_hayes",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784889964668,
+      "tag": "0010_stormy_cannonball",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1784890025599,
+      "tag": "0011_wonderful_shiver_man",
+      "breakpoints": true
     }
   ]
 }

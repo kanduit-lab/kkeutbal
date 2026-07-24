@@ -5,10 +5,11 @@ import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { serverEnv } from '@/lib/env'
-import { lockRoom } from '../game/action-helpers'
+import { lockRoom, netTotalInRoom } from '../game/action-helpers'
 import { currentUserId } from './session'
 import { isAdminUser } from './roles'
 import { generateRegistrationCode, registrationCodeHash } from './registration-codes'
+import { guestTokenHash } from './guest-tokens'
 import { encryptSsoClientSecret, SETTINGS_ID } from './sso-settings'
 
 /** 관리자 전용 액션 — 게스트 토큰 발급·회수, 관리자 지정, 방 강제 정산. */
@@ -150,11 +151,14 @@ export async function createGuestToken(
 
   const expiresAt =
     expiresInHours > 0 ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000) : null
+  const secret = serverEnv().AUTH_SECRET
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const code = generateTokenCode()
     try {
-      await db.insert(schema.guestTokens).values({ code, label, createdBy: adminId, expiresAt })
+      await db
+        .insert(schema.guestTokens)
+        .values({ codeHash: guestTokenHash(code, secret), label, createdBy: adminId, expiresAt })
       return ok({ code })
     } catch (error) {
       const isUnique = Boolean(
@@ -344,6 +348,10 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
           .update(schema.rounds)
           .set({ status: 'voided', result: { note: ADMIN_CLOSE_REASON }, endedAt: new Date() })
           .where(eq(schema.rounds.id, round.id))
+      }
+
+      if ((await netTotalInRoom(tx, roomId)) !== 0) {
+        return fail('세션 손익 합계가 0이 아니라 정산할 수 없습니다')
       }
 
       await tx

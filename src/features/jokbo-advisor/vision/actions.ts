@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { serverEnv } from '@/lib/env'
+import { consumeRateLimits } from '@/lib/rate-limit'
 import { cardsOfMonth } from '@/features/hwatu/cards'
 import type { CardId, GameType, Month } from '@/features/hwatu/types'
 import { currentUserId } from '@/features/auth/session'
@@ -59,6 +60,22 @@ export async function recognizeHand(
   if (!env.JOKBO_VISION_ENABLED || !env.ANTHROPIC_API_KEY) {
     return fail('사진 인식이 비활성화되어 있습니다. 수동 선택을 사용하세요')
   }
+
+  const rate = await consumeRateLimits([
+    {
+      scope: 'vision.user.minute',
+      identifier: userId,
+      limit: 6,
+      windowMs: 60 * 1000,
+    },
+    {
+      scope: 'vision.user.hour',
+      identifier: userId,
+      limit: 30,
+      windowMs: 60 * 60 * 1000,
+    },
+  ])
+  if (!rate.allowed) return fail('사진 인식 요청이 너무 많습니다. 잠시 후 다시 시도하세요')
 
   const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(parsed.data.imageDataUrl)
   if (!match || !match[1] || !match[2]) return fail('지원하지 않는 이미지 형식입니다 (jpeg/png/webp)')

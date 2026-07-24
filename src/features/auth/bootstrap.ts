@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { sql } from 'drizzle-orm'
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 
 /** 첫 관리자 승격 직렬화용 고정 락 키 — 방 단위 락과 네임스페이스가 겹치지 않는다. */
@@ -35,10 +35,36 @@ export async function isFirstAccount(): Promise<boolean> {
  */
 export async function createUserGrantingFirstAdmin(
   values: typeof schema.users.$inferInsert,
+  options: {
+    /** 내부 가입은 기존 계정이 있으면 활성 가입코드를 트랜잭션 안에서 다시 확인한다. */
+    requireRegistrationAccess?: boolean
+    registrationCodeId?: string | null
+  } = {},
 ): Promise<{ id: string }> {
   return await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${BOOTSTRAP_LOCK_KEY}, 42))`)
     const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)
+    if (options.registrationCodeId) {
+      const [activeCode] = await tx
+        .select({ id: schema.registrationCodes.id })
+        .from(schema.registrationCodes)
+        .where(
+          and(
+            eq(schema.registrationCodes.id, options.registrationCodeId),
+            isNull(schema.registrationCodes.revokedAt),
+            or(
+              isNull(schema.registrationCodes.expiresAt),
+              gt(schema.registrationCodes.expiresAt, new Date()),
+            ),
+          ),
+        )
+        .limit(1)
+        .for('update')
+      if (!activeCode) throw new Error('registration access is no longer active')
+    } else if (options.requireRegistrationAccess && existing) {
+      // 첫 계정은 비상 프로비저닝 경로지만, 그 뒤의 내부 가입은 반드시 코드가 필요하다.
+      throw new Error('registration access is required')
+    }
     const [created] = await tx
       .insert(schema.users)
       .values({ ...values, isAdmin: !existing })

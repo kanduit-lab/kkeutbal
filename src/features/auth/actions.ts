@@ -2,14 +2,23 @@
 
 import bcrypt from 'bcryptjs'
 import type { Route } from 'next'
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AuthError } from 'next-auth'
 import { and, eq, isNull, like, or } from 'drizzle-orm'
 import { z } from 'zod'
 import { db, schema } from '@/lib/db'
 import { signIn } from '@/lib/auth'
-import { grantRegistrationAccess, hasRegistrationAccess } from '@/features/auth/registration-access'
+import { clientAddressFromHeaders, consumeRateLimits } from '@/lib/rate-limit'
+import {
+  consumeRegistrationAccess,
+  grantRegistrationAccess,
+  hasRegistrationAccess,
+  registrationAccessCodeId,
+} from '@/features/auth/registration-access'
 import { createUserGrantingFirstAdmin } from '@/features/auth/bootstrap'
+import { guestTokenHash } from '@/features/auth/guest-tokens'
+import { serverEnv } from '@/lib/env'
 
 /**
  * 내부 계정 회원가입·로그인 form action.
@@ -34,9 +43,7 @@ export type AuthErrorCode =
   | 'registration_code_required'
 
 export type RegistrationCodeState =
-  | { status: 'idle' }
-  | { status: 'error'; error: 'invalid' | 'unavailable' }
-  | { status: 'success' }
+  { status: 'idle' } | { status: 'error'; error: 'invalid' | 'unavailable' } | { status: 'success' }
 
 const registerSchema = z.object({
   username: z
@@ -56,20 +63,14 @@ const registerSchema = z.object({
 interface RegisterFields {
   username: string
   name: string
-  phone: string
 }
 
-function backTo(
-  path: '/register' | '/login',
-  code: AuthErrorCode,
-  fields?: RegisterFields,
-): never {
+function backTo(path: '/register' | '/login', code: AuthErrorCode, fields?: RegisterFields): never {
   const params = new URLSearchParams({ error: code })
   if (fields) {
     // 폼이 지워지지 않게 비민감 필드만 쿼리로 보존한다. 길이는 폼 maxLength 에 맞춰 자른다.
     params.set('username', fields.username.slice(0, 20))
     params.set('name', fields.name.slice(0, 20))
-    params.set('phone', fields.phone.slice(0, 13))
   }
   redirect(`${path}?${params.toString()}` as Route)
 }
@@ -91,7 +92,11 @@ function validationCode(issuePath: PropertyKey | undefined): AuthErrorCode {
 }
 
 export async function registerAndLogin(formData: FormData): Promise<void> {
-  if (!(await hasRegistrationAccess())) {
+  const [hasAccess, registrationCodeId] = await Promise.all([
+    hasRegistrationAccess(),
+    registrationAccessCodeId(),
+  ])
+  if (!hasAccess) {
     backTo('/login', 'registration_code_required')
   }
 
@@ -102,7 +107,7 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
     phone: String(formData.get('phone') ?? ''),
   }
   const passwordConfirm = String(formData.get('passwordConfirm') ?? '')
-  const rawFields: RegisterFields = { username: raw.username, name: raw.name, phone: raw.phone }
+  const rawFields: RegisterFields = { username: raw.username, name: raw.name }
 
   const parsed = registerSchema.safeParse(raw)
   if (!parsed.success) {
@@ -113,7 +118,23 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
   }
 
   const { username, password, name, phone } = parsed.data
-  const fields: RegisterFields = { username, name, phone }
+  const fields: RegisterFields = { username, name }
+  const address = clientAddressFromHeaders(new Headers(await headers()))
+  const registrationRate = await consumeRateLimits([
+    {
+      scope: 'auth.register.address',
+      identifier: address,
+      limit: 10,
+      windowMs: 60 * 60 * 1000,
+    },
+    {
+      scope: 'auth.register.username_address',
+      identifier: `${username}\0${address}`,
+      limit: 3,
+      windowMs: 60 * 60 * 1000,
+    },
+  ])
+  if (!registrationRate.allowed) backTo('/register', 'register_failed', fields)
 
   const [taken] = await db
     .select({ username: schema.users.username, phone: schema.users.phone })
@@ -126,18 +147,27 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
 
   try {
     const passwordHash = await bcrypt.hash(password, 10)
-    await createUserGrantingFirstAdmin({
-      authentikSub: `local:${username}`,
-      username,
-      passwordHash,
-      phone,
-      displayName: name,
-    })
+    await createUserGrantingFirstAdmin(
+      {
+        authentikSub: `local:${username}`,
+        username,
+        passwordHash,
+        phone,
+        displayName: name,
+      },
+      { requireRegistrationAccess: true, registrationCodeId },
+    )
   } catch (error) {
     console.error('registerAndLogin failed:', error)
     backTo('/register', 'register_failed', fields)
   }
 
+  try {
+    await consumeRegistrationAccess()
+  } catch (error) {
+    // 계정 생성은 이미 커밋됐다. 쿠키 정리 실패를 가입 실패로 오인시키지 않는다.
+    console.error('registration access cookie cleanup failed:', error)
+  }
   await signIn('password', { username, password, redirectTo: '/' })
 }
 
@@ -146,7 +176,25 @@ export async function verifyRegistrationCode(
   _previousState: RegistrationCodeState,
   formData: FormData,
 ): Promise<RegistrationCodeState> {
-  const result = await grantRegistrationAccess(String(formData.get('code') ?? ''))
+  const code = String(formData.get('code') ?? '')
+  const address = clientAddressFromHeaders(new Headers(await headers()))
+  const rate = await consumeRateLimits([
+    {
+      scope: 'auth.registration_code.address',
+      identifier: address,
+      limit: 15,
+      windowMs: 15 * 60 * 1000,
+    },
+    {
+      scope: 'auth.registration_code.value_address',
+      identifier: `${code}\0${address}`,
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+    },
+  ])
+  if (!rate.allowed) return { status: 'error', error: 'invalid' }
+
+  const result = await grantRegistrationAccess(code)
   if (result === 'granted') return { status: 'success' }
   return { status: 'error', error: result }
 }
@@ -155,7 +203,7 @@ export async function loginWithPassword(formData: FormData): Promise<void> {
   const username = String(formData.get('username') ?? '')
   const password = String(formData.get('password') ?? '')
   const next = String(formData.get('next') ?? '/')
-  const redirectTo = next.startsWith('/') ? next : '/'
+  const redirectTo = safeInternalPath(next)
 
   try {
     await signIn('password', { username, password, redirectTo })
@@ -171,16 +219,31 @@ export async function loginWithGuestToken(formData: FormData): Promise<void> {
   const code = String(formData.get('code') ?? '')
   const name = String(formData.get('name') ?? '')
   const next = String(formData.get('next') ?? '/')
-  const redirectTo = next.startsWith('/') ? next : '/'
+  const redirectTo = safeInternalPath(next)
 
   try {
     await signIn('guest-token', { code, name, redirectTo })
   } catch (error) {
     if (error instanceof AuthError) {
-      const params = new URLSearchParams({ error: 'guest_token_invalid', mode: 'guest', next: redirectTo })
+      const params = new URLSearchParams({
+        error: 'guest_token_invalid',
+        mode: 'guest',
+        next: redirectTo,
+      })
       redirect(`/login?${params.toString()}` as Route)
     }
     throw error
+  }
+}
+
+function safeInternalPath(value: string): string {
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/'
+  try {
+    const parsed = new URL(value, 'https://kkeutbal.invalid')
+    if (parsed.origin !== 'https://kkeutbal.invalid') return '/'
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`
+  } catch {
+    return '/'
   }
 }
 
@@ -213,15 +276,46 @@ export async function getGuestNamesForToken(code: string): Promise<GuestNamesRes
   if (!parsed.success) return GUEST_NAMES_INVALID
 
   try {
+    const address = clientAddressFromHeaders(new Headers(await headers()))
+    const rate = await consumeRateLimits([
+      {
+        scope: 'auth.guest_names.address',
+        identifier: address,
+        limit: 30,
+        windowMs: 15 * 60 * 1000,
+      },
+      {
+        scope: 'auth.guest_names.token_address',
+        identifier: `${parsed.data}\0${address}`,
+        limit: 10,
+        windowMs: 15 * 60 * 1000,
+      },
+    ])
+    if (!rate.allowed) return GUEST_NAMES_INVALID
+
+    const codeHash = guestTokenHash(parsed.data, serverEnv().AUTH_SECRET)
     const [token] = await db
-      .select({ id: schema.guestTokens.id, expiresAt: schema.guestTokens.expiresAt })
+      .select({
+        id: schema.guestTokens.id,
+        code: schema.guestTokens.code,
+        expiresAt: schema.guestTokens.expiresAt,
+      })
       .from(schema.guestTokens)
       .where(
-        and(eq(schema.guestTokens.code, parsed.data), isNull(schema.guestTokens.revokedAt)),
+        and(
+          or(eq(schema.guestTokens.codeHash, codeHash), eq(schema.guestTokens.code, parsed.data)),
+          isNull(schema.guestTokens.revokedAt),
+        ),
       )
       .limit(1)
     if (!token) return GUEST_NAMES_INVALID
     if (token.expiresAt && token.expiresAt.getTime() < Date.now()) return GUEST_NAMES_INVALID
+    if (token.code) {
+      await db
+        .update(schema.guestTokens)
+        .set({ code: null, codeHash })
+        .where(eq(schema.guestTokens.id, token.id))
+    }
 
     // token.id 는 DB 가 생성한 uuid — LIKE 와일드카드 문자가 섞일 수 없다.
     const rows = await db

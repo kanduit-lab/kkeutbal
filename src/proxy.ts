@@ -7,7 +7,7 @@ import { authConfigBase } from './lib/auth-config'
  */
 const { auth } = NextAuth(authConfigBase)
 
-export default auth((req) => {
+export const proxy = auth((req) => {
   const { pathname } = req.nextUrl
   const isPublic =
     pathname.startsWith('/login') ||

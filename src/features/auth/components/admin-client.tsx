@@ -69,6 +69,7 @@ export function AdminClient({
 
   const [label, setLabel] = useState('')
   const [hours, setHours] = useState<number>(72)
+  const [latestGuestToken, setLatestGuestToken] = useState<string | null>(null)
   const [registrationLabel, setRegistrationLabel] = useState('')
   const [registrationHours, setRegistrationHours] = useState<number>(72)
   const [latestRegistrationCode, setLatestRegistrationCode] = useState<string | null>(null)
@@ -97,7 +98,8 @@ export function AdminClient({
     startTransition(async () => {
       const result = await createGuestToken({ label: label.trim(), expiresInHours: hours })
       if (result.success) {
-        toast(`토큰 발급됨: ${result.data.code}`, 'success')
+        setLatestGuestToken(result.data.code)
+        toast('게스트 토큰을 발급했습니다. 지금 복사해 전달하세요.', 'success')
         setLabel('')
         router.refresh()
       } else {
@@ -354,6 +356,32 @@ export function AdminClient({
         >
           토큰 발급
         </Button>
+        {latestGuestToken ? (
+          <div className="rounded-xl bg-bg-deep/60 p-3">
+            <p className="text-xs text-muted">방금 발급한 게스트 토큰</p>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <code className="font-mono text-lg font-bold tracking-[0.18em]">
+                {latestGuestToken}
+              </code>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => {
+                  if (!navigator.clipboard) {
+                    toast('복사를 지원하지 않는 브라우저입니다', 'error')
+                    return
+                  }
+                  void navigator.clipboard
+                    .writeText(latestGuestToken)
+                    .then(() => toast('게스트 토큰을 복사했습니다', 'success'))
+                    .catch(() => toast('복사하지 못했습니다. 토큰을 직접 선택하세요', 'error'))
+                }}
+              >
+                복사
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </Panel>
 
       <Panel className="space-y-3">
@@ -371,11 +399,11 @@ export function AdminClient({
                   className="flex items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3 py-2.5"
                 >
                   <div className="min-w-0">
-                    <p className="font-mono text-lg font-bold tracking-[0.2em]">
-                      {dead ? <s className="opacity-50">{token.code}</s> : token.code}
+                    <p className={`truncate font-bold ${dead ? 'opacity-50 line-through' : ''}`}>
+                      {token.label}
                     </p>
                     <p className="truncate text-xs text-muted">
-                      {token.label} · {token.createdByName} ·{' '}
+                      {token.createdByName} · {formatDate(token.createdAt)} ·{' '}
                       {token.expiresAt
                         ? `${new Date(token.expiresAt).toLocaleDateString('ko-KR')} 까지`
                         : '무기한'}
@@ -515,7 +543,7 @@ export function AdminClient({
 
       <ConfirmDialog
         open={revokeTarget !== null}
-        title={`토큰 ${revokeTarget?.code ?? ''} 을 회수할까요?`}
+        title={`게스트 토큰 ${revokeTarget?.label ?? ''} 을 회수할까요?`}
         body="회수하면 이 토큰으로는 더 이상 로그인할 수 없습니다. 이미 만든 게스트 계정은 유지됩니다."
         confirmLabel="회수"
         tone="danger"

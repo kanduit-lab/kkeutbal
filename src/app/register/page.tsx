@@ -28,9 +28,9 @@ function registerErrorCopy(d: Dictionary): Record<string, string> {
 export default async function RegisterPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; username?: string; name?: string; phone?: string }>
+  searchParams: Promise<{ error?: string; username?: string; name?: string }>
 }) {
-  const [accessGranted, { error, username, name, phone }, { d }, firstAccount] = await Promise.all([
+  const [accessGranted, { error, username, name }, { d }, firstAccount] = await Promise.all([
     hasRegistrationAccess(),
     searchParams,
     getDict(),
@@ -103,7 +103,7 @@ export default async function RegisterPage({
             />
           </Field>
           <Field label={d.auth.phoneLabel}>
-            <PhoneInput defaultValue={phone ?? ''} placeholder={d.auth.phonePlaceholder} />
+            <PhoneInput placeholder={d.auth.phonePlaceholder} />
           </Field>
           <SubmitButton variant="primary" size="lg" className="w-full" pendingLabel={d.auth.registerPending}>
             {d.auth.registerSubmit}

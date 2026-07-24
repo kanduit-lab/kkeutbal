@@ -6,7 +6,6 @@ import type { RoomGameType } from '@/features/game/types'
 
 export interface GuestTokenView {
   readonly id: string
-  readonly code: string
   readonly label: string
   readonly createdByName: string
   readonly createdAt: string
@@ -51,7 +50,6 @@ export async function listGuestTokens(): Promise<GuestTokenView[]> {
   const rows = await db
     .select({
       id: schema.guestTokens.id,
-      code: schema.guestTokens.code,
       label: schema.guestTokens.label,
       createdByName: schema.users.displayName,
       createdAt: schema.guestTokens.createdAt,

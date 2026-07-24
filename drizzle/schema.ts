@@ -1,5 +1,8 @@
+import { sql } from 'drizzle-orm'
 import {
+  bigint,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -9,8 +12,10 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
+import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
 /**
  * 스키마 구현. 설계 근거·불변식은 docs/02-data-model.md 가 소유한다.
@@ -69,13 +74,35 @@ export const authSettings = pgTable('auth_settings', {
 })
 
 /**
+ * 로그인·가입코드·Vision 호출 제한 버킷.
+ * 식별자는 AUTH_SECRET HMAC으로만 저장해 IP·아이디 원문을 남기지 않는다.
+ */
+export const rateLimitBuckets = pgTable(
+  'rate_limit_buckets',
+  {
+    scope: text('scope').notNull(),
+    keyHash: text('key_hash').notNull(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    hits: integer('hits').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.scope, table.keyHash] }),
+    index('rate_limit_buckets_expires_at_idx').on(table.expiresAt),
+    check('rate_limit_buckets_hits_positive_ck', sql`${table.hits} > 0`),
+  ],
+)
+
+/**
  * 게스트 초대 토큰. 관리자가 발급하며, 코드 + 이름만으로 게스트 로그인할 수 있다.
  * 같은 (토큰, 이름) 조합은 같은 게스트 계정으로 이어진다 — 기기를 바꿔도 전적 유지.
  */
 export const guestTokens = pgTable('guest_tokens', {
   id: uuid('id').primaryKey().defaultRandom(),
-  /** 입장 코드와 같은 문자 집합(혼동 문자 제외) 8자. */
-  code: text('code').notNull().unique(),
+  /** 레거시 원문. 사용 시 codeHash 로 전환하며 신규 발급에는 저장하지 않는다. */
+  code: text('code').unique(),
+  /** 입장 코드의 AUTH_SECRET HMAC. */
+  codeHash: text('code_hash').unique(),
   /** 발급 메모 (예: "2026 여름 MT"). */
   label: text('label').notNull(),
   createdBy: uuid('created_by')
@@ -84,7 +111,9 @@ export const guestTokens = pgTable('guest_tokens', {
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+}, (table) => [
+  check('guest_tokens_credential_present_ck', sql`${table.codeHash} is not null or ${table.code} is not null`),
+])
 
 /**
  * 내부 계정 회원가입 코드. 원문은 발급 직후 한 번만 보여주고, DB에는 AUTH_SECRET 기반 HMAC만 저장한다.
@@ -157,7 +186,10 @@ export const rooms = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp('closed_at', { withTimezone: true }),
   },
-  (table) => [index('rooms_status_idx').on(table.status)],
+  (table) => [
+    index('rooms_status_idx').on(table.status),
+    check('rooms_starting_chips_positive_ck', sql`${table.startingChips} > 0`),
+  ],
 )
 
 export const roomMembers = pgTable(
@@ -178,6 +210,7 @@ export const roomMembers = pgTable(
   (table) => [
     primaryKey({ columns: [table.roomId, table.userId] }),
     unique('room_members_seat_uq').on(table.roomId, table.seatNo),
+    check('room_members_seat_nonnegative_ck', sql`${table.seatNo} >= 0`),
   ],
 )
 
@@ -191,14 +224,38 @@ export const rounds = pgTable(
     /** 방 내 판 번호. 동시 입력 충돌 판정의 기준. */
     seq: integer('seq').notNull(),
     status: roundStatus('status').notNull().default('playing'),
-    pot: integer('pot').notNull().default(0),
+    pot: bigint('pot', { mode: 'number' }).notNull().default(0),
     winnerId: uuid('winner_id').references(() => users.id),
     /** 게임별 결과 상세 (섯다: 족보 / 고스톱: 점수 내역). */
     result: jsonb('result'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp('ended_at', { withTimezone: true }),
   },
-  (table) => [unique('rounds_room_seq_uq').on(table.roomId, table.seq)],
+  (table) => [
+    unique('rounds_room_seq_uq').on(table.roomId, table.seq),
+    check('rounds_seq_positive_ck', sql`${table.seq} > 0`),
+    check('rounds_pot_nonnegative_ck', sql`${table.pot} >= 0`),
+    uniqueIndex('rounds_one_playing_per_room_uq')
+      .on(table.roomId)
+      .where(sql`${table.status} = 'playing'`),
+  ],
+)
+
+/** 판 시작 시점의 참가자 스냅샷. 재입장·역할 변경 뒤에도 과거 판 참가 사실을 보존한다. */
+export const roundParticipants = pgTable(
+  'round_participants',
+  {
+    roundId: uuid('round_id')
+      .notNull()
+      .references(() => rounds.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+  },
+  (table) => [
+    primaryKey({ columns: [table.roundId, table.userId] }),
+    index('round_participants_user_idx').on(table.userId),
+  ],
 )
 
 export const betActions = pgTable(
@@ -227,7 +284,11 @@ export const betActions = pgTable(
     seq: integer('seq').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('bet_actions_round_seq_idx').on(table.roundId, table.seq)],
+  (table) => [
+    uniqueIndex('bet_actions_round_seq_uq').on(table.roundId, table.seq),
+    check('bet_actions_amount_nonnegative_ck', sql`${table.amount} >= 0`),
+    check('bet_actions_seq_positive_ck', sql`${table.seq} > 0`),
+  ],
 )
 
 /**
@@ -247,11 +308,13 @@ export const chipLedger = pgTable(
       .notNull()
       .references(() => users.id),
     /** 부호 있는 정수. 지출 음수, 획득 양수. */
-    delta: integer('delta').notNull(),
+    delta: bigint('delta', { mode: 'number' }).notNull(),
     reason: chipReason('reason').notNull(),
     refActionId: uuid('ref_action_id').references(() => betActions.id),
+    /** buy_in/correction 원장의 근거 바이인 행. 기존 데이터 호환을 위해 nullable. */
+    refBuyInId: uuid('ref_buy_in_id').references((): AnyPgColumn => buyIns.id),
     /** 정정 행이 원본을 가리킨다. 원본은 수정하지 않는다. */
-    revertedOf: uuid('reverted_of'),
+    revertedOf: uuid('reverted_of').references((): AnyPgColumn => chipLedger.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
@@ -259,6 +322,11 @@ export const chipLedger = pgTable(
     index('chip_ledger_room_time_idx').on(table.roomId, table.createdAt),
     /** 판별 팟 계산(getRoundPot: roundId + reason 필터)용. */
     index('chip_ledger_round_reason_idx').on(table.roundId, table.reason),
+    index('chip_ledger_ref_buy_in_idx').on(table.refBuyInId),
+    uniqueIndex('chip_ledger_reverted_of_uq')
+      .on(table.revertedOf)
+      .where(sql`${table.revertedOf} is not null`),
+    check('chip_ledger_delta_nonzero_ck', sql`${table.delta} <> 0`),
   ],
 )
 
@@ -276,7 +344,15 @@ export const buyIns = pgTable(
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
+    /** 바이인 취소 행이 원본 바이인을 가리킨다. */
+    revertedOf: uuid('reverted_of').references((): AnyPgColumn => buyIns.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('buy_ins_room_user_idx').on(table.roomId, table.userId)],
+  (table) => [
+    index('buy_ins_room_user_idx').on(table.roomId, table.userId),
+    uniqueIndex('buy_ins_reverted_of_uq')
+      .on(table.revertedOf)
+      .where(sql`${table.revertedOf} is not null`),
+    check('buy_ins_amount_nonzero_ck', sql`${table.amount} <> 0`),
+  ],
 )
