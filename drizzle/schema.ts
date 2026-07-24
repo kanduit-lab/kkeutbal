@@ -46,6 +46,9 @@ export const creditTransactionKind = pgEnum('credit_transaction_kind', [
   'correction',
 ])
 
+/** Drizzle이 bigint를 number로 읽는 동안 표현 가능한 정수 경계. */
+const MAX_SAFE_CREDIT_INTEGER = 9_007_199_254_740_991
+
 /**
  * 전역 사용자. 이메일은 저장하지 않는다 (docs/07-auth-and-security.md).
  * `authentik_sub` 는 provider 신원 키다 — OIDC 는 IdP sub, 내부 계정은 `local:{username}`,
@@ -101,6 +104,11 @@ export const creditAccounts = pgTable(
     check(
       'credit_accounts_user_balance_nonnegative_ck',
       sql`${table.kind} <> 'user' or (${table.availableBalance} >= 0 and ${table.lockedBalance} >= 0)`,
+    ),
+    check(
+      'credit_accounts_number_safe_ck',
+      sql`${table.availableBalance} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}
+        and ${table.lockedBalance} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}`,
     ),
   ],
 )
@@ -158,6 +166,7 @@ export const guestTokens = pgTable('guest_tokens', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   check('guest_tokens_credential_present_ck', sql`${table.codeHash} is not null or ${table.code} is not null`),
+  index('guest_tokens_created_by_idx').on(table.createdBy),
 ])
 
 /**
@@ -178,7 +187,10 @@ export const registrationCodes = pgTable(
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('registration_codes_expires_at_idx').on(table.expiresAt)],
+  (table) => [
+    index('registration_codes_expires_at_idx').on(table.expiresAt),
+    index('registration_codes_created_by_idx').on(table.createdBy),
+  ],
 )
 
 /**
@@ -209,7 +221,10 @@ export const promotions = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [index('promotions_kind_active_idx').on(table.kind, table.isActive)],
+  (table) => [
+    index('promotions_kind_active_idx').on(table.kind, table.isActive),
+    index('promotions_created_by_idx').on(table.createdBy),
+  ],
 )
 
 export const rooms = pgTable(
@@ -233,6 +248,7 @@ export const rooms = pgTable(
   },
   (table) => [
     index('rooms_status_idx').on(table.status),
+    index('rooms_host_idx').on(table.hostId),
     check('rooms_starting_chips_positive_ck', sql`${table.startingChips} > 0`),
   ],
 )
@@ -255,6 +271,7 @@ export const roomMembers = pgTable(
   (table) => [
     primaryKey({ columns: [table.roomId, table.userId] }),
     unique('room_members_seat_uq').on(table.roomId, table.seatNo),
+    index('room_members_user_idx').on(table.userId),
     check('room_members_seat_nonnegative_ck', sql`${table.seatNo} >= 0`),
   ],
 )
@@ -283,6 +300,7 @@ export const rounds = pgTable(
     uniqueIndex('rounds_one_playing_per_room_uq')
       .on(table.roomId)
       .where(sql`${table.status} = 'playing'`),
+    index('rounds_winner_idx').on(table.winnerId),
   ],
 )
 
@@ -359,6 +377,13 @@ export const creditEntries = pgTable(
       'credit_entries_delta_nonzero_ck',
       sql`${table.deltaAvailable} <> 0 or ${table.deltaLocked} <> 0`,
     ),
+    check(
+      'credit_entries_number_safe_ck',
+      sql`${table.deltaAvailable} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}
+        and ${table.deltaLocked} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}
+        and ${table.availableAfter} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}
+        and ${table.lockedAfter} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}`,
+    ),
   ],
 )
 
@@ -390,6 +415,10 @@ export const betActions = pgTable(
   },
   (table) => [
     uniqueIndex('bet_actions_round_seq_uq').on(table.roundId, table.seq),
+    index('bet_actions_room_idx').on(table.roomId),
+    index('bet_actions_user_idx').on(table.userId),
+    index('bet_actions_entered_by_idx').on(table.enteredBy),
+    index('bet_actions_approved_by_idx').on(table.approvedBy),
     check('bet_actions_amount_nonnegative_ck', sql`${table.amount} >= 0`),
     check('bet_actions_seq_positive_ck', sql`${table.seq} > 0`),
   ],
@@ -427,6 +456,8 @@ export const chipLedger = pgTable(
     /** 판별 팟 계산(getRoundPot: roundId + reason 필터)용. */
     index('chip_ledger_round_reason_idx').on(table.roundId, table.reason),
     index('chip_ledger_ref_buy_in_idx').on(table.refBuyInId),
+    index('chip_ledger_user_idx').on(table.userId),
+    index('chip_ledger_ref_action_idx').on(table.refActionId),
     uniqueIndex('chip_ledger_reverted_of_uq')
       .on(table.revertedOf)
       .where(sql`${table.revertedOf} is not null`),
@@ -454,6 +485,8 @@ export const buyIns = pgTable(
   },
   (table) => [
     index('buy_ins_room_user_idx').on(table.roomId, table.userId),
+    index('buy_ins_user_idx').on(table.userId),
+    index('buy_ins_created_by_idx').on(table.createdBy),
     uniqueIndex('buy_ins_reverted_of_uq')
       .on(table.revertedOf)
       .where(sql`${table.revertedOf} is not null`),
@@ -490,5 +523,9 @@ export const roomCreditLocks = pgTable(
     index('room_credit_locks_released_transaction_idx').on(table.releasedTransactionId),
     index('room_credit_locks_room_user_idx').on(table.roomId, table.userId),
     check('room_credit_locks_amount_positive_ck', sql`${table.amount} > 0`),
+    check(
+      'room_credit_locks_amount_number_safe_ck',
+      sql`${table.amount} <= ${MAX_SAFE_CREDIT_INTEGER}`,
+    ),
   ],
 )
