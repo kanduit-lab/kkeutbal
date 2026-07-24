@@ -42,9 +42,9 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    pnpm db:migrate
    ```
 
-   live DB는 2026-07-24 기준 `0000`~`0016` 이력이 동기화되어 있다. 전역 가상 크레딧과
+   live DB는 2026-07-24 기준 `0000`~`0017` 이력이 동기화되어 있다. 전역 가상 크레딧과
    게임·credit FK 인덱스, credit 안전 정수 제약, 공정 딜 라운드 상태 테이블을 포함하는 버전은
-   `0016`까지 적용하므로 같은 커밋에서
+   `0017`까지 적용하므로 같은 커밋에서
    재실행하면 새 마이그레이션만 적용된다.
 
 3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`,
@@ -120,7 +120,10 @@ order by p.proname;
 확인한다. `kkeutbal_app`은 credit 테이블에 SELECT만, `ensure_credit_account`,
 `admin_adjust_credit`, `lock_room_credit_buy_in`, `release_room_credit_buy_in`,
 `settle_room_credits`에는 EXECUTE를 가져야 한다. generic `post_credit_transaction`에는 EXECUTE가
-없어야 하며 `anon`·`authenticated`에는 앱 테이블 권한이 없어야 한다.
+없어야 하며 `anon`·`authenticated`에는 앱 테이블 권한이 없어야 한다. Drizzle `0017` 뒤에는
+`buy_ins_number_safe_activity_trg`, `chip_ledger_number_safe_activity_trg`와 세 안전 정수 CHECK
+제약이 존재해야 한다. 이 마이그레이션은 원격 DDL과 같은 hash의
+`drizzle.__drizzle_migrations` 행까지 동기화해야 한다.
 
 ## Rollback
 
@@ -164,3 +167,5 @@ order by p.proname;
 - 2026-07-24: Supabase 0013으로 관리자 강제 정산도 account-credit lock을 release하게 보완하고,
   비참가 관리자 rollback lifecycle로 권한·정산 귀속을 확인.
 - 2026-07-24: Supabase 0015로 `round_fairness_reveals` full reveal의 update/delete를 차단했다.
+- 2026-07-24: Drizzle 0017로 세션 칩의 bigint→JavaScript number 직렬화 경계를 DB CHECK와
+  room/user 누적 activity 트리거로 강제하고, live Drizzle 이력을 같은 hash로 동기화했다.

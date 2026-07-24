@@ -5,7 +5,7 @@
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
 | Status | in-progress |
-| Source of truth | credit·fair round 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0013`, 공정 딜 상태기는 `src/features/fairness/round-state.ts`; 실제 카드 배분은 이 문서의 후속 설계 |
+| Source of truth | credit·fair round 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0013`, verified 섯다 실행은 `src/features/fairness/`·`src/features/game/round-actions.ts` |
 | Last reviewed | 2026-07-24 |
 
 ## 목적과 경계
@@ -215,8 +215,8 @@ DB check constraint가 각 phase의 필수/금지 필드를 강제한다. 서버
 - 관리자 지급·회수·정정은 관리자 Server Action만 호출할 수 있고 `reason`·`initiated_by`를
   필수로 남긴다. UI는 실제 원장을 수정하는 버튼을 제공하지 않고 새 거래를 만든다.
 - `round_fairness`의 phase shape·hash 형식은 DB 제약으로, seed 제출·timeout·seal·reveal 순서는
-  `round-state.ts` 순수 상태기로 검증한다. 이 테이블은 server-only지만 아직 수동 게임 흐름에는
-  연결하지 않아 `verified` 옵션을 UI에 노출하지 않는다.
+  `round-state.ts`와 `fair-round-service.ts`가 함께 강제한다. 테이블 자체는 계속 server-only이며,
+  `refreshRoom`에는 commitment·phase·마감·확정 참가자 ID·제출 수·공개 영수증만 투영한다.
 
 ## 공정 셔플 프로토콜
 
@@ -252,9 +252,8 @@ preset을 `session`으로 해석하므로 기존 방이 우연히 전역 잔액�
 { fundingMode: 'session' | 'account_credit' }
 ```
 
-공정 배분 설정은 아직 DB/화면에 노출하지 않는다. `src/features/game/fair-play-settings.ts`의 순수
-검증기는 다음 후속 preset 구조를 고정하지만, verified deal 상태기계가 없는 동안 `verified`를
-선택할 수 있게 만들지 않는다.
+섯다 방장은 첫 판 전 방 옵션에서 아래 `fair_play` preset을 명시적으로 저장할 수 있다.
+`readFairPlaySettings`는 구버전·손상 preset을 언제나 `manual` 기본값으로 해석한다.
 
 ```ts
 {
@@ -265,11 +264,13 @@ preset을 `session`으로 해석하므로 기존 방이 우연히 전역 잔액�
 }
 ```
 
-- `verified`는 섯다·포커만 지원 후보이며, 한 번 판이 시작되면 dealing·seed timeout은 바꾸지 못한다.
-- 기본 timeout 정책은 `pause`다. 네트워크 끊김을 패배·자동 베팅으로 바꾸지 않는다.
-- 추후 게임별로 안전성이 증명된 경우에만 `auto_check_or_fold`를 추가한다. 섯다·포커·고스톱은
-  타임아웃에서 가능한 행동이 서로 다르므로 공통 자동 행동을 지금 넣지 않는다.
-- 호스트/딜러만 일시 정지 후 재개할 수 있고, pause/resume은 감사 이벤트로 남긴다.
+- `verified`의 라이브 지원은 **섯다만**이다. 포커·고스톱은 private-card/turn 모델이 완성되기 전
+  `manual`로 안전하게 폴백한다. 한 번 판이 시작되면 dealing·seed timeout은 바꾸지 못한다.
+- seed collection 마감은 DB `statement_timestamp()` 기준이다. 전원 제출 전에도 마감 후에는
+  미제출자를 명시적으로 timeout 기록하고, 참가자 누구나 봉인을 진행할 수 있다. 서버는 임의
+  행동·자동 베팅을 하지 않으므로 이 정책은 결과를 강제하지 않는 `pause`다.
+- `turnTimeoutSeconds`는 preset 호환을 위한 예약 필드다. 현재 수동 베팅 흐름에는 server-authoritative
+  차례 상태가 없으므로 개별 턴 타이머로 노출하거나 자동 fold/check하지 않는다.
 
 실제 카드 배분 지원 순서는 섯다(2장 비공개) → 포커(2장 비공개+보드) → 고스톱(게임 규칙·턴
 상태를 서버 authoritative로 확장한 뒤)이다. 현재 수동 결과 기록 흐름에 비밀 카드를 섞어
@@ -282,12 +283,14 @@ preset을 `session`으로 해석하므로 기존 방이 우연히 전역 잔액�
 | `/wallet` | 로그인 사용자 | 사용 가능/잠금 크레딧과 최근 자신의 거래 내역 |
 | `/wallet/transactions/[id]` (계획) | 거래 당사자 또는 관리자 | 거래 엔트리·스냅샷·정정 연결 |
 | `/admin` | 관리자 | 현재 지급/회수 생성과 감사 사유; 검색·정정 UI는 계획 |
-| `/rooms/{code}/fairness` (계획) | 방 참가자 | commitment, client seed hash, 마감, 종료 후 검증 영수증 |
+| 방 화면 공정 딜 패널 | 해당 round participant | commitment, 마감, 제출 수·제출자 식별자, 내 seed 제출·봉인·내 손패 조회 |
+| `/rooms/{code}/fairness/{seq}` | 종료된 해당 round participant | public/full receipt와 고정 섯다 덱 재계산 결과 |
 | `refreshRoom` | 공개 점수판만 | 비공개 카드·server seed·원본 client seed를 포함하지 않음 |
-| `getMyPrivateHand` (계획) | 해당 round participant | 진행 중 본인 카드만, 서버 액션 응답으로 반환 |
+| `getMyVerifiedSeotdaHand` | 해당 round participant | sealed 뒤 본인 카드만 Server Action 응답으로 반환 |
 
-Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairness.revealed`,
-`round.paused` 같은 refetch 힌트만 담는다. seed, hand, deck 순서는 절대 payload에 넣지 않는다.
+공정성 상태 변화도 일반 `state.snapshot` refetch 힌트로만 전파한다. seed, hand, deck 순서는
+Broadcast payload에 절대 넣지 않는다. 제출자 식별자는 버튼 복원만 위한 공개 상태이며, seed hash나
+원문을 뜻하지 않는다.
 공개 영수증의 deal-plan 검사는 구조 검증일 뿐이다. 실제 암호학적 검증은 종료 뒤 full reveal과
 원래 덱을 함께 `verifyPublicFairnessAudit`으로 재계산할 때만 성공으로 표시한다.
 
@@ -324,8 +327,8 @@ Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairnes
 2. [x] 계정 지갑 테이블/enum/제약의 Drizzle DDL 및 Supabase 권한·함수 migration을 추가한다.
 3. [x] 계정 지갑·관리자 지급/회수·거래 내역을 구현하고, 원격 DB rollback 트랜잭션으로 RPC를 검증한다.
 4. [x] account-credit 방의 lock/buy-in/release/settlement 연결과 원격 rollback lifecycle 검증을 구현한다.
-5. 섯다 verified deal, private hand action, fairness receipt 화면을 구현한다.
-6. 2인 인증 E2E에서 시드 제출·타임아웃·정산·공개 검증을 확인한다.
+5. [x] 섯다 verified deal, private hand action, 종료 후 fairness receipt 화면을 구현한다.
+6. [ ] 전용 2계정 환경에서 Playwright가 시드 제출·봉인·손패·공개 검증을 실제 실행하게 한다.
 
 각 단계는 현재 수동 기록 방을 깨지 않아야 한다. 2~4단계는 기존 잔액을 이관하지 않는 기본 정책을
 전제로 하며, 이관이 필요해지면 별도 승인된 설계 변경으로 다룬다.
@@ -336,3 +339,6 @@ Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairnes
   Server Action 트랜잭션으로 연결했다. full reveal 없는 공정 영수증은 여전히 검증 완료로 표시하지 않는다.
 - 2026-07-24: `round_fairness*` server-only schema와 commit/timeout/seal/reveal 상태기를 추가했다.
   수동 판에 실제 verified deal·private hand를 연결하기 전에는 이 상태를 사용자 설정으로 노출하지 않는다.
+- 2026-07-24: verified 섯다를 방 옵션·seed 제출/봉인·서버 재계산 승자·본인 전용 손패·종료 후
+  full receipt 감사 화면에 연결했다. `AUTH_SECRET`에서 fairness 전용 HKDF 서브키를 파생해 server seed를
+  AES-256-GCM으로 보관하며, pre-seal void는 reveal 없이 abort하고 sealed void/종료는 append-only reveal한다.

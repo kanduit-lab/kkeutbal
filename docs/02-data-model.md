@@ -307,8 +307,10 @@ Supabase 테이블 API를 직접 호출하는 가상의 경로다.** 실제 앱 
 브라우저에는 열지 않으며, 현재 앱 기능은 이 뷰를 읽지 않는다.
 
 공정 딜 기반 테이블 `round_fairness`, `round_fairness_participants`, `round_fairness_reveals`도
-동일하게 RLS를 켠 server-only 표면이다. 이 테이블은 아직 수동 게임의 공개 스냅샷에 연결하지
-않았으므로 `anon`·`authenticated`에는 권한이 없고, 향후 전용 Server Action만 상태 전이를 수행한다.
+동일하게 RLS를 켠 server-only 표면이다. `anon`·`authenticated`에는 권한이 없고, 전용 Server
+Action만 상태 전이를 수행한다. 방 스냅샷은 `server_seed_ciphertext`·원문 seed·private hand를 제외한
+commitment·phase·마감·확정 참가자 ID·제출 여부·제출 수·sealed public receipt만 서버에서 선별해
+반환한다.
 
 `chip_ledger` INSERT를 `authenticated`에 열지 않은 이유: 칩 생성은 게임 규칙 판정 결과여야
 한다. 정책이 없다는 것 자체가 방어층이고, 실제 쓰기는 Server Action이 엔진 검증 후

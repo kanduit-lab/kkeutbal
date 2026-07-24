@@ -7,9 +7,9 @@
 
 ### High — 라이브 경로 검증
 
-- [ ] **섯다 검증 배분과 공정성 영수증**: commit-reveal 시드·타임아웃·개인 손패·종료 후 공개 검증을 실제 판 흐름에 연결
-  - 변경 범위: `features/fairness/**`, `features/game/**`, `rounds` 확장, 방 옵션·검증 화면
-  - 완료 기준: 두 참가자가 server/client seed commitment, 카드 배분, timeout pause, 종료 후 deck 재계산을 E2E로 검증
+- [ ] **섯다 검증 배분 실환경 E2E**: 구현된 commit-reveal 시드·개인 손패·종료 후 공개 검증을 전용 두 계정으로 실제 실행
+  - 변경 범위: `e2e/authenticated-room.spec.ts` 실행 환경과 검증 활동
+  - 완료 기준: `E2E_ENABLE_ROOM_LIFECYCLE=true` + 두 전용 계정에서 시드 제출·봉인·손패·종료 후 deck 재계산이 통과
   - 참조: `docs/10-virtual-credit-and-fair-play.md`
 
 - [ ] **실배포 2기기 스모크 1회**: 배포된 앱에서 전체 플로우를 엔드투엔드로 완주
@@ -26,7 +26,7 @@
 
 - [ ] **인증 후 E2E 흐름 확장**: 공개 화면 모바일 스모크 다음으로 실제 방 흐름을 자동화
   - 변경 범위: `e2e/`, 테스트용 가입코드·계정 fixture
-  - 완료 기준: 2컨텍스트 동기화, 재접속 복원, 정산 흐름에서 `pnpm test:e2e` 통과
+  - 완료 기준: 2컨텍스트 동기화, 재접속 복원, 정산 흐름에서 `pnpm test:e2e` 통과. 수동/verified 방 수명주기 spec은 추가됐고 전용 자격 증명 실행만 남음
   - 참조: `playwright.config.ts`, `e2e/public-surfaces.spec.ts`
 
 ### Low — 구조적 후속 개선
@@ -43,10 +43,6 @@
 - [ ] **관리자·Vision 오류 i18n 전환**: `auth/admin-actions.ts`와 `jokbo-advisor/vision/actions.ts`의 한국어 원문 오류를 사전 키로 통일
   - 변경 범위: 관리자·어드바이저 액션 및 ko/en 사전
   - 완료 기준: 모든 Server Action 오류가 안정된 `errors.*` 키로 반환되고 영어 화면에서도 번역됨
-
-- [ ] **전광판 박 표시**: 종료 판의 `RecentRoundView.penalties`를 모니터 화면에도 노출
-  - 변경 범위: `monitor-client.tsx`
-  - 완료 기준: 피박·광박·복합 박이 결과 페이지와 같은 표기로 표시됨
 
 ## Notes
 
