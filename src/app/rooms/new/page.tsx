@@ -4,10 +4,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { createRoom } from '@/features/game/actions'
-import type { RoomGameType } from '@/features/game/types'
+import type { FundingMode, RoomGameType } from '@/features/game/types'
 import { GAME_LABELS } from '@/features/game/labels'
 import { translateError, useDict } from '@/lib/i18n/client'
-import { Button, Field, Input, Panel, Stepper, useToast } from '@/components/ui'
+import { Button, ConfirmDialog, Field, Input, Panel, Stepper, useToast } from '@/components/ui'
 
 const CHIP_PRESETS = [50, 100, 200, 500] as const
 const GAME_TYPES: readonly RoomGameType[] = ['seotda', 'gostop', 'poker']
@@ -24,8 +24,10 @@ export default function NewRoomPage() {
   const [startingChips, setStartingChips] = useState(100)
   const [pointValue, setPointValue] = useState(10)
   const [baseBet, setBaseBet] = useState(1)
+  const [fundingMode, setFundingMode] = useState<FundingMode>('session')
+  const [accountCreditConfirmOpen, setAccountCreditConfirmOpen] = useState(false)
 
-  function submit() {
+  function create() {
     if (isPending) return
     startTransition(async () => {
       const result = await createRoom({
@@ -35,6 +37,7 @@ export default function NewRoomPage() {
         startingChips,
         pointValue: gameType === 'gostop' ? pointValue : undefined,
         baseBet: gameType === 'gostop' ? undefined : baseBet,
+        fundingMode,
       })
       if (result.success) {
         router.push(`/rooms/${result.data.code}`)
@@ -42,6 +45,15 @@ export default function NewRoomPage() {
         toast(translateError(d, result.error), 'error')
       }
     })
+  }
+
+  function submit() {
+    if (isPending) return
+    if (fundingMode === 'account_credit') {
+      setAccountCreditConfirmOpen(true)
+      return
+    }
+    create()
   }
 
   return (
@@ -107,6 +119,34 @@ export default function NewRoomPage() {
           />
         </Field>
 
+        <Field label={d.roomForm.fundingModeLabel}>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant={fundingMode === 'session' ? 'primary' : 'surface'}
+              className={fundingMode === 'session' ? '' : 'border border-white/10'}
+              pressed={fundingMode === 'session'}
+              onClick={() => setFundingMode('session')}
+            >
+              {d.roomForm.sessionFunding}
+            </Button>
+            <Button
+              type="button"
+              variant={fundingMode === 'account_credit' ? 'primary' : 'surface'}
+              className={fundingMode === 'account_credit' ? '' : 'border border-white/10'}
+              pressed={fundingMode === 'account_credit'}
+              onClick={() => setFundingMode('account_credit')}
+            >
+              {d.roomForm.accountCreditFunding}
+            </Button>
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            {fundingMode === 'account_credit'
+              ? d.roomForm.accountCreditFundingHint
+              : d.roomForm.sessionFundingHint}
+          </p>
+        </Field>
+
         {gameType === 'gostop' ? (
           <Field label={d.roomForm.pointValueLabel}>
             <Stepper
@@ -168,6 +208,19 @@ export default function NewRoomPage() {
           {isPending ? d.newRoom.creating : d.newRoom.create}
         </Button>
       </Panel>
+
+      <ConfirmDialog
+        open={accountCreditConfirmOpen}
+        title={d.roomForm.accountCreditConfirmTitle}
+        body={d.roomForm.accountCreditConfirmBody}
+        confirmLabel={d.roomForm.accountCreditConfirmLabel}
+        cancelLabel={d.common.cancel}
+        onConfirm={() => {
+          setAccountCreditConfirmOpen(false)
+          create()
+        }}
+        onClose={() => setAccountCreditConfirmOpen(false)}
+      />
     </main>
   )
 }

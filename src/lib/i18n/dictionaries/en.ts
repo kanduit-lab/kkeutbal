@@ -334,6 +334,16 @@ export const en: Dictionary = {
     gameLabel: 'Game',
     startingChipsLabel: 'Starting chips',
     startingChipsAria: 'Starting chips',
+    fundingModeLabel: 'Chip funding',
+    sessionFunding: 'Session chips',
+    sessionFundingHint: 'Chips exist only in this room and do not use account credit.',
+    accountCreditFunding: 'Account credit',
+    accountCreditFundingHint:
+      'Starting chips and extra buy-ins are locked from each account, then settled from final stacks.',
+    accountCreditConfirmTitle: 'Create an account-credit room?',
+    accountCreditConfirmBody:
+      'Each participant’s starting chips and extra buy-ins lock their account credit. This funding source cannot change after the room is created.',
+    accountCreditConfirmLabel: 'Create account-credit room',
     pointValueLabel: 'Chips per point',
     pointValueAria: 'Chips per point',
     pointValueHint: 'At round end, every loser pays score × chips-per-point to the winner',

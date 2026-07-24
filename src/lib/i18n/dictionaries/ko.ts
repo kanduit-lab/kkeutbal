@@ -356,6 +356,16 @@ export const ko = {
     gameLabel: '게임',
     startingChipsLabel: '시작 칩',
     startingChipsAria: '시작 칩',
+    fundingModeLabel: '칩 재원',
+    sessionFunding: '세션 칩',
+    sessionFundingHint: '방 안에서만 쓰는 칩입니다. 개인 계정 크레딧과 연결되지 않습니다',
+    accountCreditFunding: '계정 크레딧',
+    accountCreditFundingHint:
+      '시작 칩과 추가 바이인이 각 계정에서 잠기며, 방 종료 시 최종 스택대로 정산됩니다',
+    accountCreditConfirmTitle: '계정 크레딧 방을 만들까요?',
+    accountCreditConfirmBody:
+      '참가자의 시작 칩과 추가 바이인은 개인 계정 크레딧을 잠가서 만듭니다. 방을 만든 뒤에는 이 재원을 바꿀 수 없습니다.',
+    accountCreditConfirmLabel: '계정 크레딧 방 만들기',
     pointValueLabel: '점당 칩',
     pointValueAria: '점당 칩',
     pointValueHint: '판이 끝나면 패자 전원이 점수 × 점당 칩을 승자에게 줘요',
