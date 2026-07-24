@@ -55,7 +55,7 @@ export const fairRoundPhase = pgEnum('fair_round_phase', [
 ])
 
 /** Drizzle이 bigint를 number로 읽는 동안 표현 가능한 정수 경계. */
-const MAX_SAFE_CREDIT_INTEGER = 9_007_199_254_740_991
+const MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 /**
  * 전역 사용자. 이메일은 저장하지 않는다 (docs/07-auth-and-security.md).
@@ -115,8 +115,8 @@ export const creditAccounts = pgTable(
     ),
     check(
       'credit_accounts_number_safe_ck',
-      sql`${table.availableBalance} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}
-        and ${table.lockedBalance} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}`,
+      sql`${table.availableBalance} between ${-MAX_SAFE_INTEGER} and ${MAX_SAFE_INTEGER}
+        and ${table.lockedBalance} between ${-MAX_SAFE_INTEGER} and ${MAX_SAFE_INTEGER}`,
     ),
   ],
 )
@@ -305,6 +305,7 @@ export const rounds = pgTable(
     unique('rounds_room_seq_uq').on(table.roomId, table.seq),
     check('rounds_seq_positive_ck', sql`${table.seq} > 0`),
     check('rounds_pot_nonnegative_ck', sql`${table.pot} >= 0`),
+    check('rounds_pot_number_safe_ck', sql`${table.pot} <= ${MAX_SAFE_INTEGER}`),
     uniqueIndex('rounds_one_playing_per_room_uq')
       .on(table.roomId)
       .where(sql`${table.status} = 'playing'`),
@@ -535,10 +536,10 @@ export const creditEntries = pgTable(
     ),
     check(
       'credit_entries_number_safe_ck',
-      sql`${table.deltaAvailable} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}
-        and ${table.deltaLocked} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}
-        and ${table.availableAfter} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}
-        and ${table.lockedAfter} between ${-MAX_SAFE_CREDIT_INTEGER} and ${MAX_SAFE_CREDIT_INTEGER}`,
+      sql`${table.deltaAvailable} between ${-MAX_SAFE_INTEGER} and ${MAX_SAFE_INTEGER}
+        and ${table.deltaLocked} between ${-MAX_SAFE_INTEGER} and ${MAX_SAFE_INTEGER}
+        and ${table.availableAfter} between ${-MAX_SAFE_INTEGER} and ${MAX_SAFE_INTEGER}
+        and ${table.lockedAfter} between ${-MAX_SAFE_INTEGER} and ${MAX_SAFE_INTEGER}`,
     ),
   ],
 )
@@ -618,6 +619,10 @@ export const chipLedger = pgTable(
       .on(table.revertedOf)
       .where(sql`${table.revertedOf} is not null`),
     check('chip_ledger_delta_nonzero_ck', sql`${table.delta} <> 0`),
+    check(
+      'chip_ledger_delta_number_safe_ck',
+      sql`${table.delta} between ${-MAX_SAFE_INTEGER} and ${MAX_SAFE_INTEGER}`,
+    ),
   ],
 )
 
@@ -647,6 +652,10 @@ export const buyIns = pgTable(
       .on(table.revertedOf)
       .where(sql`${table.revertedOf} is not null`),
     check('buy_ins_amount_nonzero_ck', sql`${table.amount} <> 0`),
+    check(
+      'buy_ins_amount_number_safe_ck',
+      sql`${table.amount} between ${-MAX_SAFE_INTEGER} and ${MAX_SAFE_INTEGER}`,
+    ),
   ],
 )
 
@@ -683,7 +692,7 @@ export const roomCreditLocks = pgTable(
     check('room_credit_locks_amount_positive_ck', sql`${table.amount} > 0`),
     check(
       'room_credit_locks_amount_number_safe_ck',
-      sql`${table.amount} <= ${MAX_SAFE_CREDIT_INTEGER}`,
+      sql`${table.amount} <= ${MAX_SAFE_INTEGER}`,
     ),
   ],
 )

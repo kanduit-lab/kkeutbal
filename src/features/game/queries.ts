@@ -7,6 +7,7 @@ import {
   readMaxMembers,
   readPointValue,
 } from './action-helpers'
+import { subtractSafeChipIntegers, toSafeChipInteger } from './chip-integers'
 import { readFundingMode } from './funding-mode'
 import type {
   BetActionView,
@@ -99,7 +100,7 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
     db
       .select({
         userId: chipLedger.userId,
-        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
+        balance: sql<string>`coalesce(sum(${chipLedger.delta}), 0)::text`,
       })
       .from(chipLedger)
       .where(eq(chipLedger.roomId, roomId))
@@ -107,15 +108,19 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
     db
       .select({
         userId: buyIns.userId,
-        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
+        total: sql<string>`coalesce(sum(${buyIns.amount}), 0)::text`,
       })
       .from(buyIns)
       .where(eq(buyIns.roomId, roomId))
       .groupBy(buyIns.userId),
   ])
 
-  const balanceMap = new Map(balanceRows.map((row) => [row.userId, row.balance]))
-  const buyInMap = new Map(buyInRows.map((row) => [row.userId, row.total]))
+  const balanceMap = new Map(
+    balanceRows.map((row) => [row.userId, toSafeChipInteger(row.balance, 'Member chip balance')]),
+  )
+  const buyInMap = new Map(
+    buyInRows.map((row) => [row.userId, toSafeChipInteger(row.total, 'Member buy-in total')]),
+  )
 
   return memberRows.map((member) => ({
     userId: member.userId,
@@ -133,7 +138,7 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
 export async function getRoundPot(roundId: string): Promise<number> {
   const [row] = await db
     .select({
-      pot: sql<number>`coalesce(-sum(${chipLedger.delta}), 0)::float8`,
+      pot: sql<string>`coalesce(-sum(${chipLedger.delta}), 0)::text`,
     })
     .from(chipLedger)
     .where(
@@ -142,7 +147,7 @@ export async function getRoundPot(roundId: string): Promise<number> {
         inArray(chipLedger.reason, ['bet', 'correction']),
       ),
     )
-  return row?.pot ?? 0
+  return toSafeChipInteger(row?.pot ?? '0', 'Round pot')
 }
 
 function toActionView(action: typeof betActions.$inferSelect): BetActionView {
@@ -384,7 +389,7 @@ export async function getMyRecentSessions(
     db
       .select({
         roomId: chipLedger.roomId,
-        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
+        balance: sql<string>`coalesce(sum(${chipLedger.delta}), 0)::text`,
       })
       .from(chipLedger)
       .where(and(eq(chipLedger.userId, userId), inArray(chipLedger.roomId, roomIds)))
@@ -392,15 +397,19 @@ export async function getMyRecentSessions(
     db
       .select({
         roomId: buyIns.roomId,
-        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
+        total: sql<string>`coalesce(sum(${buyIns.amount}), 0)::text`,
       })
       .from(buyIns)
       .where(and(eq(buyIns.userId, userId), inArray(buyIns.roomId, roomIds)))
       .groupBy(buyIns.roomId),
   ])
 
-  const balanceMap = new Map(balanceRows.map((row) => [row.roomId, row.balance]))
-  const buyInMap = new Map(buyInRows.map((row) => [row.roomId, row.total]))
+  const balanceMap = new Map(
+    balanceRows.map((row) => [row.roomId, toSafeChipInteger(row.balance, 'Recent session balance')]),
+  )
+  const buyInMap = new Map(
+    buyInRows.map((row) => [row.roomId, toSafeChipInteger(row.total, 'Recent session buy-in total')]),
+  )
 
   return roomRows.map((row) => ({
     id: row.id,
@@ -408,6 +417,10 @@ export async function getMyRecentSessions(
     name: row.name,
     gameType: row.gameType,
     closedAt: row.closedAt ? row.closedAt.toISOString() : null,
-    myNet: (balanceMap.get(row.id) ?? 0) - (buyInMap.get(row.id) ?? 0),
+    myNet: subtractSafeChipIntegers(
+      balanceMap.get(row.id) ?? 0,
+      buyInMap.get(row.id) ?? 0,
+      'Recent session net',
+    ),
   }))
 }

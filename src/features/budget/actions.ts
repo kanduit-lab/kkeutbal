@@ -7,6 +7,7 @@ import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
 import { balanceInRoom, lockRoom, requireRole } from '../game/action-helpers'
 import { readFundingMode } from '../game/funding-mode'
+import { toSafeChipInteger } from '../game/chip-integers'
 
 const { rooms, roomMembers, buyIns, chipLedger } = schema
 
@@ -94,11 +95,15 @@ export async function addBuyIn(
       }
 
       const [balanceRow] = await tx
-        .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8` })
+        .select({ balance: sql<string>`coalesce(sum(${chipLedger.delta}), 0)::text` })
         .from(chipLedger)
         .where(and(eq(chipLedger.roomId, roomId), eq(chipLedger.userId, userId)))
 
-      return ok({ userId, amount, balance: balanceRow?.balance ?? 0 })
+      return ok({
+        userId,
+        amount,
+        balance: toSafeChipInteger(balanceRow?.balance ?? '0', 'Buy-in room balance'),
+      })
     })
   } catch (error) {
     console.error('addBuyIn failed:', error)

@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
+import { toSafeChipInteger } from './chip-integers'
 
 /** game 도메인 Server Action 공통 헬퍼. 'use server' 파일이 아니므로 직접 노출되지 않는다. */
 
@@ -38,23 +39,25 @@ export function isUniqueViolation(error: unknown): boolean {
 
 export async function balanceInRoom(tx: Tx, roomId: string, userId: string): Promise<number> {
   const [row] = await tx
-    .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8` })
+    .select({ balance: sql<string>`coalesce(sum(${chipLedger.delta}), 0)::text` })
     .from(chipLedger)
     .where(and(eq(chipLedger.roomId, roomId), eq(chipLedger.userId, userId)))
-  return row?.balance ?? 0
+  return toSafeChipInteger(row?.balance ?? '0', 'Room chip balance')
 }
 
 /** 세션 손익 합계. 정상 원장은 전체 잔액 합과 전체 바이인 합이 같으므로 항상 0이다. */
 export async function netTotalInRoom(tx: Tx, roomId: string): Promise<number> {
-  const [ledger] = await tx
-    .select({ total: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8` })
-    .from(chipLedger)
-    .where(eq(chipLedger.roomId, roomId))
-  const [buyIn] = await tx
-    .select({ total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8` })
-    .from(buyIns)
-    .where(eq(buyIns.roomId, roomId))
-  return (ledger?.total ?? 0) - (buyIn?.total ?? 0)
+  const [row] = await tx
+    .select({
+      total: sql<string>`(
+        coalesce((select sum(${chipLedger.delta}) from ${chipLedger} where ${chipLedger.roomId} = ${roomId}), 0)
+        - coalesce((select sum(${buyIns.amount}) from ${buyIns} where ${buyIns.roomId} = ${roomId}), 0)
+      )::text`,
+    })
+    .from(schema.rooms)
+    .where(eq(schema.rooms.id, roomId))
+    .limit(1)
+  return toSafeChipInteger(row?.total ?? '0', 'Room net total')
 }
 
 /** rulePreset jsonb 에서 고스톱 점당 칩. 없으면 10. */
@@ -86,12 +89,12 @@ export function readJoinAsObserver(rulePreset: unknown): boolean {
 function readRuleNumber(rulePreset: unknown, key: string): number | null {
   if (rulePreset && typeof rulePreset === 'object' && key in rulePreset) {
     const value = (rulePreset as Record<string, unknown>)[key]
-    if (typeof value === 'number' && Number.isInteger(value) && value >= 1) return value
+    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 1) return value
   }
   return null
 }
 
 /** 시작 칩 기준 기본 삥 — rulePreset 미지정 시의 파생 규칙. */
 export function defaultBaseBet(startingChips: number): number {
-  return Math.max(1, Math.round(startingChips / 100))
+  return toSafeChipInteger(Math.max(1, Math.round(startingChips / 100)), 'Default base bet')
 }

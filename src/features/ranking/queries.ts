@@ -2,6 +2,11 @@ import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import { getMyRecentSessions } from '@/features/game/queries'
 import type { RoundPenaltyView } from '@/features/game/types'
+import {
+  addSafeChipIntegers,
+  subtractSafeChipIntegers,
+  toSafeChipInteger,
+} from '@/features/game/chip-integers'
 
 const {
   rooms,
@@ -63,7 +68,7 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
   const balances = await db
     .select({
       userId: chipLedger.userId,
-      balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
+      balance: sql<string>`coalesce(sum(${chipLedger.delta}), 0)::text`,
     })
     .from(chipLedger)
     .where(eq(chipLedger.roomId, roomId))
@@ -72,7 +77,7 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
   const buyInTotals = await db
     .select({
       userId: buyIns.userId,
-      total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
+      total: sql<string>`coalesce(sum(${buyIns.amount}), 0)::text`,
     })
     .from(buyIns)
     .where(eq(buyIns.roomId, roomId))
@@ -82,7 +87,7 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
     .select({
       winnerId: rounds.winnerId,
       wins: sql<number>`count(*)::int`,
-      biggestPot: sql<number>`coalesce(max(${rounds.pot}), 0)::float8`,
+      biggestPot: sql<string>`coalesce(max(${rounds.pot}), 0)::text`,
     })
     .from(rounds)
     .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended')))
@@ -98,10 +103,19 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
     .where(and(eq(betActions.roomId, roomId), eq(betActions.status, 'accepted')))
     .groupBy(betActions.userId, betActions.action)
 
-  const balanceMap = new Map(balances.map((row) => [row.userId, row.balance]))
-  const buyInMap = new Map(buyInTotals.map((row) => [row.userId, row.total]))
+  const balanceMap = new Map(
+    balances.map((row) => [row.userId, toSafeChipInteger(row.balance, 'Session standing balance')]),
+  )
+  const buyInMap = new Map(
+    buyInTotals.map((row) => [row.userId, toSafeChipInteger(row.total, 'Session standing buy-in')]),
+  )
   const winMap = new Map(
-    winRows.filter((row) => row.winnerId).map((row) => [row.winnerId as string, row]),
+    winRows
+      .filter((row) => row.winnerId)
+      .map((row) => [
+        row.winnerId as string,
+        { ...row, biggestPot: toSafeChipInteger(row.biggestPot, 'Session biggest pot') },
+      ]),
   )
   const raiseMap = new Map<string, number>()
   const foldMap = new Map<string, number>()
@@ -130,7 +144,7 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
         avatarUrl: member.avatarUrl,
         balance,
         buyInTotal,
-        net: balance - buyInTotal,
+        net: subtractSafeChipIntegers(balance, buyInTotal, 'Session standing net'),
         wins: win?.wins ?? 0,
         biggestPot: win?.biggestPot ?? 0,
         raises: raiseMap.get(member.userId) ?? 0,
@@ -172,7 +186,7 @@ export async function getCumulativeRanking(
   const chipRows = await db
     .select({
       userId: chipLedger.userId,
-      balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
+      balance: sql<string>`coalesce(sum(${chipLedger.delta}), 0)::text`,
     })
     .from(chipLedger)
     .where(inArray(chipLedger.roomId, settledRooms))
@@ -181,7 +195,7 @@ export async function getCumulativeRanking(
   const buyInRows = await db
     .select({
       userId: buyIns.userId,
-      total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
+      total: sql<string>`coalesce(sum(${buyIns.amount}), 0)::text`,
     })
     .from(buyIns)
     .where(inArray(buyIns.roomId, settledRooms))
@@ -213,8 +227,12 @@ export async function getCumulativeRanking(
     .from(users)
     .where(inArray(users.id, userIds))
 
-  const balanceMap = new Map(chipRows.map((row) => [row.userId, row.balance]))
-  const buyInMap = new Map(buyInRows.map((row) => [row.userId, row.total]))
+  const balanceMap = new Map(
+    chipRows.map((row) => [row.userId, toSafeChipInteger(row.balance, 'Cumulative balance')]),
+  )
+  const buyInMap = new Map(
+    buyInRows.map((row) => [row.userId, toSafeChipInteger(row.total, 'Cumulative buy-in')]),
+  )
   const winMap = new Map(
     winRows.filter((row) => row.winnerId).map((row) => [row.winnerId as string, row.wins]),
   )
@@ -229,7 +247,7 @@ export async function getCumulativeRanking(
         userId: row.userId,
         displayName: user?.displayName ?? '알 수 없음',
         avatarUrl: user?.avatarUrl ?? null,
-        net: balance - buyInTotal,
+        net: subtractSafeChipIntegers(balance, buyInTotal, 'Cumulative net'),
         wins: winMap.get(row.userId) ?? 0,
         sessions: row.sessions,
       }
@@ -401,7 +419,7 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
     db
       .select({
         gameType: rooms.gameType,
-        balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8`,
+        balance: sql<string>`coalesce(sum(${chipLedger.delta}), 0)::text`,
       })
       .from(chipLedger)
       .innerJoin(rooms, eq(rooms.id, chipLedger.roomId))
@@ -410,7 +428,7 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
     db
       .select({
         gameType: rooms.gameType,
-        total: sql<number>`coalesce(sum(${buyIns.amount}), 0)::float8`,
+        total: sql<string>`coalesce(sum(${buyIns.amount}), 0)::text`,
       })
       .from(buyIns)
       .innerJoin(rooms, eq(rooms.id, buyIns.roomId))
@@ -421,15 +439,23 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
   const sessionMap = new Map(sessionRows.map((row) => [row.gameType, row.sessions]))
   const roundMap = new Map(roundRows.map((row) => [row.gameType, row.rounds]))
   const winMap = new Map(winRows.map((row) => [row.gameType, row.wins]))
-  const balanceMap = new Map(balanceRows.map((row) => [row.gameType, row.balance]))
-  const buyInMap = new Map(buyInRows.map((row) => [row.gameType, row.total]))
+  const balanceMap = new Map(
+    balanceRows.map((row) => [row.gameType, toSafeChipInteger(row.balance, 'Player game balance')]),
+  )
+  const buyInMap = new Map(
+    buyInRows.map((row) => [row.gameType, toSafeChipInteger(row.total, 'Player game buy-in')]),
+  )
 
   const perGame = GAME_ORDER.map((gameType) => ({
     gameType,
     sessions: sessionMap.get(gameType) ?? 0,
     rounds: roundMap.get(gameType) ?? 0,
     wins: winMap.get(gameType) ?? 0,
-    net: (balanceMap.get(gameType) ?? 0) - (buyInMap.get(gameType) ?? 0),
+    net: subtractSafeChipIntegers(
+      balanceMap.get(gameType) ?? 0,
+      buyInMap.get(gameType) ?? 0,
+      'Player game net',
+    ),
   })).filter((row) => row.sessions > 0)
 
   const totals = perGame.reduce(
@@ -437,7 +463,7 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
       sessions: acc.sessions + row.sessions,
       rounds: acc.rounds + row.rounds,
       wins: acc.wins + row.wins,
-      net: acc.net + row.net,
+      net: addSafeChipIntegers(acc.net, row.net, 'Player total net'),
     }),
     { sessions: 0, rounds: 0, wins: 0, net: 0 },
   )

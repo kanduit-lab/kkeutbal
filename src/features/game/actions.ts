@@ -17,6 +17,7 @@ import {
   requireRole,
 } from './action-helpers'
 import { fundingModeSchema, readFundingMode } from './funding-mode'
+import { addSafeChipIntegers, toSafeChipInteger } from './chip-integers'
 import type { RoomSnapshot } from './types'
 
 /**
@@ -339,8 +340,8 @@ export async function updateRoomSettings(
         const targets = await tx
           .select({
             userId: roomMembers.userId,
-            balance: sql<number>`(
-              select coalesce(sum(${chipLedger.delta}), 0)::float8 from ${chipLedger}
+            balance: sql<string>`(
+              select coalesce(sum(${chipLedger.delta}), 0)::text from ${chipLedger}
               where ${chipLedger.roomId} = ${roomId}
                 and ${chipLedger.userId} = ${roomMembers.userId}
             )`,
@@ -350,7 +351,17 @@ export async function updateRoomSettings(
 
         // 시작 칩을 낮추면 전원에게서 차액을 회수한다 — 회수액이 잔액을 넘으면 원장 잔액이
         // 음수가 된다. voidRound·undoLastBuyIn 과 같은 기준으로 미리 막는다.
-        if (delta < 0 && targets.some((member) => member.balance + delta < 0)) {
+        if (
+          delta < 0 &&
+          targets.some(
+            (member) =>
+              addSafeChipIntegers(
+                toSafeChipInteger(member.balance, 'Starting-chip adjustment balance'),
+                delta,
+                'Starting-chip adjusted balance',
+              ) < 0,
+          )
+        ) {
           return fail('errors.startingChipsBelowBalance')
         }
 
