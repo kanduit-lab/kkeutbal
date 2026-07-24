@@ -43,6 +43,16 @@
 - [ ] **result 페이지 i18n**: `rooms/[code]/result/page.tsx` 전체가 하드코딩 한국어 —
   박 마커 포함 사전 배선 필요 (제안 키: `result.penaltyMarker` 템플릿)
 
+- [ ] **칩 정수 정밀도 경계 확정**: DB의 `bigint` 원장 합계를 현재 화면·액션이 `number`/`float8`로
+  전달하므로 `Number.MAX_SAFE_INTEGER`를 넘으면 정밀도가 사라진다
+  - 변경 범위: `drizzle/schema.ts`, `features/game/**`, `features/ranking/**`, API 뷰 타입
+  - 완료 기준: bigint 문자열 직렬화 또는 방·사용자 누적 안전 정수 상한을 서버/DB 양쪽에서 강제하고 경계 테스트 통과
+
+- [ ] **Server Action 상태머신 통합 테스트**: 순수 엔진 외에 방 잠금·권한·판 참가 스냅샷의
+  DB 경로를 검증할 테스트 fixture가 없다
+  - 변경 범위: `features/game/**`, `features/betting/**`, DB 테스트 harness
+  - 완료 기준: 짧은 올인 뒤 콜 기준, 판중 퇴장/강퇴 거부, 승인 순서, 동시 start/bet 요청을 실제 DB 트랜잭션으로 검증
+
 ---
 
 ## Completed
@@ -86,7 +96,7 @@
   멱등 요청 fingerprint, stale 승인 자동 거절, 최신 승인 액션만 정정하는 규칙을 서버에서 강제한다.
 - [x] **원장·정산**: `bigint` 칩 금액, 바이인-원장 직접 참조, 중복 정정 방지, 방 손익 합계
   0 불변식을 스키마와 액션 양쪽에서 검증한다.
-- [x] **인증·남용 방지**: 가입코드 재검증/소비, 게스트 토큰 HMAC 저장 및 기존 평문 지연 이전,
+- [x] **인증·남용 방지**: 가입코드 삽입 직전 재검증/소비, 게스트 토큰 HMAC 저장 및 관리자 콘솔 최초 진입 시 기존 평문 일괄 전환,
   안전한 내부 redirect, DB 기반 HMAC rate limit을 로그인·가입·코드·Vision 경로에 적용했다.
 - [x] **엔진 신뢰 경계와 테스트**: 섯다 190조합, 고스톱 경계·배수, 포커 10개 카테고리를
   검증하고 호출자가 위조한 카드 속성 대신 표준 덱 id로 다시 계산한다.
