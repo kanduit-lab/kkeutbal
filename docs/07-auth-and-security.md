@@ -122,7 +122,7 @@ JWT로 서명해 내려주는 방식)은 구현되지 않았다. 실제 경로�
 
 | 경로 | 클라이언트 | 인증 방식 | 용도 |
 |------|-----------|----------|------|
-| DB 읽기/쓰기 | `src/lib/db.ts` (drizzle + postgres-js, 서버 전용) | 전용 롤 `kkeutbal_app` (`bypassrls`), Supabase pooler session mode | 모든 테이블 CRUD |
+| DB 읽기/쓰기 | `src/lib/db.ts` (drizzle + postgres-js, 서버 전용) | 전용 롤 `kkeutbal_app` (`bypassrls`), transaction pooler(6543), CA 검증 TLS | 모든 테이블 CRUD |
 | Realtime | `src/lib/supabase/client.ts` (브라우저) | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, 로그인 세션과 무관 | Broadcast·Presence만 |
 
 `kkeutbal_app`은 `bypassrls` 롤이므로 RLS 정책과 무관하게 모든 행에 접근한다. **인가는 RLS가
@@ -144,17 +144,15 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 
 ### RLS는 방어층이지 인가 경로가 아니다
 
-`supabase/migrations/0001_init_rls.sql`은 `authenticated` 롤 기준으로 `auth.uid()`를 쓰는
-정책을 전 테이블에 걸어 두었다. 이 정책들은 다음 상황에서만 의미가 있다:
+`supabase/migrations/0007_database_hardening.sql`은 현재 앱 테이블의 RLS를 켜고, `anon`·
+`authenticated`의 테이블·시퀀스·함수 권한을 모두 회수한다. 이 정책은 다음 상황에서 방어한다:
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`가 유출되어 누군가 PostgREST를 직접 두드리는 경우
 - 향후 브라우저에서 Supabase 클라이언트로 직접 테이블을 조회하는 코드가 추가되는 경우
 
-앱의 정상 동작 경로(Server Action → `kkeutbal_app`)는 이 정책들을 아예 거치지 않는다.
-`auth.uid()`는 Supabase Auth 세션이 있을 때만 값이 나오는데, 이 앱은 Supabase Auth를 쓰지
-않으므로 `authenticated` 롤로 접속하는 경로 자체가 없다. **정책은 문서화된 방어선이지 실제로
-평가되는 코드 경로가 아니다.** 이 사실이 바뀌면(예: 브라우저에서 PostgREST 직접 호출을 추가하면)
-이 문서와 `0001_init_rls.sql`을 함께 갱신할 것.
+앱의 정상 동작 경로(Server Action → `kkeutbal_app`)는 RLS를 우회한다. 이 앱은 Supabase Auth를
+쓰지 않으므로 브라우저에 PostgREST 권한을 열지 않는다. 브라우저에서 직접 테이블 조회를 추가하면
+별도 Supabase JWT 브리지와 테이블별 정책을 함께 설계해야 한다.
 
 ### 칩 원장 불변성
 
@@ -168,11 +166,9 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 `src/lib/realtime/client.ts`의 `createRoomChannel`은 `private: true`를 지정하지 않는다 —
 **공개(public) Broadcast 채널**이며 publishable key로 접속한다. 토픽은 `room:{roomId}` (UUID).
 
-`0001_init_rls.sql`의 `realtime_room_read` / `realtime_room_write` 정책(`realtime.messages`,
-`to authenticated`)은 **현재 경로에서 평가되지 않는다.** 앱이 Supabase Auth로 인증하지
-않으므로 브라우저 클라이언트는 `authenticated`가 아니라 `anon` 롤로 붙고, 공개 채널은애초에
-`realtime.messages` RLS를 타지 않는다. 정책은 private 채널로 전환할 경우를 대비해 마이그레이션에
-남아 있을 뿐 미사용이다.
+과거 `0001_init_rls.sql`의 `realtime.messages` 정책은 `0007_database_hardening.sql`에서
+제거한다. 앱이 Supabase Auth로 인증하지 않으므로 브라우저 클라이언트는 `authenticated`가 아니라
+`anon` 롤로 붙고, 공개 채널은 애초에 `realtime.messages` RLS를 타지 않는다.
 
 이 경계가 안전한 이유는 채널 자체의 인증이 아니라 **payload를 신뢰하지 않는 설계**에 있다
 (`03-realtime-protocol.md`):
@@ -239,7 +235,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 | Realtime payload | 신뢰 경계 밖. 힌트로만 쓰고 진실은 `refreshRoom` refetch | `03-realtime-protocol.md`, 위 "Realtime" 절 |
 | Vision 모델 출력 | 신뢰 경계 밖. zod 파싱 실패 시 부분 반영 없이 실패 반환 | `src/features/jokbo-advisor/vision/actions.ts` |
 | 칩 원장 쓰기 | append-only 트리거로 UPDATE/DELETE 자체가 불가. 정정은 반대 부호 INSERT | `chip_ledger_is_append_only` 트리거 |
-| 비밀값 | `DATABASE_URL`, `AUTH_SECRET`, `ANTHROPIC_API_KEY`는 서버 전용 (`serverEnv()`)이다. SSO client secret은 `auth_settings`의 암호문으로만 저장한다 | `src/lib/env.ts`, `features/auth/sso-settings.ts` |
+| 비밀값 | `DATABASE_URL`, `DATABASE_CA_CERT_BASE64`, `AUTH_SECRET`, `KEEP_ALIVE_SECRET`, `ANTHROPIC_API_KEY`는 서버 전용 (`serverEnv()`)이다. SSO client secret은 `auth_settings`의 암호문으로만 저장한다 | `src/lib/env.ts`, `features/auth/sso-settings.ts` |
 | DB 접근 | 서버(drizzle)만 `kkeutbal_app`으로 접속. 브라우저는 DB에 직접 붙지 않는다 | `src/lib/db.ts` |
 | 데이터 격리 | RLS는 전 테이블에 활성화되어 있으나 정상 경로에서 평가되지 않음(위 "RLS는 방어층" 절). 실질 격리는 Server Action의 방 소속 검사 | `requireRole` / `memberRole` 패턴 |
 
@@ -252,6 +248,8 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 - [ ] 하드코딩된 비밀값 없음 (`.env.example`에 키 이름만)
 - [ ] `NEXT_PUBLIC_` 접두사가 붙은 서버 전용 값 없음
 - [ ] `registration_codes`와 `auth_settings` 마이그레이션이 적용되어 있고, 운영용 활성 가입코드가 발급되어 있음
+- [ ] `0007_database_hardening.sql`이 적용되어 있고, `keep_alive` 테이블에 anon 권한이 없음
+- [ ] `DATABASE_CA_CERT_BASE64`가 Supabase CA와 일치하고 `KEEP_ALIVE_SECRET`이 GitHub Actions secret과 일치함
 - [ ] 모든 신규 Server Action이 세션·방 소속·역할을 재검증
 - [ ] 모든 외부 입력(폼·realtime·vision)이 zod 통과
 - [ ] 신규 테이블에 RLS 활성화(방어층 목적) — 단, 이 자체가 인가 경로가 아님을 인지
@@ -272,7 +270,8 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 | 대리 입력 제한 | player가 `placeBet`에 `targetUserId`를 다른 사용자로 지정 → 거부 확인 |
 | observer 베팅 차단 | observer 역할로 `placeBet` 호출 → 거부 확인 |
 | 원장 불변성 | `kkeutbal_app` 롤로 `chip_ledger` 직접 UPDATE 시도 → 트리거 예외 확인 |
-| 방 소속 격리 | 비참가자 세션으로 `refreshRoom` 호출 → 실패 확인 |
+| 직접 DB 접근 차단 | publishable key로 PostgREST 테이블 SELECT/INSERT → 권한 거부 확인 |
+| TLS 검증 | `DATABASE_CA_CERT_BASE64`가 없거나 잘못되면 DB 연결이 실패하는지 확인 |
 | 가입코드 게이트 | 가입코드 없이 `/register` 접근·가입 폼 제출 → `/login`으로 이동, 올바른 코드 뒤에는 가입 가능 |
 | 토큰 누출 | 클라이언트 번들(`next build` 산출물)에서 `DATABASE_URL`, `AUTH_SECRET`, `ANTHROPIC_API_KEY` 문자열 검색 → 부재 확인 |
 

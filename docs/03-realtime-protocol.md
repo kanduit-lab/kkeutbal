@@ -230,9 +230,8 @@ channel.track({ userId, displayName })
 
 ## 미채택 대안
 
-- **`private: true` 채널 + `realtime.messages` RLS 정책**: 마이그레이션(`0001_init_rls.sql`)에
-  정책은 존재하지만 클라이언트는 공개 채널로 구독한다. 구독 인가를 DB RLS로 강제하는 대신, 쓰기
-  경로(Server Action)만 신뢰하는 모델을 택했다.
+- **`private: true` 채널 + `realtime.messages` RLS 정책**: 현재는 Supabase JWT 브리지가 없어
+  구현하지 않는다. 공개 채널을 유지하며, 쓰기 경로(Server Action)만 신뢰하는 모델을 택했다.
 - **서버 발신 이벤트(`member.joined`, `chips.updated`)**: 스키마는 남아 있으나 발신 주체가 없다.
   Postgres 트리거나 Edge Function으로 서버발 브로드캐스트를 추가하지 않는 한 죽은 스키마다.
 - **`state.request`/유실 감지 후 명시적 재요청**: 스키마만 있고 send하는 코드가 없다. 실제로는

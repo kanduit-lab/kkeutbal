@@ -44,13 +44,26 @@ function poolerOptions(databaseUrl: string): { max: number; prepare?: boolean } 
   return port === TRANSACTION_MODE_PORT ? { max: 1, prepare: false } : { max: 5 }
 }
 
+/**
+ * `ssl: 'require'`는 postgres-js에서 인증서 검증을 끈다. Supabase가 제공하는 프로젝트 CA로
+ * 체인을 검증하고, tls.connect 기본 동작으로 pooler 호스트명까지 검증한다.
+ */
+function verifiedTls(caBase64: string): { ca: string; rejectUnauthorized: true } {
+  const ca = Buffer.from(caBase64, 'base64').toString('utf8')
+  if (!ca.includes('-----BEGIN CERTIFICATE-----') || !ca.includes('-----END CERTIFICATE-----')) {
+    throw new Error('DATABASE_CA_CERT_BASE64 must contain a base64-encoded PEM certificate')
+  }
+  return { ca, rejectUnauthorized: true }
+}
+
 function createSql() {
-  const url = serverEnv().DATABASE_URL
+  const env = serverEnv()
+  const url = env.DATABASE_URL
   return postgres(url, {
     ...poolerOptions(url),
     idle_timeout: 30,
     connect_timeout: 10,
-    ssl: 'require',
+    ssl: verifiedTls(env.DATABASE_CA_CERT_BASE64),
   })
 }
 

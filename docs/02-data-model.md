@@ -4,17 +4,13 @@
 |-------|-------|
 | Type | technical-design |
 | Audience | engineering / reviewers |
-| Status | draft |
+| Status | active |
 | Source of truth | this document (테이블·관계·RLS 원칙) |
-| Last reviewed | 2026-07-23 |
+| Last reviewed | 2026-07-24 |
 
-구현 스키마는 `drizzle/schema.ts`가 소유한다. RLS·트리거·`keep_alive`·`kkeutbal_app` 권한은
-Supabase 프로젝트에 3개 마이그레이션으로 적용돼 있다: `init_schema`(drizzle 생성 DDL),
-`init_rls`(`supabase/migrations/0001_init_rls.sql`), `keep_alive_and_app_grants`.
-**`keep_alive_and_app_grants`는 supabase MCP로 직접 적용했고 로컬 SQL 파일로 미러링돼 있지
-않다** — 이 문서가 그 내용의 유일한 서술이다. 실제 적용 상태 확인은 `list_migrations` /
-`list_tables` / `pg_policies` 조회로 한다. 코드·DB 실제 상태와 이 문서가 어긋나면 **DB를
-조회해 이 문서를 고치고** 코드를 맞춘다.
+구현 스키마는 `drizzle/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
+`supabase/migrations/0007_database_hardening.sql`이 소유한다. 실제 적용 상태는
+`pg_policies`, `information_schema.role_table_grants`, `pg_class.relrowsecurity`로 확인한다.
 
 ## Context
 
@@ -31,19 +27,16 @@ Supabase 프로젝트에 3개 마이그레이션으로 적용돼 있다: `init_s
 쓰지 않는다. 두 개의 분리된 경로만 있다.
 
 1. **Server Action → `kkeutbal_app` 롤(`BYPASSRLS`)**. `src/lib/db.ts`가 drizzle +
-   postgres-js로 Supabase pooler(`aws-1-ap-northeast-2`, session mode, 포트 5432)에
-   붙는다. 모든 읽기·쓰기가 이 경로를 지난다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
+   postgres-js로 Supabase transaction pooler(포트 6543)에 붙는다. Supabase CA를 검증하고,
+   transaction pooler 제약에 맞춰 prepared statement를 끈다. 모든 읽기·쓰기가 이 경로를 지난다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
    RLS가 아니라 각 Server Action이 쿼리로 직접 한다 (`src/features/betting/actions.ts`,
    `src/features/budget/actions.ts` 등).
 2. **브라우저 → Supabase publishable key**. `src/lib/supabase/client.ts`가 명시하듯 이 클라이언트는
-   **테이블 조회에 쓰지 않는다.** 용도는 두 가지뿐이다: Realtime Broadcast/Presence 구독
-   (`room:{room_id}` 공개 채널, `03-realtime-protocol.md`), 그리고 `keep-alive.yml`
-   워크플로가 REST로 `keep_alive` 테이블에 넣고 지우는 것.
+   **테이블 조회에 쓰지 않는다.** 용도는 Realtime Broadcast/Presence 구독
+   (`room:{room_id}` 공개 채널, `03-realtime-protocol.md`)뿐이다.
 
-이 구조에서 `authenticated` 롤을 대상으로 한 RLS 정책(아래 표)은 **현재 어떤 클라이언트도
-그 롤로 접속하지 않으므로 살아있는 트래픽에는 적용되지 않는다.** 브라우저는 항상 `anon`이고,
-`anon`에 정책이 열린 테이블은 `keep_alive`뿐이다. `authenticated` 정책은 방어층으로 남겨둔
-것이며, Auth.js↔Supabase JWT 브리지를 실제로 붙이기 전까지는 문서상 의도 그 이상이 아니다.
+브라우저는 Supabase Auth 세션을 갖지 않으며, `anon`·`authenticated`에는 테이블·시퀀스·함수
+권한을 주지 않는다. 브라우저가 PostgREST를 직접 호출해도 RLS와 권한에서 거부된다.
 
 ## 핵심 설계: 칩은 원장(ledger)이다
 
@@ -156,15 +149,7 @@ erDiagram
         uuid created_by FK
         timestamptz created_at
     }
-    keep_alive {
-        bigint id PK
-        text note
-        timestamptz created_at
-    }
 ```
-
-`keep_alive`는 다른 테이블과 관계가 없다 — Supabase 무료 티어 자동 일시정지를 막는 REST
-핑 대상일 뿐이다.
 
 ## 테이블 상세
 
@@ -246,14 +231,6 @@ enum 포함). 이 결정으로 누적 랭킹은 **전역 사용자 단위로 확
 **저장하지 않는 것이 확정 동작**이다. 분기 근거·재검토 트리거는 `docs/design-decisions/`
 001이 소유한다.
 
-### `keep_alive`
-
-Supabase 무료 티어가 7일 무활동 시 프로젝트를 일시정지하는 것을 막는 용도. 스키마는
-`id`(bigint, identity), `note`, `created_at` 뿐이며 다른 테이블과 관계가 없다.
-`.github/workflows/keep-alive.yml`이 6시간(cron `0 0,6,12,18 * * *`)마다 publishable key로
-REST INSERT 한 행 뒤 7일 지난 행을 DELETE한다. 이 워크플로만 `anon` 롤로 이 테이블을 직접
-건드린다 — 앱 코드는 접근하지 않는다.
-
 ## 인덱스
 
 | 인덱스 | 목적 |
@@ -273,27 +250,12 @@ REST INSERT 한 행 뒤 7일 지난 행을 DELETE한다. 이 워크플로만 `an
 않는 것이지만, 위 "DB 접근 경로"에서 서술한 대로 **오늘 이 정책들이 막는 대상은 브라우저가
 Supabase 테이블 API를 직접 호출하는 가상의 경로다.** 실제 앱 트래픽(Server Action)은
 `kkeutbal_app`으로 RLS를 우회하고, 권한 검사는 Server Action 코드 안에서 한다.
+`0007_database_hardening.sql`은 `anon`·`authenticated`의 테이블·시퀀스·함수 권한을 회수한다.
+따라서 Auth.js 사용자라도 Supabase Data API로는 어떤 앱 테이블도 읽거나 쓸 수 없다.
 
-핵심 헬퍼(`is_room_member`, `has_room_role`, `is_round_ended`)는
-`supabase/migrations/0001_init_rls.sql`에 정의돼 있다. 정책 요약:
-
-| 테이블 | SELECT (authenticated) | INSERT (authenticated) | UPDATE/DELETE (authenticated) | anon |
-|--------|--------|--------|----------------|------|
-| `users` | 본인 + 같은 방 참가자 | — | 본인만 | 없음 |
-| `rooms` | 참가자 | host 본인 | host만 | 없음 |
-| `room_members` | 같은 방 참가자 | 본인 입장 또는 host | host만 | 없음 |
-| `rounds` | 방 참가자 | host/dealer | host/dealer | 없음 |
-| `bet_actions` | 방 참가자 | 본인 또는 host/dealer(대리) | host/dealer | 없음 |
-| `buy_ins` | 방 참가자 | 본인 또는 host/dealer | 정책 없음(불가) | 없음 |
-| `chip_ledger` | 방 참가자 | **정책 없음(불가)** | **정책 없음(불가)** | 없음 |
-| `keep_alive` | — | — | — | **select/insert/delete 전부 허용** |
-
-`groups`/`group_members`/`hand_records` 정책은 2026-07-23 테이블 제거(CASCADE)와 함께
-소멸했다. `0001_init_rls.sql`의 해당 정책 정의는 이미 적용된 이력으로만 남는다.
-
-`kkeutbal_app`은 위 표와 무관하게 `bypassrls`로 전 테이블 SELECT/INSERT/UPDATE/DELETE 권한을
-가진다(`information_schema.role_table_grants` 확인). `session_standings` 뷰도 동일하게
-grants만 있고 `authenticated`/`anon` 정책은 없다 — 현재 어떤 기능도 이 뷰를 읽지 않는다.
+`kkeutbal_app`은 `bypassrls`이지만 테이블에는 SELECT/INSERT/UPDATE/DELETE만, 시퀀스에는
+USAGE/SELECT만 가진다. TRUNCATE·TRIGGER·REFERENCES 권한은 주지 않는다. `session_standings`
+뷰도 브라우저에는 열지 않으며, 현재 앱 기능은 이 뷰를 읽지 않는다.
 
 `chip_ledger` INSERT를 `authenticated`에 열지 않은 이유: 칩 생성은 게임 규칙 판정 결과여야
 한다. 정책이 없다는 것 자체가 방어층이고, 실제 쓰기는 Server Action이 엔진 검증 후
@@ -309,13 +271,10 @@ UPDATE/DELETE 시도는 예외를 던진다. 정정은 `reverted_of`로 원본�
 
 ### Realtime 채널 권한
 
-`0001_init_rls.sql`에 `realtime.messages` 대상 `authenticated` 전용 정책
-(`realtime_room_read`/`realtime_room_write`, 토픽 `room:%` + `is_room_member`)이 존재한다.
-그러나 **현재 앱은 이 정책이 요구하는 `private: true` 구독을 쓰지 않는다** —
-`src/lib/realtime/client.ts`는 `room:{room_id}` 채널을 publishable key로 공개 채널로 구독한다.
-따라서 이 정책은 오늘 살아있는 브로드캐스트 트래픽에는 적용되지 않는다. 방 격리는 채널 토픽이
-추측 불가능한 UUID라는 점과, payload가 힌트일 뿐이고 진실은 항상 서버 스냅샷 refetch라는 점으로
-확보한다. 상세 프로토콜과 이 결정의 근거는 `03-realtime-protocol.md`가 소유한다.
+공개 Realtime 채널은 RLS로 보호되지 않는다. `src/lib/realtime/client.ts`는 `room:{room_id}`
+채널을 publishable key로 구독한다. payload는 힌트일 뿐이며 수신자는 항상 Server Action
+스냅샷을 다시 읽는다. private 채널로 전환하려면 Supabase JWT 브리지와 별도
+`realtime.messages` 정책이 필요하다. 상세 프로토콜은 `03-realtime-protocol.md`가 소유한다.
 
 ## 파생 조회
 
@@ -345,8 +304,7 @@ UPDATE/DELETE 시도는 예외를 던진다. 정정은 `reverted_of`로 원본�
 
 ## Open Questions
 
-- [ ] `authenticated` 대상 RLS 정책과 `realtime.messages` private 채널 정책을 실제로 쓸
-      계획(Auth.js↔Supabase JWT 브리지)이 있는지, 없다면 문서에서 "미래 대비"로 명시할지
-      결정 필요.
+- [ ] 공개 Realtime 채널을 private 채널로 전환할지 결정. 전환하려면 Auth.js↔Supabase JWT
+      브리지와 별도 RLS 정책이 필요하다.
 - [ ] 그룹 미지정 단발성 방(즉석 판)의 누적 랭킹 귀속 처리 — 개인 기록으로만 남길지 결정 필요.
 - [ ] 방 보존 기간·아카이빙 정책. 무기한 보관 시 무료 티어 용량 검토 필요.

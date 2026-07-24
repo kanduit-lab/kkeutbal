@@ -36,14 +36,14 @@
 | 섯다 엔진 | 구현 완료, 190 픽스처 검증 미실행 | `src/features/seotda/engine.ts`, `engine.test.ts`(`it.todo`), `seotda.fixtures.ts` 부재 |
 | 고스톱 엔진 | 구현 완료, 테스트 없음 | `src/features/gostop/scoring.ts` — 테스트 파일 자체가 없음 |
 | 인증 | Auth.js v5 내부 계정·게스트 토큰 동작, SSO는 관리자 화면에서 연결 가능 | `src/lib/auth.ts`, `registration_codes`/`auth_settings` |
-| DB · RLS | 마이그레이션 3개 적용됨 | init_schema, init_rls(`supabase/migrations/0001`), keep_alive_and_app_grants |
+| DB · RLS | hardened baseline 적용 대기 | `supabase/migrations/0007_database_hardening.sql` |
 | 방 · 실시간 | 구현 완료 | `src/features/game/`(actions·queries·room-client), `src/lib/realtime/` |
 | 베팅 · 칩 원장 | 구현 완료 | `src/features/betting/actions.ts`, `src/features/budget/actions.ts` |
 | 족보 Advisor 수동 피커 | 구현 완료 | `src/features/jokbo-advisor/components/` |
 | Vision 인식 | 구현 완료 | `src/features/jokbo-advisor/vision/actions.ts` |
 | 정산 · 랭킹 | 구현 완료 | `src/features/ranking/queries.ts`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
 | CI/CD | production 배포 활성, staging/preview 대기 | `.github/workflows/deploy.yml`, `.deploy.yml`(`preview.enabled: false`, `staging.enabled: false`) |
-| Keep-alive | 동작 중 | `.github/workflows/keep-alive.yml`, 6시간 간격 cron |
+| Keep-alive | 배포 환경 secret 설정 대기 | `.github/workflows/keep-alive.yml`, `/api/keep-alive` |
 | E2E | 미착수 | `e2e/` 디렉터리 없음 |
 | 미사용 스키마 | 제거 확정(2026-07-23) — `groups`/`group_members`/`hand_records` 스키마에서 삭제 | `drizzle/schema.ts`, 근거는 `docs/design-decisions/` 001 |
 

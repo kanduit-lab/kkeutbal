@@ -20,8 +20,12 @@ const serverSchema = z.object({
 
   /** 전용 앱 롤(bypassrls) 접속 문자열. 모든 DB 접근은 서버에서 drizzle 로만 한다. */
   DATABASE_URL: z.string().url(),
+  /** Supabase 대시보드에서 받은 CA 인증서의 base64 인코딩. */
+  DATABASE_CA_CERT_BASE64: z.string().min(1),
 
   AUTH_SECRET: z.string().min(1),
+  /** GitHub Actions가 keep-alive 엔드포인트를 호출할 때 쓰는 별도 공유 비밀값. */
+  KEEP_ALIVE_SECRET: z.string().min(32),
   ANTHROPIC_API_KEY: optionalEnv(z.string().min(1)),
   JOKBO_VISION_MODEL: z.string().default('claude-sonnet-5'),
   JOKBO_VISION_ENABLED: z

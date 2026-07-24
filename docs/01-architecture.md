@@ -6,7 +6,7 @@
 | Audience | engineering / reviewers / operators |
 | Status | active |
 | Source of truth | this document (스택·배포 토폴로지·모듈 경계) |
-| Last reviewed | 2026-07-22 |
+| Last reviewed | 2026-07-24 |
 
 ## Context
 
@@ -35,11 +35,8 @@
 ## Current State
 
 런타임 구현 진행 중. 도메인 엔진(`hwatu`/`seotda`/`gostop`), 방·베팅·예산·랭킹 Server Action,
-realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한다. 마이그레이션은 Supabase MCP로
-3건 적용됨: `init_schema`(drizzle 스키마 생성), `init_rls`(`supabase/migrations/0001_init_rls.sql`),
-`keep_alive_and_app_grants`(`keep_alive` 테이블 + `kkeutbal_app` 권한 부여 — SQL이 리포에 파일로
-남아 있지 않고 MCP 이력에만 있다. 재현하려면 `keep_alive` 테이블 DDL과 `kkeutbal_app` 권한 GRANT를
-새 마이그레이션 파일로 다시 작성해야 한다).
+realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한다. Drizzle은 테이블 DDL을,
+`supabase/migrations/0007_database_hardening.sql`은 현 스키마의 RLS·권한·원장 트리거를 소유한다.
 
 ## Proposed Design
 
@@ -61,7 +58,7 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
         ▼                               ▼
  ┌──────────────────────────────────────────┐
  │  Supabase                                │
- │  ├ PostgreSQL  : pooler(session, 5432)   │
+ │  ├ PostgreSQL  : pooler(transaction, 6543)│
  │  │   전용 롤 kkeutbal_app (bypassrls)    │
  │  └ Realtime    : Broadcast 공개 채널     │
  │                  room:{uuid}, Presence    │
@@ -77,13 +74,14 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
 `src/lib/db.ts`가 서버 전용 drizzle 클라이언트를 만든다. 접속 정보는 `DATABASE_URL` 하나이며
 가리키는 대상은:
 
-- Supabase pooler, 리전 `aws-1-ap-northeast-2`, **session mode 포트 5432**(transaction mode
-  아님 — drizzle의 prepared statement/트랜잭션 사용과 맞물려 있다).
+- Supabase pooler, **transaction mode 포트 6543**. `prepare: false`, 인스턴스당 `max: 1`로
+  transaction pooler 제약에 맞춘다.
+- `DATABASE_CA_CERT_BASE64`의 Supabase CA로 서버 인증서와 pooler 호스트명을 검증한다.
 - 전용 롤 `kkeutbal_app`, 속성 `bypassrls`.
 
 즉 Supabase `service_role` 키도, Auth.js 세션을 Supabase JWT로 바꿔 넘기는 브리지도 쓰지 않는다.
-서버 프로세스가 DB에 접속하는 통로는 이 롤 하나뿐이고, RLS(`supabase/migrations/0001_init_rls.sql`)는
-`anon`/`authenticated` 대상 방어층으로만 존재한다 — 실제 권한 판정(방 참가자인지, 딜러인지, 잔액이
+서버 프로세스가 DB에 접속하는 통로는 이 롤 하나뿐이고, RLS(`supabase/migrations/0007_database_hardening.sql`)는
+`anon`/`authenticated`의 Data API 접근을 차단한다 — 실제 권한 판정(방 참가자인지, 딜러인지, 잔액이
 충분한지)은 각 도메인 `actions.ts`의 Server Action이 수행한다. RLS를 우회하는 롤이 유일한 쓰기
 경로이므로, **Server Action의 권한 검사를 건너뛰면 DB 레벨 방어가 없다**는 점이 이 설계의 핵심
 트레이드오프다.
@@ -230,26 +228,24 @@ src/features/<domain>/       도메인별 폴더가 경계
 - 스키마 소유: `02-data-model.md` (drizzle `drizzle/schema.ts`가 source of truth, SQL은
   `drizzle/migrations/` + `supabase/migrations/`).
 - RLS는 `anon`/`authenticated` 대상 방어층. 실질적 권한 판정은 Server Action.
-- `kkeutbal_app` 롤 권한(GRANT)은 `keep_alive_and_app_grants` 마이그레이션으로 적용됐으나 SQL
-  파일이 리포에 없다 — Migration And Rollout 및 Open Questions 참조.
-- 외부 공개 REST API는 없다. 클라이언트 진입점은 Server Actions, Realtime 공개 채널, Supabase
-  REST(publishable key, `keep_alive` 테이블 ping 전용)뿐이다.
+- `kkeutbal_app`은 RLS를 우회하지만 DML과 시퀀스 사용 권한만 가진다. 정책·권한 기준은
+  `0007_database_hardening.sql`이다.
+- 외부 공개 REST API는 없다. 클라이언트 진입점은 Server Actions와 Realtime 공개 채널뿐이다.
 
 ## Migration And Rollout
 
 1. `pnpm db:generate` / `pnpm db:push`로 drizzle 스키마 반영.
-2. `supabase/migrations/0001_init_rls.sql` 적용 — RLS 정책.
-3. `keep_alive` 테이블 + `kkeutbal_app` GRANT를 마이그레이션 파일로 재작성해 리포에 커밋(현재
-   미비 — Open Questions).
-4. Authentik 애플리케이션에 `{APP_URL}/api/auth/callback/authentik`을 Redirect URI로 등록하고,
+2. `supabase/migrations/0007_database_hardening.sql` 적용 — 현재 스키마 RLS baseline, 앱 롤 최소
+   DML 권한, 원장 append-only 트리거를 한 번에 적용한다.
+3. Authentik 애플리케이션에 `{APP_URL}/api/auth/callback/authentik`을 Redirect URI로 등록하고,
    초기 관리자 계정으로 `/admin`의 SSO 설정을 저장·활성화.
-5. `.deploy.yml` — `preview`/`staging`는 `enabled: false`(ENV_FILE_BASE64 시크릿 구성 전).
+4. `.deploy.yml` — `preview`/`staging`는 `enabled: false`(ENV_FILE_BASE64 시크릿 구성 전).
    `production`은 `v*` 안정 태그 push 시 `.github/workflows/deploy.yml`이
    `kanduit-lab/docker-deploy-control-hub@v2`의 `ci-reusable.yml`/`cd-reusable.yml`을 호출해
    빌드·배포한다. 도메인 `kkeutbal.kanduit.app`, health check `/api/health`.
-6. `.github/workflows/keep-alive.yml`이 6시간 간격으로 `keep_alive` 테이블에 REST insert/delete를
-   보내 Supabase 무료 티어 7일 pause를 막는다. 시크릿 `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` 등록됨.
-7. 실제 MT 전에 2대 이상 기기로 리허설 1회 — 동기화·재접속·정산 확인.
+5. 배포 환경과 GitHub Actions에 동일한 `KEEP_ALIVE_SECRET`을 등록한다. 워크플로가 6시간 간격으로
+   `/api/keep-alive`를 호출해 인증된 `select 1`로 Supabase 일시정지를 방지한다.
+6. 실제 MT 전에 2대 이상 기기로 리허설 1회 — 동기화·재접속·정산 확인.
 
 롤백: 이전 docker 이미지 태그로 재배포(`docker-deploy-control-hub` 워크플로 기준). 스키마는
 초기 단계이므로 파괴적 변경 시 `drizzle-kit generate`로 down 경로를 명시적으로 만든다.
@@ -273,7 +269,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 | 공개 Realtime 채널 — 인증 없이 누구나 `roomId`만 알면 구독·발행 가능 | 칩 금액 등 payload 노출, 위조 이벤트 주입 | UUID 토픽 난독화, zod 검증 실패 시 폐기, 진실은 항상 Server Action 재검증 스냅샷 |
 | `kkeutbal_app`이 bypassrls — Server Action 권한 검사 누락 시 RLS 방어 없음 | 방 데이터 교차 노출 | 모든 쓰기 경로가 Server Action을 거치도록 코드 리뷰로 강제. 컴포넌트 직접 쿼리 금지 규칙 |
 | 회원가입 코드가 유출됨 | 무단 가입 | 관리자가 `/admin`에서 즉시 회수. DB에는 `AUTH_SECRET` 기반 해시만 저장하고, 원문은 발급 직후 한 번만 노출 |
-| `keep_alive_and_app_grants` 마이그레이션 SQL이 리포에 미보존 | 재현 불가, 신규 환경 구축 시 수동 추정 필요 | Migration And Rollout 3번 — SQL 파일로 재작성해 커밋 |
+| DB 인증서 미검증 | 중간자 서버에 DB 자격 증명·쿼리가 노출될 수 있음 | `DATABASE_CA_CERT_BASE64`로 TLS 체인·호스트 검증 |
 | MT 현장 Wi-Fi/LTE 불안정 | 액션 유실·중복 | 멱등키(betting), 폴링+visibilitychange 재동기화, 서버 스냅샷 우선 |
 | Broadcast 메시지 유실(전달 보장 없음) | 화면 불일치 | 이벤트를 힌트로만 쓰고 20초 폴링 + 250ms 디바운스 refetch로 항상 정정 |
 | Supabase 무료 티어 pause(7일 비활성) | 서비스 중단 | `keep-alive.yml` 6시간 주기 ping |
@@ -281,8 +277,6 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 ## Open Questions
 
-- [ ] `keep_alive_and_app_grants` 마이그레이션을 `supabase/migrations/`에 SQL 파일로
-      역커밋할지 — 현재 Supabase MCP 이력에만 존재.
 - [ ] `realtime.messages` RLS(`private: true` 채널)를 실제로 켤지, 아니면 공개 채널 +
       스냅샷 재검증 모델을 정식 채택으로 확정할지. 후자면 마이그레이션의 미사용 정책을 정리.
 - [ ] `preview`/`staging` 배포(`enabled: false`)를 켤 시점과 `ENV_FILE_BASE64` 시크릿 구성 주체.

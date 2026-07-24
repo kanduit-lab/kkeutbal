@@ -75,9 +75,21 @@ pnpm dev                     # http://localhost:3000
 |------|:---:|------|
 | `NEXT_PUBLIC_APP_URL` | ✅ | |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | ✅ | Realtime 공개 채널 구독 |
-| `DATABASE_URL` | ✅ | `kkeutbal_app` 롤, Supabase pooler(session mode, 5432) |
+| `DATABASE_URL` | ✅ | `kkeutbal_app` 롤, Supabase transaction pooler(6543) |
+| `DATABASE_CA_CERT_BASE64` | ✅ | Supabase 대시보드의 CA 인증서를 base64로 인코딩한 값 |
 | `AUTH_SECRET` | ✅ | `openssl rand -base64 32` |
-| `ANTHROPIC_API_KEY` / `JOKBO_VISION_ENABLED` / `JOKBO_VISION_MODEL` | — | 미설정 시 수동 피커만 동작 |
+| `AUTH_TRUST_HOST` | ✅ | 프록시 환경의 Auth.js 호스트 검증 |
+| `KEEP_ALIVE_SECRET` | ✅ | GitHub Actions의 같은 이름 secret과 일치하는 32자 이상 값 |
+| `ANTHROPIC_API_KEY` / `JOKBO_VISION_ENABLED` | — | 둘 다 설정하면 사진 인식 사용 |
+| `JOKBO_VISION_MODEL` | — | 사진 인식 모델 변경용 선택값. 기본값은 `src/lib/env.ts` 참고 |
+
+Supabase 대시보드의 **Database Settings → SSL Configuration**에서 CA 인증서를 내려받아 base64로
+인코딩한 값을 `DATABASE_CA_CERT_BASE64`에 넣습니다. 배포 환경에는 `KEEP_ALIVE_SECRET`도 설정하고,
+GitHub Actions secret `KEEP_ALIVE_SECRET`에는 같은 값을 등록합니다.
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\path\to\prod-supabase.cer'))
+```
 
 처음 실행할 때 로그인 화면에서 **초기 관리자 만들기**를 선택해 아이디·비밀번호를 만듭니다.
 첫 계정만 관리자이며, 이후 내부 계정 가입은 `/admin`에서 관리자가 발급한 가입코드가 필요합니다.
