@@ -9,6 +9,7 @@ import {
 } from './action-helpers'
 import { subtractSafeChipIntegers, toSafeChipInteger } from './chip-integers'
 import { readFundingMode } from './funding-mode'
+import { readFairPlaySettings } from './fair-play-settings'
 import type {
   BetActionView,
   LastResultView,
@@ -18,8 +19,18 @@ import type {
   RoundPenaltyView,
 } from './types'
 
-const { rooms, roomMembers, users, rounds, roundParticipants, betActions, chipLedger, buyIns } =
-  schema
+const {
+  rooms,
+  roomMembers,
+  users,
+  rounds,
+  roundParticipants,
+  betActions,
+  chipLedger,
+  buyIns,
+  roundFairness,
+  roundFairnessParticipants,
+} = schema
 
 function hasPlayedSession(): ReturnType<typeof sql> {
   return sql`(
@@ -60,6 +71,7 @@ function toRoomView(room: typeof rooms.$inferSelect): RoomView {
     maxMembers: readMaxMembers(room.rulePreset),
     joinAsObserver: readJoinAsObserver(room.rulePreset),
     fundingMode: readFundingMode(room.rulePreset),
+    fairPlay: readFairPlaySettings(room.gameType, room.rulePreset),
   }
 }
 
@@ -178,7 +190,18 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
         .orderBy(desc(rounds.seq))
         .limit(1),
       db
-        .select()
+        .select({
+          id: rounds.id,
+          seq: rounds.seq,
+          winnerId: rounds.winnerId,
+          pot: rounds.pot,
+          result: rounds.result,
+          hasFairnessAudit: sql<boolean>`exists (
+            select 1 from ${roundFairness} fairness_audit
+            where fairness_audit.round_id = ${rounds.id}
+              and fairness_audit.phase = 'revealed'
+          )`,
+        })
         .from(rounds)
         .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended')))
         .orderBy(desc(rounds.seq))
@@ -189,11 +212,17 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
         .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended'))),
       db
         .select({
+          id: rounds.id,
           seq: rounds.seq,
           winnerId: rounds.winnerId,
           pot: rounds.pot,
           result: rounds.result,
           status: rounds.status,
+          hasFairnessAudit: sql<boolean>`exists (
+            select 1 from ${roundFairness} fairness_audit
+            where fairness_audit.round_id = ${rounds.id}
+              and fairness_audit.phase = 'revealed'
+          )`,
         })
         .from(rounds)
         .where(and(eq(rounds.roomId, roomId), inArray(rounds.status, ['ended', 'voided'])))
@@ -207,7 +236,22 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
   const [currentRoundRow] = currentRoundRows
 
   // 2단계 — 현재 판이 있을 때만 필요한 쿼리. 팟·액션은 서로 독립이므로 병렬.
-  const [pot, actionRows]: [number, Array<typeof betActions.$inferSelect>] = currentRoundRow
+  const [pot, actionRows, fairnessRows, fairnessParticipantRows]: [
+    number,
+    Array<typeof betActions.$inferSelect>,
+    Array<{
+      phase: 'collecting_seeds' | 'sealed' | 'revealed' | 'aborted'
+      serverSeedCommitment: string
+      seedDeadline: Date
+      publicReceipt: unknown
+    }>,
+    Array<{
+      participantCount: number
+      submittedParticipantCount: number
+      participantUserIds: string[]
+      submittedParticipantUserIds: string[]
+    }>,
+  ] = currentRoundRow
     ? await Promise.all([
         getRoundPot(currentRoundRow.id),
         db
@@ -215,8 +259,30 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
           .from(betActions)
           .where(eq(betActions.roundId, currentRoundRow.id))
           .orderBy(asc(betActions.seq)),
+        db
+          .select({
+            phase: roundFairness.phase,
+            serverSeedCommitment: roundFairness.serverSeedCommitment,
+            seedDeadline: roundFairness.seedDeadline,
+            publicReceipt: roundFairness.publicReceipt,
+          })
+          .from(roundFairness)
+          .where(eq(roundFairness.roundId, currentRoundRow.id))
+          .limit(1),
+        db
+          .select({
+            participantCount: sql<number>`count(*)::int`,
+            submittedParticipantCount: sql<number>`count(${roundFairnessParticipants.clientSeedHash})::int`,
+            participantUserIds: sql<string[]>`coalesce(array_agg(${roundFairnessParticipants.userId} order by ${roundFairnessParticipants.dealOrder}), '{}')`,
+            submittedParticipantUserIds: sql<string[]>`coalesce(array_agg(${roundFairnessParticipants.userId} order by ${roundFairnessParticipants.dealOrder}) filter (where ${roundFairnessParticipants.clientSeedHash} is not null), '{}')`,
+          })
+          .from(roundFairnessParticipants)
+          .where(eq(roundFairnessParticipants.roundId, currentRoundRow.id)),
       ])
-    : [0, []]
+    : [0, [], [], []]
+
+  const [fairness] = fairnessRows
+  const [fairnessParticipants] = fairnessParticipantRows
 
   const currentRound = currentRoundRow
     ? {
@@ -224,6 +290,18 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
         seq: currentRoundRow.seq,
         pot,
         startedAt: currentRoundRow.startedAt.toISOString(),
+        fairness: fairness
+          ? {
+              phase: fairness.phase,
+              serverSeedCommitment: fairness.serverSeedCommitment,
+              seedDeadline: fairness.seedDeadline.toISOString(),
+              submittedParticipantCount: fairnessParticipants?.submittedParticipantCount ?? 0,
+              participantCount: fairnessParticipants?.participantCount ?? 0,
+              participantUserIds: fairnessParticipants?.participantUserIds ?? [],
+              submittedParticipantUserIds: fairnessParticipants?.submittedParticipantUserIds ?? [],
+              publicReceipt: fairness.publicReceipt,
+            }
+          : null,
       }
     : null
 
@@ -231,10 +309,12 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
 
   const lastResult: LastResultView | null = lastEnded
     ? {
+        roundId: lastEnded.id,
         seq: lastEnded.seq,
         winnerId: lastEnded.winnerId,
         pot: lastEnded.pot,
         note: readResultNote(lastEnded.result),
+        hasFairnessAudit: lastEnded.hasFairnessAudit,
       }
     : null
 
@@ -248,12 +328,14 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
     lastResult,
     endedRounds: endedCount?.count ?? 0,
     recentRounds: recentRoundRows.map((row) => ({
+      roundId: row.id,
       seq: row.seq,
       winnerId: row.winnerId,
       pot: row.pot,
       note: readResultNote(row.result),
       status: row.status as 'ended' | 'voided',
       penalties: readResultPenalties(row.result),
+      hasFairnessAudit: row.hasFairnessAudit,
     })),
   }
 }

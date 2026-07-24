@@ -25,9 +25,9 @@ export const defaultFairPlaySettings: Readonly<FairPlaySettings> = {
   timeoutPolicy: 'pause',
 }
 
-/** Verified dealing has not been made authoritative for GoStop yet. */
+/** Verified dealing is authoritative only for Seotda until the other engines have private-card lifecycles. */
 export function supportsVerifiedDealing(gameType: RoomGameType): boolean {
-  return gameType === 'seotda' || gameType === 'poker'
+  return gameType === 'seotda'
 }
 
 /**

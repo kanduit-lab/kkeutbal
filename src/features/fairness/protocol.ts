@@ -51,6 +51,40 @@ export interface FairShuffleVerification {
   readonly valid: boolean
 }
 
+/** Strictly parses the post-round full reveal before it reaches an independent verifier or UI. */
+export function parseFairShuffleReceipt(value: unknown): FairShuffleReceipt {
+  if (!isRecord(value)) throw new Error('Invalid fair shuffle receipt')
+  const expectedKeys = [
+    'roundId',
+    'serverSeed',
+    'serverSeedCommitment',
+    'clientSeedHashes',
+    'deckCommitment',
+    'shuffledDeckIds',
+  ]
+  if (
+    Object.keys(value).length !== expectedKeys.length ||
+    expectedKeys.some((key) => !(key in value)) ||
+    !Array.isArray(value.clientSeedHashes) ||
+    !Array.isArray(value.shuffledDeckIds) ||
+    typeof value.roundId !== 'string' ||
+    typeof value.serverSeed !== 'string' ||
+    typeof value.serverSeedCommitment !== 'string' ||
+    typeof value.deckCommitment !== 'string' ||
+    value.shuffledDeckIds.some((cardId) => typeof cardId !== 'string')
+  ) {
+    throw new Error('Invalid fair shuffle receipt')
+  }
+  return Object.freeze({
+    roundId: requireId(value.roundId),
+    serverSeed: normalizeSeed(value.serverSeed),
+    serverSeedCommitment: normalizeHash(value.serverSeedCommitment),
+    clientSeedHashes: canonicalizeClientSeedHashes(value.clientSeedHashes.map(parseClientSeedHash)),
+    deckCommitment: normalizeHash(value.deckCommitment),
+    shuffledDeckIds: Object.freeze(normalizeDeck(value.shuffledDeckIds)),
+  })
+}
+
 /** 암호학적으로 무작위인 32-byte hex seed를 만든다. */
 export function generateFairnessSeed(): string {
   const bytes = new Uint8Array(SEED_HEX_LENGTH / 2)
@@ -153,6 +187,24 @@ export async function verifyFairShuffle(
       valid: false,
     }
   }
+}
+
+function parseClientSeedHash(value: unknown): ClientSeedHash {
+  if (!isRecord(value)) throw new Error('Invalid client seed hash')
+  if (
+    Object.keys(value).length !== 2 ||
+    !('userId' in value) ||
+    !('seedHash' in value) ||
+    typeof value.userId !== 'string' ||
+    typeof value.seedHash !== 'string'
+  ) {
+    throw new Error('Invalid client seed hash')
+  }
+  return { userId: requireId(value.userId), seedHash: normalizeHash(value.seedHash) }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 async function commitDeck(deckIds: readonly string[]): Promise<string> {

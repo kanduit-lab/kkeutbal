@@ -14,9 +14,9 @@ const verifiedSettings = {
 }
 
 describe('fair-play room settings', () => {
-  it('accepts complete verified settings only for supported card games', () => {
+  it('accepts complete verified settings only for Seotda until other card engines have private hands', () => {
     expect(parseFairPlaySettings('seotda', verifiedSettings)).toEqual(verifiedSettings)
-    expect(parseFairPlaySettings('poker', verifiedSettings)).toEqual(verifiedSettings)
+    expect(supportsVerifiedDealing('poker')).toBe(false)
     expect(supportsVerifiedDealing('gostop')).toBe(false)
   })
 
@@ -29,6 +29,9 @@ describe('fair-play room settings', () => {
       parseFairPlaySettings('seotda', { ...verifiedSettings, turnTimeoutSeconds: 181 }),
     ).toThrow()
     expect(() => parseFairPlaySettings('gostop', verifiedSettings)).toThrow(
+      'Verified dealing is not supported',
+    )
+    expect(() => parseFairPlaySettings('poker', verifiedSettings)).toThrow(
       'Verified dealing is not supported',
     )
   })

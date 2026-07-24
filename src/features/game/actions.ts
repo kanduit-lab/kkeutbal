@@ -17,6 +17,7 @@ import {
   requireRole,
 } from './action-helpers'
 import { fundingModeSchema, readFundingMode } from './funding-mode'
+import { fairPlaySettingsSchema, parseFairPlaySettings, readFairPlaySettings } from './fair-play-settings'
 import { addSafeChipIntegers, toSafeChipInteger } from './chip-integers'
 import type { RoomSnapshot } from './types'
 
@@ -38,6 +39,8 @@ const createRoomSchema = z.object({
   baseBet: z.number().int().min(1).max(1_000_000).optional(),
   /** 계정 크레딧 방은 바이인마다 전역 지갑을 같은 트랜잭션에서 lock한다. */
   fundingMode: fundingModeSchema.default('session'),
+  /** 검증 가능한 섯다는 creation time에도 명시할 수 있으며, 미지정은 manual/pause다. */
+  fairPlay: fairPlaySettingsSchema.optional(),
 })
 
 export async function createRoom(
@@ -49,9 +52,18 @@ export async function createRoom(
   const parsed = createRoomSchema.safeParse(input)
   if (!parsed.success) return fail('errors.invalidInput')
   const { name, gameType, inputMode, startingChips, pointValue, baseBet, fundingMode } = parsed.data
+  let fairPlay: ReturnType<typeof parseFairPlaySettings> | undefined
+  try {
+    fairPlay = parsed.data.fairPlay
+      ? parseFairPlaySettings(gameType, parsed.data.fairPlay)
+      : undefined
+  } catch {
+    return fail('errors.invalidInput')
+  }
   const rulePreset = {
     fundingMode,
     ...(gameType === 'gostop' ? { pointValue: pointValue ?? 10 } : baseBet ? { baseBet } : {}),
+    ...(fairPlay ? { fair_play: fairPlay } : {}),
   }
 
   // 코드 충돌은 UNIQUE 가 잡는다. 확률상 1~2회 재시도면 충분하다.
@@ -253,6 +265,8 @@ const updateSettingsSchema = z.object({
   joinAsObserver: z.boolean().optional(),
   /** 시작 칩 — 대기 중 + 판 기록이 없을 때만 변경할 수 있다. */
   startingChips: z.number().int().min(1).max(1_000_000).optional(),
+  /** verified 옵션은 시작 전의 명시적 호스트 설정만 허용한다. */
+  fairPlay: fairPlaySettingsSchema.optional(),
 })
 
 /** 방 옵션 변경 — 방장 전용. 진행 중에도 다음 액션부터 새 옵션이 적용된다. */
@@ -283,6 +297,14 @@ export async function updateRoomSettings(
         parsed.data.startingChips !== undefined && parsed.data.startingChips !== room.startingChips
           ? parsed.data.startingChips
           : undefined
+      let fairPlay: ReturnType<typeof parseFairPlaySettings> | undefined
+      try {
+        fairPlay = parsed.data.fairPlay
+          ? parseFairPlaySettings(room.gameType, parsed.data.fairPlay)
+          : undefined
+      } catch {
+        return fail('errors.updateSettingsFailed')
+      }
       if (startingChips !== undefined) {
         // account_credit의 초기 스택은 생성 시점에 같은 금액으로 global credit을 lock한다.
         // 여기서 세션 원장만 바꾸면 정산 보존식이 깨지므로 재원 변경용 별도 흐름이 생길 때까지 고정한다.
@@ -310,6 +332,20 @@ export async function updateRoomSettings(
         }
       }
 
+      if (fairPlay !== undefined) {
+        const [anyRound] = await tx
+          .select({ id: rounds.id })
+          .from(rounds)
+          .where(eq(rounds.roomId, roomId))
+          .limit(1)
+        if (
+          anyRound &&
+          JSON.stringify(fairPlay) !== JSON.stringify(readFairPlaySettings(room.gameType, room.rulePreset))
+        ) {
+          return fail('errors.fairPlayLocked')
+        }
+      }
+
       const preset =
         room.rulePreset && typeof room.rulePreset === 'object'
           ? (room.rulePreset as Record<string, unknown>)
@@ -320,6 +356,7 @@ export async function updateRoomSettings(
         ...(room.gameType !== 'gostop' && baseBet ? { baseBet } : {}),
         ...(maxMembers !== undefined ? { maxMembers } : {}),
         ...(joinAsObserver !== undefined ? { joinAsObserver } : {}),
+        ...(fairPlay !== undefined ? { fair_play: fairPlay } : {}),
       }
 
       await tx

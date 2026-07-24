@@ -3,6 +3,7 @@ import {
   commitServerSeed,
   deriveFinalSeed,
   hashClientSeed,
+  parseFairShuffleReceipt,
   shuffleFairDeck,
   verifyFairShuffle,
 } from './protocol'
@@ -40,6 +41,29 @@ describe('fairness commit-reveal protocol', () => {
 
     expect(commitment).toBe('00103f3bbc5c9f588f714cbf87d26fce01f9ab1bff7b44c988619ab91cdc776c')
     expect(finalSeed).toBe('50a6d7af1c82de08fe0ae3b93ea5091b56fcf40522c9d533e61bdfe8cf46a591')
+  })
+
+  it('strictly parses a post-round receipt before independent audit', async () => {
+    const clientSeedHash = await hashClientSeed(roundId, aliceId, aliceSeed)
+    const shuffled = await shuffleFairDeck({
+      roundId,
+      serverSeed,
+      clientSeedHashes: [{ userId: aliceId, seedHash: clientSeedHash }],
+      deckIds: ['one', 'two'],
+    })
+    const receipt = {
+      roundId,
+      serverSeed,
+      serverSeedCommitment: shuffled.serverSeedCommitment,
+      clientSeedHashes: shuffled.clientSeedHashes,
+      deckCommitment: shuffled.deckCommitment,
+      shuffledDeckIds: shuffled.shuffledDeckIds,
+    }
+
+    expect(parseFairShuffleReceipt(receipt)).toEqual(receipt)
+    expect(() => parseFairShuffleReceipt({ ...receipt, privateCards: [] })).toThrow(
+      'Invalid fair shuffle receipt',
+    )
   })
 
   it('canonicalizes contributor order without changing the shuffled order', async () => {

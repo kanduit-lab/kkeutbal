@@ -1,24 +1,42 @@
 'use server'
 
-import { and, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
+import {
+  FAIRNESS_ALGORITHM_VERSION,
+  commitServerSeed,
+  generateFairnessSeed,
+} from '../fairness/protocol'
+import { FAIRNESS_PUBLIC_RECEIPT_VERSION } from '../fairness/receipt'
+import { encryptFairnessServerSeed } from '../fairness/seed-crypto'
+import {
+  fairDatabaseNow,
+  loadFairRoundParticipants,
+  revealPersistedFairRound,
+  resolvePersistedFairSeotdaShowdown,
+  type PersistedFairRound,
+} from '../fairness/fair-round-service'
 import { getRoundPot } from './queries'
 import { balanceInRoom, lockRoom, readPointValue, requireRole } from './action-helpers'
+import { readFairPlaySettings } from './fair-play-settings'
 import { winnerPayout } from './round-settlement'
+import { SEOTDA_RULES_STANDARD } from '../seotda/types'
 import type { RoundPenaltyView } from './types'
 
 /** 판 진행 액션 — 시작·종료·무효. 방 수명주기는 actions.ts. */
 
-const { rooms, roomMembers, rounds, roundParticipants, chipLedger } = schema
+const { rooms, roomMembers, rounds, roundParticipants, chipLedger, roundFairness, roundFairnessParticipants } =
+  schema
 
 export async function startRound(
   roomId: string,
 ): Promise<ActionResult<{ roundId: string; seq: number }>> {
   const userId = await currentUserId()
   if (!userId) return fail('errors.loginRequired')
+  if (!z.string().uuid().safeParse(roomId).success) return fail('errors.invalidRoom')
 
   try {
     return await db.transaction(async (tx) => {
@@ -32,7 +50,7 @@ export async function startRound(
       if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
       const participants = await tx
-        .select({ userId: roomMembers.userId })
+        .select({ userId: roomMembers.userId, seatNo: roomMembers.seatNo })
         .from(roomMembers)
         .where(
           and(
@@ -41,6 +59,7 @@ export async function startRound(
             ne(roomMembers.role, 'observer'),
           ),
         )
+        .orderBy(asc(roomMembers.seatNo))
       if (participants.length < 2) return fail('errors.roundNeedsTwoPlayers')
 
       const [playing] = await tx
@@ -56,9 +75,24 @@ export async function startRound(
         .where(eq(rounds.roomId, roomId))
       const seq = (maxSeq?.max ?? 0) + 1
 
+      const fairPlay = readFairPlaySettings(room.gameType, room.rulePreset)
+      const verifiedSeotda = fairPlay.dealing === 'verified' && room.gameType === 'seotda'
+      const roundId = crypto.randomUUID()
+      const fairSeed = verifiedSeotda ? generateFairnessSeed() : null
+      const [serverSeedCommitment, serverSeedCiphertext] = fairSeed
+        ? await Promise.all([
+            commitServerSeed(roundId, fairSeed),
+            Promise.resolve(encryptFairnessServerSeed(fairSeed)),
+          ])
+        : [null, null]
+      const fairNow = verifiedSeotda ? await fairDatabaseNow(tx) : null
+      const seedDeadline = verifiedSeotda && fairNow
+        ? new Date(fairNow.getTime() + fairPlay.seedCollectionSeconds * 1_000)
+        : null
+
       const [round] = await tx
         .insert(rounds)
-        .values({ roomId, seq })
+        .values({ id: roundId, roomId, seq })
         .returning({ id: rounds.id, seq: rounds.seq })
       if (!round) return fail('errors.createRoundFailed')
       await tx.insert(roundParticipants).values(
@@ -67,6 +101,23 @@ export async function startRound(
           userId: participant.userId,
         })),
       )
+      if (serverSeedCommitment && serverSeedCiphertext && seedDeadline) {
+        await tx.insert(roundFairness).values({
+          roundId: round.id,
+          algorithmVersion: FAIRNESS_ALGORITHM_VERSION,
+          receiptVersion: FAIRNESS_PUBLIC_RECEIPT_VERSION,
+          serverSeedCiphertext,
+          serverSeedCommitment,
+          seedDeadline,
+        })
+        await tx.insert(roundFairnessParticipants).values(
+          participants.map((participant, dealOrder) => ({
+            roundId: round.id,
+            userId: participant.userId,
+            dealOrder,
+          })),
+        )
+      }
 
       if (room.status === 'waiting') {
         await tx.update(rooms).set({ status: 'playing' }).where(eq(rooms.id, roomId))
@@ -88,7 +139,8 @@ const loserPenaltySchema = z.object({
 
 const endRoundSchema = z.object({
   roomId: z.string().uuid(),
-  winnerId: z.string().uuid(),
+  /** verified Seotda ignores a claimed winner and derives it from the sealed deck. */
+  winnerId: z.string().uuid().optional(),
   note: z.string().trim().max(60).optional(),
   /** 고스톱 점수. 고스톱 방에서는 필수 — 점수 × 점당 칩을 패자 전원이 지불한다. */
   score: z.number().int().min(1).max(999).optional(),
@@ -113,7 +165,7 @@ export async function endRound(
 
   const parsed = endRoundSchema.safeParse(input)
   if (!parsed.success) return fail('errors.invalidInput')
-  const { roomId, winnerId, note, score, loserPenalties } = parsed.data
+  const { roomId, winnerId: requestedWinnerId, note, score, loserPenalties } = parsed.data
 
   try {
     return await db.transaction(async (tx) => {
@@ -134,6 +186,54 @@ export async function endRound(
         .orderBy(desc(rounds.seq))
         .limit(1)
       if (!round) return fail('errors.noActiveRound')
+
+      const [fairRoundRow] = await tx
+        .select()
+        .from(roundFairness)
+        .where(eq(roundFairness.roundId, round.id))
+        .limit(1)
+      const fairRound = fairRoundRow as PersistedFairRound | undefined
+      let winnerId = requestedWinnerId
+      if (fairRound) {
+        if (room.gameType !== 'seotda' || fairRound.phase !== 'sealed') {
+          return fail('errors.fairnessDealNotReady')
+        }
+        const fairParticipants = await loadFairRoundParticipants(tx, round.id)
+        const acceptedActions = await tx
+          .select({ userId: schema.betActions.userId, action: schema.betActions.action })
+          .from(schema.betActions)
+          .where(
+            and(
+              eq(schema.betActions.roundId, round.id),
+              eq(schema.betActions.status, 'accepted'),
+            ),
+          )
+          .orderBy(desc(schema.betActions.seq))
+        const lastActionByUser = new Map<string, (typeof acceptedActions)[number]['action']>()
+        for (const action of acceptedActions) {
+          if (!lastActionByUser.has(action.userId)) lastActionByUser.set(action.userId, action.action)
+        }
+        const contenderIds = new Set(
+          fairParticipants
+            .filter((participant) => lastActionByUser.get(participant.userId) !== 'fold')
+            .map((participant) => participant.userId),
+        )
+        if (contenderIds.size === 0) return fail('errors.winnerNotEligible')
+        if (contenderIds.size === 1) {
+          winnerId = [...contenderIds][0]
+        } else {
+          const showdown = await resolvePersistedFairSeotdaShowdown(
+            fairRound,
+            fairParticipants,
+            SEOTDA_RULES_STANDARD,
+            contenderIds,
+          )
+          if (showdown.outcome.kind !== 'win') return fail('errors.fairnessReplayRequired')
+          winnerId = showdown.participants[showdown.outcome.winnerIndex]?.userId
+        }
+        if (!winnerId) throw new Error('Verified Seotda winner index is invalid')
+      }
+      if (!winnerId) return fail('errors.winnerNotEligible')
 
       const [winner] = await tx
         .select({ userId: roundParticipants.userId })
@@ -269,6 +369,17 @@ export async function endRound(
         })
         .where(eq(rounds.id, round.id))
 
+      if (fairRound) {
+        const fairParticipants = await loadFairRoundParticipants(tx, round.id)
+        await revealPersistedFairRound(
+          tx,
+          fairRound,
+          fairParticipants,
+          userId,
+          await fairDatabaseNow(tx),
+        )
+      }
+
       return ok({ seq: round.seq, pot, winnerId })
     })
   } catch (error) {
@@ -385,6 +496,29 @@ export async function voidRound(
         .update(rounds)
         .set({ status: 'voided', result: { note: reason }, endedAt: new Date() })
         .where(eq(rounds.id, round.id))
+
+      const [fairRoundRow] = await tx
+        .select()
+        .from(roundFairness)
+        .where(eq(roundFairness.roundId, round.id))
+        .limit(1)
+      const fairRound = fairRoundRow as PersistedFairRound | undefined
+      if (fairRound?.phase === 'collecting_seeds') {
+        // 봉인 전 취소는 server seed 공개 없이 명시적으로 abort한다. 이후 seed 제출·seal은 DB shape로 차단된다.
+        await tx
+          .update(roundFairness)
+          .set({ phase: 'aborted', abortedAt: await fairDatabaseNow(tx), abortReason: reason })
+          .where(and(eq(roundFairness.roundId, round.id), eq(roundFairness.phase, 'collecting_seeds')))
+      } else if (fairRound?.phase === 'sealed') {
+        const fairParticipants = await loadFairRoundParticipants(tx, round.id)
+        await revealPersistedFairRound(
+          tx,
+          fairRound,
+          fairParticipants,
+          userId,
+          await fairDatabaseNow(tx),
+        )
+      }
 
       return ok({ roundId: round.id, seq: round.seq })
     })
