@@ -9,7 +9,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: externalBaseUrl ?? 'http://127.0.0.1:3000',
+    baseURL: externalBaseUrl ?? 'http://localhost:3000',
     trace: 'on-first-retry',
   },
   projects: [
@@ -22,7 +22,7 @@ export default defineConfig({
     ? undefined
     : {
         command: 'pnpm dev',
-        url: 'http://127.0.0.1:3000/login',
+        url: 'http://localhost:3000/login',
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
       },
