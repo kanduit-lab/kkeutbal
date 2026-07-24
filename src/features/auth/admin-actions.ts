@@ -1,11 +1,12 @@
 'use server'
 
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { serverEnv } from '@/lib/env'
 import { lockRoom, netTotalInRoom } from '../game/action-helpers'
+import { readFundingMode } from '../game/funding-mode'
 import { currentUserId } from './session'
 import { isAdminUser } from './roles'
 import { generateRegistrationCode, registrationCodeHash } from './registration-codes'
@@ -287,7 +288,11 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
       await lockRoom(tx, roomId)
 
       const [room] = await tx
-        .select({ code: schema.rooms.code, status: schema.rooms.status })
+        .select({
+          code: schema.rooms.code,
+          status: schema.rooms.status,
+          rulePreset: schema.rooms.rulePreset,
+        })
         .from(schema.rooms)
         .where(eq(schema.rooms.id, roomId))
         .limit(1)
@@ -352,6 +357,11 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
 
       if ((await netTotalInRoom(tx, roomId)) !== 0) {
         return fail('세션 손익 합계가 0이 아니라 정산할 수 없습니다')
+      }
+      if (readFundingMode(room.rulePreset) === 'account_credit') {
+        // DB RPC도 users.is_admin을 다시 확인한다. 방장이 사라진 복구 경로에서 전역 lock이
+        // session 원장만 남긴 채 고립되는 것을 막기 위해 room 상태 변경과 같은 트랜잭션으로 정산한다.
+        await tx.execute(sql`select public.settle_room_credits(${roomId}::uuid, ${adminId}::uuid)`)
       }
 
       await tx
