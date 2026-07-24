@@ -14,6 +14,7 @@ import {
   type Tx,
 } from '../game/action-helpers'
 import type { BetActionView } from '../game/types'
+import { minimumRaiseAmount, neededToCall, roundBetState } from './round-bet-state'
 
 const { rooms, roomMembers, rounds, roundParticipants, betActions, chipLedger } = schema
 
@@ -91,23 +92,26 @@ async function validateBetSemantics(
   if (lastUserAction?.action === 'fold') return 'errors.cannotBetAfterFold'
   if (lastUserAction?.action === 'allin') return 'errors.cannotBetAfterAllIn'
 
-  // 올인은 잔액만큼의 짧은 베팅일 수 있어도, 이미 형성된 콜 기준을 낮추면 안 된다.
-  // 이 단순 베팅 모델의 현재 콜 기준은 확정된 베팅 중 최댓값으로 단조 증가한다.
-  const [highestWager] = await tx
-    .select({ amount: sql<number>`coalesce(max(${betActions.amount}), 0)::int` })
+  const acceptedActions = await tx
+    .select({
+      userId: betActions.userId,
+      action: betActions.action,
+      amount: betActions.amount,
+      status: betActions.status,
+    })
     .from(betActions)
     .where(
       and(
         eq(betActions.roundId, roundId),
         eq(betActions.status, 'accepted'),
-        gt(betActions.amount, 0),
         before,
       ),
     )
 
-  const lastBet = highestWager?.amount ?? 0
+  const state = roundBetState(acceptedActions)
+  const callNeeded = neededToCall(state, userId)
   const balance = await balanceInRoom(tx, room.id, userId)
-  if (action === 'check') return lastBet === 0 ? null : 'errors.cannotCheckAfterBet'
+  if (action === 'check') return callNeeded === 0 ? null : 'errors.cannotCheckAfterBet'
   if (action === 'fold') return null
   if (balance < 1) return 'errors.insufficientBalance'
 
@@ -117,12 +121,12 @@ async function validateBetSemantics(
   if (amount > balance) return 'errors.insufficientBalance'
 
   if (action === 'call') {
-    if (lastBet === 0) return 'errors.noBetToCall'
-    return amount === Math.min(lastBet, balance) ? null : 'errors.invalidCallAmount'
+    if (callNeeded === 0) return 'errors.noBetToCall'
+    return amount === Math.min(callNeeded, balance) ? null : 'errors.invalidCallAmount'
   }
 
   const baseBet = readBaseBet(room.rulePreset) ?? defaultBaseBet(room.startingChips)
-  const minRaise = lastBet > 0 ? lastBet + 1 : baseBet
+  const minRaise = minimumRaiseAmount(state, userId, baseBet)
   if (amount < minRaise) return 'errors.raiseBelowMinimum'
   if (amount === balance) return 'errors.allInMustUseAllInAction'
   return null

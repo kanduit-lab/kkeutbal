@@ -2,6 +2,12 @@
 
 import { useMemo, useRef, useState, useTransition } from 'react'
 import { placeBet } from '@/features/betting/actions'
+import {
+  contributedBy,
+  minimumRaiseAmount,
+  neededToCall,
+  roundBetState,
+} from '@/features/betting/round-bet-state'
 import { playChip, playFold } from '@/lib/sound'
 import { refreshRoom } from '../actions'
 import type { BetActionKind, MemberView, RoomSnapshot } from '../types'
@@ -10,7 +16,6 @@ import { format, useDict } from '@/lib/i18n/client'
 import {
   betLabelsFor,
   formatChips,
-  highestAcceptedWager,
   lastAcceptedByUser,
   raisePresets,
   type RunAction,
@@ -79,25 +84,29 @@ export function ActionBar({
           ? d.actionBar.pendingGate
           : null
 
-  /** 확정된 최고 베팅 금액 — 짧은 올인 뒤에도 콜 기준은 낮아지지 않는다. */
-  const lastBet = useMemo(() => highestAcceptedWager(snapshot.actions), [snapshot.actions])
+  /** 콜·레이즈는 액션 한 번의 금액이 아니라 사용자별 이번 판 누적 납입액에서 계산한다. */
+  const betting = useMemo(() => roundBetState(snapshot.actions), [snapshot.actions])
+  const contribution = contributedBy(betting, self.userId)
+  const lastBet = betting.currentToCall
+  const needed = neededToCall(betting, self.userId)
 
   const base = snapshot.room.baseBet
-  const canCheck = lastBet === 0
+  const canCheck = needed === 0
   /** 잔액이 콜 금액보다 적으면 잔액 전부로 콜(올인 콜)한다. */
-  const callAmount = Math.min(lastBet, balance)
-  const callIsAllin = lastBet > 0 && balance <= lastBet
-  const minRaise = lastBet > 0 ? lastBet + 1 : base
+  const callAmount = Math.min(needed, balance)
+  const callIsAllin = needed > 0 && balance <= needed
+  const minRaise = minimumRaiseAmount(betting, self.userId, base)
   /** 프리셋이 전부 걸러졌을 때 패널 초기값 — 최소 레이즈를 삥 단위로 올림. */
   const minRaiseRounded = base > 0 ? Math.ceil(minRaise / base) * base : minRaise
   const presets = useMemo(() => {
     // 최소 레이즈 미만 프리셋은 눌러도 거절될 금액이라 아예 보여주지 않는다.
-    const standard = raisePresets(gameType, { lastBet, pot, base }, d.presets).filter(
-      (preset) => preset.amount >= minRaise,
-    )
+    const standard = raisePresets(gameType, { lastBet, pot, base }, d.presets)
+      .filter((preset) => preset.amount > lastBet)
+      .map((preset) => ({ ...preset, amount: preset.amount - contribution }))
+      .filter((preset) => preset.amount >= minRaise)
     // 올인은 항상 마지막 프리셋 — 잔액 전부. 최소 레이즈 미만이어도 올인은 유효하다.
     return balance > 0 ? [...standard, { label: labels.allin, amount: balance }] : standard
-  }, [gameType, lastBet, pot, base, balance, labels.allin, minRaise, d.presets])
+  }, [gameType, lastBet, pot, base, balance, labels.allin, minRaise, contribution, d.presets])
 
   function fire(action: BetActionKind, amount: number) {
     // 렌더 게이트와 별개로 한 번 더 막는다 — 연타·이벤트 경합으로 새는 요청 차단.
@@ -205,7 +214,7 @@ export function ActionBar({
               {formatChips(balance, locale)}
             </span>
           </span>
-          {lastBet > 0 ? (
+          {needed > 0 ? (
             <span>
               {d.actionBar.toCall}{' '}
               <span className="text-base font-black tabular-nums text-warn">
@@ -325,9 +334,9 @@ export function ActionBar({
             variant="primary"
             size="lg"
             className="whitespace-nowrap px-1 text-lg"
-            disabled={disabled || balance < minRaise}
+            disabled={disabled || balance < 1}
             disabledReason={
-              reason ?? (balance < minRaise ? d.actionBar.insufficientBalance : undefined)
+              reason ?? (balance < 1 ? d.actionBar.insufficientBalance : undefined)
             }
             onClick={() => {
               if (!raiseOpen) {

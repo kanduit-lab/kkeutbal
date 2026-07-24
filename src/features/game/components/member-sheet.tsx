@@ -3,11 +3,12 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { undoLastBuyIn } from '@/features/budget/actions'
+import { neededToCall, roundBetState } from '@/features/betting/round-bet-state'
 import { format, useDict } from '@/lib/i18n/client'
 import { leaveRoom, removeMember, transferHost } from '../member-actions'
 import type { MemberView, RoomSnapshot } from '../types'
 import { Avatar, Badge, Button, ConfirmDialog, useModalBehavior, useToast } from '@/components/ui'
-import { highestAcceptedWager, type RunAction } from './shared'
+import type { RunAction } from './shared'
 import { StatTile } from './member-sheet-parts'
 import { ProxyBetSection } from './member-sheet-proxy-bet'
 import { BuyInSection } from './member-sheet-buy-in'
@@ -59,7 +60,9 @@ export function MemberSheet({
   const round = snapshot.currentRound
   const net = member.balance - member.buyInTotal
 
-  const lastBet = useMemo(() => highestAcceptedWager(snapshot.actions), [snapshot.actions])
+  const betting = useMemo(() => roundBetState(snapshot.actions), [snapshot.actions])
+  const lastBet = betting.currentToCall
+  const memberCallNeeded = neededToCall(betting, member.userId)
 
   const run = (task: () => Promise<boolean>, closeAfter = true) => {
     if (isPending) return
@@ -130,6 +133,7 @@ export function MemberSheet({
               baseBet={snapshot.room.baseBet}
               labels={labels}
               lastBet={lastBet}
+              callNeeded={memberCallNeeded}
               isPending={isPending}
               run={run}
               runAction={runAction}

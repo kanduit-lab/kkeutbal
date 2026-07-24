@@ -19,6 +19,7 @@ export function ProxyBetSection({
   baseBet,
   labels,
   lastBet,
+  callNeeded,
   isPending,
   run,
   runAction,
@@ -29,6 +30,7 @@ export function ProxyBetSection({
   baseBet: number
   labels: Record<BetActionKind, string>
   lastBet: number
+  callNeeded: number
   isPending: boolean
   run: (task: () => Promise<boolean>, closeAfter?: boolean) => void
   runAction: RunAction
@@ -36,9 +38,12 @@ export function ProxyBetSection({
   const { d } = useDict()
   const [raiseOpen, setRaiseOpen] = useState(false)
   const [raiseAmount, setRaiseAmount] = useState(baseBet)
-  const callAmount = Math.min(lastBet, memberBalance)
-  const callIsAllIn = lastBet > 0 && memberBalance <= lastBet
-  const minRaise = lastBet > 0 ? lastBet + 1 : baseBet
+  const callAmount = Math.min(callNeeded, memberBalance)
+  const callIsAllIn = callNeeded > 0 && memberBalance <= callNeeded
+  const minRaise = lastBet === 0 ? baseBet : callNeeded + 1
+  /** 최소 레이즈에 못 미치는 잔액은 올인으로만 유효하다. */
+  const raiseInputMin = Math.min(minRaise, memberBalance)
+  const canConfirmRaise = raiseAmount >= minRaise || raiseAmount === memberBalance
 
   /**
    * 대리 베팅 멱등키 — 같은 의도(대상·액션·금액)의 재시도는 같은 actionId 로 재전송한다.
@@ -85,8 +90,8 @@ export function ProxyBetSection({
       icon="🃏"
       title={d.memberSheet.proxyTitle}
       hint={`${d.memberSheet.proxyHint}${
-        lastBet > 0
-          ? ` · ${format(d.memberSheet.toCallAmount, { n: lastBet.toLocaleString() })}`
+        callNeeded > 0
+          ? ` · ${format(d.memberSheet.toCallAmount, { n: callNeeded.toLocaleString() })}`
           : ''
       }`}
     >
@@ -94,8 +99,8 @@ export function ProxyBetSection({
         <Button
           variant="surface"
           className="border border-white/10"
-          disabled={isPending || lastBet !== 0}
-          disabledReason={lastBet !== 0 ? d.memberSheet.checkBlocked : undefined}
+          disabled={isPending || callNeeded !== 0}
+          disabledReason={callNeeded !== 0 ? d.memberSheet.checkBlocked : undefined}
           onClick={() => proxyBet('check', 0)}
         >
           {labels.check}
@@ -103,9 +108,9 @@ export function ProxyBetSection({
         <Button
           variant="win"
           className="flex-col gap-0"
-          disabled={isPending || lastBet === 0 || callAmount < 1}
+          disabled={isPending || callNeeded === 0 || callAmount < 1}
           disabledReason={
-            lastBet === 0
+            callNeeded === 0
               ? d.memberSheet.noBetToCall
               : callAmount < 1
                 ? d.actionBar.insufficientBalance
@@ -123,9 +128,12 @@ export function ProxyBetSection({
         <Button
           variant={raiseOpen ? 'primary' : 'surface'}
           className={raiseOpen ? '' : 'border border-white/10'}
-          disabled={isPending}
+          disabled={isPending || memberBalance < 1}
+          disabledReason={memberBalance < 1 ? d.actionBar.insufficientBalance : undefined}
           onClick={() => {
-            if (!raiseOpen) setRaiseAmount(Math.min(memberBalance, Math.max(baseBet, minRaise)))
+            if (!raiseOpen) {
+              setRaiseAmount(Math.min(memberBalance, Math.max(baseBet, minRaise)))
+            }
             setRaiseOpen((open) => !open)
           }}
         >
@@ -140,7 +148,7 @@ export function ProxyBetSection({
           <Stepper
             value={raiseAmount}
             onChange={setRaiseAmount}
-            min={minRaise}
+            min={raiseInputMin}
             max={memberBalance}
             step={baseBet}
             ariaLabel={d.memberSheet.proxyRaiseAria}
@@ -148,9 +156,9 @@ export function ProxyBetSection({
           />
           <Button
             variant="primary"
-            disabled={isPending || raiseAmount < minRaise || raiseAmount > memberBalance}
+            disabled={isPending || !canConfirmRaise || raiseAmount > memberBalance}
             disabledReason={
-              raiseAmount < minRaise
+              !canConfirmRaise
                 ? format(d.actionBar.minRaise, { n: minRaise.toLocaleString() })
                 : raiseAmount > memberBalance
                   ? d.actionBar.insufficientBalance
