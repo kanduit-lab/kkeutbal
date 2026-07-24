@@ -107,6 +107,8 @@ src/
 │   ├── hwatu/ seotda/ gostop/ poker/   # 카드 모델·순수 함수 엔진
 │   ├── game/           # 방·판 상태머신 + 테이블·로비·모니터 UI
 │   ├── betting/ budget/ ranking/       # 베팅·바이인·랭킹
+│   ├── wallet/                         # 계정 귀속 가상 크레딧·관리자 조정·거래 이력
+│   ├── fairness/                       # commit-reveal 셔플·공개 안전 영수증 순수 도메인
 │   ├── jokbo-advisor/  # 수동 피커 + vision
 │   └── auth/           # 계정·역할·관리자
 ├── lib/                # env·db·auth·realtime·sound

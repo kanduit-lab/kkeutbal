@@ -4,8 +4,8 @@
 |---|---|
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
-| Status | proposed |
-| Source of truth | 구현 전에는 이 문서, 구현 후에는 `drizzle/schema.ts`·`src/features/wallet/`·`src/features/fairness/` |
+| Status | in-progress |
+| Source of truth | 구현된 지갑·관리자 조정은 `drizzle/schema.ts`·`src/features/wallet/`, 공개 공정 영수증은 `src/features/fairness/`; 방 연동·실제 카드 배분은 이 문서의 후속 설계 |
 | Last reviewed | 2026-07-24 |
 
 ## 목적과 경계
@@ -33,7 +33,8 @@
 따라서 전환은 아래 원칙을 따른다.
 
 1. 기존 `chip_ledger`/`buy_ins`는 수정하거나 재작성하지 않는다. 과거 세션 기록으로 계속 읽는다.
-2. 새 `account_credit` 방만 전역 가상 크레딧을 사용한다. 기존 방은 `legacy_session`으로 남긴다.
+2. 전역 크레딧 방은 `account_credit` 모드로 **추가할 예정**이고, 기존 방은 `legacy_session`으로
+   남긴다. 현재 앱에서 실제로 열 수 있는 방은 아직 모두 `legacy_session`이다.
 3. 기존 계정의 전역 잔액은 자동 이관하지 않는다. 새 지갑은 0 크레딧으로 만들고 관리자가
    명시적인 사유와 함께 지급한다.
 4. 모든 이관 정책은 별도 데이터 감사와 운영자 승인 뒤에만 forward migration으로 추가한다.
@@ -75,15 +76,18 @@ erDiagram
 | Column | Type | Constraint | 설명 |
 |---|---|---|---|
 | `id` | uuid | PK | 계정 식별자 |
-| `user_id` | uuid | FK users, UNIQUE | 사용자당 하나의 가상 크레딧 계정 |
-| `available_balance` | bigint | `>= 0` | 새 방에 사용할 수 있는 크레딧 |
-| `locked_balance` | bigint | `>= 0` | 진행 중인 방에 잠긴 크레딧 |
+| `user_id` | uuid? | FK users, partial UNIQUE | `kind=user`일 때 사용자당 하나의 계정 |
+| `kind` | enum | `user` \| `issuance` | 사용자 계정 또는 관리자 지급/회수의 시스템 상대 계정 |
+| `available_balance` | bigint | user는 `>= 0`, 모두 안전 정수 범위 | 새 방에 사용할 수 있는 크레딧 |
+| `locked_balance` | bigint | user는 `>= 0`, 모두 안전 정수 범위 | 진행 중인 방에 잠긴 크레딧 |
 | `version` | bigint | `>= 0` | 낙관적 관측·감사용 단조 증가 버전 |
 | `created_at` | timestamptz | not null | 생성 시각 |
 | `updated_at` | timestamptz | not null | 마지막 원장 반영 시각 |
 
 이 테이블은 읽기 성능을 위한 materialized balance다. 진실은 `credit_entries`이며, 애플리케이션
-롤은 이 테이블을 직접 수정할 수 없다.
+롤은 이 테이블을 직접 수정할 수 없다. `issuance` 계정은 한 개만 존재하며 음수 잔액을 가질 수
+있어 발행·회수의 반대 엔트리를 보존한다. Drizzle이 현재 `bigint`를 JavaScript `number`로 읽으므로
+모든 credit 잔액·엔트리·lock은 `Number.MAX_SAFE_INTEGER` 범위로 DB가 제한한다.
 
 ### `credit_transactions` — 거래 헤더 (`[TX]`)
 
@@ -97,7 +101,7 @@ erDiagram
 | `initiated_by` | uuid? | FK users | 관리자 또는 시스템 실행 주체 |
 | `reverses_transaction_id` | uuid? | UNIQUE FK self | 취소는 새 거래로만 표현 |
 | `reason` | text | 1..200 | 관리자 조정·정정의 필수 사유 |
-| `snapshot_json` | jsonb | not null | 표시명·방 코드·정산 근거의 당시 스냅샷 |
+| `snapshot` | jsonb | not null | 표시명·방 코드·정산 근거의 당시 스냅샷 |
 | `created_at` | timestamptz | not null | 확정 시각 |
 
 `status` 컬럼을 두고 나중에 바꾸지 않는다. 실패한 작업은 헤더·엔트리를 함께 롤백하고,
@@ -112,8 +116,8 @@ erDiagram
 | `account_id` | uuid | FK credit_accounts | 변경 대상 계정 |
 | `delta_available` | bigint | not both zero | 사용 가능 잔액 변화 |
 | `delta_locked` | bigint | not both zero | 잠금 잔액 변화 |
-| `available_after` | bigint | `>= 0` | 적용 직후 사용 가능 잔액 |
-| `locked_after` | bigint | `>= 0` | 적용 직후 잠금 잔액 |
+| `available_after` | bigint | user는 `>= 0`, 모두 안전 정수 범위 | 적용 직후 사용 가능 잔액 |
+| `locked_after` | bigint | user는 `>= 0`, 모두 안전 정수 범위 | 적용 직후 잠금 잔액 |
 | `created_at` | timestamptz | not null | 기록 시각 |
 
 사용자 계정 엔트리는 거래 전체에서
@@ -121,7 +125,7 @@ erDiagram
 발행 계정과 상대 엔트리를 만들며, 일반 사용자 잔액은 절대 음수가 될 수 없다. 이 구조는
 단순 `amount` 로그보다 크레딧 생성·소멸과 방 간 이동을 감사하기 쉽다.
 
-### `room_credit_locks` — 방별 잠금 근거 (`[TX]`)
+### `room_credit_locks` — 방별 잠금 근거 (`[TX]`, 예약됨)
 
 | Column | Type | Constraint | 설명 |
 |---|---|---|---|
@@ -129,14 +133,16 @@ erDiagram
 | `room_id` | uuid | FK rooms | 대상 방 |
 | `user_id` | uuid | FK users | 대상 사용자 |
 | `buy_in_id` | uuid | UNIQUE FK buy_ins | 대응 세션 칩 발행 근거 |
-| `lock_transaction_id` | uuid | UNIQUE FK credit_transactions | 잠금 거래 |
+| `lock_transaction_id` | uuid | FK credit_transactions | 잠금 거래 |
 | `amount` | bigint | `> 0` | 잠근 크레딧/발행 세션 칩 |
-| `released_transaction_id` | uuid? | UNIQUE FK credit_transactions | 최종 정산 거래 |
+| `released_transaction_id` | uuid? | FK credit_transactions, non-unique | 최종 정산 거래 |
 | `created_at` | timestamptz | not null | 잠금 시각 |
 
-새 account-credit 방에서 `buy_ins`는 세션 칩 발행 내역으로 유지하되, 반드시 이 잠금 행과
-1:1로 연결한다. 따라서 세션 칩이 전역 잔액을 초과해 생기지 않는다. `released_transaction_id`의
-단 한 번의 상태 전이는 posting 함수 안에서만 허용하고, 그 밖의 UPDATE/DELETE는 금지한다.
+새 account-credit 방에서는 `buy_ins`를 세션 칩 발행 내역으로 유지하되, 반드시 이 잠금 행과
+1:1로 연결한다. 이 테이블과 순수 명령 구성기(`src/features/game/credit-room.ts`)는 이미
+준비됐지만, **현재 앱은 아직 이 행을 쓰지 않는다.** `buy_in`·잠금 원장·lock 행 생성, 종료 정산·
+release 표기는 서로 다른 Server Action으로 나누지 않고 전용 `SECURITY DEFINER` 프로시저 하나에서
+방/계정 행 잠금과 함께 처리해야 라이브 연결이 가능하다.
 
 ### `fairness_rounds` — 커밋-리빌 영수증 (`[TX]`)
 
@@ -170,8 +176,9 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 
 ## 원자 처리와 잠금
 
-잔액을 바꾸는 외부 Server Action은 개별 INSERT/UPDATE를 조합하지 않는다. 오직
-`post_credit_transaction(...)` DB 함수 하나로 진입한다.
+잔액을 바꾸는 외부 Server Action은 개별 INSERT/UPDATE를 조합하지 않는다. 현재 라이브 write
+경로는 관리자 조정 전용 `admin_adjust_credit(...)` RPC 하나이며, 이 함수가 내부
+`post_credit_transaction(...)` primitive를 호출한다. 앱 롤은 primitive를 직접 실행할 수 없다.
 
 1. `idempotency_key`를 먼저 조회한다. 이미 확정된 거래면 기존 거래 ID를 반환한다.
 2. 대상 `credit_accounts`를 `account_id` 오름차순으로 `FOR UPDATE` 잠근다.
@@ -187,13 +194,16 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 ## 권한과 불변성
 
 - 브라우저는 Supabase 테이블 API로 이 테이블을 읽거나 쓸 수 없다. 현재 앱 경계와 같다.
-- `kkeutbal_app`에는 `credit_accounts`/`credit_entries`의 직접 INSERT·UPDATE·DELETE 권한을
-  주지 않는다. 조회와 `post_credit_transaction` 실행만 허용한다.
+- `kkeutbal_app`에는 credit 테이블의 직접 INSERT·UPDATE·DELETE 권한을 주지 않는다. 조회와
+  `ensure_credit_account`, `admin_adjust_credit`만 허용하고 `post_credit_transaction` 실행 권한은
+  주지 않는다.
 - `credit_entries`와 `credit_transactions`에는 `BEFORE UPDATE OR DELETE` 거부 트리거를 둔다.
 - `credit_accounts` 직접 UPDATE에는 거부 트리거를 두고, posting 함수가 설정하는 트랜잭션 로컬
   플래그가 있을 때만 통과시킨다.
-- `room_credit_locks`의 release 연결은 posting 함수의 정산 경로에서만 한 번 허용한다. 한 정산
-  거래가 여러 lock을 함께 release할 수 있으므로 `released_transaction_id`는 unique가 아니다.
+- `room_credit_locks`의 release 연결은 아직 라이브 write 경로가 없다. 이후 전용 정산 RPC가
+  buy-in의 room/user/amount, lock 거래 kind/room, release 거래 kind/room을 모두 대조하고
+  `released_transaction_id`의 null→값 단방향 전이만 허용한다. 한 정산 거래가 여러 lock을 함께
+  release하므로 이 열은 unique가 아니다.
 - 관리자 지급·회수·정정은 관리자 Server Action만 호출할 수 있고 `reason`·`initiated_by`를
   필수로 남긴다. UI는 실제 원장을 수정하는 버튼을 제공하지 않고 새 거래를 만든다.
 - `fairness_rounds`의 commitment, deadline, algorithm version은 첫 카드 배분 뒤 변경할 수 없다.
@@ -253,12 +263,12 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 
 | 표면 | 권한 | 제공 내용 |
 |---|---|---|
-| `/wallet` | 로그인 사용자 | 사용 가능/잠금 크레딧, 자신의 거래 내역, 방별 정산 링크 |
-| `/wallet/transactions/[id]` | 거래 당사자 또는 관리자 | 거래 엔트리·스냅샷·정정 연결 |
-| `/admin/credits` | 관리자 | 지급/회수/정정 생성, 검색, 감사 사유 |
-| `/rooms/{code}/fairness` | 방 참가자 | commitment, client seed hash, 마감, 종료 후 검증 영수증 |
+| `/wallet` | 로그인 사용자 | 사용 가능/잠금 크레딧과 최근 자신의 거래 내역 |
+| `/wallet/transactions/[id]` (계획) | 거래 당사자 또는 관리자 | 거래 엔트리·스냅샷·정정 연결 |
+| `/admin` | 관리자 | 현재 지급/회수 생성과 감사 사유; 검색·정정 UI는 계획 |
+| `/rooms/{code}/fairness` (계획) | 방 참가자 | commitment, client seed hash, 마감, 종료 후 검증 영수증 |
 | `refreshRoom` | 공개 점수판만 | 비공개 카드·server seed·원본 client seed를 포함하지 않음 |
-| `getMyPrivateHand` | 해당 round participant | 진행 중 본인 카드만, 서버 액션 응답으로 반환 |
+| `getMyPrivateHand` (계획) | 해당 round participant | 진행 중 본인 카드만, 서버 액션 응답으로 반환 |
 
 Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairness.revealed`,
 `round.paused` 같은 refetch 힌트만 담는다. seed, hand, deck 순서는 절대 payload에 넣지 않는다.
@@ -291,9 +301,9 @@ Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairnes
 
 ## 구현 순서와 완료 조건
 
-1. 공정 셔플 순수 모듈과 벡터 테스트를 추가한다.
-2. 위 테이블/enum/제약의 Drizzle DDL 및 별도 Supabase 권한·함수 migration을 추가한다.
-3. 계정 지갑·관리자 지급·거래 내역을 구현하고 실제 DB 트랜잭션 테스트를 만든다.
+1. [x] 공정 셔플 순수 모듈과 벡터 테스트, 공개 안전 영수증 경계를 추가한다.
+2. [x] 계정 지갑 테이블/enum/제약의 Drizzle DDL 및 Supabase 권한·함수 migration을 추가한다.
+3. [x] 계정 지갑·관리자 지급/회수·거래 내역을 구현하고, 원격 DB rollback 트랜잭션으로 RPC를 검증한다.
 4. account-credit 방의 lock/buy-in/settlement 연결을 구현한다.
 5. 섯다 verified deal, private hand action, fairness receipt 화면을 구현한다.
 6. 2인 인증 E2E에서 시드 제출·타임아웃·정산·공개 검증을 확인한다.

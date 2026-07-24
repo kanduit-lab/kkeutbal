@@ -30,7 +30,8 @@
 1. **Server Action → `kkeutbal_app` 롤(`BYPASSRLS`)**. `src/lib/db.ts`가 drizzle +
    postgres-js로 Supabase pooler에 붙는다. 포트 5432(session)는 `max: 5`와 prepared statement를,
    포트 6543(transaction)는 `max: 1`과 `prepare: false`를 자동 적용하며 Supabase CA를 검증한다.
-   모든 읽기·쓰기가 이 경로를 지난다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
+   모든 읽기·쓰기가 이 경로를 지난다. 단, 전역 credit 테이블은 이 롤의 직접 DML을 막고 전용
+   RPC(`ensure_credit_account`, `admin_adjust_credit`)로만 변경한다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
    RLS가 아니라 각 Server Action이 쿼리로 직접 한다 (`src/features/betting/actions.ts`,
    `src/features/budget/actions.ts` 등).
 2. **브라우저 → Supabase publishable key**. `src/lib/supabase/client.ts`가 명시하듯 이 클라이언트는
@@ -283,6 +284,10 @@ enum 포함). 이 결정으로 누적 랭킹은 **전역 사용자 단위로 확
 | `bet_actions(round_id, seq)` unique | 판 내 액션 순서 |
 | `round_participants(round_id, user_id)` PK | 판 참가자 정본 |
 | `buy_ins(room_id, user_id)` | 방·사용자별 바이인 합계 |
+| `*_user_id` / `*_created_by` / `*_host_id` FK 인덱스 | 사용자 삭제·관리자 감사·방장 조회의 역방향 FK 탐색 |
+| `bet_actions(room_id/user_id/entered_by/approved_by)` | 방별 액션·입력자·승인자 조회와 FK 검증 |
+| `chip_ledger(user_id/ref_action_id)` | 사용자 이력·액션 정정 근거 조회 |
+| `credit_transactions(round_id, created_at)` / `room_credit_locks(user_id/lock_transaction_id)` | credit 정산 감사와 FK 역방향 조회 |
 
 ## RLS 원칙
 
@@ -293,9 +298,10 @@ Supabase 테이블 API를 직접 호출하는 가상의 경로다.** 실제 앱 
 `0007_database_hardening.sql`은 `anon`·`authenticated`의 테이블·시퀀스·함수 권한을 회수한다.
 따라서 Auth.js 사용자라도 Supabase Data API로는 어떤 앱 테이블도 읽거나 쓸 수 없다.
 
-`kkeutbal_app`은 `bypassrls`이지만 테이블에는 SELECT/INSERT/UPDATE/DELETE만, 시퀀스에는
-USAGE/SELECT만 가진다. TRUNCATE·TRIGGER·REFERENCES 권한은 주지 않는다. `session_standings`
-뷰도 브라우저에는 열지 않으며, 현재 앱 기능은 이 뷰를 읽지 않는다.
+`kkeutbal_app`은 `bypassrls`이지만 일반 게임 테이블에는 SELECT/INSERT/UPDATE/DELETE만,
+시퀀스에는 USAGE/SELECT만 가진다. credit 4개 테이블에는 SELECT만 주고 write는 관리자 전용
+`admin_adjust_credit` RPC가 내부 primitive로 처리한다. TRUNCATE·TRIGGER·REFERENCES 권한은
+주지 않는다. `session_standings` 뷰도 브라우저에는 열지 않으며, 현재 앱 기능은 이 뷰를 읽지 않는다.
 
 `chip_ledger` INSERT를 `authenticated`에 열지 않은 이유: 칩 생성은 게임 규칙 판정 결과여야
 한다. 정책이 없다는 것 자체가 방어층이고, 실제 쓰기는 Server Action이 엔진 검증 후
