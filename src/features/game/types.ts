@@ -6,6 +6,8 @@
 export type RoomGameType = 'seotda' | 'gostop' | 'poker'
 export type RoomStatus = 'waiting' | 'playing' | 'settled' | 'closed'
 export type InputMode = 'trust' | 'approval'
+/** 세션 칩의 재원. account_credit은 전역 지갑 lock과 함께만 바이인한다. */
+export type FundingMode = 'session' | 'account_credit'
 export type MemberRole = 'host' | 'dealer' | 'player' | 'observer'
 export type BetActionKind = 'check' | 'call' | 'raise' | 'fold' | 'allin'
 export type BetStatus = 'pending' | 'accepted' | 'rejected' | 'reverted'
@@ -52,6 +54,8 @@ export interface RoomView {
   readonly maxMembers: number
   /** true 면 새 참가자가 관전자로 입장(시작 칩 미지급). */
   readonly joinAsObserver: boolean
+  /** 기존 방은 안전하게 session으로 해석한다. */
+  readonly fundingMode: FundingMode
 }
 
 export interface RoundView {

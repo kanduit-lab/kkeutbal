@@ -7,6 +7,7 @@ import {
   readMaxMembers,
   readPointValue,
 } from './action-helpers'
+import { readFundingMode } from './funding-mode'
 import type {
   BetActionView,
   LastResultView,
@@ -57,6 +58,7 @@ function toRoomView(room: typeof rooms.$inferSelect): RoomView {
     baseBet: readBaseBet(room.rulePreset) ?? defaultBaseBet(room.startingChips),
     maxMembers: readMaxMembers(room.rulePreset),
     joinAsObserver: readJoinAsObserver(room.rulePreset),
+    fundingMode: readFundingMode(room.rulePreset),
   }
 }
 

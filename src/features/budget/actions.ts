@@ -6,6 +6,7 @@ import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
 import { balanceInRoom, lockRoom, requireRole } from '../game/action-helpers'
+import { readFundingMode } from '../game/funding-mode'
 
 const { rooms, roomMembers, buyIns, chipLedger } = schema
 
@@ -62,7 +63,7 @@ export async function addBuyIn(
       if (target.role === 'observer') return fail('errors.observerCannotBuyIn')
 
       const [room] = await tx
-        .select({ status: rooms.status })
+        .select({ status: rooms.status, rulePreset: rooms.rulePreset })
         .from(rooms)
         .where(eq(rooms.id, roomId))
         .limit(1)
@@ -77,6 +78,20 @@ export async function addBuyIn(
       await tx
         .insert(chipLedger)
         .values({ roomId, userId, delta: amount, reason: 'buy_in', refBuyInId: buyIn.id })
+
+      // 계정 크레딧 방은 세션 칩을 발행한 동일 트랜잭션에서 전역 지갑도 잠근다.
+      // RPC가 잔액·멱등성·room_credit_locks를 검증하며, 실패하면 위 buy-in/원장도 함께 rollback 된다.
+      if (readFundingMode(room.rulePreset) === 'account_credit') {
+        await tx.execute(sql`
+          select public.lock_room_credit_buy_in(
+            ${roomId}::uuid,
+            ${userId}::uuid,
+            ${buyIn.id}::uuid,
+            ${amount}::bigint,
+            ${callerId}::uuid
+          )
+        `)
+      }
 
       const [balanceRow] = await tx
         .select({ balance: sql<number>`coalesce(sum(${chipLedger.delta}), 0)::float8` })
@@ -118,7 +133,7 @@ export async function undoLastBuyIn(
       }
 
       const [room] = await tx
-        .select({ status: rooms.status })
+        .select({ status: rooms.status, rulePreset: rooms.rulePreset })
         .from(rooms)
         .where(eq(rooms.id, roomId))
         .limit(1)
@@ -182,6 +197,21 @@ export async function undoLastBuyIn(
         refBuyInId: reversal.id,
         revertedOf: originalLedger?.id ?? null,
       })
+
+      if (readFundingMode(room.rulePreset) === 'account_credit') {
+        // 세션 원장의 상쇄와 같은 트랜잭션에서 원 buy-in의 global lock도 풀어야 한다.
+        // RPC는 원본 buy-in·활성 lock·reversal 행의 연결을 다시 검증한다.
+        await tx.execute(sql`
+          select public.release_room_credit_buy_in(
+            ${roomId}::uuid,
+            ${targetUserId}::uuid,
+            ${lastBuyIn.id}::uuid,
+            ${reversal.id}::uuid,
+            ${lastBuyIn.amount}::bigint,
+            ${callerId}::uuid
+          )
+        `)
+      }
 
       return ok({ userId: targetUserId, amount: lastBuyIn.amount })
     })

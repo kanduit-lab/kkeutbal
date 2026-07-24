@@ -16,6 +16,7 @@ import {
   readMaxMembers,
   requireRole,
 } from './action-helpers'
+import { fundingModeSchema, readFundingMode } from './funding-mode'
 import type { RoomSnapshot } from './types'
 
 /**
@@ -34,19 +35,23 @@ const createRoomSchema = z.object({
   pointValue: z.number().int().min(1).max(100_000).optional(),
   /** 베팅 기본 단위(삥). 미지정 시 시작 칩의 1%. */
   baseBet: z.number().int().min(1).max(1_000_000).optional(),
+  /** 계정 크레딧 방은 바이인마다 전역 지갑을 같은 트랜잭션에서 lock한다. */
+  fundingMode: fundingModeSchema.default('session'),
 })
 
 export async function createRoom(
-  input: z.infer<typeof createRoomSchema>,
+  input: z.input<typeof createRoomSchema>,
 ): Promise<ActionResult<{ code: string }>> {
   const userId = await currentUserId()
   if (!userId) return fail('errors.loginRequired')
 
   const parsed = createRoomSchema.safeParse(input)
   if (!parsed.success) return fail('errors.invalidInput')
-  const { name, gameType, inputMode, startingChips, pointValue, baseBet } = parsed.data
-  const rulePreset =
-    gameType === 'gostop' ? { pointValue: pointValue ?? 10 } : baseBet ? { baseBet } : {}
+  const { name, gameType, inputMode, startingChips, pointValue, baseBet, fundingMode } = parsed.data
+  const rulePreset = {
+    fundingMode,
+    ...(gameType === 'gostop' ? { pointValue: pointValue ?? 10 } : baseBet ? { baseBet } : {}),
+  }
 
   // 코드 충돌은 UNIQUE 가 잡는다. 확률상 1~2회 재시도면 충분하다.
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -77,6 +82,18 @@ export async function createRoom(
           reason: 'buy_in',
           refBuyInId: initialBuyIn.id,
         })
+        if (fundingMode === 'account_credit') {
+          // 지갑 lock이 실패하면 방·멤버·세션 칩 INSERT도 같은 트랜잭션에서 전부 rollback 된다.
+          await tx.execute(sql`
+            select public.lock_room_credit_buy_in(
+              ${room.id}::uuid,
+              ${userId}::uuid,
+              ${initialBuyIn.id}::uuid,
+              ${startingChips}::bigint,
+              ${userId}::uuid
+            )
+          `)
+        }
         return room.code
       })
       return ok({ code: createdCode })
@@ -171,6 +188,17 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
           reason: 'buy_in',
           refBuyInId: initialBuyIn.id,
         })
+        if (readFundingMode(room.rulePreset) === 'account_credit') {
+          await tx.execute(sql`
+            select public.lock_room_credit_buy_in(
+              ${room.id}::uuid,
+              ${userId}::uuid,
+              ${initialBuyIn.id}::uuid,
+              ${room.startingChips}::bigint,
+              ${userId}::uuid
+            )
+          `)
+        }
       }
 
       return ok({ code: room.code })
@@ -255,6 +283,11 @@ export async function updateRoomSettings(
           ? parsed.data.startingChips
           : undefined
       if (startingChips !== undefined) {
+        // account_credit의 초기 스택은 생성 시점에 같은 금액으로 global credit을 lock한다.
+        // 여기서 세션 원장만 바꾸면 정산 보존식이 깨지므로 재원 변경용 별도 흐름이 생길 때까지 고정한다.
+        if (readFundingMode(room.rulePreset) === 'account_credit') {
+          return fail('errors.updateSettingsFailed')
+        }
         if (room.status !== 'waiting') {
           return fail('errors.startingChipsWaitingOnly')
         }
@@ -380,6 +413,19 @@ export async function closeRoom(roomId: string): Promise<ActionResult<{ code: st
       if (playing) return fail('errors.activeRoundBeforeSettle')
       if ((await netTotalInRoom(tx, roomId)) !== 0) {
         return fail('errors.settlementNotBalanced')
+      }
+
+      const [roomBeforeClose] = await tx
+        .select({ rulePreset: rooms.rulePreset })
+        .from(rooms)
+        .where(eq(rooms.id, roomId))
+        .limit(1)
+      if (!roomBeforeClose) return fail('errors.roomNotFound')
+      if (readFundingMode(roomBeforeClose.rulePreset) === 'account_credit') {
+        // 모든 활성 lock을 최종 세션 스택대로 같은 트랜잭션에서 available로 되돌린다.
+        await tx.execute(sql`
+          select public.settle_room_credits(${roomId}::uuid, ${userId}::uuid)
+        `)
       }
 
       const [room] = await tx
