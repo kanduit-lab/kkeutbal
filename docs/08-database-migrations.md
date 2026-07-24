@@ -42,11 +42,13 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    pnpm db:migrate
    ```
 
-   live DB는 2026-07-24 기준 `0000`~`0011` 이력이 동기화되어 있으므로 같은 커밋에서
+   live DB는 2026-07-24 기준 `0000`~`0011` 이력이 동기화되어 있다. 전역 가상 크레딧을
+   포함하는 버전은 `0012`까지 적용하므로 같은 커밋에서
    재실행하면 새 마이그레이션만 적용된다.
 
-3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`을 적용한다.
-   이미 최신 `0007_database_hardening.sql`을 다시 적용했다면 0008은 중복 실행해도 안전하다.
+3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`과
+   `0009_virtual_credits_security.sql`을 번호순으로 적용한다. 0009는 `0012` DDL 뒤에만
+   실행하며, credit 테이블의 직접 DML을 회수하고 posting 함수·append-only 트리거를 만든다.
 
 4. 아래 Verification을 수행한 뒤 앱을 다시 연다.
 5. 관리자 계정으로 `/admin`에 한 번 로그인해 `0011` 이전 게스트 토큰 원문을
@@ -89,9 +91,11 @@ where grantee = 'kkeutbal_app'
 order by table_name, privilege_type;
 ```
 
-추가로 `rate_limit_buckets`, `round_participants`가 존재하고 `chip_ledger.delta`,
-`rounds.pot`이 `bigint`인지 확인한다. 앱 롤에는 DML만 있고 `anon`·`authenticated`에는 앱
-테이블 권한이 없어야 한다.
+추가로 `rate_limit_buckets`, `round_participants`, `credit_accounts`, `credit_transactions`,
+`credit_entries`, `room_credit_locks`가 존재하고 `chip_ledger.delta`, `rounds.pot`이 `bigint`인지
+확인한다. `kkeutbal_app`은 credit 테이블에 SELECT만, `ensure_credit_account`과
+`post_credit_transaction`에는 EXECUTE만 가져야 하며 `anon`·`authenticated`에는 앱 테이블 권한이
+없어야 한다.
 
 ## Rollback
 
@@ -111,6 +115,8 @@ order by table_name, privilege_type;
 - unique/check 제약 추가 실패: 기존 데이터가 새 불변식을 위반한다. 위반 행을 백업·분석한 뒤
   정정 행으로 복구하고 마이그레이션을 재실행한다.
 - 앱 로그인 전체 실패: `rate_limit_buckets` DDL 또는 0008 권한 적용이 빠졌는지 확인한다.
+- 가상 크레딧 조회·지급 실패: `0012` 뒤에 0009를 적용했는지, `credit_accounts` 직접 DML이
+  아니라 `post_credit_transaction` 함수 실행 경로를 쓰는지 확인한다.
 
 ## Contacts Or Owners
 
@@ -121,3 +127,4 @@ order by table_name, privilege_type;
 - 2026-07-24: live DB에 `0006`~`0011`, 보안 SQL `0007`~`0008` 적용. Drizzle 이력 12건
   동기화 및 view/append-only 트리거 의존성 보정.
 - 2026-07-24: Drizzle 순차 마이그레이션과 Supabase 보안 baseline의 적용 경계를 문서화.
+- 2026-07-24: `0012` 전역 가상 크레딧 DDL과 0009 posting 함수·권한 경계를 추가.

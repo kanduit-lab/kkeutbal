@@ -121,7 +121,7 @@ erDiagram
 발행 계정과 상대 엔트리를 만들며, 일반 사용자 잔액은 절대 음수가 될 수 없다. 이 구조는
 단순 `amount` 로그보다 크레딧 생성·소멸과 방 간 이동을 감사하기 쉽다.
 
-### `room_credit_locks` — 방별 잠금 근거 (insert-only Entity)
+### `room_credit_locks` — 방별 잠금 근거 (`[TX]`)
 
 | Column | Type | Constraint | 설명 |
 |---|---|---|---|
@@ -135,7 +135,8 @@ erDiagram
 | `created_at` | timestamptz | not null | 잠금 시각 |
 
 새 account-credit 방에서 `buy_ins`는 세션 칩 발행 내역으로 유지하되, 반드시 이 잠금 행과
-1:1로 연결한다. 따라서 세션 칩이 전역 잔액을 초과해 생기지 않는다.
+1:1로 연결한다. 따라서 세션 칩이 전역 잔액을 초과해 생기지 않는다. `released_transaction_id`의
+단 한 번의 상태 전이는 posting 함수 안에서만 허용하고, 그 밖의 UPDATE/DELETE는 금지한다.
 
 ### `fairness_rounds` — 커밋-리빌 영수증 (`[TX]`)
 
@@ -191,6 +192,8 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 - `credit_entries`와 `credit_transactions`에는 `BEFORE UPDATE OR DELETE` 거부 트리거를 둔다.
 - `credit_accounts` 직접 UPDATE에는 거부 트리거를 두고, posting 함수가 설정하는 트랜잭션 로컬
   플래그가 있을 때만 통과시킨다.
+- `room_credit_locks`의 release 연결은 posting 함수의 정산 경로에서만 한 번 허용한다. 한 정산
+  거래가 여러 lock을 함께 release할 수 있으므로 `released_transaction_id`는 unique가 아니다.
 - 관리자 지급·회수·정정은 관리자 Server Action만 호출할 수 있고 `reason`·`initiated_by`를
   필수로 남긴다. UI는 실제 원장을 수정하는 버튼을 제공하지 않고 새 거래를 만든다.
 - `fairness_rounds`의 commitment, deadline, algorithm version은 첫 카드 배분 뒤 변경할 수 없다.

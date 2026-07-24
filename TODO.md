@@ -7,6 +7,16 @@
 
 ### High — 라이브 경로 검증
 
+- [ ] **전역 가상 크레딧 방 연동**: 기존 세션 칩과 분리된 계정 크레딧을 방 입장·바이인·최종 정산에 연결
+  - 변경 범위: `features/wallet/**`, `features/game/**`, `room_credit_locks`, 방 옵션
+  - 완료 기준: account-credit 방에서 잠금 → 세션 칩 → 정산 해제가 원자적으로 처리되고, 중복 요청·음수 잔액·미정산 lock을 DB 통합 테스트로 차단
+  - 참조: `docs/10-virtual-credit-and-fair-play.md`
+
+- [ ] **섯다 검증 배분과 공정성 영수증**: commit-reveal 시드·타임아웃·개인 손패·종료 후 공개 검증을 실제 판 흐름에 연결
+  - 변경 범위: `features/fairness/**`, `features/game/**`, `rounds` 확장, 방 옵션·검증 화면
+  - 완료 기준: 두 참가자가 server/client seed commitment, 카드 배분, timeout pause, 종료 후 deck 재계산을 E2E로 검증
+  - 참조: `docs/10-virtual-credit-and-fair-play.md`
+
 - [ ] **실배포 2기기 스모크 1회**: 배포된 앱에서 전체 플로우를 엔드투엔드로 완주
   - 변경 범위: 검증 활동. 발견한 결함은 별도 구현 작업으로 분리
   - 완료 기준: 로그인 → 방 생성·입장 → 베팅·동기화 → 판 종료·정산 → 랭킹을 실제 기기 2대로 완주하고 Broadcast 왕복 p95를 기록

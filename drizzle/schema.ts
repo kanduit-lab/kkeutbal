@@ -37,6 +37,14 @@ export const chipReason = pgEnum('chip_reason', [
   'correction',
   'settlement',
 ])
+export const creditAccountKind = pgEnum('credit_account_kind', ['user', 'issuance'])
+export const creditTransactionKind = pgEnum('credit_transaction_kind', [
+  'admin_grant',
+  'admin_revoke',
+  'room_lock',
+  'room_settlement',
+  'correction',
+])
 
 /**
  * 전역 사용자. 이메일은 저장하지 않는다 (docs/07-auth-and-security.md).
@@ -59,6 +67,43 @@ export const users = pgTable('users', {
   isAdmin: boolean('is_admin').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/**
+ * 계정 단위 가상 크레딧의 빠른 현재 잔액. `credit_entries`가 감사 정본이고 이 행은
+ * posting 함수가 같은 트랜잭션에서만 갱신하는 materialized balance다.
+ */
+export const creditAccounts = pgTable(
+  'credit_accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** user 계정만 user_id를 가진다. issuance는 시스템 발행/회수의 상대 계정이다. */
+    userId: uuid('user_id').references(() => users.id),
+    kind: creditAccountKind('kind').notNull(),
+    availableBalance: bigint('available_balance', { mode: 'number' }).notNull().default(0),
+    lockedBalance: bigint('locked_balance', { mode: 'number' }).notNull().default(0),
+    /** posting마다 증가하는 관측·감사용 버전. */
+    version: bigint('version', { mode: 'number' }).notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('credit_accounts_user_uq')
+      .on(table.userId)
+      .where(sql`${table.userId} is not null`),
+    uniqueIndex('credit_accounts_issuance_uq')
+      .on(table.kind)
+      .where(sql`${table.kind} = 'issuance'`),
+    check('credit_accounts_version_nonnegative_ck', sql`${table.version} >= 0`),
+    check(
+      'credit_accounts_owner_kind_ck',
+      sql`(${table.kind} = 'user' and ${table.userId} is not null) or (${table.kind} = 'issuance' and ${table.userId} is null)`,
+    ),
+    check(
+      'credit_accounts_user_balance_nonnegative_ck',
+      sql`${table.kind} <> 'user' or (${table.availableBalance} >= 0 and ${table.lockedBalance} >= 0)`,
+    ),
+  ],
+)
 
 /**
  * 인스턴스 단위 인증 설정. SSO 비밀값은 AUTH_SECRET 기반 AES-GCM 암호문으로만 보관한다.
@@ -258,6 +303,65 @@ export const roundParticipants = pgTable(
   ],
 )
 
+/**
+ * 전역 가상 크레딧 이동의 거래 헤더. 잘못된 거래는 UPDATE가 아니라 반대 거래로 되돌린다.
+ * `snapshot`은 당시의 방 코드·표시명·정산 근거를 보존한다.
+ */
+export const creditTransactions = pgTable(
+  'credit_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    kind: creditTransactionKind('kind').notNull(),
+    /** 서버가 만든 멱등키. 재시도는 같은 거래를 반환한다. */
+    idempotencyKey: text('idempotency_key').notNull().unique(),
+    roomId: uuid('room_id').references(() => rooms.id),
+    roundId: uuid('round_id').references(() => rounds.id),
+    initiatedBy: uuid('initiated_by').references(() => users.id),
+    reversesTransactionId: uuid('reverses_transaction_id').references(
+      (): AnyPgColumn => creditTransactions.id,
+    ),
+    /** 관리자 지급·회수·정정은 빈 사유를 허용하지 않는다. */
+    reason: text('reason').notNull(),
+    snapshot: jsonb('snapshot').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('credit_transactions_room_time_idx').on(table.roomId, table.createdAt),
+    index('credit_transactions_initiator_time_idx').on(table.initiatedBy, table.createdAt),
+    uniqueIndex('credit_transactions_reverses_uq')
+      .on(table.reversesTransactionId)
+      .where(sql`${table.reversesTransactionId} is not null`),
+    check('credit_transactions_reason_present_ck', sql`length(trim(${table.reason})) between 1 and 200`),
+  ],
+)
+
+/** 복식 원장 엔트리. 현재 잔액 계산의 감사 근거이며 UPDATE/DELETE가 금지된다. */
+export const creditEntries = pgTable(
+  'credit_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    transactionId: uuid('transaction_id')
+      .notNull()
+      .references(() => creditTransactions.id),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => creditAccounts.id),
+    deltaAvailable: bigint('delta_available', { mode: 'number' }).notNull(),
+    deltaLocked: bigint('delta_locked', { mode: 'number' }).notNull(),
+    availableAfter: bigint('available_after', { mode: 'number' }).notNull(),
+    lockedAfter: bigint('locked_after', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('credit_entries_account_time_idx').on(table.accountId, table.createdAt),
+    index('credit_entries_transaction_idx').on(table.transactionId),
+    check(
+      'credit_entries_delta_nonzero_ck',
+      sql`${table.deltaAvailable} <> 0 or ${table.deltaLocked} <> 0`,
+    ),
+  ],
+)
+
 export const betActions = pgTable(
   'bet_actions',
   {
@@ -354,5 +458,37 @@ export const buyIns = pgTable(
       .on(table.revertedOf)
       .where(sql`${table.revertedOf} is not null`),
     check('buy_ins_amount_nonzero_ck', sql`${table.amount} <> 0`),
+  ],
+)
+
+/**
+ * account-credit 방에서 세션 칩을 발행한 전역 잠금 근거. 한 buy-in은 하나의 lock만 가질 수 있다.
+ * 정산 뒤 releasedTransactionId를 연결하되, 원 행을 삭제하지 않는다.
+ */
+export const roomCreditLocks = pgTable(
+  'room_credit_locks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roomId: uuid('room_id')
+      .notNull()
+      .references(() => rooms.id),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id),
+    buyInId: uuid('buy_in_id')
+      .notNull()
+      .references(() => buyIns.id),
+    lockTransactionId: uuid('lock_transaction_id')
+      .notNull()
+      .references(() => creditTransactions.id),
+    releasedTransactionId: uuid('released_transaction_id').references(() => creditTransactions.id),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('room_credit_locks_buy_in_uq').on(table.buyInId),
+    index('room_credit_locks_released_transaction_idx').on(table.releasedTransactionId),
+    index('room_credit_locks_room_user_idx').on(table.roomId, table.userId),
+    check('room_credit_locks_amount_positive_ck', sql`${table.amount} > 0`),
   ],
 )
