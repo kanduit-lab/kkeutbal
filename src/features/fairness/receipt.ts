@@ -12,7 +12,10 @@ import { z } from 'zod'
 import {
   FAIRNESS_ALGORITHM_VERSION,
   type ClientSeedHash,
+  type FairShuffleReceipt,
   type FairShuffleResult,
+  shuffleFairDeck,
+  verifyFairShuffle,
 } from './protocol'
 
 export const FAIRNESS_PUBLIC_RECEIPT_VERSION = 'kkeutbal-public-fairness-receipt-v1'
@@ -233,8 +236,11 @@ export function parsePublicFairnessReceipt(value: unknown): PublicFairnessReceip
   })
 }
 
-/** commitment가 round와 공개 배분 규칙에 맞는지만 검증한다. seed나 카드 원문은 요구하지 않는다. */
-export async function verifyPublicFairnessReceipt(value: unknown): Promise<boolean> {
+/**
+ * 공개 영수증의 **형식과 배분 규칙 commitment만** 확인한다. 이 함수는 시드·덱 공개 전에는
+ * 셔플의 공정성을 증명할 수 없다. 종료 후에는 반드시 `verifyPublicFairnessAudit`을 사용한다.
+ */
+export async function validatePublicFairnessReceipt(value: unknown): Promise<boolean> {
   try {
     const receipt = parsePublicFairnessReceipt(value)
     const expectedPlan = await createPublicFairnessDealPlan(
@@ -249,12 +255,49 @@ export async function verifyPublicFairnessReceipt(value: unknown): Promise<boole
 }
 
 /**
+ * 종료 뒤 인증된 경로에서 얻은 full reveal로 실제 셔플을 재현한다.
+ * 공개 영수증의 hash들이 reveal과 정확히 이어지고, 원래 덱에서 재현한 순서까지 일치할 때만 true다.
+ */
+export async function verifyPublicFairnessAudit(
+  publicValue: unknown,
+  reveal: FairShuffleReceipt,
+  originalDeckIds: readonly string[],
+): Promise<boolean> {
+  try {
+    const receipt = parsePublicFairnessReceipt(publicValue)
+    if (!(await validatePublicFairnessReceipt(receipt))) return false
+    if (receipt.roundId !== reveal.roundId) return false
+
+    const [verification, reproduced] = await Promise.all([
+      verifyFairShuffle(reveal, originalDeckIds),
+      shuffleFairDeck({
+        roundId: reveal.roundId,
+        serverSeed: reveal.serverSeed,
+        clientSeedHashes: reveal.clientSeedHashes,
+        deckIds: originalDeckIds,
+      }),
+    ])
+    if (!verification.valid) return false
+
+    return (
+      receipt.algorithmVersion === reproduced.algorithmVersion &&
+      receipt.seedAudit.serverSeedCommitment === reproduced.serverSeedCommitment &&
+      sameClientSeedHashes(receipt.seedAudit.clientSeedHashes, reproduced.clientSeedHashes) &&
+      receipt.seedAudit.finalSeedHash === reproduced.finalSeedHash &&
+      receipt.shuffledDeckCommitment === reproduced.deckCommitment
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
  * 안정적인 JSON 문자열을 만든다. 이 직렬화 경계는 strict parser를 통과한 필드만 내보내므로
  * 실수로 serverSeed, finalSeed, shuffledDeckIds, privateCards를 Broadcast에 보내지 못하게 한다.
  */
 export async function serializePublicFairnessReceipt(value: unknown): Promise<string> {
   const receipt = parsePublicFairnessReceipt(value)
-  if (!(await verifyPublicFairnessReceipt(receipt))) {
+  if (!(await validatePublicFairnessReceipt(receipt))) {
     throw new Error('Public fairness receipt has an invalid deal plan commitment')
   }
 
@@ -295,7 +338,7 @@ export async function deserializePublicFairnessReceipt(serialized: string): Prom
   }
 
   const receipt = parsePublicFairnessReceipt(value)
-  if (!(await verifyPublicFairnessReceipt(receipt))) {
+  if (!(await validatePublicFairnessReceipt(receipt))) {
     throw new Error('Public fairness receipt has an invalid deal plan commitment')
   }
   return receipt
@@ -368,6 +411,19 @@ function freezeReceipt(receipt: PublicFairnessReceipt): PublicFairnessReceipt {
 
 function numbersEqual(left: readonly number[], right: readonly number[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
+function sameClientSeedHashes(
+  left: readonly ClientSeedHash[],
+  right: readonly ClientSeedHash[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every(
+      (entry, index) =>
+        entry.userId === right[index]?.userId && entry.seedHash === right[index]?.seedHash,
+    )
+  )
 }
 
 function sum(values: readonly number[]): number {

@@ -7,7 +7,8 @@ import {
   deserializePublicFairnessReceipt,
   parsePublicFairnessReceipt,
   serializePublicFairnessReceipt,
-  verifyPublicFairnessReceipt,
+  validatePublicFairnessReceipt,
+  verifyPublicFairnessAudit,
 } from './receipt'
 
 const roundId = '11111111-1111-4111-8111-111111111111'
@@ -95,14 +96,39 @@ describe('public fairness receipt', () => {
     const serialized = await serializePublicFairnessReceipt(receipt)
 
     await expect(deserializePublicFairnessReceipt(serialized)).resolves.toEqual(receipt)
-    await expect(verifyPublicFairnessReceipt(JSON.parse(serialized))).resolves.toBe(true)
+    await expect(validatePublicFairnessReceipt(JSON.parse(serialized))).resolves.toBe(true)
     expect(await serializePublicFairnessReceipt(receipt)).toBe(serialized)
 
     const tampered = JSON.parse(serialized) as {
       dealPlan: { participantCount: number }
     }
     tampered.dealPlan.participantCount = 5
-    await expect(verifyPublicFairnessReceipt(tampered)).resolves.toBe(false)
+    await expect(validatePublicFairnessReceipt(tampered)).resolves.toBe(false)
+  })
+
+  it('requires a full reveal to cryptographically audit the public commitments', async () => {
+    const shuffle = await shuffledFixture()
+    const receipt = await createPublicFairnessReceipt({
+      roundId,
+      game: 'seotda',
+      participantCount: 2,
+      shuffle,
+    })
+
+    const reveal = {
+      roundId,
+      serverSeed,
+      serverSeedCommitment: shuffle.serverSeedCommitment,
+      clientSeedHashes: shuffle.clientSeedHashes,
+      deckCommitment: shuffle.deckCommitment,
+      shuffledDeckIds: shuffle.shuffledDeckIds,
+    }
+    const originalDeck = Array.from({ length: 20 }, (_, index) => `card-${index + 1}`)
+
+    expect(await verifyPublicFairnessAudit(receipt, reveal, originalDeck)).toBe(true)
+    expect(await verifyPublicFairnessAudit(receipt, { ...reveal, serverSeed: aliceSeed }, originalDeck)).toBe(
+      false,
+    )
   })
 
   it('does not let a shuffle for one deck masquerade as the other game', async () => {

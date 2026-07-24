@@ -50,7 +50,8 @@
 | 세션 칩 | 방 안에서만 움직이는 `chip_ledger` 잔액 |
 | 거래 | 여러 계정/버킷의 크레딧 이동을 묶는 원자 단위 |
 | 엔트리 | 거래의 한 계정에 남는 변경 불가 원장 행 |
-| 공정 영수증 | 서버 커밋, 참가자 시드 해시, 공개된 시드, 셔플 결과를 담은 검증 자료 |
+| 공개 공정 영수증 | 진행 중에도 노출 가능한 commitment·시드 해시·덱 commitment 메타데이터. 형식/배분 규칙만 검사한다. |
+| full reveal 감사 자료 | 종료 뒤 인증된 경로에서만 제공하는 server seed·전체 덱 순서. 실제 셔플을 재계산한다. |
 
 `available + locked`가 계정의 총 가상 크레딧이다. 게임 중 베팅은 세션 칩에서만 처리한다.
 방을 정산할 때 세션의 최종 칩을 전역 계정으로 되돌린다.
@@ -272,6 +273,8 @@ client seed는 DB에 보관하지 않는다. 사용자는 자신의 원본 시�
 
 Broadcast 이벤트는 `fairness.committed`, `fairness.seed_submitted`, `fairness.revealed`,
 `round.paused` 같은 refetch 힌트만 담는다. seed, hand, deck 순서는 절대 payload에 넣지 않는다.
+공개 영수증의 deal-plan 검사는 구조 검증일 뿐이다. 실제 암호학적 검증은 종료 뒤 full reveal과
+원래 덱을 함께 `verifyPublicFairnessAudit`으로 재계산할 때만 성공으로 표시한다.
 
 ## 정합성 감시와 운영
 
