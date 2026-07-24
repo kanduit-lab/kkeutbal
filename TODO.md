@@ -31,11 +31,6 @@
 
 ### Low — 구조적 후속 개선
 
-- [ ] **세션 칩 정수 정밀도 경계 확정**: 전역 credit은 DB `Number.MAX_SAFE_INTEGER` 제약으로 막았지만,
-  기존 세션 `chip_ledger`·랭킹은 `bigint` 합계를 화면·액션에서 `number`/`float8`로 전달한다.
-  - 변경 범위: `features/game/**`, `features/ranking/**`, API 뷰 타입
-  - 완료 기준: bigint 문자열 직렬화 또는 방·사용자 누적 상한을 서버/DB 양쪽에서 강제하고 경계 테스트 통과
-
 - [ ] **Server Action 상태머신 통합 테스트**: 순수 엔진 외에 방 잠금·권한·판 참가 스냅샷의 DB 경로 검증이 필요
   - 변경 범위: `features/game/**`, `features/betting/**`, DB 테스트 harness
   - 완료 기준: 누적 베팅 재레이즈, 판중 퇴장·강퇴 거부, 승인 순서, 동시 start/bet 요청을 실제 DB 트랜잭션으로 검증
