@@ -146,6 +146,7 @@ pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 | [`docs/07-auth-and-security.md`](docs/07-auth-and-security.md) | 인증·역할·보안 경계 |
 | [`docs/08-database-migrations.md`](docs/08-database-migrations.md) | DB 적용·검증·복구 런북 |
 | [`docs/09-roadmap.md`](docs/09-roadmap.md) | 우선순위·마일스톤 |
+| [`docs/10-virtual-credit-and-fair-play.md`](docs/10-virtual-credit-and-fair-play.md) | 전역 가상 크레딧·공정 셔플 확장 설계 |
 
 실행 잔여 작업: [`TODO.md`](TODO.md) · 에이전트 가이드: [`CLAUDE.md`](CLAUDE.md)
 
