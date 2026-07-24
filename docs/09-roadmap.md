@@ -5,7 +5,7 @@
 | Type | technical-design |
 | Audience | engineering |
 | Status | active |
-| Source of truth | this document (단계 구분·MVP 경계) |
+| Source of truth | 구현 현황은 코드·스키마, 이 문서는 단계 구분·MVP 경계 |
 | Last reviewed | 2026-07-24 |
 
 실행 단위 잔여 작업은 [`TODO.md`](../TODO.md)가 소유한다. 이 문서는 **순서와 경계**만 정한다.
@@ -28,7 +28,7 @@
 ## 현재 상태 요약
 
 핵심 기능과 순수 엔진 검증은 구현돼 있다. 남은 것은
-**신규 DB 마이그레이션 적용, 실배포 라이브 경로 검증, 전체 사용자 흐름 E2E 확장**이다.
+**실배포 라이브 경로 검증, 전체 사용자 흐름 E2E 확장, 이후 DB 마이그레이션 드리프트 방지**다.
 
 | 영역 | 상태 | 근거 |
 |------|------|------|
@@ -115,7 +115,7 @@ Authentik은 초기 관리자 로그인 뒤 `/admin`의 SSO 설정에서 Issuer 
 
 구 P3(미사용 스키마 정리)는 2026-07-23 **제거로 확정**되어 우선순위 목록에서 빠졌다 —
 `groups`/`group_members`/`hand_records`를 스키마에서 삭제. 근거는
-`docs/design-decisions/` 001, 반영 상태는 `TODO.md` Completed.
+`docs/design-decisions/` 001이다.
 
 ---
 
@@ -135,5 +135,5 @@ Authentik은 초기 관리자 로그인 뒤 `/admin`의 SSO 설정에서 Issuer 
    P0 전체의 선행 조건 (P0-1).
 3. **향후 DB 마이그레이션 드리프트** — 현재 live DB와 Drizzle 이력은 동기화됐다. 이후 변경도
    `docs/08-database-migrations.md` 순서로만 적용해 SQL과 이력이 갈라지지 않게 해야 한다.
-4. **현장 네트워크** — 실물 리허설에서만 드러난다. 완화책은 로컬 큐 + 스냅샷 복원
-   (이미 구현됨, `src/lib/realtime/`).
+4. **현장 네트워크** — 실물 리허설에서만 드러난다. 완화책은 액션 성공 뒤 스냅샷 복원,
+   이벤트 수신 refetch·폴링·재연결이다. 로컬 액션 큐는 구현하지 않았다.

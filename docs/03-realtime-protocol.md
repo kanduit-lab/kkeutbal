@@ -5,8 +5,8 @@
 | Type | technical-design |
 | Audience | engineering / reviewers |
 | Status | active |
-| Source of truth | this document (채널·이벤트·동기화 규약) — 구현은 `src/lib/realtime/events.ts`, `src/lib/realtime/client.ts` |
-| Last reviewed | 2026-07-23 |
+| Source of truth | 구현 프로토콜은 `src/lib/realtime/events.ts`·`client.ts`, 이 문서는 채널·이벤트·동기화 규약 |
+| Last reviewed | 2026-07-24 |
 
 ## Context
 
@@ -28,7 +28,7 @@ supabase.channel(`room:${roomId}`, {
 })
 ```
 
-- `self: false` — 자기 액션은 낙관적 refetch로 이미 반영했으므로 되받지 않는다.
+- `self: false` — 자기 액션은 Server Action 성공 뒤의 refetch로 이미 반영했으므로 되받지 않는다.
 - `ack` 옵션은 쓰지 않는다.
 - 채널 구독 자체에는 인가 검사가 없다. **payload를 신뢰하지 않는 것**과 **모든 쓰기를 Server
   Action이 권한 검사 후 수행하는 것**으로 방어한다 (아래 보안 경계).
@@ -56,7 +56,7 @@ type Envelope = {
 
 ### 이벤트 목록과 실제 사용처
 
-`eventPayloads`에 정의된 이벤트는 12개다.
+`eventPayloads`에 정의된 이벤트는 14개다.
 
 | 이벤트 | 발신 위치 | `room-client.tsx` 수신 처리 |
 |--------|-----------|------------------------------|
@@ -91,7 +91,7 @@ payload 내용을 UI에 직접 반영하는 것은 토스트 문구를 가진 �
 ```ts
 // bet.placed
 {
-  actionId: string      // = envelope.id
+  actionId: string      // 베팅 DB 멱등키. envelope.id와 독립적으로 생성
   roundId: string
   action: 'check' | 'call' | 'raise' | 'fold' | 'allin'
   amount: number         // 정수, nonnegative
@@ -124,7 +124,7 @@ payload 내용을 UI에 직접 반영하는 것은 토스트 문구를 가진 �
   ├─(1) Server Action 호출 (베팅 제출, 판 시작 등)
   │       → 권한·규칙·불변식 검증 후 Postgres 커밋
   │
-  ├─(2) 성공 시 refetch(refreshRoom) 로 자기 화면 먼저 갱신
+  ├─(2) 성공 시 refetch(refreshRoom) 로 자기 화면 갱신
   │
   └─(3) 성공 시 channel.send(event)  ← 행동한 본인이 직접 브로드캐스트
           + 뒤이어 state.snapshot 도 함께 send (afterMutation, room-client.tsx)
@@ -162,8 +162,8 @@ supabase-js는 미구독 채널의 `send`를 REST로 보내므로 웹소켓 구�
 
 ### 멱등성
 
-`actionId`(UUID, envelope.id와 동일)를 클라이언트가 만들고 해당 테이블의 PK로 그대로 쓴다. 같은
-행동이 중복 전송돼도 두 번째 INSERT는 PK 충돌로 걸러진다.
+`actionId` UUID를 클라이언트가 만들고 `bet_actions.id` PK로 쓴다. Realtime envelope UUID는 별도로
+생성한다. 같은 Server Action 요청이 재전송돼도 두 번째 INSERT는 actionId PK 충돌로 흡수한다.
 
 ### 순서
 
@@ -205,7 +205,7 @@ Broadcast는 전역 순서를 보장하지 않는다. 순서가 의미를 갖는
 | `connected=false` | 채널 오류·끊김·`offline` | 기존 배너 조건(`everConnected && !connected`) |
 | `connectTimedOut` | 구독 시작 후 10초 내 `SUBSCRIBED` 미도달 | 최초 연결 실패 — `everConnected`가 아직 false라 기존 배너 조건에 안 걸리는 구간을 메운다. 배너 조건에 `연결끊김 OR connectTimedOut`으로 더해 쓴다 |
 | `syncFailed` | refetch 연속 2회 실패 (Server Action reject 포함) | 채널과 무관하게 스냅샷 동기화 자체가 죽음. 성공 1회로 해제 |
-| `authError` | `refreshRoom`이 '로그인이 필요합니다' 또는 '이 방의 참가자가 아닙니다' 반환 (문자열 일치) | 재시도로 복구 불가 — 재로그인·재입장 안내 필요. null이면 정상 |
+| `authError` | `refreshRoom`이 `errors.loginRequired` 또는 `errors.notMember` 오류 키 반환 | 재시도로 복구 불가 — 재로그인·재입장 안내 필요. null이면 정상 |
 
 ## Presence
 

@@ -5,7 +5,7 @@
 | Type | technical-design |
 | Audience | engineering / reviewers |
 | Status | active |
-| Source of truth | this document (테이블·관계·RLS 원칙) |
+| Source of truth | 구현 스키마는 `drizzle/schema.ts`, 이 문서는 관계·불변식·RLS 경계 |
 | Last reviewed | 2026-07-24 |
 
 구현 스키마는 `drizzle/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
@@ -28,8 +28,9 @@
 쓰지 않는다. 두 개의 분리된 경로만 있다.
 
 1. **Server Action → `kkeutbal_app` 롤(`BYPASSRLS`)**. `src/lib/db.ts`가 drizzle +
-   postgres-js로 Supabase transaction pooler(포트 6543)에 붙는다. Supabase CA를 검증하고,
-   transaction pooler 제약에 맞춰 prepared statement를 끈다. 모든 읽기·쓰기가 이 경로를 지난다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
+   postgres-js로 Supabase pooler에 붙는다. 포트 5432(session)는 `max: 5`와 prepared statement를,
+   포트 6543(transaction)는 `max: 1`과 `prepare: false`를 자동 적용하며 Supabase CA를 검증한다.
+   모든 읽기·쓰기가 이 경로를 지난다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
    RLS가 아니라 각 Server Action이 쿼리로 직접 한다 (`src/features/betting/actions.ts`,
    `src/features/budget/actions.ts` 등).
 2. **브라우저 → Supabase publishable key**. `src/lib/supabase/client.ts`가 명시하듯 이 클라이언트는
@@ -172,6 +173,11 @@ erDiagram
 - 구버전 `code` 원문 행은 로그인 또는 이름 조회 성공 시 해시로 전환하고 원문을 지운다.
 - `expires_at`·`revoked_at`으로 새 로그인을 차단한다.
 
+### `auth_settings`
+
+인스턴스 단위 인증 설정의 단일 행(`id = 'default'`)이다. SSO 활성 여부·Issuer·Client ID를 두고,
+Client secret은 `AUTH_SECRET` 기반 AES-GCM 암호문만 저장한다. 읽기·변경은 관리자 Server Action만 한다.
+
 ### `registration_codes`
 
 - `code_hash` — `AUTH_SECRET` 기반 HMAC. 원문 가입코드는 DB에 저장하지 않는다.
@@ -183,6 +189,12 @@ erDiagram
 
 로그인·가입·가입코드·게스트·Vision 남용 방지용 고정 창 카운터다. IP·아이디·토큰 원문 대신
 scope와 식별자를 `AUTH_SECRET`으로 HMAC한 `key_hash`만 저장하고 만료 인덱스로 정리한다.
+
+### `promotions`
+
+관리자 운영 공지다. `banner`는 활성 시간창 안의 항목을 우선순위순으로 모두, `popup`은 가장 높은
+우선순위 한 개만 노출한다. “N시간 동안 보지 않기” 상태는 사용자 계정이 아니라 브라우저 localStorage에
+저장해 게스트도 같은 동작을 한다.
 
 ### `rooms`
 
@@ -224,7 +236,8 @@ scope와 식별자를 `AUTH_SECRET`으로 HMAC한 `key_hash`만 저장하고 만
 - `approved_by` — 승인/거절/자동거절 처리자.
 - `reason` — 거절·정정 사유. `rejectBet`/`revertBet`은 사유 없이는 호출 자체가 막힌다
   (zod `min(1)`).
-- `amount` — 칩 단위 정수.
+- `amount` — **이번 액션에서 실제로 이동한 칩** 단위 정수. 콜·레이즈 기준은 accepted 액션을
+  사용자별로 합산한 누적 납입액이다. 따라서 재레이즈 뒤에도 기존 납입분을 다시 차감하지 않는다.
 - `seq` — 판 내 순번. 서버가 커밋 시 `max(seq)+1`로 확정한다.
 
 ### `chip_ledger`

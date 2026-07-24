@@ -5,7 +5,7 @@
 | Type | technical-design |
 | Audience | engineering / operators / reviewers |
 | Status | active |
-| Source of truth | this document (인증 흐름·역할 권한·보안 경계) |
+| Source of truth | 구현은 auth·권한 코드와 스키마, 이 문서는 인증 흐름·역할 권한·보안 경계 |
 | Last reviewed | 2026-07-24 |
 
 ## Context
@@ -77,7 +77,7 @@ URL 직접 접근이나 폼 직접 제출로는 가입할 수 없다. 원문 코
 ### 설정 파일이 둘로 나뉜 이유
 
 - `src/lib/auth-config.ts` — edge-safe. provider 없이 세션 옵션·`session` 콜백만 가진다.
-  `src/middleware.ts`가 이 파일만 import한다.
+  `src/proxy.ts`가 이 파일만 import한다.
 - `src/lib/auth.ts` — 전체 설정. `db`(postgres 커넥션)를 물기 때문에 edge 런타임(미들웨어)에
   들어가면 안 된다. provider 목록 구성과 `jwt` 콜백(사용자 upsert)이 여기 있다.
 
@@ -106,12 +106,12 @@ SSO 설정에서 새 secret을 다시 저장해야 한다.
 
 ## 미들웨어 — UX 게이트일 뿐
 
-`src/middleware.ts`는 `authConfigBase`로 JWT 쿠키를 해독해 로그인 여부만 본다. 결과로 하는 일은
+`src/proxy.ts`는 `authConfigBase`로 JWT 쿠키를 해독해 로그인 여부만 본다. 결과로 하는 일은
 리다이렉트뿐이다:
 
 - 미로그인 + 비공개 경로 → `/login`으로 리다이렉트 (`next` 쿼리로 원래 경로 보존)
 - 로그인 + `/login` 접근 → `/`로 리다이렉트
-- 공개 경로: `/login`, `/api/auth`, `/api/health`
+- 공개 경로: `/login`, `/register`, `/about`, `/api/auth`, `/api/health`
 
 **역할·방 소속 검사는 하지 않는다.** 여기를 통과했다고 해서 어떤 Server Action도 자동으로
 허용되지 않는다 — 각 Server Action이 세션에서 `userId`를 다시 뽑고, DB에서 방 멤버십과 역할을
@@ -124,7 +124,7 @@ JWT로 서명해 내려주는 방식)은 구현되지 않았다. 실제 경로�
 
 | 경로 | 클라이언트 | 인증 방식 | 용도 |
 |------|-----------|----------|------|
-| DB 읽기/쓰기 | `src/lib/db.ts` (drizzle + postgres-js, 서버 전용) | 전용 롤 `kkeutbal_app` (`bypassrls`), transaction pooler(6543), CA 검증 TLS | 모든 테이블 CRUD |
+| DB 읽기/쓰기 | `src/lib/db.ts` (drizzle + postgres-js, 서버 전용) | 전용 롤 `kkeutbal_app` (`bypassrls`), 5432 session / 6543 transaction pooler 자동 설정, CA 검증 TLS | 모든 테이블 CRUD |
 | Realtime | `src/lib/supabase/client.ts` (브라우저) | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, 로그인 세션과 무관 | Broadcast·Presence만 |
 
 `kkeutbal_app`은 `bypassrls` 롤이므로 RLS 정책과 무관하게 모든 행에 접근한다. **인가는 RLS가
@@ -188,8 +188,9 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 
 ## 역할 · 권한
 
-방 단위 역할이다. 전역 관리자 역할은 없다. 값은 `room_members.role`:
-`host` / `dealer` / `player` / `observer`.
+방 단위 역할은 `room_members.role`의 `host` / `dealer` / `player` / `observer`다. 별도로
+`users.is_admin` 전역 관리자는 `/admin`에서 게스트 토큰·가입코드·SSO 설정·관리자 지정·공지를 관리하며,
+방의 게임 권한을 자동으로 얻지는 않는다.
 
 | 권한 | host | dealer | player | observer | Server Action |
 |------|:----:|:------:|:------:|:--------:|------|
@@ -207,6 +208,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 | 타인 바이인 추가 (`addBuyIn`) | ✅ | ✅ | — | — | `addBuyIn` |
 | 본인 바이인 추가 (`addBuyIn`) | ✅ | ✅ | ✅ | — (명시적 거부) | `addBuyIn` |
 | 방 스냅샷 조회 (`refreshRoom`) | ✅ | ✅ | ✅ | ✅ | 로그인 사용자 전광판 조회 허용, 쓰기는 별도 검사 |
+| 전역 운영 설정·공지 관리 | — | — | — | — | `users.is_admin`을 별도 검사하는 관리자 액션 (방 역할과 무관) |
 
 공통 규칙:
 

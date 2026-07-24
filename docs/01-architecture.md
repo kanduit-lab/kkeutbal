@@ -5,7 +5,7 @@
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
 | Status | active |
-| Source of truth | this document (스택·배포 토폴로지·모듈 경계) |
+| Source of truth | 구현은 코드·스키마, 이 문서는 스택·배포 토폴로지·모듈 경계 |
 | Last reviewed | 2026-07-24 |
 
 ## Context
@@ -13,7 +13,7 @@
 실물 화투판 옆에서 돌아가는 실시간 다중 참가 기록 앱이다. 제약:
 
 - 참가자는 전부 모바일 브라우저. 설치 없이 링크/QR로 들어온다.
-- 사용자는 Authentik을 자체 운영하지만, 로컬 개발과 MT 현장 게스트 로그인은 이름만으로 통과시킨다.
+- 사용자는 내부 계정·관리자 발급 게스트 토큰으로 로그인하며, Authentik SSO는 관리자가 연결할 수 있다.
 - 동시 사용 규모는 방당 2~10명, 동시 방 수 한 자릿수. 부하가 아니라 지연이 품질을 좌우한다.
 - 배포 대상은 Vercel이 아니라 사용자가 운영하는 `kanduit-lab/docker-deploy-control-hub` 기반
   self-hosted docker 인프라다.
@@ -58,7 +58,7 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
         ▼                               ▼
  ┌──────────────────────────────────────────┐
  │  Supabase                                │
- │  ├ PostgreSQL  : pooler(transaction, 6543)│
+ │  ├ PostgreSQL  : pooler(session 5432 / transaction 6543)│
  │  │   전용 롤 kkeutbal_app (bypassrls)    │
  │  └ Realtime    : Broadcast 공개 채널     │
  │                  room:{uuid}, Presence    │
@@ -74,8 +74,8 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
 `src/lib/db.ts`가 서버 전용 drizzle 클라이언트를 만든다. 접속 정보는 `DATABASE_URL` 하나이며
 가리키는 대상은:
 
-- Supabase pooler, **transaction mode 포트 6543**. `prepare: false`, 인스턴스당 `max: 1`로
-  transaction pooler 제약에 맞춘다.
+- Supabase pooler. **session mode 5432**에서는 `max: 5`와 prepared statement를 쓰고,
+  **transaction mode 6543**에서는 `prepare: false`, `max: 1`로 제약에 맞춘다. 포트로 자동 선택한다.
 - `DATABASE_CA_CERT_BASE64`의 Supabase CA로 서버 인증서와 pooler 호스트명을 검증한다.
 - 전용 롤 `kkeutbal_app`, 속성 `bypassrls`.
 
@@ -86,7 +86,7 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
 경로이므로, **Server Action의 권한 검사를 건너뛰면 DB 레벨 방어가 없다**는 점이 이 설계의 핵심
 트레이드오프다.
 
-커넥션은 `globalThis` 캐시로 dev HMR 재생성을 막는다(`max: 5`, `idle_timeout: 30s`).
+커넥션은 `globalThis` 캐시로 dev HMR 재생성을 막고, 두 모드 모두 `idle_timeout: 30s`를 둔다.
 
 ### Auth — 관리자 설정 SSO, 가입코드 검증
 
@@ -103,7 +103,7 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
   내부 id를 `token.uid`에 싣는다. 이후 모든 서버 컨텍스트는 `session.user.id`로 이 내부 id를
   쓴다.
 - `authConfigBase`(`auth-config.ts`)는 edge-safe 부분만 분리해 둔 것 — DB(postgres-js)를 물지
-  않아 미들웨어 번들에 안전하게 들어간다. `src/middleware.ts`는 이 설정만으로 NextAuth 인스턴스를
+  않아 proxy 번들에 안전하게 들어간다. `src/proxy.ts`는 이 설정만으로 NextAuth 인스턴스를
   만들어 JWT 쿠키 유무만 검사하고 `/login`으로 리다이렉트한다. **미들웨어는 UX 게이트일 뿐이며
   실제 권한 검사는 하지 않는다** — 각 Server Action이 다시 세션을 확인한다.
 
@@ -140,8 +140,9 @@ Realtime 전용이다). `src/lib/realtime/client.ts` + `events.ts`가 프로토�
 payload 검증은 `events.ts`의 `parseEvent()` — envelope(`v`/`id`/`roomId`/`actorId`/`at`) +
 이벤트별 zod 스키마를 한 번에 검증하고, 실패하면 조용히 버린다(상태 미반영, 스냅샷 경로로 복구).
 
-`realtime.messages` RLS 정책은 마이그레이션에 존재하지만 클라이언트가 `private: true`로 구독하지
-않는 한 적용되지 않는다 — 현재 미사용 상태다. 이걸 켜는 것은 Open Questions 항목.
+과거 마이그레이션에 있던 `realtime.messages` RLS 정책은 현 baseline(`0007`)에서 제거됐다.
+현재 공개 채널에는 적용되는 Realtime RLS 정책이 없다. private 채널 전환은 새 정책과 Supabase JWT
+브리지를 함께 설계해야 한다.
 
 ### 쓰기 경로
 
@@ -278,7 +279,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 ## Open Questions
 
-- [ ] `realtime.messages` RLS(`private: true` 채널)를 실제로 켤지, 아니면 공개 채널 +
-      스냅샷 재검증 모델을 정식 채택으로 확정할지. 후자면 마이그레이션의 미사용 정책을 정리.
+- [ ] 공개 Broadcast + 스냅샷 재검증을 유지할지, private 채널(Supabase JWT 브리지와 새 RLS 정책 포함)로
+      전환할지 결정.
 - [ ] `preview`/`staging` 배포(`enabled: false`)를 켤 시점과 `ENV_FILE_BASE64` 시크릿 구성 주체.
-- [ ] Authentik 실등록 일정 — 그때까지 게스트 로그인이 유일한 인증 경로.
+- [ ] Authentik 실등록 일정 — 그 전에도 내부 계정과 게스트 토큰 로그인은 사용 가능.
