@@ -7,6 +7,7 @@ import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
 import { getRoundPot } from './queries'
 import { balanceInRoom, lockRoom, readPointValue, requireRole } from './action-helpers'
+import { winnerPayout } from './round-settlement'
 import type { RoundPenaltyView } from './types'
 
 /** 판 진행 액션 — 시작·종료·무효. 방 수명주기는 actions.ts. */
@@ -227,16 +228,17 @@ export async function endRound(
           if (penalty.factor === 1) return []
           return [{ userId: penalty.userId, factor: penalty.factor }]
         })
-        if (collected > 0) {
+        const payout = winnerPayout(pot, collected)
+        if (payout > 0) {
           await tx.insert(chipLedger).values({
             roomId,
             roundId: round.id,
             userId: winnerId,
-            delta: collected,
+            delta: payout,
             reason: 'pot_win',
           })
         }
-        pot += collected
+        pot = payout
       } else if (pot > 0) {
         await tx.insert(chipLedger).values({
           roomId,
