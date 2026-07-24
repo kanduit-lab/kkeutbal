@@ -119,4 +119,84 @@ test.describe('authenticated room funding', () => {
       await Promise.all([hostContext.close(), guestContext.close()])
     }
   })
+
+  test('two dedicated accounts complete a verified Seotda deal and recompute its audit', async ({
+    browser,
+  }) => {
+    test.skip(!canRunLifecycle, lifecycleSkipReason)
+    test.setTimeout(120_000)
+
+    const hostContext = await browser.newContext()
+    const guestContext = await browser.newContext()
+    const host = await hostContext.newPage()
+    const guest = await guestContext.newPage()
+
+    try {
+      await loginWithPassword(host, { username: username!, password: password! })
+      await loginWithPassword(guest, { username: secondUsername!, password: secondPassword! })
+
+      await host.getByRole('textbox', { name: '방 이름' }).fill(`E2E verified ${Date.now().toString(36)}`)
+      await host.getByRole('button', { name: '방 만들기', exact: true }).click()
+      await expect(host).toHaveURL(/\/rooms\/[A-Z0-9]{6}$/)
+      const roomCode = new URL(host.url()).pathname.split('/').at(-1)
+      expect(roomCode).toMatch(/^[A-Z0-9]{6}$/)
+
+      await host.goto(`/rooms/${roomCode}/settings`)
+      await host.getByRole('button', { name: '수동 딜', exact: true }).click()
+      await expect(host.getByRole('button', { name: '검증 가능한 섯다 딜 사용', exact: true })).toBeVisible()
+      await host.getByRole('button', { name: '저장', exact: true }).click()
+      await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}$`))
+
+      await guest.goto(`/rooms/${roomCode}`)
+      await expect(guest.getByText('참가자 2명')).toBeVisible()
+
+      await host.getByRole('button', { name: /판 시작/ }).click()
+      await expect(host.getByRole('heading', { name: /검증 가능한 섯다 딜/ })).toBeVisible()
+      await expect(guest.getByRole('heading', { name: /검증 가능한 섯다 딜/ })).toBeVisible()
+
+      await host.getByRole('button', { name: '내 시드 제출', exact: true }).click()
+      await guest.getByRole('button', { name: '내 시드 제출', exact: true }).click()
+      await host.getByRole('button', { name: '검증 딜 봉인', exact: true }).click()
+      await expect(host.getByText('딜 봉인 완료')).toBeVisible()
+
+      await host.getByRole('button', { name: '내 검증 패 보기', exact: true }).click()
+      await guest.reload()
+      await guest.getByRole('button', { name: '내 검증 패 보기', exact: true }).click()
+      await expect(host.getByText('내 검증 패')).toBeVisible()
+      await expect(guest.getByText('내 검증 패')).toBeVisible()
+
+      // A rare tie/gusa asks the dealer to void and replay. The deterministic winner path is
+      // retried in an isolated test room, so a random deck cannot make this E2E flaky.
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await host.getByRole('button', { name: /판 종료/ }).click()
+        const auditAppeared = await host
+          .getByRole('link', { name: '공정성 감사', exact: true })
+          .isVisible({ timeout: 3_000 })
+          .catch(() => false)
+        if (auditAppeared) {
+          break
+        }
+        await host.getByRole('button', { name: '판 무효', exact: true }).click()
+        await host.getByRole('dialog').getByRole('button', { name: '무효화', exact: true }).click()
+        await host.getByRole('button', { name: /판 시작/ }).click()
+        await host.getByRole('button', { name: '내 시드 제출', exact: true }).click()
+        await guest.reload()
+        await guest.getByRole('button', { name: '내 시드 제출', exact: true }).click()
+        await host.getByRole('button', { name: '검증 딜 봉인', exact: true }).click()
+      }
+
+      const auditLink = host.getByRole('link', { name: '공정성 감사', exact: true })
+      await expect(auditLink).toBeVisible()
+      await auditLink.click()
+      await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}/fairness/\\d+$`))
+      await expect(host.getByText('덱 재계산 검증 통과')).toBeVisible()
+
+      await host.goto(`/rooms/${roomCode}`)
+      await host.getByRole('button', { name: '세션 정산', exact: true }).click()
+      await host.getByRole('dialog', { name: '세션을 정산할까요?' }).getByRole('button', { name: '정산', exact: true }).click()
+      await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}/result$`))
+    } finally {
+      await Promise.all([hostContext.close(), guestContext.close()])
+    }
+  })
 })
