@@ -52,9 +52,8 @@ export function useDict(): I18nValue {
  * 서버 액션 에러 해석. 액션은 `errors.*` 키 또는 원문 문자열을 반환한다 —
  * 키면 번역하고, 아니면 그대로 보여준다.
  *
- * 주요 플로우 액션(game/actions·round-actions·member-actions·betting·budget)은 모두
- * `errors.*` 키를 반환하도록 전환됐다. admin-actions·jokbo-advisor vision 액션만 아직
- * 한국어 원문을 반환한다 (관리자·어드바이저 화면은 ko 중심 — 허용 범위, TODO.md 참고).
+ * 주요 플로우 액션(game/actions·round-actions·member-actions·betting·budget·admin-actions·
+ * jokbo-advisor vision)은 모두 `errors.*` 키를 반환하도록 전환됐다.
  * 새 서버 액션은 처음부터 `errors.*` 키를 반환할 것 — 원문 문자열을 반환하지 않는다.
  * 에러를 토스트·배너로 표면화하는 모든 지점은 원문을 직접 렌더하지 말고
  * 이 함수를 거칠 것: `toast(translateError(d, result.error), 'error')`.

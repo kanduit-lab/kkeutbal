@@ -3,7 +3,7 @@
 import { useRef, useTransition } from 'react'
 import type { CardId, GameType } from '@/features/hwatu/types'
 import { Button, Spinner, useToast } from '@/components/ui'
-import { useDict } from '@/lib/i18n/client'
+import { translateError, useDict } from '@/lib/i18n/client'
 import { recognizeHand } from '../vision/actions'
 
 /** 사진 인식 버튼 — 촬영 → 1568px 다운스케일 → recognizeHand Server Action. */
@@ -34,7 +34,7 @@ export function VisionCapture({
       }
       const result = await recognizeHand({ imageDataUrl: dataUrl, gameType })
       if (!result.success) {
-        toast(result.error, 'error')
+        toast(translateError(d, result.error), 'error')
         return
       }
       if (result.data.cardIds.length === 0) {

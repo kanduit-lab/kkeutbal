@@ -11,8 +11,8 @@
  * - `/guide/**` 페이지는 콘텐츠(게임 규칙·사용법 문서)다 — 사전 대상이 아니며 한국어로 유지한다.
  * - 게임 용어(섯다·고스톱·화투·끗·땡·광땡·삥·따당·고·스톱·피·광·다이·올려 등)는 어떤 로케일에서도
  *   번역하지 않는다. 영어 사전에서도 원어 그대로 두고, 도움이 되는 곳에 괄호 주석을 한 번만 단다.
- * - 서버 액션 에러는 `errors.*` 키를 반환한다 — translateError 참고. round-actions.ts 는 전환 대기 중이라
- *   과도기에는 한국어 원문이 여전히 나올 수 있다 (키가 없으면 translateError 가 원문을 그대로 통과시킨다).
+ * - 서버 액션 에러는 `errors.*` 키를 반환한다 — translateError 참고. 과거 원문 오류는 호환을 위해
+ *   그대로 통과시키지만, 새 서버 액션은 원문을 반환하지 않는다.
  *
  * 템플릿 값은 `format(template, params)` 로 치환한다 — `{n}`, `{name}`, `{seq}` 자리표시자.
  * 섹션은 화면 단위(surface)로 묶는다. 여러 화면이 공유하는 문자열만 common·roles·bet 등
@@ -721,6 +721,36 @@ export const ko = {
     fairnessHandFailed: '내 검증 패를 불러오지 못했습니다',
     fairnessAuditNotReady: '판 종료 뒤에만 전체 공정성 검증 자료를 볼 수 있습니다',
     fairnessAuditFailed: '공정성 검증 자료를 불러오지 못했습니다',
+    // 관리자 도구 (auth/admin-actions.ts)
+    adminOnlyChange: '관리자만 변경할 수 있습니다',
+    ssoIssuerAndClientIdRequired: 'SSO를 켜려면 Issuer URL과 Client ID를 입력하세요',
+    ssoClientSecretRequired: 'SSO를 켜려면 Client secret을 입력하세요',
+    saveSsoSettingsFailed: 'SSO 설정을 저장하지 못했습니다',
+    adminOnlyIssue: '관리자만 발급할 수 있습니다',
+    createRegistrationCodeFailed: '가입코드 발급에 실패했습니다',
+    registrationCodeGenerationFailed: '가입코드 생성에 실패했습니다. 다시 시도하세요',
+    createGuestTokenFailed: '토큰 발급에 실패했습니다',
+    guestTokenGenerationFailed: '토큰 코드 생성에 실패했습니다. 다시 시도하세요',
+    adminOnlyRevoke: '관리자만 회수할 수 있습니다',
+    guestTokenNotFound: '토큰을 찾을 수 없습니다',
+    revokeGuestTokenFailed: '토큰 회수에 실패했습니다',
+    registrationCodeNotFoundOrRevoked: '가입코드를 찾을 수 없거나 이미 회수했습니다',
+    revokeRegistrationCodeFailed: '가입코드 회수에 실패했습니다',
+    cannotRevokeOwnAdmin: '자기 자신의 관리자 권한은 해제할 수 없습니다',
+    adminUserNotFound: '사용자를 찾을 수 없습니다',
+    guestCannotBeAdmin: '게스트 계정은 관리자로 지정할 수 없습니다',
+    setAdminUpdateFailed: '권한을 변경하지 못했습니다',
+    setAdminFailed: '권한 변경에 실패했습니다',
+    adminOnlyCloseRoom: '관리자만 강제 정산할 수 있습니다',
+    adminCloseRoomFailed: '강제 정산에 실패했습니다',
+    // 족보 사진 인식 (jokbo-advisor/vision/actions.ts)
+    visionDisabled: '사진 인식이 비활성화되어 있습니다. 수동 선택을 사용하세요',
+    visionRateLimited: '사진 인식 요청이 너무 많습니다. 잠시 후 다시 시도하세요',
+    visionUnsupportedImage: '지원하지 않는 이미지 형식입니다 (jpeg/png/webp)',
+    visionImageTooLarge: '이미지가 너무 큽니다 (5MB 이하)',
+    visionNoResult: '인식 결과를 받지 못했습니다',
+    visionInvalidResult: '인식 결과 형식이 올바르지 않습니다',
+    visionRecognitionFailed: '사진 인식에 실패했습니다. 수동 선택을 사용하세요',
   },
 } as const
 

@@ -20,6 +20,7 @@ import type {
 import type { SsoSettingsView } from '../sso-settings'
 import { Badge, Button, ConfirmDialog, Field, Input, Panel, useToast } from '@/components/ui'
 import { GAME_BADGE_TONE, GAME_LABELS } from '@/features/game/components/shared'
+import { translateError, useDict } from '@/lib/i18n/client'
 
 const EXPIRY_PRESETS = [
   { label: '24시간', hours: 24 },
@@ -65,6 +66,7 @@ export function AdminClient({
 }) {
   const router = useRouter()
   const { toast } = useToast()
+  const { d } = useDict()
   const [isPending, startTransition] = useTransition()
 
   const [label, setLabel] = useState('')
@@ -103,7 +105,7 @@ export function AdminClient({
         setLabel('')
         router.refresh()
       } else {
-        toast(result.error, 'error')
+        toast(translateError(d, result.error), 'error')
       }
     })
   }
@@ -121,7 +123,7 @@ export function AdminClient({
         toast('가입코드를 발급했습니다. 지금 복사해 전달하세요.', 'success')
         router.refresh()
       } else {
-        toast(result.error, 'error')
+        toast(translateError(d, result.error), 'error')
       }
     })
   }
@@ -143,7 +145,7 @@ export function AdminClient({
         )
         router.refresh()
       } else {
-        toast(result.error, 'error')
+        toast(translateError(d, result.error), 'error')
       }
     })
   }
@@ -557,7 +559,7 @@ export function AdminClient({
               toast('토큰을 회수했습니다', 'success')
               router.refresh()
             } else {
-              toast(result.error, 'error')
+              toast(translateError(d, result.error), 'error')
             }
           })
         }}
@@ -580,7 +582,7 @@ export function AdminClient({
               toast('가입코드를 회수했습니다', 'success')
               router.refresh()
             } else {
-              toast(result.error, 'error')
+              toast(translateError(d, result.error), 'error')
             }
           })
         }}
@@ -611,7 +613,7 @@ export function AdminClient({
               toast('권한을 변경했습니다', 'success')
               router.refresh()
             } else {
-              toast(result.error, 'error')
+              toast(translateError(d, result.error), 'error')
             }
           })
         }}
@@ -634,7 +636,7 @@ export function AdminClient({
               toast('방을 강제 정산했습니다', 'success')
               router.refresh()
             } else {
-              toast(result.error, 'error')
+              toast(translateError(d, result.error), 'error')
             }
           })
         }}

@@ -53,14 +53,14 @@ export async function saveSsoSettings(
   input: z.infer<typeof saveSsoSettingsSchema>,
 ): Promise<ActionResult<undefined>> {
   const adminId = await requireAdmin()
-  if (!adminId) return fail('관리자만 변경할 수 있습니다')
+  if (!adminId) return fail('errors.adminOnlyChange')
   const parsed = saveSsoSettingsSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
 
   const { enabled, issuer, clientId, clientSecret } = parsed.data
   if (enabled) {
     if (!issuer || !z.string().url().safeParse(issuer).success || !clientId) {
-      return fail('SSO를 켜려면 Issuer URL과 Client ID를 입력하세요')
+      return fail('errors.ssoIssuerAndClientIdRequired')
     }
   }
 
@@ -75,7 +75,7 @@ export async function saveSsoSettings(
       : (current?.clientSecretCiphertext ?? null)
 
     if (enabled && !clientSecretCiphertext) {
-      return fail('SSO를 켜려면 Client secret을 입력하세요')
+      return fail('errors.ssoClientSecretRequired')
     }
 
     await db
@@ -101,7 +101,7 @@ export async function saveSsoSettings(
     return ok(undefined)
   } catch (error) {
     console.error('saveSsoSettings failed:', error)
-    return fail('SSO 설정을 저장하지 못했습니다')
+    return fail('errors.saveSsoSettingsFailed')
   }
 }
 
@@ -109,10 +109,10 @@ export async function createRegistrationCode(
   input: z.infer<typeof createRegistrationCodeSchema>,
 ): Promise<ActionResult<{ code: string }>> {
   const adminId = await requireAdmin()
-  if (!adminId) return fail('관리자만 발급할 수 있습니다')
+  if (!adminId) return fail('errors.adminOnlyIssue')
 
   const parsed = createRegistrationCodeSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { label, expiresInHours } = parsed.data
   const expiresAt =
     expiresInHours > 0 ? new Date(Date.now() + expiresInHours * 60 * 60 * 1000) : null
@@ -134,20 +134,20 @@ export async function createRegistrationCode(
       )
       if (isUnique) continue
       console.error('createRegistrationCode failed:', error)
-      return fail('가입코드 발급에 실패했습니다')
+      return fail('errors.createRegistrationCodeFailed')
     }
   }
-  return fail('가입코드 생성에 실패했습니다. 다시 시도하세요')
+  return fail('errors.registrationCodeGenerationFailed')
 }
 
 export async function createGuestToken(
   input: z.infer<typeof createTokenSchema>,
 ): Promise<ActionResult<{ code: string }>> {
   const adminId = await requireAdmin()
-  if (!adminId) return fail('관리자만 발급할 수 있습니다')
+  if (!adminId) return fail('errors.adminOnlyIssue')
 
   const parsed = createTokenSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { label, expiresInHours } = parsed.data
 
   const expiresAt =
@@ -167,10 +167,10 @@ export async function createGuestToken(
       )
       if (isUnique) continue
       console.error('createGuestToken failed:', error)
-      return fail('토큰 발급에 실패했습니다')
+      return fail('errors.createGuestTokenFailed')
     }
   }
-  return fail('토큰 코드 생성에 실패했습니다. 다시 시도하세요')
+  return fail('errors.guestTokenGenerationFailed')
 }
 
 const revokeSchema = z.object({ tokenId: z.string().uuid() })
@@ -179,10 +179,10 @@ export async function revokeGuestToken(
   input: z.infer<typeof revokeSchema>,
 ): Promise<ActionResult<{ tokenId: string }>> {
   const adminId = await requireAdmin()
-  if (!adminId) return fail('관리자만 회수할 수 있습니다')
+  if (!adminId) return fail('errors.adminOnlyRevoke')
 
   const parsed = revokeSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
 
   try {
     const [updated] = await db
@@ -190,11 +190,11 @@ export async function revokeGuestToken(
       .set({ revokedAt: new Date() })
       .where(eq(schema.guestTokens.id, parsed.data.tokenId))
       .returning({ id: schema.guestTokens.id })
-    if (!updated) return fail('토큰을 찾을 수 없습니다')
+    if (!updated) return fail('errors.guestTokenNotFound')
     return ok({ tokenId: updated.id })
   } catch (error) {
     console.error('revokeGuestToken failed:', error)
-    return fail('토큰 회수에 실패했습니다')
+    return fail('errors.revokeGuestTokenFailed')
   }
 }
 
@@ -204,9 +204,9 @@ export async function revokeRegistrationCode(
   input: z.infer<typeof revokeRegistrationCodeSchema>,
 ): Promise<ActionResult<{ codeId: string }>> {
   const adminId = await requireAdmin()
-  if (!adminId) return fail('관리자만 회수할 수 있습니다')
+  if (!adminId) return fail('errors.adminOnlyRevoke')
   const parsed = revokeRegistrationCodeSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
 
   try {
     const [updated] = await db
@@ -219,11 +219,11 @@ export async function revokeRegistrationCode(
         ),
       )
       .returning({ id: schema.registrationCodes.id })
-    if (!updated) return fail('가입코드를 찾을 수 없거나 이미 회수했습니다')
+    if (!updated) return fail('errors.registrationCodeNotFoundOrRevoked')
     return ok({ codeId: updated.id })
   } catch (error) {
     console.error('revokeRegistrationCode failed:', error)
-    return fail('가입코드 회수에 실패했습니다')
+    return fail('errors.revokeRegistrationCodeFailed')
   }
 }
 
@@ -236,14 +236,14 @@ export async function setAdmin(
   input: z.infer<typeof setAdminSchema>,
 ): Promise<ActionResult<{ targetUserId: string; isAdmin: boolean }>> {
   const adminId = await requireAdmin()
-  if (!adminId) return fail('관리자만 변경할 수 있습니다')
+  if (!adminId) return fail('errors.adminOnlyChange')
 
   const parsed = setAdminSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { targetUserId, isAdmin } = parsed.data
 
   if (targetUserId === adminId && !isAdmin) {
-    return fail('자기 자신의 관리자 권한은 해제할 수 없습니다')
+    return fail('errors.cannotRevokeOwnAdmin')
   }
 
   try {
@@ -252,9 +252,9 @@ export async function setAdmin(
       .from(schema.users)
       .where(eq(schema.users.id, targetUserId))
       .limit(1)
-    if (!target) return fail('사용자를 찾을 수 없습니다')
+    if (!target) return fail('errors.adminUserNotFound')
     if (target.authentikSub.startsWith('guest:')) {
-      return fail('게스트 계정은 관리자로 지정할 수 없습니다')
+      return fail('errors.guestCannotBeAdmin')
     }
 
     const [updated] = await db
@@ -262,11 +262,11 @@ export async function setAdmin(
       .set({ isAdmin })
       .where(eq(schema.users.id, targetUserId))
       .returning({ id: schema.users.id })
-    if (!updated) return fail('권한을 변경하지 못했습니다')
+    if (!updated) return fail('errors.setAdminUpdateFailed')
     return ok({ targetUserId, isAdmin })
   } catch (error) {
     console.error('setAdmin failed:', error)
-    return fail('권한 변경에 실패했습니다')
+    return fail('errors.setAdminFailed')
   }
 }
 
@@ -280,8 +280,8 @@ const ADMIN_CLOSE_REASON = '관리자 강제 정산'
  */
 export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ code: string }>> {
   const adminId = await requireAdmin()
-  if (!adminId) return fail('관리자만 강제 정산할 수 있습니다')
-  if (!z.string().uuid().safeParse(roomId).success) return fail('잘못된 방입니다')
+  if (!adminId) return fail('errors.adminOnlyCloseRoom')
+  if (!z.string().uuid().safeParse(roomId).success) return fail('errors.invalidRoom')
 
   try {
     return await db.transaction(async (tx) => {
@@ -296,8 +296,8 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
         .from(schema.rooms)
         .where(eq(schema.rooms.id, roomId))
         .limit(1)
-      if (!room) return fail('방을 찾을 수 없습니다')
-      if (room.status === 'settled' || room.status === 'closed') return fail('이미 끝난 방입니다')
+      if (!room) return fail('errors.roomNotFound')
+      if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
       const [round] = await tx
         .select({ id: schema.rounds.id })
@@ -356,7 +356,7 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
       }
 
       if ((await netTotalInRoom(tx, roomId)) !== 0) {
-        return fail('세션 손익 합계가 0이 아니라 정산할 수 없습니다')
+        return fail('errors.settlementNotBalanced')
       }
       if (readFundingMode(room.rulePreset) === 'account_credit') {
         // DB RPC도 users.is_admin을 다시 확인한다. 방장이 사라진 복구 경로에서 전역 lock이
@@ -373,6 +373,6 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
     })
   } catch (error) {
     console.error('adminCloseRoom failed:', error)
-    return fail('강제 정산에 실패했습니다')
+    return fail('errors.adminCloseRoomFailed')
   }
 }

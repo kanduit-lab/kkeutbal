@@ -51,14 +51,14 @@ export async function recognizeHand(
   input: z.infer<typeof inputSchema>,
 ): Promise<ActionResult<VisionRecognition>> {
   const userId = await currentUserId()
-  if (!userId) return fail('로그인이 필요합니다')
+  if (!userId) return fail('errors.loginRequired')
 
   const parsed = inputSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
 
   const env = serverEnv()
   if (!env.JOKBO_VISION_ENABLED || !env.ANTHROPIC_API_KEY) {
-    return fail('사진 인식이 비활성화되어 있습니다. 수동 선택을 사용하세요')
+    return fail('errors.visionDisabled')
   }
 
   const rate = await consumeRateLimits([
@@ -75,13 +75,13 @@ export async function recognizeHand(
       windowMs: 60 * 60 * 1000,
     },
   ])
-  if (!rate.allowed) return fail('사진 인식 요청이 너무 많습니다. 잠시 후 다시 시도하세요')
+  if (!rate.allowed) return fail('errors.visionRateLimited')
 
   const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(parsed.data.imageDataUrl)
-  if (!match || !match[1] || !match[2]) return fail('지원하지 않는 이미지 형식입니다 (jpeg/png/webp)')
+  if (!match || !match[1] || !match[2]) return fail('errors.visionUnsupportedImage')
   const mediaType = match[1] as 'image/jpeg' | 'image/png' | 'image/webp'
   const base64Data = match[2]
-  if (base64Data.length * 0.75 > MAX_IMAGE_BYTES) return fail('이미지가 너무 큽니다 (5MB 이하)')
+  if (base64Data.length * 0.75 > MAX_IMAGE_BYTES) return fail('errors.visionImageTooLarge')
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
 
@@ -115,20 +115,20 @@ export async function recognizeHand(
     })
 
     const textBlock = response.content.find((block) => block.type === 'text')
-    if (!textBlock || textBlock.type !== 'text') return fail('인식 결과를 받지 못했습니다')
+    if (!textBlock || textBlock.type !== 'text') return fail('errors.visionNoResult')
 
     const jsonMatch = /\{[\s\S]*\}/.exec(textBlock.text)
-    if (!jsonMatch) return fail('인식 결과 형식이 올바르지 않습니다')
+    if (!jsonMatch) return fail('errors.visionInvalidResult')
 
     let raw: unknown
     try {
       raw = JSON.parse(jsonMatch[0])
     } catch {
-      return fail('인식 결과 형식이 올바르지 않습니다')
+      return fail('errors.visionInvalidResult')
     }
 
     const result = visionSchema.safeParse(raw)
-    if (!result.success) return fail('인식 결과 형식이 올바르지 않습니다')
+    if (!result.success) return fail('errors.visionInvalidResult')
 
     const cardIds = toCardIds(result.data.cards, parsed.data.gameType)
     return ok({
@@ -138,7 +138,7 @@ export async function recognizeHand(
     })
   } catch (error) {
     console.error('vision recognition failed:', error)
-    return fail('사진 인식에 실패했습니다. 수동 선택을 사용하세요')
+    return fail('errors.visionRecognitionFailed')
   }
 }
 
