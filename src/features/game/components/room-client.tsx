@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format, translateError, useDict } from '@/lib/i18n/client'
@@ -16,6 +17,7 @@ import { DealerPanel } from './dealer-panel'
 import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
 import { RoundLog } from './round-log'
+import { FairnessPanel } from './fairness-panel'
 import type { BroadcastSpec, RunAction } from './shared'
 
 /**
@@ -258,6 +260,10 @@ export function RoomClient({
     () => snapshot.actions.filter((action) => action.status === 'pending'),
     [snapshot.actions],
   )
+  const latestAuditableRound = useMemo(
+    () => snapshot.recentRounds.find((round) => round.hasFairnessAudit) ?? null,
+    [snapshot.recentRounds],
+  )
 
   function toggleMute() {
     const next = !muted
@@ -381,6 +387,9 @@ export function RoomClient({
       ) : (
         <div className="lg:grid lg:grid-cols-12 lg:gap-6">
           <div className="lg:col-span-7 xl:col-span-8">
+            <div className="rise-in rise-in-1">
+              <FairnessPanel snapshot={snapshot} selfId={selfId} runAction={runAction} />
+            </div>
             {snapshot.lastResult && !snapshot.currentRound ? (
               <p className="rise-in rise-in-1 mb-2 text-center text-xs text-muted lg:text-sm">
                 {/* 무효 판은 lastResult 에 오지 않는다 — 승자 미상은 '?' 로만 표기. */}
@@ -392,6 +401,26 @@ export function RoomClient({
                   pot: snapshot.lastResult.pot.toLocaleString(),
                 })}
                 {snapshot.lastResult.note ? ` · ${snapshot.lastResult.note}` : ''}
+                {snapshot.lastResult.hasFairnessAudit ? (
+                  <Link
+                    href={`/rooms/${snapshot.room.code}/fairness/${snapshot.lastResult.seq}` as Route}
+                    className="ml-2 font-bold text-accent underline underline-offset-2"
+                  >
+                    {d.fairness.auditLink}
+                  </Link>
+                ) : null}
+              </p>
+            ) : null}
+            {!snapshot.currentRound &&
+            latestAuditableRound &&
+            latestAuditableRound.roundId !== snapshot.lastResult?.roundId ? (
+              <p className="mb-2 text-center text-xs text-muted lg:text-sm">
+                <Link
+                  href={`/rooms/${snapshot.room.code}/fairness/${latestAuditableRound.seq}` as Route}
+                  className="font-bold text-accent underline underline-offset-2"
+                >
+                  {d.fairness.auditLink}
+                </Link>
               </p>
             ) : null}
 

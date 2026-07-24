@@ -26,8 +26,13 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
   const [startingChips, setStartingChips] = useState(room.startingChips)
   const [maxMembers, setMaxMembers] = useState(room.maxMembers)
   const [joinAsObserver, setJoinAsObserver] = useState(room.joinAsObserver)
+  const [fairDealing, setFairDealing] = useState(room.fairPlay.dealing)
+  const [seedCollectionSeconds, setSeedCollectionSeconds] = useState(
+    room.fairPlay.seedCollectionSeconds,
+  )
 
   const isGostop = room.gameType === 'gostop'
+  const supportsVerifiedFairDeal = room.gameType === 'seotda'
   // 첫 판 전에만 시작 칩 변경 허용 — 진행 중 변경은 손익·팟 계산의 기준을 흔든다.
   const canEditStartingChips = room.status === 'waiting'
 
@@ -44,6 +49,14 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
         startingChips: canEditStartingChips ? startingChips : undefined,
         maxMembers,
         joinAsObserver,
+        fairPlay: supportsVerifiedFairDeal
+          ? {
+              dealing: fairDealing,
+              seedCollectionSeconds,
+              turnTimeoutSeconds: room.fairPlay.turnTimeoutSeconds,
+              timeoutPolicy: 'pause',
+            }
+          : undefined,
       })
       if (result.success) {
         // 설정 페이지는 채널 미구독 — 원샷 브로드캐스트로 방 화면 피어가 즉시 refetch 하게 한다.
@@ -189,6 +202,48 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
           </Button>
           <p className="mt-1.5 text-xs text-muted">{d.settings.joinAsObserverHint}</p>
         </div>
+
+        {supportsVerifiedFairDeal ? (
+          <Field label={d.fairness.settingsLabel}>
+            <Button
+              type="button"
+              variant={fairDealing === 'verified' ? 'primary' : 'surface'}
+              className={
+                fairDealing === 'verified'
+                  ? 'w-full justify-between'
+                  : 'w-full justify-between border border-white/10'
+              }
+              pressed={fairDealing === 'verified'}
+              disabled={room.status !== 'waiting'}
+              disabledReason={room.status !== 'waiting' ? d.fairness.settingsLocked : undefined}
+              onClick={() =>
+                setFairDealing((current) => (current === 'verified' ? 'manual' : 'verified'))
+              }
+            >
+              <span>
+                {fairDealing === 'verified' ? d.fairness.verifiedEnabled : d.fairness.verifiedDisabled}
+              </span>
+              <span className="text-sm opacity-80" aria-hidden>
+                {fairDealing === 'verified' ? 'ON' : 'OFF'}
+              </span>
+            </Button>
+            <p className="mt-1.5 text-xs text-muted">{d.fairness.verifiedHint}</p>
+            {fairDealing === 'verified' ? (
+              <div className="mt-3">
+                <p className="mb-1 text-xs font-medium">{d.fairness.seedTimeoutLabel}</p>
+                <Stepper
+                  value={seedCollectionSeconds}
+                  onChange={setSeedCollectionSeconds}
+                  min={10}
+                  max={120}
+                  step={5}
+                  ariaLabel={d.fairness.seedTimeoutLabel}
+                />
+                <p className="mt-1.5 text-xs text-muted">{d.fairness.seedTimeoutHint}</p>
+              </div>
+            ) : null}
+          </Field>
+        ) : null}
 
         <Button
           type="button"

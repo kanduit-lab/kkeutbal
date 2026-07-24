@@ -52,6 +52,9 @@ export function DealerPanel({
   const isHost = snapshot.members.find((member) => member.userId === selfId)?.role === 'host'
   const players = snapshot.members.filter((member) => member.role !== 'observer')
   const isGostop = snapshot.room.gameType === 'gostop'
+  const verifiedFairness =
+    snapshot.room.gameType === 'seotda' ? (round?.fairness ?? null) : null
+  const verifiedDealReady = verifiedFairness?.phase === 'sealed'
   // 다이/폴드는 그 판의 승자 후보가 아니다. 서버도 endRound에서 재검증하므로, 이 값은
   // 스냅샷이 잠시 오래됐더라도 권한 경계를 대신하지 않는다.
   const eligibleWinnerIds = new Set(
@@ -104,6 +107,25 @@ export function DealerPanel({
     )
   }
 
+  const finishVerifiedRound = () => {
+    if (!round || !verifiedDealReady) return
+    run(() =>
+      runAction(
+        // verified 섯다는 winnerId를 받지 않는다. 서버가 봉인된 덱으로만 승자를 판정한다.
+        () => endRound({ roomId }),
+        (data) => ({
+          event: 'round.ended',
+          payload: {
+            roundId: round.id,
+            seq: data.seq,
+            winnerId: data.winnerId,
+            pot: data.pot,
+          },
+        }),
+      ),
+    )
+  }
+
   return (
     <Panel className="mb-4 space-y-4 border border-accent/20">
       <h2 className="text-sm font-bold text-accent">{d.dealer.title}</h2>
@@ -146,9 +168,19 @@ export function DealerPanel({
               <Button
                 variant="win"
                 size="lg"
-                disabled={isPending || pendingActions.length > 0}
-                disabledReason={pendingActions.length > 0 ? d.dealer.pendingFirst : undefined}
+                disabled={isPending || pendingActions.length > 0 || Boolean(verifiedFairness && !verifiedDealReady)}
+                disabledReason={
+                  pendingActions.length > 0
+                    ? d.dealer.pendingFirst
+                    : verifiedFairness && !verifiedDealReady
+                      ? d.fairness.waitForSeeds
+                      : undefined
+                }
                 onClick={() => {
+                  if (verifiedFairness) {
+                    finishVerifiedRound()
+                    return
+                  }
                   // 마지막 한 명만 남았다면 다이 승리를 미리 선택해 딜러의 한 단계를 줄인다.
                   setWinnerId(foldWinWinner?.userId ?? null)
                   setNote('')
