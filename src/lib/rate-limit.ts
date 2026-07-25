@@ -52,6 +52,10 @@ export async function consumeRateLimits(
       const windowStartMs = Math.floor(now / rule.windowMs) * rule.windowMs
       const windowStart = new Date(windowStartMs)
       const expiresAt = new Date(windowStartMs + rule.windowMs)
+      // Drizzle column values are encoded as timestamps, but a value interpolated
+      // directly into a SQL fragment reaches postgres-js unchanged. Pass ISO text
+      // so the prepared statement never receives a JavaScript Date object.
+      const windowStartIso = windowStart.toISOString()
       const keyHash = hashIdentifier(rule.scope, rule.identifier)
 
       const [bucket] = await tx
@@ -69,7 +73,7 @@ export async function consumeRateLimits(
             windowStart,
             expiresAt,
             hits: sql<number>`case
-              when ${schema.rateLimitBuckets.windowStart} < ${windowStart}
+              when ${schema.rateLimitBuckets.windowStart} < ${windowStartIso}
                 then 1
               else ${schema.rateLimitBuckets.hits} + 1
             end`,
