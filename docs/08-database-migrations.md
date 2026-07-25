@@ -6,7 +6,7 @@
 | Audience | operators / maintainers |
 | Status | active |
 | Source of truth | this document (DB 적용 순서·검증·복구) |
-| Last reviewed | 2026-07-24 |
+| Last reviewed | 2026-07-25 |
 
 ## Purpose
 
@@ -42,22 +42,23 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    pnpm db:migrate
    ```
 
-   live DB는 2026-07-24 기준 `0000`~`0017` 이력이 동기화되어 있다. 전역 가상 크레딧과
+   live DB는 2026-07-25 기준 `0000`~`0019` 이력이 동기화되어 있다. 전역 가상 크레딧과
    게임·credit FK 인덱스, credit 안전 정수 제약, 공정 딜 라운드 상태 테이블을 포함하는 버전은
-   `0017`까지 적용하므로 같은 커밋에서
+   `0018`(Vision provider 설정 테이블)과 `0019`(최초 관리자 설정 가드)까지 적용하므로 같은 커밋에서
    재실행하면 새 마이그레이션만 적용된다.
 
 3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`,
    `0009_virtual_credits_security.sql`, `0010_credit_posting_hardening.sql`,
    `0011_room_credit_lifecycle.sql`, `0012_room_credit_reversals.sql`,
    `0013_admin_room_credit_settlement.sql`, `0014_fair_round_security.sql`,
-   `0015_fair_reveal_immutability.sql`을 번호순으로 적용한다.
+   `0015_fair_reveal_immutability.sql`, `0016_vision_settings_security.sql`을 번호순으로 적용한다.
    0009는 **Drizzle** `0012` credit DDL 뒤에만 실행하며 credit 테이블의 직접 DML을 회수하고
    posting primitive·append-only 트리거를 만든다. 0010은 앱 롤의 generic posting 실행 권한을
    회수하고 관리자 조정 전용 RPC를 부여한다. 0011·0012는 account-credit 방의 buy-in 잠금,
    취소 release, 종료 정산 전용 RPC를 부여한다. 0013은 호스트를 잃은 account-credit 방을
    관리자 강제 정산할 때 DB에서 관리자 권한을 재검증한다. 0014는 Drizzle 0016의 공정 딜 상태
-   테이블을 server-only로 잠그고, 0015는 종료 뒤 full reveal 행의 수정·삭제를 막는다.
+   테이블을 server-only로 잠그고, 0015는 종료 뒤 full reveal 행의 수정·삭제를 막는다. 0016은
+   Vision 설정 테이블의 브라우저 역할 접근을 회수한다.
 
 4. 아래 Verification을 수행한 뒤 앱을 다시 연다.
 5. 관리자 계정으로 `/admin`에 한 번 로그인해 `0011` 이전 게스트 토큰 원문을

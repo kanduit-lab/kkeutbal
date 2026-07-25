@@ -6,7 +6,7 @@
 | Audience | engineering |
 | Status | active |
 | Source of truth | 구현 현황은 코드·스키마, 이 문서는 단계 구분·MVP 경계 |
-| Last reviewed | 2026-07-24 |
+| Last reviewed | 2026-07-25 |
 
 실행 단위 잔여 작업은 [`TODO.md`](../TODO.md)가 소유한다. 이 문서는 **순서와 경계**만 정한다.
 
@@ -44,7 +44,6 @@
 | Vision 인식 | 구현 완료 | `src/features/jokbo-advisor/vision/actions.ts` |
 | 정산 · 랭킹 | 구현 완료 | `src/features/ranking/queries.ts`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
 | CI/CD | production 배포 활성, staging/preview 대기 | `.github/workflows/deploy.yml`, `.deploy.yml`(`preview.enabled: false`, `staging.enabled: false`) |
-| Keep-alive | 배포 환경 secret 설정 대기 | `.github/workflows/keep-alive.yml`, `/api/keep-alive` |
 | E2E | 모바일 Chromium 공개 플로우 7개(로그인·안전한 next·오류 폴백·소개·가이드·언어·404·보호 경로) 구현, 인증 후 전체 흐름 미구현 | `playwright.config.ts`, `e2e/public-surfaces.spec.ts` |
 | 미사용 스키마 | 제거 확정(2026-07-23) — `groups`/`group_members`/`hand_records` 스키마에서 삭제 | `drizzle/schema.ts`, 근거는 `docs/design-decisions/` 001 |
 

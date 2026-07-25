@@ -1,12 +1,12 @@
 # 아키텍처
 
-| Field | Value |
-|-------|-------|
-| Type | technical-design |
-| Audience | engineering / reviewers / operators |
-| Status | active |
+| Field           | Value                                                      |
+| --------------- | ---------------------------------------------------------- |
+| Type            | technical-design                                           |
+| Audience        | engineering / reviewers / operators                        |
+| Status          | active                                                     |
 | Source of truth | 구현은 코드·스키마, 이 문서는 스택·배포 토폴로지·모듈 경계 |
-| Last reviewed | 2026-07-24 |
+| Last reviewed   | 2026-07-25                                                 |
 
 ## Context
 
@@ -134,13 +134,13 @@ Realtime 전용이다). `src/lib/realtime/client.ts` + `events.ts`가 프로토�
 
 **refetch 트리거 4종**(`room-client.tsx`):
 
-| 트리거 | 조건 |
-|---|---|
-| 이벤트 수신 | 모든 broadcast 이벤트 → 250ms 디바운스 후 refetch |
-| Presence sync | 참가자 입장/이탈 감지 시 즉시 디바운스 refetch |
+| 트리거         | 조건                                                        |
+| -------------- | ----------------------------------------------------------- |
+| 이벤트 수신    | 모든 broadcast 이벤트 → 250ms 디바운스 후 refetch           |
+| Presence sync  | 참가자 입장/이탈 감지 시 즉시 디바운스 refetch              |
 | 구독 성공 직후 | `channel.subscribe` 콜백에서 즉시 refetch(재연결 공백 복원) |
-| 폴링 | 탭이 visible일 때 20초 간격 `setInterval` |
-| 가시성 복귀 | `visibilitychange` 이벤트에서 탭이 다시 보이면 즉시 refetch |
+| 폴링           | 탭이 visible일 때 20초 간격 `setInterval`                   |
+| 가시성 복귀    | `visibilitychange` 이벤트에서 탭이 다시 보이면 즉시 refetch |
 
 payload 검증은 `events.ts`의 `parseEvent()` — envelope(`v`/`id`/`roomId`/`actorId`/`at`) +
 이벤트별 zod 스키마를 한 번에 검증하고, 실패하면 조용히 버린다(상태 미반영, 스냅샷 경로로 복구).
@@ -193,16 +193,16 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 ### 기술 선택 요약
 
-| 레이어 | 선택 | 근거 |
-|--------|------|------|
-| 앱 프레임워크 | Next.js 16 App Router, `output: 'standalone'` | SSR로 초기 방 상태를 즉시 그림. standalone 산출물을 docker 이미지에 그대로 담는다 |
-| 언어 | TypeScript strict | 카드 배열 인덱싱이 많아 undefined 누락이 실제 버그 원인이 됨 |
-| 실시간 | Supabase Realtime Broadcast(공개 채널) + Presence | 전용 서버 불필요, 저지연. 인증 연동은 안 함 — obscurity + 스냅샷 재검증으로 대체 |
-| DB 접근 | Drizzle ORM + postgres-js, 전용 롤(bypassrls) | 스키마를 타입 소스로. service role key/JWT 브리지 없이 커넥션 문자열 하나로 통제 |
-| 인증 | Auth.js v5, Authentik 선택적 + 게스트 로그인 | Authentik 미등록 상태에서도 개발·현장 운영 가능 |
-| 검증 | zod | realtime payload·env·폼 입력 단일 검증 수단 |
-| 배포 | Docker, `kanduit-lab/docker-deploy-control-hub` v2 | 사용자 소유 self-hosted 인프라. Vercel 미사용 |
-| Vision | Anthropic Claude(`JOKBO_VISION_MODEL`, 기본 `claude-sonnet-5`) | 화투 패 인식을 별도 모델 학습 없이 처리 |
+| 레이어        | 선택                                               | 근거                                                                                       |
+| ------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 앱 프레임워크 | Next.js 16 App Router, `output: 'standalone'`      | SSR로 초기 방 상태를 즉시 그림. standalone 산출물을 docker 이미지에 그대로 담는다          |
+| 언어          | TypeScript strict                                  | 카드 배열 인덱싱이 많아 undefined 누락이 실제 버그 원인이 됨                               |
+| 실시간        | Supabase Realtime Broadcast(공개 채널) + Presence  | 전용 서버 불필요, 저지연. 인증 연동은 안 함 — obscurity + 스냅샷 재검증으로 대체           |
+| DB 접근       | Drizzle ORM + postgres-js, 전용 롤(bypassrls)      | 스키마를 타입 소스로. service role key/JWT 브리지 없이 커넥션 문자열 하나로 통제           |
+| 인증          | Auth.js v5, Authentik 선택적 + 게스트 로그인       | Authentik 미등록 상태에서도 개발·현장 운영 가능                                            |
+| 검증          | zod                                                | realtime payload·env·폼 입력 단일 검증 수단                                                |
+| 배포          | Docker, `kanduit-lab/docker-deploy-control-hub` v2 | 사용자 소유 self-hosted 인프라. Vercel 미사용                                              |
+| Vision        | Anthropic Claude 또는 Gemini(`vision_settings`)    | API key는 환경변수에만 두고, 관리자 콘솔에서 공급자·모델·활성화와 키의 준비 상태를 관리 |
 
 ## Alternatives Considered
 
@@ -250,37 +250,34 @@ src/features/<domain>/       도메인별 폴더가 경계
    `production`은 `v*` 안정 태그 push 시 `.github/workflows/deploy.yml`이
    `kanduit-lab/docker-deploy-control-hub@v2`의 `ci-reusable.yml`/`cd-reusable.yml`을 호출해
    빌드·배포한다. 도메인 `kkeutbal.kanduit.app`, health check `/api/health`.
-5. 배포 환경과 GitHub Actions에 동일한 `KEEP_ALIVE_SECRET`을 등록한다. 워크플로가 6시간 간격으로
-   `/api/keep-alive`를 호출해 인증된 `select 1`로 Supabase 일시정지를 방지한다.
-6. 실제 MT 전에 2대 이상 기기로 리허설 1회 — 동기화·재접속·정산 확인.
+5. 실제 MT 전에 2대 이상 기기로 리허설 1회 — 동기화·재접속·정산 확인.
 
 롤백: 이전 docker 이미지 태그로 재배포(`docker-deploy-control-hub` 워크플로 기준). 스키마는
 초기 단계이므로 파괴적 변경 시 `drizzle-kit generate`로 down 경로를 명시적으로 만든다.
 
 ## Verification Plan
 
-| 대상 | 방법 |
-|------|------|
-| 게임 엔진 정확성 | Vitest 단위 테스트(`*.test.ts`). 섯다는 20장 조합 대조 |
-| 칩 보존 불변식 | `chip_ledger` 기반 잔액 = delta 합. 세션 정산 시 순손익 합계 0 검증 |
-| 실시간 지연 | 2개 브라우저 컨텍스트에서 액션→반영 타임스탬프 측정(Playwright) — 현재 자동화 스위트 없음 |
-| 재접속 복원 | 소켓 강제 종료 후 `refreshRoom` 스냅샷 일치 확인 |
-| 권한 격리 | 비참가자 세션으로 Server Action 호출 시 거부 확인(RLS는 anon 직접 조회 차단만 검증) |
-| 타입·린트 | `pnpm typecheck`, `pnpm lint` |
-| 빌드 | `pnpm build` — 사용자가 직접 실행(에이전트는 코드 수정·오류 분석만) |
+| 대상             | 방법                                                                                      |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| 게임 엔진 정확성 | Vitest 단위 테스트(`*.test.ts`). 섯다는 20장 조합 대조                                    |
+| 칩 보존 불변식   | `chip_ledger` 기반 잔액 = delta 합. 세션 정산 시 순손익 합계 0 검증                       |
+| 실시간 지연      | 2개 브라우저 컨텍스트에서 액션→반영 타임스탬프 측정(Playwright) — 현재 자동화 스위트 없음 |
+| 재접속 복원      | 소켓 강제 종료 후 `refreshRoom` 스냅샷 일치 확인                                          |
+| 권한 격리        | 비참가자 세션으로 Server Action 호출 시 거부 확인(RLS는 anon 직접 조회 차단만 검증)       |
+| 타입·린트        | `pnpm typecheck`, `pnpm lint`                                                             |
+| 빌드             | `pnpm build` — 사용자가 직접 실행(에이전트는 코드 수정·오류 분석만)                       |
 
 ## Risks And Mitigations
 
-| 리스크 | 영향 | 완화 |
-|--------|------|------|
-| 공개 Realtime 채널 — 인증 없이 누구나 `roomId`만 알면 구독·발행 가능 | 칩 금액 등 payload 노출, 위조 이벤트 주입 | UUID 토픽 난독화, zod 검증 실패 시 폐기, 진실은 항상 Server Action 재검증 스냅샷 |
-| `kkeutbal_app`이 bypassrls — Server Action 권한 검사 누락 시 RLS 방어 없음 | 방 데이터 교차 노출 | 모든 쓰기 경로가 Server Action을 거치도록 코드 리뷰로 강제. 컴포넌트 직접 쿼리 금지 규칙 |
-| 회원가입 코드가 유출됨 | 무단 가입 | 관리자가 `/admin`에서 즉시 회수. DB에는 `AUTH_SECRET` 기반 해시만 저장하고, 원문은 발급 직후 한 번만 노출 |
-| DB 인증서 미검증 | 중간자 서버에 DB 자격 증명·쿼리가 노출될 수 있음 | `DATABASE_CA_CERT_BASE64`로 TLS 체인·호스트 검증 |
-| MT 현장 Wi-Fi/LTE 불안정 | 액션 유실·중복 | 멱등키(betting), 폴링+visibilitychange 재동기화, 서버 스냅샷 우선 |
-| Broadcast 메시지 유실(전달 보장 없음) | 화면 불일치 | 이벤트를 힌트로만 쓰고 20초 폴링 + 250ms 디바운스 refetch로 항상 정정 |
-| Supabase 무료 티어 pause(7일 비활성) | 서비스 중단 | `keep-alive.yml` 6시간 주기 ping |
-| Vision 오인식으로 잘못된 족보 안내 | 판 분쟁 | 인식은 보조. 수동 피커 폴백, 결과 수정 UI 필수 |
+| 리스크                                                                     | 영향                                             | 완화                                                                                                      |
+| -------------------------------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| 공개 Realtime 채널 — 인증 없이 누구나 `roomId`만 알면 구독·발행 가능       | 칩 금액 등 payload 노출, 위조 이벤트 주입        | UUID 토픽 난독화, zod 검증 실패 시 폐기, 진실은 항상 Server Action 재검증 스냅샷                          |
+| `kkeutbal_app`이 bypassrls — Server Action 권한 검사 누락 시 RLS 방어 없음 | 방 데이터 교차 노출                              | 모든 쓰기 경로가 Server Action을 거치도록 코드 리뷰로 강제. 컴포넌트 직접 쿼리 금지 규칙                  |
+| 회원가입 코드가 유출됨                                                     | 무단 가입                                        | 관리자가 `/admin`에서 즉시 회수. DB에는 `AUTH_SECRET` 기반 해시만 저장하고, 원문은 발급 직후 한 번만 노출 |
+| DB 인증서 미검증                                                           | 중간자 서버에 DB 자격 증명·쿼리가 노출될 수 있음 | `DATABASE_CA_CERT_BASE64`로 TLS 체인·호스트 검증                                                          |
+| MT 현장 Wi-Fi/LTE 불안정                                                   | 액션 유실·중복                                   | 멱등키(betting), 폴링+visibilitychange 재동기화, 서버 스냅샷 우선                                         |
+| Broadcast 메시지 유실(전달 보장 없음)                                      | 화면 불일치                                      | 이벤트를 힌트로만 쓰고 20초 폴링 + 250ms 디바운스 refetch로 항상 정정                                     |
+| Vision 오인식으로 잘못된 족보 안내                                         | 판 분쟁                                          | 인식은 보조. 수동 피커 폴백, 결과 수정 UI 필수                                                            |
 
 ## Open Questions
 

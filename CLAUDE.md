@@ -11,14 +11,14 @@ MT/모임에서 공용 칩을 쓰면 승패 기록이 안 남는 문제를 푼�
 
 ## 스택
 
-| 레이어 | 선택 |
-|--------|------|
-| 앱 | Next.js 15 App Router, TypeScript strict, RSC + Server Actions, `output: 'standalone'` |
-| 실시간 | Supabase Realtime **Broadcast** 공개 채널(`room:{uuid}`, publishable key) |
-| DB | PostgreSQL(Supabase) + Drizzle ORM. 전용 롤 `kkeutbal_app`(bypassrls)로 pooler(session mode, 5432) 직결. RLS는 anon/authenticated 대상 방어층일 뿐, 실제 권한 검사는 Server Action이 한다 |
-| 인증 | Auth.js v5, 3개 경로: `password`(내부 계정 — username·bcrypt·phone, `local:{username}` sub) · Authentik OIDC(`AUTH_AUTHENTIK_*` 3종 있을 때만, 아이디/전화번호 일치 시 내부 계정에 자동 병합) · `guest-token`(관리자 발급 토큰+이름, `guest:{tokenId}:{name}` sub). 회원가입은 관리자가 발급·회수하는 `registration_codes` 검증 뒤에만 열림. `AUTH_REGISTRATION_CODE`는 첫 관리자 생성용 비상 코드다. 관리자 판정은 `users.is_admin` OR `AUTH_ADMIN_USERNAMES` |
-| Vision | `@anthropic-ai/sdk`, 모델은 `JOKBO_VISION_MODEL` env(기본 `claude-sonnet-5`). 족보 사진 인식 실패 시 수동 피커로 폴백 |
-| 배포 | kanduit-lab `docker-deploy-control-hub` v2 (`.github/workflows/deploy.yml`, `.deploy.yml`), 전용 서버 없음. `dockerfiles/Dockerfile.nextjs` |
+| 레이어 | 선택                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 앱     | Next.js 16 App Router, TypeScript strict, RSC + Server Actions, `output: 'standalone'`                                                                                                                                                                                                                                                                                                                                                                         |
+| 실시간 | Supabase Realtime **Broadcast** 공개 채널(`room:{uuid}`, publishable key)                                                                                                                                                                                                                                                                                                                                                                                      |
+| DB     | PostgreSQL(Supabase) + Drizzle ORM. 전용 롤 `kkeutbal_app`(bypassrls)로 pooler(session mode, 5432) 직결. RLS는 anon/authenticated 대상 방어층일 뿐, 실제 권한 검사는 Server Action이 한다                                                                                                                                                                                                                                                                      |
+| 인증   | Auth.js v5, 3개 경로: `password`(내부 계정 — username·bcrypt·phone, `local:{username}` sub) · Authentik OIDC(관리자 콘솔에서 연결, 아이디/전화번호 일치 시 내부 계정에 자동 병합) · `guest-token`(관리자 발급 토큰+이름, `guest:{tokenId}:{name}` sub). 최초 관리자는 서버 콘솔의 10분짜리 설정 코드로 생성하고, 이후 회원가입은 관리자가 발급·회수하는 `registration_codes` 검증 뒤에만 열린다. 관리자 판정은 `users.is_admin` |
+| Vision | `@anthropic-ai/sdk` + `@google/genai`. API key는 환경변수에만 두고, 관리자 콘솔이 공급자(Anthropic/Gemini)·모델·활성 상태를 관리한다. 인식 실패 시 수동 피커로 폴백                                                                                                                                                                                                                                                                       |
+| 배포   | kanduit-lab `docker-deploy-control-hub` v2 (`.github/workflows/deploy.yml`, `.deploy.yml`), 전용 서버 없음. `dockerfiles/Dockerfile.nextjs`                                                                                                                                                                                                                                                                                                                    |
 
 **중요**: 라이브 액션은 Postgres Changes가 아니라 **Broadcast**를 쓴다. 행동한 클라이언트가
 Server Action 성공 후 이벤트를 직접 send하고, 수신자는 그 이벤트를 힌트로만 쓰고 진실은
@@ -78,18 +78,18 @@ pnpm db:push        # 스키마 반영
 
 게임 용어는 **번역하지 말고 원어 그대로** 쓴다 (코드 식별자 포함).
 
-| 용어 | 뜻 |
-|------|-----|
-| 화투(hwatu) | 48장 카드. 12개월 × 4장. 섯다는 1~10월 20장 부분집합 사용 |
-| 끗(kkeut) | 섯다 점수. 두 장 합의 일의 자리 (0끗=망통 ~ 9끗) |
-| 땡(ttaeng) | 같은 월 2장. 장땡(10)이 최상위 |
-| 광땡(gwangttaeng) | 광 2장 조합. 최상위 족보 |
-| 특수패 | 알리·독사·구삥·장삥·장사·세륙 등 끗보다 우선하는 조합 |
-| 광(gwang) | 밝은 패. 고스톱 점수 핵심 |
-| 피(pi) | 고스톱 껍데기 패. 쌍피 포함 |
-| 고(go)/스톱(stop) | 고스톱에서 판 계속/종료 선언 |
-| 판(pan) | 한 판 = 라운드 |
-| 방(room) | 실시간 세션 단위 |
+| 용어              | 뜻                                                        |
+| ----------------- | --------------------------------------------------------- |
+| 화투(hwatu)       | 48장 카드. 12개월 × 4장. 섯다는 1~10월 20장 부분집합 사용 |
+| 끗(kkeut)         | 섯다 점수. 두 장 합의 일의 자리 (0끗=망통 ~ 9끗)          |
+| 땡(ttaeng)        | 같은 월 2장. 장땡(10)이 최상위                            |
+| 광땡(gwangttaeng) | 광 2장 조합. 최상위 족보                                  |
+| 특수패            | 알리·독사·구삥·장삥·장사·세륙 등 끗보다 우선하는 조합     |
+| 광(gwang)         | 밝은 패. 고스톱 점수 핵심                                 |
+| 피(pi)            | 고스톱 껍데기 패. 쌍피 포함                               |
+| 고(go)/스톱(stop) | 고스톱에서 판 계속/종료 선언                              |
+| 판(pan)           | 한 판 = 라운드                                            |
+| 방(room)          | 실시간 세션 단위                                          |
 
 ## 컨벤션
 

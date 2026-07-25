@@ -1,15 +1,15 @@
 # 데이터 모델
 
-| Field | Value |
-|-------|-------|
-| Type | technical-design |
-| Audience | engineering / reviewers |
-| Status | active |
+| Field           | Value                                                             |
+| --------------- | ----------------------------------------------------------------- |
+| Type            | technical-design                                                  |
+| Audience        | engineering / reviewers                                           |
+| Status          | active                                                            |
 | Source of truth | 구현 스키마는 `drizzle/schema.ts`, 이 문서는 관계·불변식·RLS 경계 |
-| Last reviewed | 2026-07-24 |
+| Last reviewed   | 2026-07-25                                                        |
 
 구현 스키마는 `drizzle/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
-`supabase/migrations/0007_database_hardening.sql`과 신규 테이블 보강용 `0008`이 소유한다.
+`supabase/migrations/0007_database_hardening.sql`과 신규 테이블 보강용 `0008`·`0016`이 소유한다.
 적용 순서는 [`08-database-migrations.md`](08-database-migrations.md)가 소유한다. 실제 상태는
 `pg_policies`, `information_schema.role_table_grants`, `pg_class.relrowsecurity`로 확인한다.
 
@@ -178,7 +178,16 @@ erDiagram
 ### `auth_settings`
 
 인스턴스 단위 인증 설정의 단일 행(`id = 'default'`)이다. SSO 활성 여부·Issuer·Client ID를 두고,
-Client secret은 `AUTH_SECRET` 기반 AES-GCM 암호문만 저장한다. 읽기·변경은 관리자 Server Action만 한다.
+Client secret은 `AUTH_SECRET` 기반 AES-GCM 암호문만 저장한다. 계정이 하나도 없을 때는
+`initial_admin_setup_ciphertext`와 `initial_admin_setup_expires_at`에 10분짜리 최초 관리자
+설정 코드를 암호문으로 보관한다. 첫 관리자 생성 트랜잭션이 코드를 폐기한다. 읽기·변경은 서버
+인증 흐름과 관리자 Server Action만 수행한다.
+
+### `vision_settings`
+
+인스턴스 단위 사진 인식 설정의 단일 행(`id = 'default'`)이다. 활성 여부·선택 공급자
+(`anthropic`/`gemini`)·모델명만 저장한다. API key는 DB에 저장하지 않고 서버 환경변수에서만 읽으며,
+관리자 조회에는 각 키의 설정 여부만 전달한다.
 
 ### `registration_codes`
 
@@ -272,23 +281,23 @@ enum 포함). 이 결정으로 누적 랭킹은 **전역 사용자 단위로 확
 
 ## 인덱스
 
-| 인덱스 | 목적 |
-|--------|------|
-| `rooms(code)` unique | 입장 조회 |
-| `room_members(room_id, user_id)` PK | 참가 판정 · RLS 헬퍼 |
-| `room_members(room_id, seat_no)` unique | 좌석 중복 방지 |
-| `chip_ledger(room_id, user_id)` | 잔액 집계 |
-| `chip_ledger(room_id, created_at)` | 원장 타임라인 |
-| `chip_ledger(ref_buy_in_id)` | 바이인과 원장 직접 연결 |
-| `rounds(room_id, seq)` unique | 판 순서 · 충돌 판정 |
-| `rounds(room_id) where status='playing'` unique | 방마다 진행 중 판 하나 |
-| `bet_actions(round_id, seq)` unique | 판 내 액션 순서 |
-| `round_participants(round_id, user_id)` PK | 판 참가자 정본 |
-| `buy_ins(room_id, user_id)` | 방·사용자별 바이인 합계 |
-| `*_user_id` / `*_created_by` / `*_host_id` FK 인덱스 | 사용자 삭제·관리자 감사·방장 조회의 역방향 FK 탐색 |
-| `bet_actions(room_id/user_id/entered_by/approved_by)` | 방별 액션·입력자·승인자 조회와 FK 검증 |
-| `chip_ledger(user_id/ref_action_id)` | 사용자 이력·액션 정정 근거 조회 |
-| `credit_transactions(round_id, created_at)` / `room_credit_locks(user_id/lock_transaction_id)` | credit 정산 감사와 FK 역방향 조회 |
+| 인덱스                                                                                         | 목적                                               |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `rooms(code)` unique                                                                           | 입장 조회                                          |
+| `room_members(room_id, user_id)` PK                                                            | 참가 판정 · RLS 헬퍼                               |
+| `room_members(room_id, seat_no)` unique                                                        | 좌석 중복 방지                                     |
+| `chip_ledger(room_id, user_id)`                                                                | 잔액 집계                                          |
+| `chip_ledger(room_id, created_at)`                                                             | 원장 타임라인                                      |
+| `chip_ledger(ref_buy_in_id)`                                                                   | 바이인과 원장 직접 연결                            |
+| `rounds(room_id, seq)` unique                                                                  | 판 순서 · 충돌 판정                                |
+| `rounds(room_id) where status='playing'` unique                                                | 방마다 진행 중 판 하나                             |
+| `bet_actions(round_id, seq)` unique                                                            | 판 내 액션 순서                                    |
+| `round_participants(round_id, user_id)` PK                                                     | 판 참가자 정본                                     |
+| `buy_ins(room_id, user_id)`                                                                    | 방·사용자별 바이인 합계                            |
+| `*_user_id` / `*_created_by` / `*_host_id` FK 인덱스                                           | 사용자 삭제·관리자 감사·방장 조회의 역방향 FK 탐색 |
+| `bet_actions(room_id/user_id/entered_by/approved_by)`                                          | 방별 액션·입력자·승인자 조회와 FK 검증             |
+| `chip_ledger(user_id/ref_action_id)`                                                           | 사용자 이력·액션 정정 근거 조회                    |
+| `credit_transactions(round_id, created_at)` / `room_credit_locks(user_id/lock_transaction_id)` | credit 정산 감사와 FK 역방향 조회                  |
 
 ## RLS 원칙
 
