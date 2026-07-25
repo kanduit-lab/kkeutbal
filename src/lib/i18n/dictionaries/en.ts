@@ -101,8 +101,26 @@ export const en: Dictionary = {
     errorInvalidCredentials: 'Username or password is incorrect',
     errorGuestTokenInvalid: 'Token is invalid or expired',
     errorLoginFailed: 'Sign-in failed',
+    initialAdminTitle: 'Initial administrator setup',
+    initialAdminDescription: 'This instance has no accounts yet.',
+    initialAdminCodeHint: 'Enter the one-time setup code shown in the server console.',
+    initialAdminCodeExpiryHint:
+      'When it expires after 10 minutes, a new code is issued to the console automatically.',
+    initialAdminQuestion: 'New installation?',
+    initialAdminLink: 'Create the initial administrator',
+    initialAdminCodeLabel: 'Initial administrator setup code',
+    initialAdminCodePlaceholder: 'XXXX-XXXX-XXXX-XXXX',
+    initialAdminCodeSubmit: 'Verify code',
+    initialAdminCodePending: 'Verifying…',
+    initialAdminCodeInvalid: 'The code is incorrect or expired.',
+    initialAdminCodeRetry: 'Enter the latest code shown in the server console.',
+    initialAdminSetupUnavailable:
+      'Initial administrator setup could not be prepared. Check the server logs and database migrations.',
+    initialAdminSetupRequired:
+      'Verify the initial administrator setup code from the server console first',
     registerTitle: 'Sign up',
-    firstAccountNotice: "This is the first account on this instance — you'll become the admin",
+    firstAccountNotice:
+      'This account will be created with administrator access. The initial setup code is revoked immediately after signup.',
     usernameLabel: 'Username',
     usernameFormatPlaceholder: 'Lowercase letters, digits, _ · 3–20 chars',
     passwordLabel: 'Password',
@@ -139,6 +157,42 @@ export const en: Dictionary = {
     noNamesForToken: 'No one has joined with this token yet',
     enterTokenFirst: 'Enter the 8-character token first',
     loadNamesFailed: 'Could not load names',
+  },
+  adminDashboard: {
+    title: 'Admin console',
+    subtitle: 'Load only the area you need to reduce server work and waiting time.',
+    deniedTitle: 'Administrators only',
+    deniedBody:
+      'Registration codes, guest tokens, connection settings, and roles are available only to administrators.',
+    sectionNavLabel: 'Admin console sections',
+    onDemand: 'On-demand',
+    refreshing: 'Refreshing with the latest data…',
+    slowTitle: 'Waiting for the server',
+    slowBody: 'The interface remains available and data appears when the connection recovers.',
+    loadFailed: 'Could not load this section',
+    loadFailedBody: 'Check the connection and try again.',
+    sections: {
+      settings: {
+        label: 'Connections',
+        short: 'SSO · photo recognition',
+        description: 'Manage external sign-in and AI photo-recognition connections.',
+      },
+      access: {
+        label: 'Access',
+        short: 'Registration · guests',
+        description: 'Issue and revoke registration codes and guest access tokens.',
+      },
+      people: {
+        label: 'People · credits',
+        short: 'Roles · virtual credits',
+        description: 'Search members and manage administrator roles and in-game virtual credits.',
+      },
+      operations: {
+        label: 'Operations',
+        short: 'Rooms · banners · popups',
+        description: 'Manage active rooms and in-app notices and promotions.',
+      },
+    },
   },
   home: {
     joinTitle: 'Join room',
@@ -520,9 +574,11 @@ export const en: Dictionary = {
     settingsLabel: 'Fair dealing',
     verifiedEnabled: 'Use verifiable Seotda dealing',
     verifiedDisabled: 'Manual dealing',
-    verifiedHint: 'Cards are dealt only after server and participant seed commitments, then the full deck is auditable after the round.',
+    verifiedHint:
+      'Cards are dealt only after server and participant seed commitments, then the full deck is auditable after the round.',
     seedTimeoutLabel: 'Seed submission timeout',
-    seedTimeoutHint: 'After this time, missing submissions are recorded and the deal can be sealed.',
+    seedTimeoutHint:
+      'After this time, missing submissions are recorded and the deal can be sealed.',
     settingsLocked: 'Fair-dealing options lock after the first round starts.',
     auditLink: 'Fairness audit',
     auditTitle: 'Verifiable deal audit',
@@ -683,6 +739,8 @@ export const en: Dictionary = {
     fairnessAuditFailed: 'Failed to load the fairness audit',
     // Admin tools (auth/admin-actions.ts)
     adminOnlyChange: 'Only an administrator can change this',
+    adminDashboardLoadFailed: 'Failed to load administrator data',
+    visionProviderKeyMissing: 'The selected provider API key environment variable is required',
     ssoIssuerAndClientIdRequired: 'Enter the Issuer URL and Client ID to enable SSO',
     ssoClientSecretRequired: 'Enter the Client secret to enable SSO',
     saveSsoSettingsFailed: 'Failed to save the SSO settings',
@@ -705,6 +763,7 @@ export const en: Dictionary = {
     adminCloseRoomFailed: 'Failed to force-settle the room',
     // Jokbo photo recognition (jokbo-advisor/vision/actions.ts)
     visionDisabled: 'Photo recognition is disabled. Use manual selection instead',
+    saveVisionSettingsFailed: 'Failed to save photo recognition settings',
     visionRateLimited: 'Too many photo recognition requests. Please try again shortly',
     visionUnsupportedImage: 'Unsupported image format (jpeg/png/webp)',
     visionImageTooLarge: 'The image is too large (5MB maximum)',

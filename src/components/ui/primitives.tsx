@@ -82,7 +82,7 @@ export function Badge({
   return (
     <span
       className={clsx(
-        'inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-bold',
+        'inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs font-bold',
         tone === 'muted' && 'bg-white/10 text-muted',
         tone === 'accent' && 'bg-accent/20 text-accent',
         tone === 'win' && 'bg-win/20 text-win',

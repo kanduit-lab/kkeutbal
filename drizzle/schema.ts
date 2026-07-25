@@ -46,6 +46,7 @@ export const creditTransactionKind = pgEnum('credit_transaction_kind', [
   'room_settlement',
   'correction',
 ])
+export const visionProvider = pgEnum('vision_provider', ['anthropic', 'gemini'])
 /** 공정 딜 라운드의 공개 가능한 단계. 비밀 seed·패는 이 단계와 별도 행에 둔다. */
 export const fairRoundPhase = pgEnum('fair_round_phase', [
   'collecting_seeds',
@@ -122,7 +123,8 @@ export const creditAccounts = pgTable(
 )
 
 /**
- * 인스턴스 단위 인증 설정. SSO 비밀값은 AUTH_SECRET 기반 AES-GCM 암호문으로만 보관한다.
+ * 인스턴스 단위 인증 설정. SSO 비밀값과 최초 관리자 설정 코드는
+ * AUTH_SECRET 기반 AES-GCM 암호문으로만 보관한다.
  * id 는 항상 `default` 한 행만 사용한다.
  */
 export const authSettings = pgTable('auth_settings', {
@@ -131,8 +133,28 @@ export const authSettings = pgTable('auth_settings', {
   ssoIssuer: text('sso_issuer'),
   ssoClientId: text('sso_client_id'),
   ssoClientSecretCiphertext: text('sso_client_secret_ciphertext'),
+  initialAdminSetupCiphertext: text('initial_admin_setup_ciphertext'),
+  initialAdminSetupExpiresAt: timestamp('initial_admin_setup_expires_at', { withTimezone: true }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+/**
+ * 인스턴스 단위 Vision 설정. API 키는 환경변수에만 두고, 여기서는 선택·모델·활성화만 관리한다.
+ * id 는 항상 `default` 한 행만 사용한다.
+ */
+export const visionSettings = pgTable(
+  'vision_settings',
+  {
+    id: text('id').primaryKey().default('default'),
+    enabled: boolean('enabled').notNull().default(false),
+    provider: visionProvider('provider').notNull().default('anthropic'),
+    model: text('model').notNull().default('claude-sonnet-5'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('vision_settings_model_present_ck', sql`length(trim(${table.model})) between 1 and 120`),
+  ],
+)
 
 /**
  * 로그인·가입코드·Vision 호출 제한 버킷.
@@ -158,24 +180,31 @@ export const rateLimitBuckets = pgTable(
  * 게스트 초대 토큰. 관리자가 발급하며, 코드 + 이름만으로 게스트 로그인할 수 있다.
  * 같은 (토큰, 이름) 조합은 같은 게스트 계정으로 이어진다 — 기기를 바꿔도 전적 유지.
  */
-export const guestTokens = pgTable('guest_tokens', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  /** 레거시 원문. 사용 시 codeHash 로 전환하며 신규 발급에는 저장하지 않는다. */
-  code: text('code').unique(),
-  /** 입장 코드의 AUTH_SECRET HMAC. */
-  codeHash: text('code_hash').unique(),
-  /** 발급 메모 (예: "2026 여름 MT"). */
-  label: text('label').notNull(),
-  createdBy: uuid('created_by')
-    .notNull()
-    .references(() => users.id),
-  expiresAt: timestamp('expires_at', { withTimezone: true }),
-  revokedAt: timestamp('revoked_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (table) => [
-  check('guest_tokens_credential_present_ck', sql`${table.codeHash} is not null or ${table.code} is not null`),
-  index('guest_tokens_created_by_idx').on(table.createdBy),
-])
+export const guestTokens = pgTable(
+  'guest_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** 레거시 원문. 사용 시 codeHash 로 전환하며 신규 발급에는 저장하지 않는다. */
+    code: text('code').unique(),
+    /** 입장 코드의 AUTH_SECRET HMAC. */
+    codeHash: text('code_hash').unique(),
+    /** 발급 메모 (예: "2026 여름 MT"). */
+    label: text('label').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'guest_tokens_credential_present_ck',
+      sql`${table.codeHash} is not null or ${table.code} is not null`,
+    ),
+    index('guest_tokens_created_by_idx').on(table.createdBy),
+  ],
+)
 
 /**
  * 내부 계정 회원가입 코드. 원문은 발급 직후 한 번만 보여주고, DB에는 AUTH_SECRET 기반 HMAC만 저장한다.
@@ -361,10 +390,22 @@ export const roundFairness = pgTable(
   },
   (table) => [
     index('round_fairness_phase_deadline_idx').on(table.phase, table.seedDeadline),
-    check('round_fairness_algorithm_version_present_ck', sql`length(trim(${table.algorithmVersion})) between 1 and 120`),
-    check('round_fairness_receipt_version_present_ck', sql`length(trim(${table.receiptVersion})) between 1 and 120`),
-    check('round_fairness_server_seed_ciphertext_present_ck', sql`length(trim(${table.serverSeedCiphertext})) > 0`),
-    check('round_fairness_server_seed_commitment_hash_ck', sql`${table.serverSeedCommitment} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'round_fairness_algorithm_version_present_ck',
+      sql`length(trim(${table.algorithmVersion})) between 1 and 120`,
+    ),
+    check(
+      'round_fairness_receipt_version_present_ck',
+      sql`length(trim(${table.receiptVersion})) between 1 and 120`,
+    ),
+    check(
+      'round_fairness_server_seed_ciphertext_present_ck',
+      sql`length(trim(${table.serverSeedCiphertext})) > 0`,
+    ),
+    check(
+      'round_fairness_server_seed_commitment_hash_ck',
+      sql`${table.serverSeedCommitment} ~ '^[0-9a-f]{64}$'`,
+    ),
     check(
       'round_fairness_sealed_deck_commitment_hash_ck',
       sql`${table.shuffledDeckCommitment} is null or ${table.shuffledDeckCommitment} ~ '^[0-9a-f]{64}$'`,
@@ -472,8 +513,14 @@ export const roundFairnessReveals = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    check('round_fairness_reveals_server_seed_hash_ck', sql`${table.serverSeed} ~ '^[0-9a-f]{64}$'`),
-    check('round_fairness_reveals_full_receipt_object_ck', sql`jsonb_typeof(${table.fullReceipt}) = 'object'`),
+    check(
+      'round_fairness_reveals_server_seed_hash_ck',
+      sql`${table.serverSeed} ~ '^[0-9a-f]{64}$'`,
+    ),
+    check(
+      'round_fairness_reveals_full_receipt_object_ck',
+      sql`jsonb_typeof(${table.fullReceipt}) = 'object'`,
+    ),
   ],
 )
 
@@ -506,7 +553,10 @@ export const creditTransactions = pgTable(
     uniqueIndex('credit_transactions_reverses_uq')
       .on(table.reversesTransactionId)
       .where(sql`${table.reversesTransactionId} is not null`),
-    check('credit_transactions_reason_present_ck', sql`length(trim(${table.reason})) between 1 and 200`),
+    check(
+      'credit_transactions_reason_present_ck',
+      sql`length(trim(${table.reason})) between 1 and 200`,
+    ),
   ],
 )
 
@@ -690,9 +740,6 @@ export const roomCreditLocks = pgTable(
     index('room_credit_locks_user_idx').on(table.userId),
     index('room_credit_locks_lock_transaction_idx').on(table.lockTransactionId),
     check('room_credit_locks_amount_positive_ck', sql`${table.amount} > 0`),
-    check(
-      'room_credit_locks_amount_number_safe_ck',
-      sql`${table.amount} <= ${MAX_SAFE_INTEGER}`,
-    ),
+    check('room_credit_locks_amount_number_safe_ck', sql`${table.amount} <= ${MAX_SAFE_INTEGER}`),
   ],
 )

@@ -127,6 +127,20 @@
       "when": 1784902660313,
       "tag": "0017_bored_brood",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784964274061,
+      "tag": "0018_yummy_doctor_strange",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784967234159,
+      "tag": "0019_real_korvac",
+      "breakpoints": true
     }
   ]
 }

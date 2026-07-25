@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { hasAuthentik, signIn } from '@/lib/auth'
 import { LoginFormSwitcher } from '@/features/auth/components/login-form-switcher'
 import { isFirstAccount } from '@/features/auth/bootstrap'
+import { prepareInitialAdminSetup } from '@/features/auth/initial-admin-setup'
 import { findCard } from '@/features/hwatu/cards'
 import { HwatuCardView } from '@/components/hwatu-card'
 import { LocaleSwitcher } from '@/components/locale-switcher'
@@ -20,6 +21,7 @@ function loginErrorCopy(d: Dictionary): Record<string, string> {
     invalid_credentials: d.auth.errorInvalidCredentials,
     guest_token_invalid: d.auth.errorGuestTokenInvalid,
     registration_code_required: d.auth.registrationCodeRequired,
+    initial_admin_setup_required: d.auth.initialAdminSetupRequired,
   }
 }
 
@@ -36,7 +38,9 @@ export default async function LoginPage({
   ])
   const errorMessage = error ? (loginErrorCopy(d)[error] ?? d.auth.errorLoginFailed) : null
   const redirectTo = next && next.startsWith('/') ? next : '/'
-  const initialMode = mode === 'guest' ? 'guest' : 'password'
+  const initialMode =
+    mode === 'guest' ? 'guest' : mode === 'registration' ? 'registration' : 'password'
+  const initialAdminSetupReady = firstAccount ? await prepareInitialAdminSetup() : false
   const showcase = SHOWCASE_CARD_IDS.map((id) => findCard(id)).filter(
     (card): card is NonNullable<typeof card> => card !== undefined,
   )
@@ -87,6 +91,7 @@ export default async function LoginPage({
             redirectTo={redirectTo}
             initialMode={initialMode}
             firstAccount={firstAccount}
+            initialAdminSetupReady={initialAdminSetupReady}
           />
 
           {authentik ? (

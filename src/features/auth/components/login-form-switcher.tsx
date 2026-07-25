@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { loginWithGuestToken, loginWithPassword } from '@/features/auth/actions'
 import { GuestNamePicker } from '@/features/auth/components/guest-name-picker'
 import { RegistrationCodeForm } from '@/features/auth/components/registration-code-form'
+import { InitialAdminSetupForm } from '@/features/auth/components/initial-admin-setup-form'
 import { Button, Input, Panel, SubmitButton } from '@/components/ui'
 import { useDict } from '@/lib/i18n/client'
 
@@ -15,13 +15,14 @@ export function LoginFormSwitcher({
   redirectTo,
   initialMode,
   firstAccount,
+  initialAdminSetupReady,
 }: {
   redirectTo: string
   initialMode: LoginMode
   firstAccount: boolean
+  initialAdminSetupReady: boolean
 }) {
   const { d } = useDict()
-  const router = useRouter()
   const [mode, setMode] = useState<LoginMode>(initialMode)
 
   if (mode === 'guest') {
@@ -46,19 +47,30 @@ export function LoginFormSwitcher({
       return (
         <Panel className="space-y-4">
           <div>
-            <h2 className="font-bold">초기 관리자 계정</h2>
-            <p className="mt-1 text-sm text-muted">
-              처음 실행입니다. 아이디와 비밀번호를 만들면 이 계정이 관리자가 됩니다.
+            <h2 className="font-bold">{d.auth.initialAdminTitle}</h2>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              <span className="block">{d.auth.initialAdminDescription}</span>
+              <span className="block">{d.auth.initialAdminCodeHint}</span>
+              <span className="block">{d.auth.initialAdminCodeExpiryHint}</span>
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <Button type="button" variant="ghost" onClick={() => setMode('password')}>
-              {d.common.cancel}
-            </Button>
-            <Button type="button" variant="primary" onClick={() => router.push('/register')}>
-              관리자 만들기
-            </Button>
-          </div>
+          {initialAdminSetupReady ? (
+            <InitialAdminSetupForm onCancel={() => setMode('password')} />
+          ) : (
+            <div className="space-y-3">
+              <p role="alert" className="text-sm text-[#ff9a94]">
+                {d.auth.initialAdminSetupUnavailable}
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => setMode('password')}
+              >
+                {d.common.cancel}
+              </Button>
+            </div>
+          )}
         </Panel>
       )
     }
@@ -105,7 +117,7 @@ export function LoginFormSwitcher({
         </SubmitButton>
       </form>
       <p className="text-center text-sm text-muted">
-        {firstAccount ? '처음 설치인가요?' : d.auth.noAccount}{' '}
+        {firstAccount ? d.auth.initialAdminQuestion : d.auth.noAccount}{' '}
         <Button
           type="button"
           variant="ghost"
@@ -113,7 +125,7 @@ export function LoginFormSwitcher({
           className="min-h-0 px-0 py-0 font-bold text-text underline underline-offset-4"
           onClick={() => setMode('registration')}
         >
-          {firstAccount ? '초기 관리자 만들기' : d.auth.registerLink}
+          {firstAccount ? d.auth.initialAdminLink : d.auth.registerLink}
         </Button>
       </p>
       <Button type="button" variant="ghost" className="w-full" onClick={() => setMode('guest')}>

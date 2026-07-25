@@ -1,14 +1,18 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
 import { useMemo, useState, useTransition } from 'react'
 import type { AdminUserView } from '@/features/auth/admin-queries'
 import { adminAdjustCredits } from '../actions'
 import { Button, ConfirmDialog, Field, Input, Panel, useToast } from '@/components/ui'
 
 /** 관리자 지급/회수 표면. 입력값은 확인 대화상자 뒤에만 posting한다. */
-export function CreditAdmin({ users }: { users: readonly AdminUserView[] }) {
-  const router = useRouter()
+export function CreditAdmin({
+  users,
+  onDataChanged,
+}: {
+  users: readonly AdminUserView[]
+  onDataChanged?: () => void
+}) {
   const { toast } = useToast()
   const [isPending, startTransition] = useTransition()
   const [targetUserId, setTargetUserId] = useState(users[0]?.id ?? '')
@@ -41,7 +45,7 @@ export function CreditAdmin({ users }: { users: readonly AdminUserView[] }) {
         toast(amount > 0 ? '가상 크레딧을 지급했습니다' : '가상 크레딧을 회수했습니다', 'success')
         setAmountText('')
         setReason('')
-        router.refresh()
+        onDataChanged?.()
       } else {
         toast(result.error, 'error')
       }
@@ -54,8 +58,8 @@ export function CreditAdmin({ users }: { users: readonly AdminUserView[] }) {
         <div>
           <h2 className="font-bold">가상 크레딧 관리</h2>
           <p className="mt-1 text-sm text-muted">
-            현금 가치·환전·출금이 없는 게임 전용 크레딧입니다. 모든 지급·회수는 사유와 함께
-            변경 불가 원장에 남습니다.
+            현금 가치·환전·출금이 없는 게임 전용 크레딧입니다. 모든 지급·회수는 사유와 함께 변경
+            불가 원장에 남습니다.
           </p>
         </div>
         {users.length === 0 ? (

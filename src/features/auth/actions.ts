@@ -15,7 +15,17 @@ import {
   hasRegistrationAccess,
   registrationAccessCodeId,
 } from '@/features/auth/registration-access'
-import { createUserGrantingFirstAdmin } from '@/features/auth/bootstrap'
+import {
+  createUserGrantingFirstAdmin,
+  InitialAdminSetupRequiredError,
+  isFirstAccount,
+} from '@/features/auth/bootstrap'
+import {
+  consumeInitialAdminSetupAccess,
+  grantInitialAdminSetupAccess,
+  initialAdminSetupAccessId,
+  prepareInitialAdminSetup,
+} from '@/features/auth/initial-admin-setup'
 import { guestTokenHash } from '@/features/auth/guest-tokens'
 import { serverEnv } from '@/lib/env'
 
@@ -40,8 +50,12 @@ export type AuthErrorCode =
   | 'phone_taken'
   | 'register_failed'
   | 'registration_code_required'
+  | 'initial_admin_setup_required'
 
 export type RegistrationCodeState =
+  { status: 'idle' } | { status: 'error'; error: 'invalid' | 'unavailable' } | { status: 'success' }
+
+export type InitialAdminSetupState =
   { status: 'idle' } | { status: 'error'; error: 'invalid' | 'unavailable' } | { status: 'success' }
 
 const registerSchema = z.object({
@@ -91,11 +105,16 @@ function validationCode(issuePath: PropertyKey | undefined): AuthErrorCode {
 }
 
 export async function registerAndLogin(formData: FormData): Promise<void> {
-  const [hasAccess, registrationCodeId] = await Promise.all([
+  const [hasAccess, registrationCodeId, initialAdminSetupId, firstAccount] = await Promise.all([
     hasRegistrationAccess(),
     registrationAccessCodeId(),
+    initialAdminSetupAccessId(),
+    isFirstAccount(),
   ])
   if (!hasAccess) {
+    if (firstAccount) {
+      redirect('/login?error=initial_admin_setup_required&mode=registration')
+    }
     backTo('/login', 'registration_code_required')
   }
 
@@ -155,20 +174,56 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
         phone,
         displayName: name,
       },
-      { requireRegistrationAccess: true, registrationCodeId },
+      { requireRegistrationAccess: true, registrationCodeId, initialAdminSetupId },
     )
   } catch (error) {
+    if (error instanceof InitialAdminSetupRequiredError) {
+      redirect('/login?error=initial_admin_setup_required&mode=registration')
+    }
     console.error('registerAndLogin failed:', error)
     backTo('/register', 'register_failed', fields)
   }
 
   try {
-    await consumeRegistrationAccess()
+    await Promise.all([consumeRegistrationAccess(), consumeInitialAdminSetupAccess()])
   } catch (error) {
     // 계정 생성은 이미 커밋됐다. 쿠키 정리 실패를 가입 실패로 오인시키지 않는다.
     console.error('registration access cookie cleanup failed:', error)
   }
   await signIn('password', { username, password, redirectTo: '/' })
+}
+
+/** 서버 콘솔의 초기 설정 코드를 확인하고 첫 관리자 가입용 10분 증표를 발급한다. */
+export async function verifyInitialAdminSetupCode(
+  _previousState: InitialAdminSetupState,
+  formData: FormData,
+): Promise<InitialAdminSetupState> {
+  if (!(await isFirstAccount())) return { status: 'error', error: 'unavailable' }
+
+  // 코드가 만료됐다면 이 호출에서 새 코드를 발급해 콘솔에 다시 출력한다.
+  if (!(await prepareInitialAdminSetup())) return { status: 'error', error: 'unavailable' }
+
+  const code = String(formData.get('code') ?? '')
+  const address = clientAddressFromHeaders(new Headers(await headers()))
+  const rate = await consumeRateLimits([
+    {
+      scope: 'auth.initial_admin_setup.address',
+      identifier: address,
+      limit: 10,
+      windowMs: 15 * 60 * 1000,
+    },
+    {
+      scope: 'auth.initial_admin_setup.value_address',
+      identifier: `${code}\0${address}`,
+      limit: 5,
+      windowMs: 15 * 60 * 1000,
+    },
+  ])
+  if (!rate.allowed) return { status: 'error', error: 'invalid' }
+
+  return (await grantInitialAdminSetupAccess(code))
+    ? { status: 'success' }
+    : { status: 'error', error: 'invalid' }
 }
 
 /** 가입코드 검증 성공 시에만 `/register` 접근용 서명 쿠키를 발급한다. */

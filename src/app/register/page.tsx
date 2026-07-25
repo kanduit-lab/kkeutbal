@@ -36,7 +36,13 @@ export default async function RegisterPage({
     getDict(),
     isFirstAccount(),
   ])
-  if (!accessGranted) redirect('/login?error=registration_code_required')
+  if (!accessGranted) {
+    redirect(
+      firstAccount
+        ? '/login?error=initial_admin_setup_required&mode=registration'
+        : '/login?error=registration_code_required',
+    )
+  }
   const errorMessage = error ? (registerErrorCopy(d)[error] ?? d.auth.errorRequestFailed) : null
 
   return (
@@ -105,7 +111,12 @@ export default async function RegisterPage({
           <Field label={d.auth.phoneLabel}>
             <PhoneInput placeholder={d.auth.phonePlaceholder} />
           </Field>
-          <SubmitButton variant="primary" size="lg" className="w-full" pendingLabel={d.auth.registerPending}>
+          <SubmitButton
+            variant="primary"
+            size="lg"
+            className="w-full"
+            pendingLabel={d.auth.registerPending}
+          >
             {d.auth.registerSubmit}
           </SubmitButton>
         </form>

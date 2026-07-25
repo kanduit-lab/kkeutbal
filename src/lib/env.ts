@@ -24,12 +24,9 @@ const serverSchema = z.object({
   DATABASE_CA_CERT_BASE64: z.string().min(1),
 
   AUTH_SECRET: z.string().min(1),
+  /** Vision 공급자 API 키. 실제 선택·활성화는 관리자 콘솔에서 관리한다. */
   ANTHROPIC_API_KEY: optionalEnv(z.string().min(1)),
-  JOKBO_VISION_MODEL: z.string().default('claude-sonnet-5'),
-  JOKBO_VISION_ENABLED: z
-    .enum(['true', 'false'])
-    .default('false')
-    .transform((value) => value === 'true'),
+  GEMINI_API_KEY: optionalEnv(z.string().min(1)),
 })
 
 const clientSchema = z.object({

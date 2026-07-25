@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { Badge, Button, ConfirmDialog, Field, Input, Panel, useToast } from '@/components/ui'
 import { createPromotion, deletePromotion, setPromotionActive } from '../actions'
 import type { AdminPromotionView, PromotionKind } from '../types'
@@ -42,8 +41,13 @@ function toInt(value: string): number {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-export function PromotionsAdmin({ promotions }: { promotions: readonly AdminPromotionView[] }) {
-  const router = useRouter()
+export function PromotionsAdmin({
+  promotions,
+  onDataChanged,
+}: {
+  promotions: readonly AdminPromotionView[]
+  onDataChanged?: () => void
+}) {
   const { toast } = useToast()
   const [pending, startTransition] = useTransition()
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT)
@@ -71,7 +75,7 @@ export function PromotionsAdmin({ promotions }: { promotions: readonly AdminProm
       }
       toast('등록했습니다', 'success')
       setDraft(EMPTY_DRAFT)
-      router.refresh()
+      onDataChanged?.()
     })
   }
 
@@ -85,7 +89,7 @@ export function PromotionsAdmin({ promotions }: { promotions: readonly AdminProm
         toast(result.error, 'error')
         return
       }
-      router.refresh()
+      onDataChanged?.()
     })
   }
 
@@ -98,7 +102,7 @@ export function PromotionsAdmin({ promotions }: { promotions: readonly AdminProm
         return
       }
       toast('삭제했습니다', 'success')
-      router.refresh()
+      onDataChanged?.()
     })
   }
 

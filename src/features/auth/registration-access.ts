@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { and, eq, gt, isNull, or } from 'drizzle-orm'
 import { serverEnv } from '@/lib/env'
 import { isFirstAccount } from './bootstrap'
+import { initialAdminSetupAccessId } from './initial-admin-setup'
 import { registrationCodeHash, registrationCodeSchema } from './registration-codes'
 
 const REGISTRATION_ACCESS_COOKIE = 'kkeutbal_registration_access'
@@ -90,7 +91,7 @@ export async function grantRegistrationAccess(code: string): Promise<Registratio
 
 /** 회원가입 화면과 가입 액션이 모두 확인하는 접근 권한. */
 export async function hasRegistrationAccess(): Promise<boolean> {
-  if (await isFirstAccount()) return true
+  if (await isFirstAccount()) return Boolean(await initialAdminSetupAccessId())
 
   return Boolean(await registrationAccessCodeId())
 }

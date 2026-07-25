@@ -10,9 +10,7 @@
   #   인라인하라는 선언이다. 번들에서 발견되는 것이 설계된 동작이며, 특히 Supabase
   #   publishable 키는 이름 그대로 브라우저에 공개되도록 만들어진 키다(RLS 와 서버
   #   Server Action 권한 검사가 실제 방어선이다 — docs/07-auth-and-security.md).
-  # - JOKBO_VISION_MODEL: 값이 모델 이름(`claude-sonnet-5`)이라 비밀이 아니다.
-  #   README·CLAUDE.md·docs 에 기본값으로 문서화돼 있어서 저장소 스캔에도 걸린다.
   #
-  # 여기에 진짜 비밀값(AUTH_SECRET, DATABASE_URL, ANTHROPIC_API_KEY, SSO client secret)을
+  # 여기에 진짜 비밀값(AUTH_SECRET, DATABASE_URL, Vision API key, SSO client secret)을
   # 절대 추가하지 말 것 — 그 값들이 번들에 나타나면 그건 실제 유출이고, 스캔이 막아야 한다.
-  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,JOKBO_VISION_MODEL"
+  SECRETS_SCAN_OMIT_KEYS = "NEXT_PUBLIC_APP_URL,NEXT_PUBLIC_SUPABASE_URL,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"

@@ -3,14 +3,23 @@ import 'server-only'
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import type * as schema from '../../../drizzle/schema'
 import { getOptionalDatabase } from '@/lib/optional-database'
+import {
+  INITIAL_ADMIN_LOCK_KEY,
+  initialAdminSetupIdFromCiphertext,
+  matchesInitialAdminSetupId,
+} from './initial-admin-setup'
 
-/** 첫 관리자 승격 직렬화용 고정 락 키 — 방 단위 락과 네임스페이스가 겹치지 않는다. */
-const BOOTSTRAP_LOCK_KEY = 'kkeutbal:bootstrap-admin'
+export class InitialAdminSetupRequiredError extends Error {
+  constructor() {
+    super('initial admin setup access is required')
+    this.name = 'InitialAdminSetupRequiredError'
+  }
+}
 
 /**
  * 첫 실행 프로비저닝 판정.
  *
- * 계정이 하나도 없으면 그 다음 가입자가 곧 운영자다.
+ * 계정이 하나도 없으면 초기 관리자 설정 가드를 노출한다.
  * 실제 승격은 `createUserGrantingFirstAdmin` 이 같은 트랜잭션 안에서 다시 확인하고 수행한다 —
  * 이 함수는 화면 안내용이라 결과가 조금 낡아도 안전하다.
  */
@@ -34,8 +43,8 @@ export async function isFirstAccount(): Promise<boolean> {
  * 판정과 삽입을 한 트랜잭션 + advisory lock 으로 묶는다 — 동시에 두 명이 가입하면
  * 둘 다 "계정 없음"을 보고 관리자가 두 명 생기기 때문이다.
  *
- * **비밀번호 가입과 SSO 최초 로그인이 이 함수를 공유해야 한다.** 한쪽에만 승격 로직을 두면,
- * SSO 가 유일한 로그인 수단인 인스턴스는 관리자를 만들 방법이 영영 없어진다.
+ * 모든 사용자 생성 경로가 이 함수를 공유해야 한다. 그래야 설정 코드를 검증하지 않은 SSO나
+ * 직접 호출이 빈 DB의 첫 관리자 자리를 선점하지 못한다.
  */
 export async function createUserGrantingFirstAdmin(
   values: typeof schema.users.$inferInsert,
@@ -43,13 +52,38 @@ export async function createUserGrantingFirstAdmin(
     /** 내부 가입은 기존 계정이 있으면 활성 가입코드를 트랜잭션 안에서 다시 확인한다. */
     requireRegistrationAccess?: boolean
     registrationCodeId?: string | null
+    /** 콘솔 설정 코드를 검증한 브라우저에 발급된, 현재 코드의 식별자. */
+    initialAdminSetupId?: string | null
   } = {},
 ): Promise<{ id: string }> {
   const { db, schema } = await import('@/lib/db')
   return await db.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${BOOTSTRAP_LOCK_KEY}, 42))`)
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${INITIAL_ADMIN_LOCK_KEY}, 42))`,
+    )
     const [existing] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)
-    if (options.registrationCodeId) {
+    if (!existing) {
+      const [settings] = await tx
+        .select({
+          ciphertext: schema.authSettings.initialAdminSetupCiphertext,
+          expiresAt: schema.authSettings.initialAdminSetupExpiresAt,
+        })
+        .from(schema.authSettings)
+        .where(eq(schema.authSettings.id, 'default'))
+        .limit(1)
+        .for('update')
+      const expectedId =
+        settings?.ciphertext && settings.expiresAt && settings.expiresAt.getTime() > Date.now()
+          ? initialAdminSetupIdFromCiphertext(settings.ciphertext)
+          : null
+      if (
+        !expectedId ||
+        !options.initialAdminSetupId ||
+        !matchesInitialAdminSetupId(expectedId, options.initialAdminSetupId)
+      ) {
+        throw new InitialAdminSetupRequiredError()
+      }
+    } else if (options.registrationCodeId) {
       const [activeCode] = await tx
         .select({ id: schema.registrationCodes.id })
         .from(schema.registrationCodes)
@@ -66,7 +100,7 @@ export async function createUserGrantingFirstAdmin(
         .limit(1)
         .for('update')
       if (!activeCode) throw new Error('registration access is no longer active')
-    } else if (options.requireRegistrationAccess && existing) {
+    } else if (options.requireRegistrationAccess) {
       // 첫 계정은 비상 프로비저닝 경로지만, 그 뒤의 내부 가입은 반드시 코드가 필요하다.
       throw new Error('registration access is required')
     }
@@ -75,6 +109,17 @@ export async function createUserGrantingFirstAdmin(
       .values({ ...values, isAdmin: !existing })
       .returning({ id: schema.users.id })
     if (!created) throw new Error('user insert failed')
+    if (!existing) {
+      // 같은 트랜잭션에서 폐기해 검증된 다른 브라우저도 코드를 재사용할 수 없게 한다.
+      await tx
+        .update(schema.authSettings)
+        .set({
+          initialAdminSetupCiphertext: null,
+          initialAdminSetupExpiresAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.authSettings.id, 'default'))
+    }
     return created
   })
 }

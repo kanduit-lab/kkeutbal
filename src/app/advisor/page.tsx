@@ -1,14 +1,18 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
-import { serverEnv } from '@/lib/env'
 import { AdvisorClient } from '@/features/jokbo-advisor/components/advisor-client'
+import { getVisionSettings } from '@/features/jokbo-advisor/vision/settings'
 
 export default async function AdvisorPage() {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
 
-  const env = serverEnv()
-  const visionEnabled = env.JOKBO_VISION_ENABLED && Boolean(env.ANTHROPIC_API_KEY)
+  const visionSettings = await getVisionSettings()
+  const visionEnabled =
+    visionSettings.enabled &&
+    (visionSettings.provider === 'anthropic'
+      ? visionSettings.hasAnthropicApiKey
+      : visionSettings.hasGeminiApiKey)
 
   return <AdvisorClient visionEnabled={visionEnabled} />
 }
