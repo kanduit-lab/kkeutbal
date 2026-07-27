@@ -4,11 +4,18 @@ import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { verifyRegistrationCode } from '@/features/auth/actions'
 import type { RegistrationCodeState } from '@/features/auth/actions'
-import { Button, Input, SubmitButton } from '@/components/ui'
+import { Alert, Button, Input, SubmitButton } from '@/components/ui'
 import { useDict } from '@/lib/i18n/client'
 
 /** 회원가입 폼을 열기 전에 가입코드를 확인하는 로그인 카드용 폼. */
-export function RegistrationCodeForm({ onCancel }: { onCancel: () => void }) {
+export function RegistrationCodeForm({
+  next = '/',
+  onCancel,
+}: {
+  /** 초대 링크로 온 사람이 가입 후 방으로 이어지게 목적지를 /register 까지 들고 간다. */
+  next?: string
+  onCancel: () => void
+}) {
   const { d } = useDict()
   const router = useRouter()
   const [state, formAction] = useActionState<RegistrationCodeState, FormData>(
@@ -17,8 +24,12 @@ export function RegistrationCodeForm({ onCancel }: { onCancel: () => void }) {
   )
 
   useEffect(() => {
-    if (state.status === 'success') router.replace('/register')
-  }, [router, state.status])
+    if (state.status !== 'success') return
+    const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/'
+    router.replace(
+      safeNext === '/' ? '/register' : `/register?next=${encodeURIComponent(safeNext)}`,
+    )
+  }, [next, router, state.status])
 
   return (
     <form action={formAction} className="space-y-3">
@@ -28,15 +39,17 @@ export function RegistrationCodeForm({ onCancel }: { onCancel: () => void }) {
         placeholder={d.auth.registrationCodePlaceholder}
         maxLength={10}
         required
-        autoComplete="off"
+        autoComplete="one-time-code"
         autoCapitalize="characters"
         className="uppercase tracking-[0.2em]"
         autoFocus
       />
       {state.status === 'error' ? (
-        <p role="alert" className="text-sm text-[#ff9a94]">
-          {state.error === 'invalid' ? d.auth.registrationCodeInvalid : d.auth.registrationCodeUnavailable}
-        </p>
+        <Alert tone="error">
+          {state.error === 'invalid'
+            ? d.auth.registrationCodeInvalid
+            : d.auth.registrationCodeUnavailable}
+        </Alert>
       ) : null}
       <div className="grid grid-cols-2 gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>

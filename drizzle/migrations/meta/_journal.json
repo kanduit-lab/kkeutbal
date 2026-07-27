@@ -141,6 +141,13 @@
       "when": 1784967234159,
       "tag": "0019_real_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785159109562,
+      "tag": "0020_lying_leader",
+      "breakpoints": true
     }
   ]
 }

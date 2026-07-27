@@ -1,16 +1,16 @@
 'use client'
 
-import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { findCard } from '@/features/hwatu/cards'
 import type { CardId, GameType, HwatuCard } from '@/features/hwatu/types'
 import { findPokerCard } from '@/features/poker/cards'
 import type { PokerCard } from '@/features/poker/cards'
-import { Button, Panel, useToast } from '@/components/ui'
+import { Button, PageHeader, PageShell, Panel, Segmented, useToast } from '@/components/ui'
+import { LocaleSwitcher } from '@/components/locale-switcher'
 import { format, useDict } from '@/lib/i18n/client'
 import { CardPicker } from './card-picker'
 import { PokerPicker } from './poker-picker'
-import { GostopResult, PokerResult, SeotdaResult } from './advisor-results'
+import { GostopResult, PokerResult, SeotdaResult, type VisionSource } from './advisor-results'
 import { SeotdaRankingPanel } from './seotda-ranking-panel'
 import { VisionCapture } from './vision-capture'
 
@@ -24,19 +24,25 @@ const TAB_EMOJI: Record<AdvisorTab, string> = {
 }
 
 const POKER_MAX_SELECT = 7
+/** 고스톱에서 실제로 도달 가능한 상한이라 화면에도 이 숫자를 그대로 쓴다 — 예전 표기 `∞` 는 거짓말이었다. */
+const GOSTOP_MAX_SELECT = 30
 
 /** 족보 판독 화면 — 탭·카드 선택 상태를 소유하고, 판정 표시는 advisor-results 에 맡긴다. */
 export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
   const [tab, setTab] = useState<AdvisorTab>('seotda')
   const [selected, setSelected] = useState<ReadonlySet<CardId>>(new Set())
   const [pokerSelected, setPokerSelected] = useState<ReadonlySet<string>>(new Set())
+  // 사진 인식으로 채워진 선택인지 — 수동 토글이 들어오면 지운다.
+  const [vision, setVision] = useState<VisionSource | null>(null)
   const { toast } = useToast()
   const { d } = useDict()
 
   const hwatuGameType: GameType = tab === 'gostop' ? 'gostop' : 'seotda'
-  const maxSelect = hwatuGameType === 'seotda' ? 2 : 30
+  const maxSelect = hwatuGameType === 'seotda' ? 2 : GOSTOP_MAX_SELECT
 
   function toggle(id: CardId) {
+    // 사람이 한 장이라도 손대면 더 이상 "사진이 판정한 패"가 아니다.
+    setVision(null)
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
@@ -56,8 +62,46 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
 
   function switchTab(next: AdvisorTab) {
     // 화투 탭끼리 전환할 때만 선택을 비운다 — 포커 선택은 별도 상태라 건드릴 필요 없음.
-    if (next !== 'poker' && tab !== next) setSelected(new Set())
+    if (next !== 'poker' && tab !== next) {
+      setSelected(new Set())
+      setVision(null)
+    }
     setTab(next)
+  }
+
+  /**
+   * 인식 결과 반영. 세 가지를 지킨다.
+   * 1. 토스트의 장수는 실제 반영 장수다 — 예전에는 `ids.length` 라 3장 중 2장만 들어가도
+   *    "3장 인식"이라고 말했다. 잘렸으면 잘렸다고 따로 말한다.
+   * 2. 신뢰도는 토스트가 사라진 뒤에도 결과 패널의 배지로 남는다 — 저신뢰 오인식을
+   *    사람이 직접 고른 것과 구분할 수 없으면 "앱이 판정한 내 패"로 받아들인다.
+   * 3. 덮어쓴 이전 선택은 토스트의 되돌리기로 복구할 수 있다.
+   */
+  function applyRecognized(ids: readonly CardId[], confidence: number) {
+    const applied = ids.slice(0, maxSelect)
+    const previous = selected
+    setSelected(new Set(applied))
+    setVision({ confidence })
+    const message =
+      applied.length < ids.length
+        ? format(d.advisor.vision.truncated, { detected: ids.length, applied: applied.length })
+        : format(d.advisor.vision.recognizedToast, {
+            n: applied.length,
+            confidence: (confidence * 100).toFixed(0),
+          })
+    toast(message, confidence >= 0.9 ? 'success' : 'info', {
+      action:
+        previous.size > 0
+          ? {
+              label: d.advisor.vision.undo,
+              onClick: () => {
+                setSelected(previous)
+                setVision(null)
+                toast(d.advisor.vision.undone, 'info')
+              },
+            }
+          : undefined,
+    })
   }
 
   const cards = useMemo(
@@ -77,53 +121,48 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
   )
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 pb-16 pt-6 lg:h-dvh lg:overflow-hidden lg:px-8 lg:pb-8 lg:pt-8">
-      <header className="rise-in flex items-center gap-3">
-        <Link href="/" className="text-2xl text-muted transition-colors hover:text-text">
-          ←
-        </Link>
-        <div>
-          <h1 className="font-brush text-3xl font-black lg:text-4xl">{d.home.advisor}</h1>
-        </div>
-      </header>
+    <PageShell
+      width="wide"
+      className="flex flex-col gap-6 lg:h-dvh lg:overflow-hidden lg:pb-8 lg:pt-8"
+    >
+      <PageHeader
+        className="rise-in mb-0"
+        title={d.home.advisor}
+        backHref="/"
+        backLabel={d.common.home}
+        actions={<LocaleSwitcher />}
+      />
 
-      <div className="rise-in rise-in-1 grid max-w-xl grid-cols-3 gap-2">
-        {(['seotda', 'gostop', 'poker'] as const).map((type) => (
-          <Button
-            key={type}
-            type="button"
-            variant={tab === type ? 'primary' : 'surface'}
-            onClick={() => switchTab(type)}
-          >
-            {TAB_EMOJI[type]} {d.games[type]}
-          </Button>
-        ))}
-      </div>
+      <Segmented
+        value={tab}
+        onChange={switchTab}
+        options={(['seotda', 'gostop', 'poker'] as const).map((type) => ({
+          value: type,
+          label: (
+            <>
+              <span aria-hidden="true">{TAB_EMOJI[type]}</span> {d.games[type]}
+            </>
+          ),
+        }))}
+        ariaLabel={d.home.advisor}
+        className="rise-in rise-in-1 max-w-xl grid-cols-3"
+      />
 
       <div className="grid gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-12">
         <div className="lg:order-2 lg:col-span-5 lg:min-h-0 lg:overflow-y-auto">
           <div className="rise-in rise-in-2 space-y-5">
-            {tab === 'seotda' ? <SeotdaResult cards={cards} /> : null}
+            {tab === 'seotda' ? <SeotdaResult cards={cards} vision={vision} /> : null}
             {/* 서열표는 결과 쪽 컬럼에 둔다 — 피커 안에 넣으면 카드 그리드가 반으로 눌리고
                 패널이 좁은 스크롤 상자에 갇힌다. */}
             {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
-            {tab === 'gostop' ? <GostopResult cards={cards} /> : null}
+            {tab === 'gostop' ? <GostopResult cards={cards} vision={vision} /> : null}
             {tab === 'poker' ? <PokerResult cards={pokerCards} /> : null}
 
             {tab !== 'poker' ? (
               <VisionCapture
                 gameType={hwatuGameType}
                 enabled={visionEnabled}
-                onRecognized={(ids, confidence) => {
-                  setSelected(new Set(ids.slice(0, maxSelect)))
-                  toast(
-                    format(d.advisor.vision.recognizedToast, {
-                      n: ids.length,
-                      confidence: (confidence * 100).toFixed(0),
-                    }),
-                    confidence >= 0.9 ? 'success' : 'info',
-                  )
-                }}
+                onRecognized={applyRecognized}
               />
             ) : null}
           </div>
@@ -132,19 +171,11 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
         <div className="rise-in rise-in-3 lg:order-1 lg:col-span-7 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
           {tab === 'poker' ? (
             <Panel className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-muted">
-                  {format(d.advisor.cardSelectionCount, {
-                    n: pokerSelected.size,
-                    max: POKER_MAX_SELECT,
-                  })}
-                </h2>
-                {pokerSelected.size > 0 ? (
-                  <Button size="sm" variant="ghost" onClick={() => setPokerSelected(new Set())}>
-                    {d.common.clearAll}
-                  </Button>
-                ) : null}
-              </div>
+              <PickerHeader
+                count={pokerSelected.size}
+                max={POKER_MAX_SELECT}
+                onClear={pokerSelected.size > 0 ? () => setPokerSelected(new Set()) : undefined}
+              />
               <PokerPicker
                 selected={pokerSelected}
                 maxSelect={POKER_MAX_SELECT}
@@ -153,19 +184,18 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
             </Panel>
           ) : (
             <Panel className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-muted">
-                  {format(d.advisor.cardSelectionCount, {
-                    n: selected.size,
-                    max: hwatuGameType === 'seotda' ? 2 : '∞',
-                  })}
-                </h2>
-                {selected.size > 0 ? (
-                  <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-                    {d.common.clearAll}
-                  </Button>
-                ) : null}
-              </div>
+              <PickerHeader
+                count={selected.size}
+                max={maxSelect}
+                onClear={
+                  selected.size > 0
+                    ? () => {
+                        setSelected(new Set())
+                        setVision(null)
+                      }
+                    : undefined
+                }
+              />
               <CardPicker
                 gameType={hwatuGameType}
                 selected={selected}
@@ -176,6 +206,34 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
           )}
         </div>
       </div>
-    </main>
+    </PageShell>
+  )
+}
+
+/**
+ * 카드 선택 헤더. 상한에 걸렸을 때 유일한 탈출구가 `전체 해제` 인데 스크롤되는 컬럼 안에
+ * 있어서 8월·10월까지 내려간 순간 화면 밖으로 사라졌다 — sticky 로 항상 보이게 둔다.
+ */
+function PickerHeader({
+  count,
+  max,
+  onClear,
+}: {
+  count: number
+  max: number
+  onClear?: () => void
+}) {
+  const { d } = useDict()
+  return (
+    <div className="lacquer sticky top-0 z-10 -mx-5 -mt-5 flex items-center justify-between rounded-t-2xl px-5 py-3">
+      <h2 className="text-sm font-bold text-muted">
+        {format(d.advisor.cardSelectionCount, { n: count, max })}
+      </h2>
+      {onClear ? (
+        <Button size="sm" variant="ghost" onClick={onClear}>
+          {d.common.clearAll}
+        </Button>
+      ) : null}
+    </div>
   )
 }

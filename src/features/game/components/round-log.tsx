@@ -52,7 +52,13 @@ export function RoundLog({
       {actions.length === 0 ? (
         <EmptyState title={d.roundLog.empty} />
       ) : (
-        <ul className={clsx('space-y-1.5', !board && 'max-h-48 overflow-y-auto')}>
+        // 판이 도는 동안 여기에만 새 액션이 쌓인다 — 추가분만 읽어 준다.
+        // 목록이 위에서부터 최신이라 additions 만으로 "방금 무슨 일이 있었는지"가 전달된다.
+        <ul
+          aria-live="polite"
+          aria-relevant="additions"
+          className={clsx('space-y-1.5', !board && 'max-h-48 overflow-y-auto')}
+        >
           {rows.map((action) => {
             const badge = statusBadge[action.status]
             const showReason =

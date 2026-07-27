@@ -49,7 +49,8 @@ export function validateCreditEntries(entries: readonly CreditEntryRequest[]): v
     if (entry.delta_available === 0 && entry.delta_locked === 0) {
       throw new Error('Credit entry must change a balance')
     }
-    if (accountIds.has(entry.account_id)) throw new Error('Only one credit entry per account is allowed')
+    if (accountIds.has(entry.account_id))
+      throw new Error('Only one credit entry per account is allowed')
     accountIds.add(entry.account_id)
     total += entry.delta_available + entry.delta_locked
   }

@@ -2,10 +2,10 @@ import Link from 'next/link'
 import type { Route } from 'next'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
-import type { ReactNode } from 'react'
 import { auth } from '@/lib/auth'
 import { getCumulativeRanking } from '@/features/ranking/queries'
-import { EmptyState, Panel } from '@/components/ui'
+import { LocaleSwitcher } from '@/components/locale-switcher'
+import { Badge, EmptyState, PageHeader, PageShell, Panel, SegmentedLinks } from '@/components/ui'
 import { getDict, format } from '@/lib/i18n/server'
 import type { Dictionary } from '@/lib/i18n/server'
 
@@ -17,6 +17,12 @@ const filterSchema = z.object({
 
 type GameFilter = z.infer<typeof filterSchema>['game']
 type PeriodFilter = z.infer<typeof filterSchema>['period']
+
+/**
+ * 한 화면에 그리는 최대 인원. 누적 랭킹 대상은 정산된 방에 참여한 전체 사용자라
+ * 상한이 없으면 사용자 수만큼 Panel 이 늘어난다. 잘려도 내 행은 아래에 따로 붙인다.
+ */
+const TOP_LIMIT = 50
 
 function gameChips(d: Dictionary): ReadonlyArray<{ value: GameFilter; label: string }> {
   return [
@@ -44,7 +50,7 @@ function periodToSince(period: PeriodFilter): Date | undefined {
 }
 
 /** 기본값(전체)은 쿼리에서 생략해 /ranking 이 canonical URL 로 남게 한다. */
-function filterHref(game: GameFilter, period: PeriodFilter): string {
+function filterHref(game: GameFilter, period: PeriodFilter): Route {
   const params = new URLSearchParams()
   if (game !== 'all') params.set('game', game)
   if (period !== 'all') params.set('period', period)
@@ -52,28 +58,63 @@ function filterHref(game: GameFilter, period: PeriodFilter): string {
   return query ? `/ranking?${query}` : '/ranking'
 }
 
-/** 필터 칩 — 활성은 primary 버튼 룩, 비활성은 surface 룩. 터치 타깃 44px 이상. */
-function FilterChip({
-  href,
-  active,
-  children,
+function rankMark(index: number): string {
+  return index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : String(index + 1)
+}
+
+interface RankingRow {
+  readonly userId: string
+  readonly displayName: string
+  readonly sessions: number
+  readonly wins: number
+  readonly net: number
+}
+
+function RankingEntry({
+  row,
+  index,
+  isMe,
+  d,
 }: {
-  href: string
-  active: boolean
-  children: ReactNode
+  row: RankingRow
+  index: number
+  isMe: boolean
+  d: Dictionary
 }) {
   return (
     <Link
-      // typedRoutes 는 동적으로 조립한 쿼리 문자열을 추론하지 못한다 — 경로 자체는 /ranking 고정
-      href={href as Route}
-      aria-current={active ? 'true' : undefined}
-      className={
-        active
-          ? 'inline-flex min-h-11 items-center rounded-xl bg-accent px-4 text-sm font-bold text-white shadow-[0_2px_0_rgb(0_0_0/0.35)]'
-          : 'inline-flex min-h-11 items-center rounded-xl border border-gold/15 bg-surface-raised px-4 text-sm font-semibold text-muted transition-colors hover:border-gold/40 hover:text-text'
-      }
+      // typedRoutes 는 새 동적 라우트를 타입 재생성 전까지 추론하지 못한다
+      href={`/ranking/player/${row.userId}` as Route}
+      className="block"
     >
-      {children}
+      <Panel
+        className={`flex min-h-14 items-center justify-between py-3 transition-transform hover:-translate-y-0.5 ${
+          isMe ? 'ring-1 ring-gold/40' : ''
+        }`}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="w-7 shrink-0 text-center text-lg font-black text-muted">
+            {rankMark(index)}
+          </span>
+          <div className="min-w-0">
+            <p className="flex items-center gap-1.5 truncate font-bold">
+              {row.displayName}
+              {isMe ? <Badge tone="warn">{d.common.me}</Badge> : null}
+            </p>
+            <p className="text-xs text-muted">
+              {format(d.ranking.sessionsAndWins, { sessions: row.sessions, wins: row.wins })}
+            </p>
+          </div>
+        </div>
+        <p
+          className={`ml-3 shrink-0 text-xl font-black tabular-nums ${
+            row.net > 0 ? 'text-win' : row.net < 0 ? 'text-accent' : 'text-muted'
+          }`}
+        >
+          {row.net > 0 ? '+' : ''}
+          {row.net.toLocaleString()}
+        </p>
+      </Panel>
     </Link>
   )
 }
@@ -97,42 +138,42 @@ export default async function RankingPage({
     getDict(),
   ])
 
-  return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8">
-      <header className="flex items-center gap-3">
-        <Link href="/" className="text-2xl text-muted">
-          ←
-        </Link>
-        <div>
-          <h1 className="font-brush text-4xl font-black lg:text-5xl">{d.home.ranking}</h1>
-          <p className="text-xs text-muted">{d.ranking.subtitle}</p>
-        </div>
-      </header>
+  const myId = session.user.id
+  const visible = ranking.slice(0, TOP_LIMIT)
+  const myIndex = ranking.findIndex((row) => row.userId === myId)
+  const myRowBelowCut = myIndex >= TOP_LIMIT ? ranking[myIndex] : undefined
 
-      <nav className="space-y-2" aria-label={d.ranking.filterNavAria}>
-        <div className="flex flex-wrap gap-2">
-          {gameChips(d).map((chip) => (
-            <FilterChip
-              key={chip.value}
-              href={filterHref(chip.value, period)}
-              active={game === chip.value}
-            >
-              {chip.label}
-            </FilterChip>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {periodChips(d).map((chip) => (
-            <FilterChip
-              key={chip.value}
-              href={filterHref(game, chip.value)}
-              active={period === chip.value}
-            >
-              {chip.label}
-            </FilterChip>
-          ))}
-        </div>
-      </nav>
+  return (
+    <PageShell width="content" className="space-y-6">
+      <PageHeader
+        className="mb-0"
+        title={d.home.ranking}
+        subtitle={d.ranking.subtitle}
+        backHref="/"
+        backLabel={d.common.home}
+        actions={<LocaleSwitcher />}
+      />
+
+      <div className="space-y-2">
+        <SegmentedLinks
+          ariaLabel={d.ranking.filterNavAria}
+          size="sm"
+          items={gameChips(d).map((chip) => ({
+            href: filterHref(chip.value, period),
+            label: chip.label,
+            active: game === chip.value,
+          }))}
+        />
+        <SegmentedLinks
+          ariaLabel={d.ranking.filterPeriodNavAria}
+          size="sm"
+          items={periodChips(d).map((chip) => ({
+            href: filterHref(game, chip.value),
+            label: chip.label,
+            active: period === chip.value,
+          }))}
+        />
+      </div>
 
       {ranking.length === 0 ? (
         filtered ? (
@@ -141,39 +182,31 @@ export default async function RankingPage({
           <EmptyState title={d.ranking.emptyTitle} hint={d.ranking.emptyHint} />
         )
       ) : (
-        <section className="space-y-2">
-          {ranking.map((row, index) => (
-            <Link
+        <section className="space-y-2" aria-label={d.ranking.listAria}>
+          {visible.map((row, index) => (
+            <RankingEntry
               key={row.userId}
-              // typedRoutes 는 새 동적 라우트를 타입 재생성 전까지 추론하지 못한다
-              href={`/ranking/player/${row.userId}` as Route}
-              className="block"
-            >
-              <Panel className="flex min-h-14 items-center justify-between py-3 transition-transform hover:-translate-y-0.5">
-                <div className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className="w-7 shrink-0 text-center text-lg font-black text-muted">
-                    {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate font-bold">{row.displayName}</p>
-                    <p className="text-xs text-muted">
-                      {format(d.ranking.sessionsAndWins, { sessions: row.sessions, wins: row.wins })}
-                    </p>
-                  </div>
-                </div>
-                <p
-                  className={`ml-3 shrink-0 text-xl font-black tabular-nums ${
-                    row.net > 0 ? 'text-win' : row.net < 0 ? 'text-accent' : 'text-muted'
-                  }`}
-                >
-                  {row.net > 0 ? '+' : ''}
-                  {row.net.toLocaleString()}
-                </p>
-              </Panel>
-            </Link>
+              row={row}
+              index={index}
+              isMe={row.userId === myId}
+              d={d}
+            />
           ))}
+
+          {ranking.length > TOP_LIMIT ? (
+            <p className="pt-2 text-center text-xs text-muted">
+              {format(d.ranking.topNNote, { n: TOP_LIMIT })}
+            </p>
+          ) : null}
         </section>
       )}
-    </main>
+
+      {/* 상위 50 밖이면 자기 순위만 따로 붙인다 — 스크롤로 찾게 두지 않는다. */}
+      {myRowBelowCut ? (
+        <section aria-label={d.ranking.myPositionAria}>
+          <RankingEntry row={myRowBelowCut} index={myIndex} isMe d={d} />
+        </section>
+      ) : null}
+    </PageShell>
   )
 }

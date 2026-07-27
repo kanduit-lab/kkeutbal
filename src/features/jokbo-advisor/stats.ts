@@ -10,18 +10,16 @@ const ALL_SEOTDA_HANDS: readonly SeotdaHand[] = (() => {
   const hands: SeotdaHand[] = []
   for (let i = 0; i < SEOTDA_DECK.length; i += 1) {
     for (let j = i + 1; j < SEOTDA_DECK.length; j += 1) {
-      hands.push(
-        evaluateSeotdaHand([SEOTDA_DECK[i] as HwatuCard, SEOTDA_DECK[j] as HwatuCard]),
-      )
+      hands.push(evaluateSeotdaHand([SEOTDA_DECK[i] as HwatuCard, SEOTDA_DECK[j] as HwatuCard]))
     }
   }
   return hands
 })()
 
 /** 서열 단계: 높은 rank 부터. */
-const SEOTDA_TIERS: readonly number[] = [...new Set(ALL_SEOTDA_HANDS.map((hand) => hand.rank))].sort(
-  (a, b) => b - a,
-)
+const SEOTDA_TIERS: readonly number[] = [
+  ...new Set(ALL_SEOTDA_HANDS.map((hand) => hand.rank)),
+].sort((a, b) => b - a)
 
 export interface SeotdaStats {
   /** 전체 서열 단계 수 */
@@ -58,10 +56,7 @@ export function seotdaStats(hand: SeotdaHand): SeotdaStats {
   let total = 0
   for (let i = 0; i < remaining.length; i += 1) {
     for (let j = i + 1; j < remaining.length; j += 1) {
-      const opponent = evaluateSeotdaHand([
-        remaining[i] as HwatuCard,
-        remaining[j] as HwatuCard,
-      ])
+      const opponent = evaluateSeotdaHand([remaining[i] as HwatuCard, remaining[j] as HwatuCard])
       const outcome = resolveSeotdaShowdown([hand, opponent], SEOTDA_RULES_STANDARD)
       total += 1
       if (catcherTrait && opponent.traits.includes(catcherTrait)) catchers += 1

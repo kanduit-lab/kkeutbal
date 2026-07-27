@@ -16,24 +16,34 @@ export function PendingApprovalQueue({
   runAction,
   nameOf,
   betLabels,
+  staleReason = null,
 }: {
   pendingActions: readonly BetActionView[]
   selfId: string
   runAction: RunAction
   nameOf: (userId: string) => string
   betLabels: Record<BetActionKind, string>
+  /** 스냅샷이 낡아 조작을 잠글 사유. null 이면 정상. */
+  staleReason?: string | null
 }) {
   const { d } = useDict()
   const [isPending, startTransition] = useTransition()
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  /** 진행 중인 요청의 대상 — 스피너를 그 행의 버튼에만 붙인다. */
+  const [firing, setFiring] = useState<{ id: string; kind: 'approve' | 'reject' } | null>(null)
 
   if (pendingActions.length === 0) return null
 
-  const run = (task: () => Promise<unknown>) => {
+  const run = (target: { id: string; kind: 'approve' | 'reject' }, task: () => Promise<unknown>) => {
     if (isPending) return
+    setFiring(target)
     startTransition(async () => {
-      await task()
+      try {
+        await task()
+      } finally {
+        setFiring(null)
+      }
     })
   }
 
@@ -56,9 +66,12 @@ export function PendingApprovalQueue({
               <Button
                 size="md"
                 variant="win"
-                disabled={isPending}
+                loading={firing?.id === action.id && firing.kind === 'approve'}
+                loadingLabel={d.ui.processing}
+                disabled={isPending || staleReason !== null}
+                disabledReason={staleReason ?? undefined}
                 onClick={() =>
-                  run(() =>
+                  run({ id: action.id, kind: 'approve' }, () =>
                     runAction(
                       () => approveBet({ actionId: action.id }),
                       (data) =>
@@ -84,7 +97,9 @@ export function PendingApprovalQueue({
               <Button
                 size="md"
                 variant="danger"
-                disabled={isPending}
+                disabled={isPending || staleReason !== null}
+                disabledReason={staleReason ?? undefined}
+                aria-expanded={rejectingId === action.id}
                 onClick={() => {
                   setRejectingId(rejectingId === action.id ? null : action.id)
                   setRejectReason('')
@@ -106,12 +121,16 @@ export function PendingApprovalQueue({
               <Button
                 size="md"
                 variant="danger"
-                disabled={isPending || rejectReason.trim().length === 0}
+                loading={firing?.id === action.id && firing.kind === 'reject'}
+                loadingLabel={d.ui.processing}
+                disabled={rejectReason.trim().length === 0 || staleReason !== null}
                 disabledReason={
-                  rejectReason.trim().length === 0 ? d.dealer.reasonRequired : undefined
+                  rejectReason.trim().length === 0
+                    ? d.dealer.reasonRequired
+                    : (staleReason ?? undefined)
                 }
                 onClick={() =>
-                  run(async () => {
+                  run({ id: action.id, kind: 'reject' }, async () => {
                     const reason = rejectReason.trim()
                     const success = await runAction(
                       () => rejectBet({ actionId: action.id, reason }),

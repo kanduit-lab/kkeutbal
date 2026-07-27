@@ -2,8 +2,14 @@ import Link from 'next/link'
 import { findCard } from '@/features/hwatu/cards'
 import { HwatuCardView } from '@/components/hwatu-card'
 import { LocaleSwitcher } from '@/components/locale-switcher'
-import { ButtonLink, Panel } from '@/components/ui'
+import { ButtonLink, PageShell, Panel } from '@/components/ui'
+import type { Metadata } from 'next'
 import { getDict } from '@/lib/i18n/server'
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { d } = await getDict()
+  return { title: `${d.home.aboutLink} · ${d.common.appName}` }
+}
 
 const SHOWCASE_CARD_IDS = ['01-gwang', '03-gwang', '08-gwang', '11-gwang', '12-gwang'] as const
 
@@ -24,7 +30,7 @@ export default async function AboutPage() {
   const steps = [d.about.step1, d.about.step2, d.about.step3, d.about.step4, d.about.step5] as const
 
   return (
-    <main className="relative mx-auto w-full max-w-3xl px-5 pb-16 pt-10">
+    <PageShell width="content" className="relative">
       <div className="absolute right-4 top-4 z-10">
         <LocaleSwitcher />
       </div>
@@ -49,7 +55,9 @@ export default async function AboutPage() {
       <section className="rise-in rise-in-1 mt-10 grid gap-4 sm:grid-cols-2">
         {features.map((feature) => (
           <Panel key={feature.title} className="space-y-2">
-            <p className="text-3xl">{feature.emoji}</p>
+            <p aria-hidden className="text-3xl">
+              {feature.emoji}
+            </p>
             <h2 className="font-bold">{feature.title}</h2>
             <p className="text-sm text-muted">{feature.body}</p>
           </Panel>
@@ -78,10 +86,13 @@ export default async function AboutPage() {
       </div>
 
       <footer className="mt-10 text-center text-xs text-muted">
-        <Link href="/" className="underline underline-offset-4 hover:text-text">
+        <Link
+          href="/"
+          className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-text"
+        >
           {d.common.home}
         </Link>
       </footer>
-    </main>
+    </PageShell>
   )
 }

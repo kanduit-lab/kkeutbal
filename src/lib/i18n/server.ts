@@ -4,6 +4,7 @@ import { ko, type Dictionary } from './dictionaries/ko'
 import { en } from './dictionaries/en'
 
 export { format } from './format'
+export { translateError } from './translate-error'
 export type { Dictionary } from './dictionaries/ko'
 
 const DICTIONARIES: Record<Locale, Dictionary> = { ko, en }

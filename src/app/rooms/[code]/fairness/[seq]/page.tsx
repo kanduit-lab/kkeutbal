@@ -10,7 +10,8 @@ import { findRoomByCode } from '@/features/game/queries'
 import { normalizeRoomCode } from '@/features/game/room-code'
 import { auth } from '@/lib/auth'
 import { db, schema } from '@/lib/db'
-import { getDict } from '@/lib/i18n/server'
+import { RoomEntryError } from '@/features/game/components/room-entry-error'
+import { getDict, format } from '@/lib/i18n/server'
 
 /** Authenticated original participants can independently recompute a finalized verified Seotda deck. */
 export default async function FairnessAuditPage({
@@ -27,7 +28,16 @@ export default async function FairnessAuditPage({
   if (!Number.isSafeInteger(seq) || seq < 1) notFound()
 
   const [room, { d }] = await Promise.all([findRoomByCode(code), getDict()])
-  if (!room) notFound()
+  // 형제 라우트 5개가 공유하는 한 가지 표면 — 코드 오타는 앱 404 가 아니라 "방 없음"이다.
+  if (!room) {
+    return (
+      <RoomEntryError
+        title={d.room.notFoundTitle}
+        hint={format(d.room.notFoundHint, { code })}
+        homeLabel={d.common.home}
+      />
+    )
+  }
   const [round] = await db
     .select({ id: schema.rounds.id, gameType: schema.rooms.gameType })
     .from(schema.rounds)
@@ -62,9 +72,13 @@ export default async function FairnessAuditPage({
   }
 
   return (
-    <main className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-16 pt-8">
+    <main id="main" className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-16 pt-8">
       <header>
-        <Link href={`/rooms/${code}`} className="text-sm font-bold text-muted hover:text-text">
+        {/* 48px 타깃 — 원래는 text-sm 글리프 링크뿐이라 한 손 조작에서 잡히지 않았다. */}
+        <Link
+          href={`/rooms/${code}`}
+          className="-ml-2 inline-flex min-h-12 items-center gap-1 rounded-xl px-2 text-sm font-bold text-muted transition-colors hover:text-text"
+        >
           ← {d.fairness.auditBack}
         </Link>
         <h1 className="mt-3 font-brush text-3xl font-black">{d.fairness.auditTitle}</h1>
@@ -94,10 +108,13 @@ function AuditError({
   backLabel: string
 }) {
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6">
+    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6">
       <Panel className="space-y-4 text-center">
         <p className="text-sm text-muted">{message}</p>
-        <Link href={`/rooms/${code}`} className="font-bold text-accent underline underline-offset-2">
+        <Link
+          href={`/rooms/${code}`}
+          className="inline-flex min-h-12 items-center justify-center rounded-xl px-3 font-bold text-accent underline underline-offset-2"
+        >
           ← {backLabel}
         </Link>
       </Panel>

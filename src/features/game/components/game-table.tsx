@@ -6,15 +6,7 @@ import type { BetActionKind, BetActionView, MemberView, RoomGameType } from '../
 import { Avatar, Badge } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { betLabelsFor, formatChips, lastAcceptedByUser } from './shared'
-
-/** 칩 액면가 → 색. 실물 카지노 칩 관례를 따른다. */
-const CHIP_COLORS: readonly { value: number; bg: string; rim: string }[] = [
-  { value: 500, bg: '#7c3aed', rim: '#a78bfa' },
-  { value: 100, bg: '#18181b', rim: '#52525b' },
-  { value: 25, bg: '#15803d', rim: '#4ade80' },
-  { value: 5, bg: '#b91c1c', rim: '#f87171' },
-  { value: 1, bg: '#e4e4e7', rim: '#a1a1aa' },
-]
+import { ChipStack, chipBreakdown } from './game-table-chips'
 
 /** 액션별 뱃지 톤 — 무슨 일이 일어났는지 색만으로 구분되게 한다. */
 const ACTION_BADGE: Record<BetActionKind, string> = {
@@ -23,49 +15,6 @@ const ACTION_BADGE: Record<BetActionKind, string> = {
   raise: 'bg-warn/25 text-warn',
   fold: 'bg-white/10 text-muted',
   allin: 'bg-accent/30 text-accent',
-}
-
-function chipBreakdown(amount: number, maxChips = 5): readonly { bg: string; rim: string }[] {
-  // 로컬 accumulator — 함수 밖으로 새지 않음
-  const chips: { bg: string; rim: string }[] = []
-  let rest = Math.max(0, amount)
-  for (const denom of CHIP_COLORS) {
-    while (rest >= denom.value && chips.length < maxChips) {
-      chips.push({ bg: denom.bg, rim: denom.rim })
-      rest -= denom.value
-    }
-    if (chips.length >= maxChips) break
-  }
-  if (chips.length === 0 && amount > 0) chips.push(CHIP_COLORS[4]!)
-  return chips
-}
-
-function ChipStack({ amount, size = 16 }: { amount: number; size?: number }) {
-  const chips = chipBreakdown(amount)
-  if (chips.length === 0) return null
-  return (
-    <span
-      className="relative inline-block shrink-0"
-      style={{ width: size, height: size + (chips.length - 1) * (size * 0.28) }}
-      aria-hidden
-    >
-      {chips.map((chip, i) => (
-        <span
-          key={i}
-          className="absolute rounded-full border-2 border-dashed"
-          style={{
-            width: size,
-            height: size,
-            left: 0,
-            bottom: i * (size * 0.28),
-            backgroundColor: chip.bg,
-            borderColor: chip.rim,
-            boxShadow: '0 1px 1px rgb(0 0 0 / 0.4)',
-          }}
-        />
-      ))}
-    </span>
-  )
 }
 
 interface Flight {
@@ -201,7 +150,10 @@ export function GameTable({
   const potText = formatChips(pot, locale)
 
   return (
-    <section className="relative mx-auto mb-4 aspect-[4/5] w-full max-w-3xl select-none [container-type:size] sm:aspect-[16/10]">
+    // container-type: size 는 contain: layout style size 만 건다 — paint 는 포함되지 않아
+    // 좌석 카드가 섹션 밖으로 삐져나간다. n=4·8 에서 좌석 중심이 left:90% 에 놓이고 긴
+    // 닉네임이 카드를 최대 폭까지 밀면 375px 뷰포트에서 페이지가 통째로 가로 스크롤된다.
+    <section className="relative mx-auto mb-4 aspect-[4/5] w-full max-w-3xl select-none overflow-hidden [container-type:size] sm:aspect-[16/10]">
       {/* 펠트 테이블 */}
       <div className="absolute inset-[7%] rounded-[50%] border-8 border-[#5a3a1e] bg-[radial-gradient(ellipse_at_center,#1d6b45_0%,#145233_55%,#0e3d26_100%)] shadow-[inset_0_0_40px_rgb(0_0_0/0.55),0_6px_24px_rgb(0_0_0/0.45)]" />
       <div className="pointer-events-none absolute inset-[12%] rounded-[50%] border border-white/10" />
@@ -235,18 +187,29 @@ export function GameTable({
           </div>
         ) : null}
 
+        {/* 팟은 방에서 가장 자주 바뀌는 값이다 — 라이브 리전으로 읽어 준다.
+            숫자 자체는 aria-hidden 으로 두고 문장 하나만 전달해 중복 낭독을 막는다. */}
         <div>
           <p
+            aria-hidden
             className={clsx(
               'gilt font-brush font-black leading-none tabular-nums drop-shadow-[0_2px_8px_rgb(0_0_0/0.6)]',
-              // 자릿수가 길면 한 단계 줄여 테이블 밖으로 넘치지 않게 한다.
-              potText.length >= 7 ? 'text-5xl sm:text-6xl' : 'text-6xl sm:text-7xl',
+              // 자릿수에 따라 단계로 튀지 않게 컨테이너 폭 기준으로 연속 축소한다
+              // (섹션이 container-type:size 라 cqw 를 쓸 수 있다).
+              board
+                ? 'text-[clamp(3rem,16cqw,6rem)]'
+                : 'text-[clamp(2.5rem,14cqw,4.5rem)]',
             )}
           >
             {potText}
           </p>
-          <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.3em] text-white/50">
+          {/* text-white/50 은 펠트(#1d6b45) 위에서 2.86:1 — 11px 대문자 자간 확장에는
+              한참 못 미친다. /80 으로 올려 4.9:1 을 확보한다. */}
+          <p className="mt-1 text-xs font-medium uppercase tracking-[0.3em] text-white/80">
             {d.table.potLabel}
+          </p>
+          <p className="sr-only" aria-live="polite" aria-atomic="true">
+            {format(d.room.potAnnounce, { n: potText })}
           </p>
         </div>
       </div>
@@ -297,24 +260,23 @@ export function GameTable({
         ]
           .filter(Boolean)
           .join(' · ')
-        return (
-          <button
-            key={member.userId}
-            type="button"
-            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 text-left"
-            style={{ left: `${left}%`, top: `${top}%` }}
-            onClick={onSeatTap ? () => onSeatTap(member) : undefined}
-            aria-label={seatLabel}
-          >
+        // 전광판(onSeatTap 없음)에서는 좌석이 아무 동작도 없는 버튼이 되면 안 된다 —
+        // TV·태블릿에서 리모컨/키보드 탭이 죽은 컨트롤 N 개를 훑고, 스크린리더도
+        // 읽기 전용 화면에서 버튼 N 개를 읽는다. 그때는 이미지 역할의 div 로 낮춘다.
+        const interactive = Boolean(onSeatTap)
+        const seatPosition = { left: `${left}%`, top: `${top}%` }
+        const seatBody = (
             <div
               aria-hidden
               className={clsx(
                 'relative flex flex-col items-center rounded-2xl border backdrop-blur-sm transition-all',
+                // 폰에서는 카드 최대 폭을 뷰포트 비율로 묶는다 — 고정 max-w-44(176px)는
+                // 좌석이 left:90% 에 놓이는 배치에서 화면 밖으로 나간다.
                 board
                   ? 'min-w-36 max-w-56 px-4 pb-2.5 pt-2'
                   : compact
-                    ? 'min-w-20 max-w-40 px-2 pb-1.5 pt-1'
-                    : 'min-w-28 max-w-44 px-3 pb-2 pt-1.5 sm:min-w-32',
+                    ? 'min-w-20 max-w-[34vw] px-2 pb-1.5 pt-1 sm:max-w-40'
+                    : 'min-w-28 max-w-[38vw] px-3 pb-2 pt-1.5 sm:min-w-32 sm:max-w-44',
                 folded ? 'border-white/5 bg-black/50 opacity-50' : 'border-gold/20 bg-black/60',
                 isSelf && 'border-gold/60',
                 isWinner && 'winner-glow border-win',
@@ -415,7 +377,28 @@ export function GameTable({
                 <span className={clsx('mt-0.5', board ? 'text-2xl' : 'text-base')}>🏆</span>
               ) : null}
             </div>
+        )
+        return interactive ? (
+          <button
+            key={member.userId}
+            type="button"
+            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 text-left"
+            style={seatPosition}
+            onClick={() => onSeatTap?.(member)}
+            aria-label={seatLabel}
+          >
+            {seatBody}
           </button>
+        ) : (
+          <div
+            key={member.userId}
+            role="img"
+            aria-label={seatLabel}
+            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 text-left"
+            style={seatPosition}
+          >
+            {seatBody}
+          </div>
         )
       })}
     </section>

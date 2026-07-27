@@ -104,6 +104,7 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
         joinedAt: roomMembers.joinedAt,
         displayName: users.displayName,
         avatarUrl: users.avatarUrl,
+        isManaged: users.isManaged,
       })
       .from(roomMembers)
       .innerJoin(users, eq(users.id, roomMembers.userId))
@@ -142,6 +143,7 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
     seatNo: member.seatNo,
     balance: balanceMap.get(member.userId) ?? 0,
     buyInTotal: buyInMap.get(member.userId) ?? 0,
+    isManaged: member.isManaged,
     joinedAt: member.joinedAt.toISOString(),
   }))
 }

@@ -12,13 +12,21 @@ import { formatPhone } from '../phone'
 export function PhoneInput({
   defaultValue = '',
   placeholder,
+  autoFocus,
+  ...control
 }: {
   defaultValue?: string
   placeholder?: string
+  autoFocus?: boolean
+  /** Field 의 render prop 이 넘기는 연결 속성 — 그대로 통과시켜야 에러가 필드에 묶인다. */
+  id?: string
+  'aria-describedby'?: string
+  'aria-invalid'?: true
 }) {
   const [value, setValue] = useState(() => formatPhone(defaultValue))
   return (
     <Input
+      {...control}
       name="phone"
       type="tel"
       value={value}
@@ -26,6 +34,7 @@ export function PhoneInput({
       placeholder={placeholder}
       maxLength={13}
       required
+      autoFocus={autoFocus}
       autoComplete="tel"
       inputMode="numeric"
     />

@@ -38,6 +38,8 @@ export function ProxyBetSection({
   const { d } = useDict()
   const [raiseOpen, setRaiseOpen] = useState(false)
   const [raiseAmount, setRaiseAmount] = useState(baseBet)
+  /** 현재 요청이 걸린 버튼 자리 — 네 버튼이 한꺼번에 도는 대신 누른 버튼만 돌게 한다. */
+  const [firingSlot, setFiringSlot] = useState<'check' | 'call' | 'raise' | 'fold' | null>(null)
   const callAmount = Math.min(callNeeded, memberBalance)
   const callIsAllIn = callNeeded > 0 && memberBalance <= callNeeded
   const minRaise = lastBet === 0 ? baseBet : callNeeded + 1
@@ -52,13 +54,14 @@ export function ProxyBetSection({
    */
   const proxyIntentRef = useRef<{ key: string; id: string } | null>(null)
 
-  function proxyBet(action: BetActionKind, amount: number) {
+  function proxyBet(action: BetActionKind, amount: number, slot: 'check' | 'call' | 'raise' | 'fold') {
     const key = `${memberId}:${action}:${amount}`
     const intent =
       proxyIntentRef.current?.key === key
         ? proxyIntentRef.current
         : { key, id: crypto.randomUUID() }
     proxyIntentRef.current = intent
+    setFiringSlot(slot)
     run(async () => {
       const success = await runAction(
         () =>
@@ -81,6 +84,7 @@ export function ProxyBetSection({
         }),
       )
       if (success) proxyIntentRef.current = null
+      setFiringSlot(null)
       return success
     })
   }
@@ -97,17 +101,18 @@ export function ProxyBetSection({
     >
       <div className="grid grid-cols-4 gap-2">
         <Button
-          variant="surface"
-          className="border border-white/10"
+          variant="outline"
+          loading={firingSlot === 'check'}
           disabled={isPending || callNeeded !== 0}
           disabledReason={callNeeded !== 0 ? d.memberSheet.checkBlocked : undefined}
-          onClick={() => proxyBet('check', 0)}
+          onClick={() => proxyBet('check', 0, 'check')}
         >
           {labels.check}
         </Button>
         <Button
           variant="win"
           className="flex-col gap-0"
+          loading={firingSlot === 'call'}
           disabled={isPending || callNeeded === 0 || callAmount < 1}
           disabledReason={
             callNeeded === 0
@@ -116,7 +121,7 @@ export function ProxyBetSection({
                 ? d.actionBar.insufficientBalance
                 : undefined
           }
-          onClick={() => proxyBet(callIsAllIn ? 'allin' : 'call', callAmount)}
+          onClick={() => proxyBet(callIsAllIn ? 'allin' : 'call', callAmount, 'call')}
         >
           <span>{callIsAllIn ? labels.allin : labels.call}</span>
           {callAmount > 0 ? (
@@ -126,8 +131,8 @@ export function ProxyBetSection({
           ) : null}
         </Button>
         <Button
-          variant={raiseOpen ? 'primary' : 'surface'}
-          className={raiseOpen ? '' : 'border border-white/10'}
+          selected={raiseOpen}
+          aria-expanded={raiseOpen}
           disabled={isPending || memberBalance < 1}
           disabledReason={memberBalance < 1 ? d.actionBar.insufficientBalance : undefined}
           onClick={() => {
@@ -139,7 +144,12 @@ export function ProxyBetSection({
         >
           {labels.raise}
         </Button>
-        <Button variant="danger" disabled={isPending} onClick={() => proxyBet('fold', 0)}>
+        <Button
+          variant="danger"
+          loading={firingSlot === 'fold'}
+          disabled={isPending}
+          onClick={() => proxyBet('fold', 0, 'fold')}
+        >
           {labels.fold}
         </Button>
       </div>
@@ -152,10 +162,14 @@ export function ProxyBetSection({
             max={memberBalance}
             step={baseBet}
             ariaLabel={d.memberSheet.proxyRaiseAria}
+            decreaseLabel={d.ui.decrease}
+            increaseLabel={d.ui.increase}
             className="flex-1"
           />
           <Button
             variant="primary"
+            loading={firingSlot === 'raise'}
+            loadingLabel={d.ui.processing}
             disabled={isPending || !canConfirmRaise || raiseAmount > memberBalance}
             disabledReason={
               !canConfirmRaise
@@ -165,7 +179,7 @@ export function ProxyBetSection({
                   : undefined
             }
             onClick={() =>
-              proxyBet(raiseAmount >= memberBalance ? 'allin' : 'raise', raiseAmount)
+              proxyBet(raiseAmount >= memberBalance ? 'allin' : 'raise', raiseAmount, 'raise')
             }
           >
             {d.common.confirm}

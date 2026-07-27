@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  ISSUANCE_ACCOUNT_ID,
-  adminAdjustmentEntries,
-  validateCreditEntries,
-} from './ledger'
+import { ISSUANCE_ACCOUNT_ID, adminAdjustmentEntries, validateCreditEntries } from './ledger'
 
 const accountId = '11111111-1111-4111-8111-111111111111'
 

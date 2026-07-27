@@ -3,6 +3,7 @@
 import { clsx } from 'clsx'
 import { useMemo } from 'react'
 import { HwatuCardView } from '@/components/hwatu-card'
+import { useToast } from '@/components/ui'
 import { deckFor } from '@/features/hwatu/cards'
 import type { CardId, GameType, HwatuCard } from '@/features/hwatu/types'
 import { format, useDict } from '@/lib/i18n/client'
@@ -19,6 +20,7 @@ export function CardPicker({
   onToggle: (id: CardId) => void
 }) {
   const { d } = useDict()
+  const { toast } = useToast()
   const deck = deckFor(gameType)
 
   const byMonth = useMemo(() => {
@@ -31,6 +33,11 @@ export function CardPicker({
     return [...groups.entries()].sort((a, b) => a[0] - b[0])
   }, [deck])
 
+  /**
+   * 상한에 닿아도 진짜 `disabled` 로 두지 않는다 — 섯다는 2장이 상한이라 두 장 고르는 순간
+   * 나머지 18장이 전부 무반응이 되는데, 탭해도 아무 일이 없으면 "앱이 멈췄다"로 읽힌다.
+   * aria-disabled 로 탭은 살려 두고 사유를 토스트로 알린다 (Button 의 disabledReason 과 같은 규칙).
+   */
   const renderCard = (card: HwatuCard) => {
     const isSelected = selected.has(card.id)
     const isFull = !isSelected && selected.size >= maxSelect
@@ -38,11 +45,19 @@ export function CardPicker({
       <button
         key={card.id}
         type="button"
-        disabled={isFull}
-        onClick={() => onToggle(card.id)}
+        aria-pressed={isSelected}
+        aria-disabled={isFull || undefined}
+        aria-label={format(d.advisor.cardToggleAria, { card: card.label })}
+        onClick={() => {
+          if (isFull) {
+            toast(format(d.advisor.pickerFullReason, { max: maxSelect }), 'info')
+            return
+          }
+          onToggle(card.id)
+        }}
         className={clsx(
           'flex w-full justify-center rounded-md transition-opacity',
-          isFull && 'opacity-30',
+          isFull && 'cursor-not-allowed opacity-30',
         )}
       >
         <HwatuCardView card={card} size="sm" selected={isSelected} />

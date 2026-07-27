@@ -40,6 +40,20 @@ guest-token (항상 활성)
 발급·회수, 관리자 지정, SSO 설정을 한다
 (`features/auth/admin-actions.ts`, 게이트는 `features/auth/roles.ts` `isAdminUser`).
 
+### 로그인 경로가 없는 사용자 행 — 로컬 플레이어
+
+방 호스트·딜러가 로비에서 이름만으로 만드는 대리 기록용 좌석(`users.is_managed`,
+sub = `managed:{roomId}:{uuid}`). **provider가 아니다** — 위 세 경로 어디로도 이 행에
+로그인할 수 없다:
+
+- 비밀번호: `password_hash`가 null이라 `authorize`가 거부한다.
+- 게스트: 발급된 `guest_tokens` 행에서만 sub가 파생돼 네임스페이스가 겹치지 않는다.
+- SSO: `resolveProviderUser`의 sub 조회와 username/phone 병합 조회 모두
+  `is_managed = false` 조건을 명시적으로 건다(`lib/auth.ts`). 방어층이 이중이다.
+
+세션·정산은 일반 참가자와 같고, 전역 누적 랭킹에서만 제외된다. 자세한 근거는
+[`02-data-model.md`](02-data-model.md) `users` 절.
+
 ```
 브라우저 ──► Next.js (Auth.js v5)
                  │

@@ -8,13 +8,62 @@ import { captureOf, hasChongtong, scoreGostop } from '@/features/gostop/scoring'
 import type { PokerCard } from '@/features/poker/cards'
 import { describePokerHand, evaluatePokerHand } from '@/features/poker/engine'
 import type { SeotdaAdviceCode } from '@/features/seotda/advice'
-import { Panel, Stepper } from '@/components/ui'
+import type { ReactNode } from 'react'
+import { Badge, Panel, Stepper } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { POKER_CATEGORY_STATS, seotdaStats } from '../stats'
 
 /** 어드바이저 판정 결과 패널 3종 — 게임별 표시만 담당하고 선택 상태는 advisor-client 가 소유한다. */
 
-export function SeotdaResult({ cards }: { cards: readonly HwatuCard[] }) {
+/** 사진 인식으로 채워진 선택의 출처. 사용자가 카드를 직접 토글하면 advisor-client 가 지운다. */
+export interface VisionSource {
+  readonly confidence: number
+}
+
+/**
+ * 결과 패널 공통 껍데기. 이 화면의 인터랙션은 "카드를 탭하면 다른 패널의 판정이 바뀐다" 인데
+ * 포커스는 카드 버튼에 남으므로, 라이브 리전이 없으면 스크린리더에 변경이 전혀 전달되지 않는다.
+ * 결과 영역에 헤딩이 없어 랜드마크 탐색으로도 도달할 수 없던 것도 함께 고친다.
+ *
+ * 사진 인식 결과는 사람이 고른 것과 시각적으로 구분되지 않으면 저신뢰 오인식을
+ * "앱이 판정한 내 패" 로 받아들이게 된다 — 배지를 지속 표시한다.
+ */
+function ResultRegion({
+  className,
+  vision,
+  children,
+}: {
+  className?: string
+  vision?: VisionSource | null
+  children: ReactNode
+}) {
+  const { d } = useDict()
+  return (
+    <div aria-live="polite" aria-atomic="true">
+      <Panel className={className}>
+        <h2 className="sr-only">{d.advisor.resultHeading}</h2>
+        {vision ? (
+          <p className="mb-2 flex justify-center">
+            <Badge tone={vision.confidence >= 0.9 ? 'muted' : 'warn'}>
+              {format(d.advisor.vision.sourceBadge, {
+                confidence: (vision.confidence * 100).toFixed(0),
+              })}
+            </Badge>
+          </p>
+        ) : null}
+        {children}
+      </Panel>
+    </div>
+  )
+}
+
+export function SeotdaResult({
+  cards,
+  vision,
+}: {
+  cards: readonly HwatuCard[]
+  vision?: VisionSource | null
+}) {
   const { d } = useDict()
   const result = useMemo(() => {
     if (cards.length !== 2) return null
@@ -27,7 +76,7 @@ export function SeotdaResult({ cards }: { cards: readonly HwatuCard[] }) {
   }, [cards])
 
   return (
-    <Panel className="min-h-36 space-y-3 text-center">
+    <ResultRegion className="min-h-36 space-y-3 text-center" vision={vision}>
       {result ? (
         <>
           <p className="font-brush gilt text-6xl font-black">{result.hand.label}</p>
@@ -46,13 +95,17 @@ export function SeotdaResult({ cards }: { cards: readonly HwatuCard[] }) {
           <div className="space-y-1.5 text-left">
             <div className="flex justify-between text-xs font-medium">
               <span className="text-win">
-                {format(d.advisor.winRateLabel, { rate: `${(result.stats.winRate * 100).toFixed(1)}%` })}
+                {format(d.advisor.winRateLabel, {
+                  rate: `${(result.stats.winRate * 100).toFixed(1)}%`,
+                })}
               </span>
               <span className="text-muted">
                 {result.stats.replayRate > 0
                   ? `${format(d.advisor.replayRateLabel, { rate: `${(result.stats.replayRate * 100).toFixed(1)}%` })} · `
                   : ''}
-                {format(d.advisor.loseRateLabel, { rate: `${(result.stats.loseRate * 100).toFixed(1)}%` })}
+                {format(d.advisor.loseRateLabel, {
+                  rate: `${(result.stats.loseRate * 100).toFixed(1)}%`,
+                })}
               </span>
             </div>
             <div className="flex h-2.5 overflow-hidden rounded-full bg-bg-deep/70">
@@ -69,7 +122,7 @@ export function SeotdaResult({ cards }: { cards: readonly HwatuCard[] }) {
           {cards.length < 2 ? d.advisor.selectTwoCards : d.advisor.invalidCombination}
         </p>
       )}
-    </Panel>
+    </ResultRegion>
   )
 }
 
@@ -101,7 +154,13 @@ function SeotdaAdviceList({
   )
 }
 
-export function GostopResult({ cards }: { cards: readonly HwatuCard[] }) {
+export function GostopResult({
+  cards,
+  vision,
+}: {
+  cards: readonly HwatuCard[]
+  vision?: VisionSource | null
+}) {
   const { d } = useDict()
   const [goCount, setGoCount] = useState(0)
   const [shakeCount, setShakeCount] = useState(0)
@@ -123,7 +182,7 @@ export function GostopResult({ cards }: { cards: readonly HwatuCard[] }) {
   }, [cards, goCount, shakeCount, bombCount])
 
   return (
-    <Panel className="space-y-4">
+    <ResultRegion className="space-y-4" vision={vision}>
       {result ? (
         <>
           <div className="text-center">
@@ -171,13 +230,9 @@ export function GostopResult({ cards }: { cards: readonly HwatuCard[] }) {
           value={shakeCount}
           onChange={setShakeCount}
         />
-        <CountStepper
-          label={d.advisor.bombCountLabel}
-          value={bombCount}
-          onChange={setBombCount}
-        />
+        <CountStepper label={d.advisor.bombCountLabel} value={bombCount} onChange={setBombCount} />
       </div>
-    </Panel>
+    </ResultRegion>
   )
 }
 
@@ -195,7 +250,7 @@ export function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
   const stats = result ? POKER_CATEGORY_STATS[result.category] : null
 
   return (
-    <Panel className="min-h-36 space-y-3 text-center">
+    <ResultRegion className="min-h-36 space-y-3 text-center">
       {result && stats ? (
         <>
           <p className="font-brush gilt text-5xl font-black">{result.label}</p>
@@ -218,7 +273,7 @@ export function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
             : d.advisor.invalidCombination}
         </p>
       )}
-    </Panel>
+    </ResultRegion>
   )
 }
 

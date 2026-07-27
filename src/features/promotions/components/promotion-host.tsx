@@ -2,7 +2,7 @@
 
 import { clsx } from 'clsx'
 import { useEffect, useState } from 'react'
-import { Button, useModalBehavior } from '@/components/ui'
+import { Button, ModalPortal, useModalBehavior } from '@/components/ui'
 import { useDict, format } from '@/lib/i18n/client'
 import {
   isDismissed,
@@ -77,9 +77,10 @@ function PromotionBanner({
         onClick={onDismiss}
         aria-label={format(d.promo.dismissFor, { hours: promotion.dismissHours })}
         title={format(d.promo.dismissFor, { hours: promotion.dismissHours })}
-        className="shrink-0 rounded-lg px-2 py-1 text-lg leading-none text-muted hover:text-text"
+        // -m-1 로 히트 영역만 44px 로 넓힌다 — 배너 높이는 그대로 둔다.
+        className="-m-1 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-muted hover:text-text"
       >
-        ×
+        <span aria-hidden="true">×</span>
       </button>
     </aside>
   )
@@ -95,47 +96,54 @@ function PromotionPopup({
   const { d } = useDict()
   // 이번 방문에만 숨기는 닫기 — localStorage 를 건드리지 않는다.
   const [closed, setClosed] = useState(false)
-  const { panelRef, rendered, closing } = useModalBehavior(!closed, () => setClosed(true))
+  const { panelRef, rendered, closing, backdropProps } = useModalBehavior(!closed, () =>
+    setClosed(true),
+  )
   if (!rendered) return null
 
   return (
-    <div
-      className={clsx(
-        'overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4',
-        closing && 'overlay-out',
-      )}
-      role="dialog"
-      aria-modal="true"
-      aria-label={promotion.title}
-      onClick={() => setClosed(true)}
-    >
+    <ModalPortal>
       <div
-        ref={panelRef}
-        tabIndex={-1}
-        className="lacquer panel-pop-in w-full max-w-sm rounded-2xl p-5 focus:outline-none"
-        onClick={(event) => event.stopPropagation()}
+        className={clsx(
+          'overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4',
+          closing && 'overlay-out',
+        )}
+        role="dialog"
+        aria-modal="true"
+        aria-label={promotion.title}
+        // 패널 안에서 누르고 배경에서 뗀 드래그로 팝업이 닫히던 것을 backdropProps 가 막는다.
+        {...backdropProps}
       >
-        <p className="font-brush text-xl font-black">{promotion.title}</p>
-        {promotion.body ? (
-          <p className="mt-2 whitespace-pre-line text-sm text-muted">{promotion.body}</p>
-        ) : null}
-        {promotion.linkUrl ? (
-          <a
-            href={promotion.linkUrl}
-            className="mt-3 inline-block font-bold text-text underline underline-offset-4"
-          >
-            {promotion.linkLabel ?? d.promo.learnMore}
-          </a>
-        ) : null}
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <Button variant="ghost" onClick={onDismiss}>
-            {format(d.promo.dismissFor, { hours: promotion.dismissHours })}
-          </Button>
-          <Button variant="primary" onClick={() => setClosed(true)}>
-            {d.promo.close}
-          </Button>
+        <div
+          ref={panelRef}
+          tabIndex={-1}
+          className={clsx(
+            'lacquer panel-pop-in max-h-[85dvh] w-full max-w-sm overflow-y-auto overscroll-contain rounded-2xl p-5 focus:outline-none',
+            closing && 'panel-pop-out',
+          )}
+        >
+          <p className="font-brush text-xl font-black">{promotion.title}</p>
+          {promotion.body ? (
+            <p className="mt-2 whitespace-pre-line text-sm text-muted">{promotion.body}</p>
+          ) : null}
+          {promotion.linkUrl ? (
+            <a
+              href={promotion.linkUrl}
+              className="mt-3 inline-block font-bold text-text underline underline-offset-4"
+            >
+              {promotion.linkLabel ?? d.promo.learnMore}
+            </a>
+          ) : null}
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <Button variant="ghost" onClick={onDismiss}>
+              {format(d.promo.dismissFor, { hours: promotion.dismissHours })}
+            </Button>
+            <Button variant="primary" onClick={() => setClosed(true)}>
+              {d.promo.close}
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

@@ -1,41 +1,44 @@
-import { Panel } from '@/components/ui'
+import { PageShell, Skeleton, SkeletonPanel } from '@/components/ui'
+import { getDict } from '@/lib/i18n/server'
 
-function Bar({ className = '' }: { className?: string }) {
-  return <div className={`rounded-md bg-white/10 motion-safe:animate-pulse ${className}`} />
-}
+/** 랭킹 화면 모양의 스켈레톤 — 헤더 + 필터 칩(게임 4 · 기간 3) + 순위 목록을 흉내낸다. */
+export default async function Loading() {
+  const { d } = await getDict()
 
-/** 랭킹 화면 모양의 스켈레톤 — 헤더 + 필터 칩 2줄 + 순위 목록을 흉내낸다. */
-export default function Loading() {
   return (
-    <main
-      className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8"
-      role="status"
-      aria-live="polite"
-    >
-      <span className="sr-only">랭킹 불러오는 중…</span>
-      <header className="flex items-center gap-3">
-        <Bar className="h-6 w-6 rounded-full" />
-        <Bar className="h-10 w-32" />
-      </header>
+    <PageShell width="content">
+      <div role="status" aria-live="polite" className="space-y-6">
+        <span className="sr-only">{d.loading.ranking}</span>
 
-      <div className="space-y-2">
-        <div className="flex flex-wrap gap-2">
-          <Bar className="h-11 w-16 rounded-xl" />
-          <Bar className="h-11 w-16 rounded-xl" />
-          <Bar className="h-11 w-16 rounded-xl" />
+        <header className="flex items-start gap-3">
+          <Skeleton className="size-11 shrink-0" radius="xl" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </header>
+
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-11 w-16" radius="xl" />
+            <Skeleton className="h-11 w-16" radius="xl" />
+            <Skeleton className="h-11 w-20" radius="xl" />
+            <Skeleton className="h-11 w-16" radius="xl" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Skeleton className="h-11 w-24" radius="xl" />
+            <Skeleton className="h-11 w-24" radius="xl" />
+            <Skeleton className="h-11 w-24" radius="xl" />
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Bar className="h-11 w-20 rounded-xl" />
-          <Bar className="h-11 w-20 rounded-xl" />
+
+        <div className="space-y-2">
+          <SkeletonPanel className="h-14" />
+          <SkeletonPanel className="h-14" />
+          <SkeletonPanel className="h-14" />
+          <SkeletonPanel className="h-14" />
         </div>
       </div>
-
-      <section className="space-y-2">
-        <Panel className="h-14 motion-safe:animate-pulse">{null}</Panel>
-        <Panel className="h-14 motion-safe:animate-pulse">{null}</Panel>
-        <Panel className="h-14 motion-safe:animate-pulse">{null}</Panel>
-        <Panel className="h-14 motion-safe:animate-pulse">{null}</Panel>
-      </section>
-    </main>
+    </PageShell>
   )
 }

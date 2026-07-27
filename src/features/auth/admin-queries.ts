@@ -157,11 +157,7 @@ export async function listUsers(): Promise<AdminUserView[]> {
     phoneMasked: row.phone ? `****${row.phone.slice(-4)}` : null,
     isAdmin: row.isAdmin,
     isGuest: row.authentikSub.startsWith('guest:'),
-    authType: row.authentikSub.startsWith('guest:')
-      ? 'guest'
-      : row.username
-        ? 'internal'
-        : 'sso',
+    authType: row.authentikSub.startsWith('guest:') ? 'guest' : row.username ? 'internal' : 'sso',
     createdAt: row.createdAt.toISOString(),
   }))
 }

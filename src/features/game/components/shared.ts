@@ -22,6 +22,29 @@ export type RunAction = <T>(
   onSuccess?: (data: T) => BroadcastSpec | void,
 ) => Promise<boolean>
 
+/**
+ * 무효 사유 프리셋 — value 는 서버 voidRound reason 과 round.voided 브로드캐스트에
+ * 실리는 정본(한국어) 값, labelKey 는 로케일별 표시용. 저장·중계되는 값은 보는 사람의
+ * 로케일과 무관해야 하므로 분리한다.
+ */
+export const VOID_REASONS = [
+  { value: '재경기', labelKey: 'voidReasonRematch' },
+  { value: '오입력', labelKey: 'voidReasonMisentry' },
+  { value: '패 노출', labelKey: 'voidReasonExposed' },
+] as const
+export type VoidReason = (typeof VOID_REASONS)[number]['value']
+
+const VOID_REASON_VALUES: ReadonlySet<string> = new Set(VOID_REASONS.map((item) => item.value))
+
+/**
+ * 브로드캐스트로 들어온 무효 사유가 우리가 만든 프리셋인지 판정한다.
+ * 채널은 공개라 누구나 임의 문자열을 실을 수 있다 — 화이트리스트를 통과한 값만
+ * 앱 문구로 렌더하고, 나머지는 사유 없는 일반 문구로 떨어뜨린다.
+ */
+export function isKnownVoidReason(reason: string): reason is VoidReason {
+  return VOID_REASON_VALUES.has(reason)
+}
+
 /** 게임별 액션 표기 — 섯다는 섯다 용어를 쓴다. 고스톱은 베팅 자체가 없다. */
 export const BET_LABELS_BY_GAME: Record<'seotda' | 'poker', Record<BetActionKind, string>> = {
   seotda: { check: '체크', call: '콜', raise: '올려', fold: '다이', allin: '올인' },

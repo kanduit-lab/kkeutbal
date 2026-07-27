@@ -9,7 +9,7 @@ import {
   getPlayerStats,
 } from '@/features/ranking/queries'
 import { GAME_BADGE_TONE, GAME_LABELS } from '@/features/game/labels'
-import { Avatar, Badge, EmptyState, Panel } from '@/components/ui'
+import { Avatar, Badge, EmptyState, PageShell, Panel, StatTile } from '@/components/ui'
 import { getDict, format } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/config'
 
@@ -30,15 +30,6 @@ function formatSessionDate(iso: string | null, locale: Locale): string | null {
     month: 'short',
     day: 'numeric',
   })
-}
-
-function StatTile({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Panel className="px-2 py-4 text-center">
-      <p className="text-xs font-bold text-muted">{label}</p>
-      <p className="mt-1 text-xl font-black tabular-nums">{children}</p>
-    </Panel>
-  )
 }
 
 function GameStat({ label, children }: { label: string; children: ReactNode }) {
@@ -72,30 +63,30 @@ export default async function PlayerStatsPage({
   ])
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8">
-      <header className="flex items-center gap-3">
+    <PageShell width="content" className="space-y-6">
+      <header className="flex items-center gap-2">
         <Link
           href="/ranking"
           aria-label={d.ranking.backAria}
-          className="flex min-h-11 min-w-11 items-center justify-center text-2xl text-muted"
+          className="-ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-xl text-muted transition hover:text-text"
         >
           ←
         </Link>
-        <Avatar name={profile.displayName} url={profile.avatarUrl} size={48} />
-        <div className="min-w-0">
-          <h1 className="truncate font-brush text-4xl font-black lg:text-5xl">
-            {profile.displayName}
-          </h1>
-          <p className="text-xs text-muted">{d.ranking.subtitle}</p>
+        <Avatar name={profile.displayName} url={profile.avatarUrl} size={44} />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-brush text-2xl font-black">{profile.displayName}</h1>
+          <p className="mt-0.5 text-sm text-muted">{d.ranking.subtitle}</p>
         </div>
       </header>
 
       <section className="grid grid-cols-3 gap-2" aria-label={d.ranking.overallSummaryAria}>
-        <StatTile label={d.ranking.statSessions}>
+        <StatTile tone="panel" label={d.ranking.statSessions} valueClass="text-xl">
           {stats.totals.sessions.toLocaleString()}
         </StatTile>
-        <StatTile label={d.ranking.statWins}>{stats.totals.wins.toLocaleString()}</StatTile>
-        <StatTile label={d.ranking.statNet}>
+        <StatTile tone="panel" label={d.ranking.statWins} valueClass="text-xl">
+          {stats.totals.wins.toLocaleString()}
+        </StatTile>
+        <StatTile tone="panel" label={d.ranking.statNet} valueClass="text-xl">
           <span className={netClass(stats.totals.net)}>{netLabel(stats.totals.net)}</span>
         </StatTile>
       </section>
@@ -113,8 +104,10 @@ export default async function PlayerStatsPage({
             <Panel key={game.gameType} className="space-y-3 py-4">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="text-xl">{GAME_LABELS[game.gameType].emoji}</span>
-                  <p className="truncate font-bold">{GAME_LABELS[game.gameType].name}</p>
+                  <span aria-hidden className="text-xl">
+                    {GAME_LABELS[game.gameType].emoji}
+                  </span>
+                  <p className="truncate font-bold">{d.games[game.gameType]}</p>
                   <Badge tone={GAME_BADGE_TONE[game.gameType]}>
                     {format(d.ranking.sessionsBadge, { n: game.sessions })}
                   </Badge>
@@ -146,7 +139,7 @@ export default async function PlayerStatsPage({
                   <div className="flex min-w-0 items-center gap-2">
                     <p className="truncate font-bold">{past.name}</p>
                     <Badge tone={GAME_BADGE_TONE[past.gameType]}>
-                      {GAME_LABELS[past.gameType].name}
+                      {d.games[past.gameType]}
                     </Badge>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
@@ -163,6 +156,6 @@ export default async function PlayerStatsPage({
           </div>
         </section>
       ) : null}
-    </main>
+    </PageShell>
   )
 }

@@ -3,8 +3,10 @@
 import { clsx } from 'clsx'
 import { useMemo } from 'react'
 import { isRedPokerSuit, PokerCardView } from '@/components/poker-card'
+import { useToast } from '@/components/ui'
 import { POKER_DECK, SUIT_LABELS } from '@/features/poker/cards'
 import type { PokerCard, PokerSuit } from '@/features/poker/cards'
+import { format, useDict } from '@/lib/i18n/client'
 
 const SUIT_ORDER: readonly PokerSuit[] = ['s', 'h', 'd', 'c']
 
@@ -18,6 +20,8 @@ export function PokerPicker({
   maxSelect: number
   onToggle: (id: string) => void
 }) {
+  const { d } = useDict()
+  const { toast } = useToast()
   const bySuit = useMemo(() => {
     const groups = new Map<PokerSuit, PokerCard[]>()
     for (const card of POKER_DECK) {
@@ -46,14 +50,23 @@ export function PokerPicker({
               const isSelected = selected.has(card.id)
               const isFull = !isSelected && selected.size >= maxSelect
               return (
+                // 상한 도달 카드는 aria-disabled + 사유 토스트 — 화투 피커와 같은 규칙이다.
                 <button
                   key={card.id}
                   type="button"
-                  disabled={isFull}
-                  onClick={() => onToggle(card.id)}
-                  className={clsx('flex justify-center rounded-md transition-opacity', isFull && 'opacity-30')}
+                  aria-pressed={isSelected}
+                  aria-disabled={isFull || undefined}
+                  aria-label={format(d.advisor.cardToggleAria, { card: card.label })}
+                  onClick={() => {
+                    if (isFull) {
+                      toast(format(d.advisor.pickerFullReason, { max: maxSelect }), 'info')
+                      return
+                    }
+                    onToggle(card.id)
+                  }}
+                  className={clsx('flex justify-center rounded-md', isFull && 'cursor-not-allowed')}
                 >
-                  <PokerCardView card={card} size="xs" selected={isSelected} />
+                  <PokerCardView card={card} size="xs" selected={isSelected} disabled={isFull} />
                 </button>
               )
             })}

@@ -23,8 +23,60 @@
   --color-warn: #e5b954;
   /* 카드 면 */
   --color-card: #fbf3e3;
+  /* 실패·경고 표면 — 이 쌍이 없어서 10개 파일이 #471a17/#ff9a94 를 직접 박고 있었다 */
+  --color-danger: #ff9a94;
+  --color-danger-surface: #471a17;
+  --color-success-fg: #7ad9a2;
+  --color-success-surface: #123c26;
 
   --font-display: 'Gungsuh', 'GungsuhChe', 'Nanum Myeongjo', 'Batang', 'AppleMyungjo', serif;
+
+  /* 반복되던 리터럴의 단일 출처 */
+  --text-micro: 0.6875rem;
+  --shadow-raised: 0 2px 0 rgb(0 0 0 / 0.35);
+}
+
+/*
+ * 겹침 순서 정책. z-40 sticky(액션바) < z-50 오버레이 < z-60 토스트.
+ * 토스트가 오버레이 위에 뜨는 건 DOM 순서 우연이 아니라 이 값으로 보장한다.
+ */
+:root {
+  --z-sticky: 40;
+  --z-overlay: 50;
+  --z-toast: 60;
+}
+
+/*
+ * 포커스 기준선. 프리미티브들이 focus:outline-none 으로 브라우저 기본값까지 지워
+ * 앱 전체에 키보드 포커스 표시가 없었다 (WCAG 2.4.7). 어두운 초록 배경에서
+ * 확실히 보이는 금박 링을 기본으로 깐다.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* 키보드 사용자가 페이지마다 반복되는 헤더를 건너뛴다 */
+.skip-link {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 70;
+  transform: translateY(-200%);
+  border-radius: 0.75rem;
+  background: var(--color-surface-raised);
+  padding: 0.625rem 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* 앵커 이동 시 sticky 헤더에 제목이 가리지 않게 */
+:target {
+  scroll-margin-top: 5rem;
 }
 
 html,
@@ -95,8 +147,14 @@ body {
   }
 }
 
+/*
+ * `both` 는 forwards 를 포함해서 애니메이션이 끝난 뒤에도 transform: translateY(0) 이
+ * 남는다. non-none transform 은 position: fixed 자손의 containing block 이 되어
+ * .rise-in 안에서 렌더되는 전체화면 다이얼로그가 그 컬럼 안에 갇힌다.
+ * backwards 는 같은 등장 연출을 주면서 잔여 transform 을 남기지 않는다.
+ */
 .rise-in {
-  animation: rise-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: rise-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
 .rise-in-1 { animation-delay: 0.05s; }

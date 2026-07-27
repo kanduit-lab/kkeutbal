@@ -2,6 +2,8 @@
 
 import { clsx } from 'clsx'
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import type { ReactNode } from 'react'
 import { Button } from './button'
 
 /** 퇴장 애니메이션 길이. globals.css 의 `*-out` 지속시간과 반드시 같아야 한다. */
@@ -29,6 +31,8 @@ export function useModalBehavior(open: boolean, onClose: () => void) {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const [rendered, setRendered] = useState(open)
   const [closing, setClosing] = useState(false)
+  // 바깥 클릭 판정용 — 패널 안에서 누르고 배경에서 뗀 드래그는 닫지 않는다.
+  const pressedBackdrop = useRef(false)
   // onClose 가 렌더마다 새 함수여도 포커스·스크롤 잠금 효과가 재실행되지 않게 ref 로 고정.
   const onCloseRef = useRef(onClose)
   useEffect(() => {
@@ -97,7 +101,32 @@ export function useModalBehavior(open: boolean, onClose: () => void) {
     }
   }, [rendered, closing])
 
-  return { panelRef, rendered, closing }
+  /**
+   * 배경 요소에 그대로 펼친다. click 만 쓰면 패널 안(예: Stepper 의 −/+)에서 누르고
+   * 손가락이 미끄러져 배경에서 떼는 순간 click 이 배경에 직접 떨어져 시트가 통째로 닫힌다
+   * — 입력하던 바이인 금액이 함께 날아간다. pointerdown 위치를 같이 본다.
+   */
+  const backdropProps = {
+    onPointerDown: (event: React.PointerEvent) => {
+      pressedBackdrop.current = event.target === event.currentTarget
+    },
+    onClick: (event: React.MouseEvent) => {
+      if (pressedBackdrop.current && event.target === event.currentTarget) onCloseRef.current()
+    },
+  }
+
+  return { panelRef, rendered, closing, backdropProps }
+}
+
+/**
+ * 오버레이를 body 로 포탈한다. 조상에 transform/filter 가 걸려 있으면
+ * position: fixed 가 그 조상 기준으로 잡혀 전체화면 다이얼로그가 컬럼 안에 갇힌다.
+ * SSR 에서는 document 가 없으므로 마운트 후에만 렌더한다.
+ */
+export function ModalPortal({ children }: { children: ReactNode }) {
+  const [host, setHost] = useState<HTMLElement | null>(null)
+  useEffect(() => setHost(document.body), [])
+  return host ? createPortal(children, host) : null
 }
 
 /** 확인 다이얼로그 — window.confirm 대체. 바깥 클릭·취소·Escape 로 닫힌다. */
@@ -105,54 +134,69 @@ export function ConfirmDialog({
   open,
   title,
   body,
+  children,
   confirmLabel,
   cancelLabel = '취소',
+  confirmDisabled = false,
+  loading = false,
   tone = 'primary',
   onConfirm,
   onClose,
 }: {
   open: boolean
   title: string
-  body?: string
+  /** 결과와 범위를 문장으로 적는다 (ui-states-and-feedback). 노드도 받는다. */
+  body?: ReactNode
+  /** 본문과 버튼 줄 사이의 자유 슬롯 — 사유 선택 같은 구조적 내용을 넣는다. */
+  children?: ReactNode
   confirmLabel: string
   cancelLabel?: string
+  confirmDisabled?: boolean
+  loading?: boolean
   tone?: 'primary' | 'danger'
   onConfirm: () => void
   onClose: () => void
 }) {
-  const { panelRef, rendered, closing } = useModalBehavior(open, onClose)
+  const { panelRef, rendered, closing, backdropProps } = useModalBehavior(open, onClose)
   if (!rendered) return null
   return (
-    <div
-      className={clsx(
-        'overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4',
-        closing && 'overlay-out',
-      )}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      onClick={onClose}
-    >
+    <ModalPortal>
       <div
-        ref={panelRef}
-        tabIndex={-1}
         className={clsx(
-          'lacquer panel-pop-in w-full max-w-sm rounded-2xl p-5 focus:outline-none',
-          closing && 'panel-pop-out',
+          'overlay-in fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4',
+          closing && 'overlay-out',
         )}
-        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        {...backdropProps}
       >
-        <p className="font-bold">{title}</p>
-        {body ? <p className="mt-1.5 text-sm text-muted">{body}</p> : null}
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <Button variant="ghost" onClick={onClose}>
-            {cancelLabel}
-          </Button>
-          <Button variant={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm}>
-            {confirmLabel}
-          </Button>
+        <div
+          ref={panelRef}
+          tabIndex={-1}
+          className={clsx(
+            'lacquer panel-pop-in max-h-[85dvh] w-full max-w-sm overflow-y-auto overscroll-contain rounded-2xl p-5 focus:outline-none',
+            closing && 'panel-pop-out',
+          )}
+        >
+          <p className="font-bold">{title}</p>
+          {body ? <div className="mt-1.5 text-sm text-muted">{body}</div> : null}
+          {children ? <div className="mt-3">{children}</div> : null}
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={loading}>
+              {cancelLabel}
+            </Button>
+            <Button
+              variant={tone === 'danger' ? 'danger' : 'primary'}
+              onClick={onConfirm}
+              disabled={confirmDisabled}
+              loading={loading}
+            >
+              {confirmLabel}
+            </Button>
+          </div>
         </div>
       </div>
-    </div>
+    </ModalPortal>
   )
 }

@@ -1,0 +1,131 @@
+'use client'
+
+import { useState, useTransition } from 'react'
+import { Badge, Button, Checkbox, Field, Input, Panel, Select, useToast } from '@/components/ui'
+import { translateError, useDict } from '@/lib/i18n/client'
+import { saveVisionSettings } from '@/features/jokbo-advisor/vision/settings-actions'
+import type { VisionProvider, VisionSettingsView } from '@/features/jokbo-advisor/vision/settings'
+
+const DEFAULT_VISION_MODELS: Record<VisionProvider, string> = {
+  anthropic: 'claude-sonnet-5',
+  gemini: 'gemini-3.6-flash',
+}
+
+/**
+ * 사진 인식 공급자·모델 설정. API key 는 환경변수에서만 읽으므로 여기서는
+ * "키가 있는가"만 보여주고, 없으면 활성화를 막는다.
+ *
+ * 비활성 사유는 체크박스 라벨을 덮어쓰지 않고 별도 hint 로 붙인다 — 라벨을 사유로
+ * 바꿔 버리면 스크린리더가 컨트롤의 이름을 에러 문장으로 읽어 컨트롤의 정체가 사라진다.
+ */
+export function VisionSettingsPanel({
+  settings,
+  onDataChanged,
+}: {
+  settings: VisionSettingsView
+  onDataChanged: () => void
+}) {
+  const { d } = useDict()
+  const { toast } = useToast()
+  const [isPending, startTransition] = useTransition()
+  const [enabled, setEnabled] = useState(settings.enabled)
+  const [provider, setProvider] = useState<VisionProvider>(settings.provider)
+  const [model, setModel] = useState(settings.model)
+
+  const providerAvailable =
+    provider === 'anthropic' ? settings.hasAnthropicApiKey : settings.hasGeminiApiKey
+  const live = enabled && providerAvailable
+  const blockedReason = !model.trim()
+    ? d.adminConsole.vision.modelRequired
+    : enabled && !providerAvailable
+      ? d.adminConsole.vision.keyRequired
+      : undefined
+
+  function save() {
+    if (isPending || blockedReason) return
+    startTransition(async () => {
+      const result = await saveVisionSettings({ enabled, provider, model: model.trim() })
+      if (result.success) {
+        toast(enabled ? d.adminConsole.vision.savedEnabled : d.adminConsole.vision.saved, 'success')
+        onDataChanged()
+      } else {
+        toast(translateError(d, result.error), 'error')
+      }
+    })
+  }
+
+  return (
+    <Panel className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="font-bold">{d.adminConsole.vision.title}</h2>
+          <p className="mt-1 text-sm text-muted">{d.adminConsole.vision.description}</p>
+        </div>
+        <Badge tone={live ? 'win' : 'muted'}>{live ? d.adminConsole.on : d.adminConsole.off}</Badge>
+      </div>
+      <Checkbox
+        label={d.adminConsole.vision.enable}
+        checked={enabled}
+        disabled={!providerAvailable && !enabled}
+        hint={providerAvailable ? undefined : d.adminConsole.vision.keyRequired}
+        title={providerAvailable ? undefined : d.adminConsole.vision.keyRequired}
+        onChange={(event) => setEnabled(event.target.checked)}
+      />
+      <Field label={d.adminConsole.vision.providerLabel}>
+        {(control) => (
+          <Select
+            {...control}
+            value={provider}
+            onChange={(event) => {
+              const next = event.target.value as VisionProvider
+              setProvider(next)
+              setModel(DEFAULT_VISION_MODELS[next])
+              const available =
+                next === 'anthropic' ? settings.hasAnthropicApiKey : settings.hasGeminiApiKey
+              if (!available) setEnabled(false)
+            }}
+          >
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Gemini</option>
+          </Select>
+        )}
+      </Field>
+      <Field label={d.adminConsole.vision.modelLabel}>
+        {(control) => (
+          <Input
+            {...control}
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            placeholder={DEFAULT_VISION_MODELS[provider]}
+            maxLength={120}
+            autoCapitalize="off"
+          />
+        )}
+      </Field>
+      <div className="flex flex-wrap gap-2 text-xs">
+        <Badge tone={settings.hasAnthropicApiKey ? 'win' : 'muted'}>
+          {d.adminConsole.vision.anthropicKey}:{' '}
+          {settings.hasAnthropicApiKey
+            ? d.adminConsole.vision.keySet
+            : d.adminConsole.vision.keyUnset}
+        </Badge>
+        <Badge tone={settings.hasGeminiApiKey ? 'win' : 'muted'}>
+          {d.adminConsole.vision.geminiKey}:{' '}
+          {settings.hasGeminiApiKey ? d.adminConsole.vision.keySet : d.adminConsole.vision.keyUnset}
+        </Badge>
+      </div>
+      <p className="text-xs text-muted">{d.adminConsole.vision.note}</p>
+      <Button
+        type="button"
+        variant="primary"
+        className="w-full"
+        loading={isPending}
+        disabled={Boolean(blockedReason)}
+        disabledReason={blockedReason}
+        onClick={save}
+      >
+        {d.adminConsole.vision.save}
+      </Button>
+    </Panel>
+  )
+}

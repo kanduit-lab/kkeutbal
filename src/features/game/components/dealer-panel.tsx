@@ -6,8 +6,7 @@ import { closeRoom } from '../actions'
 import { endRound, startRound, voidRound } from '../round-actions'
 import type { BetActionView, RoomSnapshot } from '../types'
 import { Button, ConfirmDialog, Input, Panel } from '@/components/ui'
-import { nonFoldedParticipantIds, type RunAction } from './shared'
-import { VoidRoundDialog, type VoidReason } from './dealer-panel-void-dialog'
+import { nonFoldedParticipantIds, VOID_REASONS, type RunAction, type VoidReason } from './shared'
 import { PendingApprovalQueue } from './dealer-panel-pending-queue'
 import { RevertList } from './dealer-panel-revert-list'
 import {
@@ -20,6 +19,9 @@ import {
 
 type PanelMode = 'idle' | 'pickWinner'
 
+/** 진행 표시를 붙일 버튼 자리 — 패널 전체가 아니라 누른 버튼만 돌게 한다. */
+type DealerSlot = 'start' | 'end' | 'void' | 'settle' | 'confirmWinner'
+
 /**
  * 딜러/방장 전용 컨트롤 — 판 시작·종료·무효, 승인 대기열, 정정, 세션 정산.
  * 멤버 단위 조작(바이인·대리 입력·역할·위임)은 좌석 탭 → MemberSheet 로 옮겼다.
@@ -30,11 +32,14 @@ export function DealerPanel({
   pendingActions,
   selfId,
   runAction,
+  staleReason = null,
 }: {
   snapshot: RoomSnapshot
   pendingActions: readonly BetActionView[]
   selfId: string
   runAction: RunAction
+  /** 스냅샷이 낡아 조작을 잠글 사유. null 이면 정상. */
+  staleReason?: string | null
 }) {
   const { d } = useDict()
   const [mode, setMode] = useState<PanelMode>('idle')
@@ -46,6 +51,8 @@ export function DealerPanel({
   const [voidTarget, setVoidTarget] = useState<'current' | 'last' | null>(null)
   const [voidReason, setVoidReason] = useState<VoidReason>('재경기')
   const [isPending, startTransition] = useTransition()
+  /** 현재 요청이 걸린 버튼 자리 — 스피너를 그 버튼에만 붙인다. */
+  const [firingSlot, setFiringSlot] = useState<DealerSlot | null>(null)
 
   const roomId = snapshot.room.id
   const round = snapshot.currentRound
@@ -77,10 +84,15 @@ export function DealerPanel({
         ? d.dealer.noteExampleGostop
         : d.dealer.noteExamplePoker
 
-  const run = (task: () => Promise<unknown>) => {
+  const run = (slot: DealerSlot, task: () => Promise<unknown>) => {
     if (isPending) return
+    setFiringSlot(slot)
     startTransition(async () => {
-      await task()
+      try {
+        await task()
+      } finally {
+        setFiringSlot(null)
+      }
     })
   }
 
@@ -95,7 +107,7 @@ export function DealerPanel({
   const confirmVoid = () => {
     const reason = voidReason
     setVoidTarget(null)
-    run(() =>
+    run('void', () =>
       runAction(
         // voidRound 는 진행 중 판이 없으면 마지막으로 끝난 판을 되돌린다 — 서버가 대상을 판정.
         () => voidRound({ roomId, reason }),
@@ -109,7 +121,7 @@ export function DealerPanel({
 
   const finishVerifiedRound = () => {
     if (!round || !verifiedDealReady) return
-    run(() =>
+    run('end', () =>
       runAction(
         // verified 섯다는 winnerId를 받지 않는다. 서버가 봉인된 덱으로만 승자를 판정한다.
         () => endRound({ roomId }),
@@ -138,9 +150,12 @@ export function DealerPanel({
               <Button
                 variant="primary"
                 size="lg"
-                disabled={isPending}
+                loading={firingSlot === 'start'}
+                loadingLabel={d.ui.processing}
+                disabled={isPending || staleReason !== null}
+                disabledReason={staleReason ?? undefined}
                 onClick={() =>
-                  run(() =>
+                  run('start', () =>
                     runAction(
                       () => startRound(roomId),
                       (data) => ({
@@ -156,7 +171,10 @@ export function DealerPanel({
               {snapshot.lastResult ? (
                 <Button
                   variant="danger"
-                  disabled={isPending}
+                  loading={firingSlot === 'void'}
+                  loadingLabel={d.ui.processing}
+                  disabled={isPending || staleReason !== null}
+                  disabledReason={staleReason ?? undefined}
                   onClick={() => openVoidDialog('last')}
                 >
                   {d.dealer.voidLastRound}
@@ -168,13 +186,21 @@ export function DealerPanel({
               <Button
                 variant="win"
                 size="lg"
-                disabled={isPending || pendingActions.length > 0 || Boolean(verifiedFairness && !verifiedDealReady)}
+                loading={firingSlot === 'end'}
+                loadingLabel={d.ui.processing}
+                disabled={
+                  isPending ||
+                  pendingActions.length > 0 ||
+                  staleReason !== null ||
+                  Boolean(verifiedFairness && !verifiedDealReady)
+                }
                 disabledReason={
                   pendingActions.length > 0
                     ? d.dealer.pendingFirst
-                    : verifiedFairness && !verifiedDealReady
-                      ? d.fairness.waitForSeeds
-                      : undefined
+                    : (staleReason ??
+                      (verifiedFairness && !verifiedDealReady
+                        ? d.fairness.waitForSeeds
+                        : undefined))
                 }
                 onClick={() => {
                   if (verifiedFairness) {
@@ -193,7 +219,10 @@ export function DealerPanel({
               </Button>
               <Button
                 variant="danger"
-                disabled={isPending}
+                loading={firingSlot === 'void'}
+                loadingLabel={d.ui.processing}
+                disabled={isPending || staleReason !== null}
+                disabledReason={staleReason ?? undefined}
                 onClick={() => openVoidDialog('current')}
               >
                 {d.dealer.voidRound}
@@ -202,10 +231,13 @@ export function DealerPanel({
           )}
           {isHost && !round ? (
             <Button
-              variant="surface"
-              className="border border-white/10"
-              disabled={isPending || snapshot.endedRounds === 0}
-              disabledReason={snapshot.endedRounds === 0 ? d.dealer.noEndedRounds : undefined}
+              variant="outline"
+              loading={firingSlot === 'settle'}
+              loadingLabel={d.ui.processing}
+              disabled={isPending || snapshot.endedRounds === 0 || staleReason !== null}
+              disabledReason={
+                snapshot.endedRounds === 0 ? d.dealer.noEndedRounds : (staleReason ?? undefined)
+              }
               onClick={() => setSettleOpen(true)}
             >
               🧾 {d.dealer.settleSession}
@@ -235,8 +267,9 @@ export function DealerPanel({
             {eligiblePlayers.map((member) => (
               <Button
                 key={member.userId}
-                variant={winnerId === member.userId ? 'win' : 'surface'}
-                className={winnerId === member.userId ? 'max-w-full' : 'max-w-full border border-white/10'}
+                variant={winnerId === member.userId ? 'win' : 'outline'}
+                pressed={winnerId === member.userId}
+                className="max-w-full"
                 onClick={() => setWinnerId(member.userId)}
               >
                 <span className="truncate">{member.displayName}</span>
@@ -258,14 +291,20 @@ export function DealerPanel({
             maxLength={60}
           />
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="ghost" onClick={() => setMode('idle')}>
+            <Button variant="ghost" disabled={isPending} onClick={() => setMode('idle')}>
               {d.common.cancel}
             </Button>
             <Button
               variant="win"
               size="lg"
-              disabled={!selectedWinnerIsEligible || isPending}
-              disabledReason={!selectedWinnerIsEligible ? d.dealer.pickWinnerFirst : undefined}
+              loading={firingSlot === 'confirmWinner'}
+              loadingLabel={d.ui.processing}
+              disabled={isPending || !selectedWinnerIsEligible || staleReason !== null}
+              disabledReason={
+                !selectedWinnerIsEligible
+                  ? d.dealer.pickWinnerFirst
+                  : (staleReason ?? undefined)
+              }
               onClick={() => {
                 if (!winnerId || !eligibleWinnerIds.has(winnerId)) return
                 const roundId = round.id
@@ -273,7 +312,7 @@ export function DealerPanel({
                   gostop,
                   gostopLosers.map((member) => member.userId),
                 )
-                run(async () => {
+                run('confirmWinner', async () => {
                   const success = await runAction(
                     () =>
                       endRound({
@@ -305,20 +344,36 @@ export function DealerPanel({
         </div>
       ) : null}
 
-      {/* ── 판 무효 확인 (진행 중 판 · 지난 판 공용) ── */}
-      <VoidRoundDialog
+      {/* ── 판 무효 확인 (진행 중 판 · 지난 판 공용) ──
+          사유 칩은 ConfirmDialog 의 children 슬롯에 얹는다 — 전용 다이얼로그를 따로
+          두면 모션·포커스 트랩·포탈이 갈라져 같은 버그를 두 번 고치게 된다. */}
+      <ConfirmDialog
         open={voidTarget !== null}
+        tone="danger"
         title={voidTarget === 'last' ? d.dealer.voidLastTitle : d.dealer.voidCurrentTitle}
         body={
           voidTarget === 'last'
             ? format(d.dealer.voidLastBody, { seq: snapshot.lastResult?.seq ?? 0 })
             : d.dealer.voidCurrentBody
         }
-        reason={voidReason}
-        onReasonChange={setVoidReason}
+        confirmLabel={d.dealer.voidConfirm}
+        cancelLabel={d.common.cancel}
         onConfirm={confirmVoid}
         onClose={() => setVoidTarget(null)}
-      />
+      >
+        <div className="grid grid-cols-3 gap-2" role="group" aria-label={d.dealer.voidReasonAria}>
+          {VOID_REASONS.map((item) => (
+            <Button
+              key={item.value}
+              size="sm"
+              selected={voidReason === item.value}
+              onClick={() => setVoidReason(item.value)}
+            >
+              {d.dealer[item.labelKey]}
+            </Button>
+          ))}
+        </div>
+      </ConfirmDialog>
 
       {/* ── 세션 정산 확인 ── */}
       <ConfirmDialog
@@ -329,7 +384,7 @@ export function DealerPanel({
         cancelLabel={d.common.cancel}
         onConfirm={() => {
           setSettleOpen(false)
-          run(() => runAction(() => closeRoom(roomId)))
+          run('settle', () => runAction(() => closeRoom(roomId)))
         }}
         onClose={() => setSettleOpen(false)}
       />
@@ -341,10 +396,16 @@ export function DealerPanel({
         runAction={runAction}
         nameOf={nameOf}
         betLabels={betLabels}
+        staleReason={staleReason}
       />
 
       {/* ── 확정 액션 정정 ── */}
-      <RevertList snapshot={snapshot} selfId={selfId} runAction={runAction} />
+      <RevertList
+        snapshot={snapshot}
+        selfId={selfId}
+        runAction={runAction}
+        staleReason={staleReason}
+      />
 
       <p className="text-xs text-muted">{d.dealer.memberActionsHint}</p>
     </Panel>

@@ -1,6 +1,14 @@
+import { BackToTop } from '../_components/back-to-top'
 import { GuideHeader } from '../_components/guide-header'
 import { TocNav } from '../_components/toc-nav'
-import { Panel } from '@/components/ui'
+import { PageShell, Panel } from '@/components/ui'
+import type { Metadata } from 'next'
+import { getDict } from '@/lib/i18n/server'
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { d } = await getDict()
+  return { title: `앱 사용법 · ${d.common.appName}` }
+}
 
 const TOC = [
   { href: '#premise', label: '이 앱은 기록용' },
@@ -66,21 +74,28 @@ const DEALER_ACTIONS: readonly DealerAction[] = [
   { title: '모니터링 화면', description: '헤더의 📺를 태블릿·TV에 띄우면 테이블과 기록이 전광판으로 보입니다' },
 ]
 
-export default function UsageGuidePage() {
+export default async function UsageGuidePage() {
+  const { d } = await getDict()
+
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 pb-16 pt-8 lg:px-8 lg:pt-12">
+    <PageShell width="wide">
       <GuideHeader
         backHref="/guide"
-        backLabel="가이드 목록으로"
+        backLabel={d.guide.backToList}
         emoji="📱"
         title="앱 사용법"
         description="방 만들기부터 정산·랭킹까지 진행 순서"
       />
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <div className="space-y-8 lg:col-span-9">
+        {/* 목차가 먼저 온다 — 1열(모바일)에서는 본문 위, lg 에서는 order 로 우측 컬럼. */}
+        <div className="min-w-0 lg:order-2 lg:col-span-3">
+          <TocNav items={TOC} />
+        </div>
+
+        <div className="min-w-0 space-y-8 lg:order-1 lg:col-span-9">
           <section id="premise" className="scroll-mt-6">
-            <Panel className="border-accent/30 bg-[#1a2f24] space-y-1.5">
+            <Panel className="space-y-1.5 border-accent/30 bg-accent/5">
               <p className="font-brush font-bold text-accent">이 앱은 기록용입니다</p>
               <p className="text-sm text-muted">
                 게임은 실물 화투·카드·칩으로 칩니다. 앱은 베팅 액수와 승부 결과를 기록해
@@ -118,7 +133,9 @@ export default function UsageGuidePage() {
               <ul className="space-y-3">
                 {DEALER_ACTIONS.map((action) => (
                   <li key={action.title} className="flex gap-3">
-                    <span className="text-accent">●</span>
+                    <span aria-hidden className="text-accent">
+                      ●
+                    </span>
                     <div>
                       <p className="font-bold">{action.title}</p>
                       <p className="text-sm text-muted">{action.description}</p>
@@ -128,12 +145,10 @@ export default function UsageGuidePage() {
               </ul>
             </Panel>
           </section>
-        </div>
 
-        <div className="lg:col-span-3">
-          <TocNav items={TOC} />
+          <BackToTop />
         </div>
       </div>
-    </main>
+    </PageShell>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { clsx } from 'clsx'
+import { useState } from 'react'
 import { useDict } from '@/lib/i18n/client'
 import { setMemberRole } from '../member-actions'
 import type { MemberRole } from '../types'
@@ -37,6 +37,8 @@ export function RoleSection({
   onTransferRequest: () => void
 }) {
   const { d } = useDict()
+  /** 요청이 걸린 역할 — 세 칸이 한꺼번에 도는 대신 누른 칸만 돌게 한다. */
+  const [firingRole, setFiringRole] = useState<MemberRole | null>(null)
   return (
     <Section icon="🎭" title={d.memberSheet.roleTitle} hint={d.memberSheet.roleHint}>
       <div className="grid grid-cols-3 gap-2">
@@ -45,15 +47,16 @@ export function RoleSection({
           return (
             <Button
               key={option.role}
-              variant={selected ? 'primary' : 'surface'}
-              className={clsx('min-h-16 flex-col gap-0.5', !selected && 'border border-white/10')}
+              selected={selected}
+              className="min-h-16 flex-col gap-0.5"
+              loading={firingRole === option.role}
               disabled={isPending}
-              pressed={selected}
               onClick={() => {
-                // 이미 선택된 역할 — 재전송할 것이 없다. 시각은 pressed 로 유지된다.
+                // 이미 선택된 역할 — 재전송할 것이 없다. 시각은 selected 로 유지된다.
                 if (selected) return
-                run(() =>
-                  runAction(
+                setFiringRole(option.role)
+                run(async () => {
+                  const success = await runAction(
                     () =>
                       setMemberRole({
                         roomId,
@@ -64,8 +67,10 @@ export function RoleSection({
                       event: 'member.role_changed',
                       payload: { userId: memberId, role: option.role },
                     }),
-                  ),
-                )
+                  )
+                  setFiringRole(null)
+                  return success
+                })
               }}
             >
               <span className="text-xl leading-none" aria-hidden>
@@ -80,6 +85,7 @@ export function RoleSection({
         variant="danger"
         className="w-full"
         disabled={isPending}
+        aria-haspopup="dialog"
         onClick={onTransferRequest}
       >
         👑 {d.memberSheet.transferHost}

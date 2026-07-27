@@ -3,14 +3,23 @@
 import Link from 'next/link'
 import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import { sendRoomEvent } from '@/lib/realtime/client'
-import type { RoomEvent } from '@/lib/realtime/events'
-import { isMuted, playChip, playRoundStart, playWin, setMuted } from '@/lib/sound'
-import type { RoomSnapshot } from '../types'
-import { Badge, useToast } from '@/components/ui'
+import { isMuted, setMuted } from '@/lib/sound'
+import type { MemberView, RoomSnapshot } from '../types'
+import { useToast } from '@/components/ui'
 import { AUTH_ERROR_KEYS, useRoomSync } from './use-room-sync'
+import { useRoomEventFeedback } from './use-room-event-feedback'
+import { RoomHeader } from './room-header'
+import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
 import { ActionBar } from './action-bar'
 import { DealerPanel } from './dealer-panel'
@@ -21,19 +30,22 @@ import { FairnessPanel } from './fairness-panel'
 import type { BroadcastSpec, RunAction } from './shared'
 
 /**
- * SSR 안전 미디어쿼리 훅 — 서버·첫 렌더는 false(모바일 취급), 마운트 시 동기화 후 변경을 구독한다.
+ * SSR 안전 미디어쿼리 훅 — 서버 스냅샷은 false(모바일 취급)지만 클라이언트 첫 렌더는
+ * 이미 실제 값을 읽는다. effect 로만 동기화하면 데스크톱에서 하단 고정 바가 한 프레임
+ * 번쩍인 뒤 인라인 패널로 튄다.
  * ActionBar 를 한 인스턴스만 마운트해 레이즈 열림 상태·입력값이 브레이크포인트 전환에도 유지되게 한다.
  */
 function useIsDesktop(query: string): boolean {
-  const [isDesktop, setIsDesktop] = useState(false)
-  useEffect(() => {
-    const media = window.matchMedia(query)
-    setIsDesktop(media.matches)
-    const onChange = (event: MediaQueryListEvent) => setIsDesktop(event.matches)
-    media.addEventListener('change', onChange)
-    return () => media.removeEventListener('change', onChange)
-  }, [query])
-  return isDesktop
+  const subscribe = useCallback(
+    (onStoreChange: () => void) => {
+      const media = window.matchMedia(query)
+      media.addEventListener('change', onStoreChange)
+      return () => media.removeEventListener('change', onStoreChange)
+    },
+    [query],
+  )
+  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query])
+  return useSyncExternalStore(subscribe, getSnapshot, () => false)
 }
 
 /**
@@ -54,75 +66,7 @@ export function RoomClient({
   const [muted, setMutedState] = useState(() => isMuted())
   const isDesktop = useIsDesktop('(min-width: 1024px)')
 
-  const onEvent = useCallback(
-    (event: RoomEvent, current: RoomSnapshot) => {
-      /** 내 액션에만 개인 피드백을 띄운다 — 승인·거절·되돌림 공용 판정. */
-      const isMyAction = (actionId: string) =>
-        current.actions.some((action) => action.id === actionId && action.userId === selfId)
-
-      switch (event.name) {
-        case 'bet.placed':
-          if (event.payload.amount > 0) playChip()
-          break
-        case 'bet.approved':
-          if (isMyAction(event.payload.actionId)) toast(d.room.toastBetApproved, 'success')
-          break
-        case 'bet.rejected':
-          if (isMyAction(event.payload.actionId)) {
-            toast(
-              format(d.room.toastBetRejected, {
-                reason: translateError(d, event.payload.reason),
-              }),
-              'error',
-            )
-          }
-          break
-        case 'bet.reverted':
-          if (isMyAction(event.payload.actionId)) {
-            toast(
-              format(d.room.toastBetReverted, {
-                reason: translateError(d, event.payload.reason),
-              }),
-              'error',
-            )
-          }
-          break
-        case 'round.started':
-          toast(format(d.room.toastRoundStarted, { seq: event.payload.seq }), 'info')
-          playRoundStart()
-          break
-        case 'round.ended': {
-          const winner = current.members.find(
-            (member) => member.userId === event.payload.winnerId,
-          )
-          if (winner) {
-            toast(
-              format(d.room.toastRoundWon, {
-                name: winner.displayName,
-                pot: event.payload.pot.toLocaleString(),
-              }),
-              'success',
-            )
-            playWin()
-          }
-          break
-        }
-        case 'round.voided':
-          // 무효는 전원의 베팅을 되돌린다 — 전원에게 사유와 함께 알린다.
-          toast(
-            format(d.room.toastRoundVoided, {
-              seq: event.payload.seq,
-              reason: event.payload.reason,
-            }),
-            'error',
-          )
-          break
-        default:
-          break
-      }
-    },
-    [selfId, toast, d],
-  )
+  const onEvent = useRoomEventFeedback(selfId)
 
   const {
     snapshot,
@@ -139,12 +83,27 @@ export function RoomClient({
   // connectTimedOut 은 최초 구독이 늦어지는 구간(everConnected=false)을 배너로 메운다.
   const showDisconnected = (everConnected && !connected) || connectTimedOut
   const roomId = initial.room.id
+  const roomCode = initial.room.code
+
+  /**
+   * 스냅샷이 임의로 낡았을 때는 조작을 잠근다. 지금 화면의 잔액·팟은 서버 값이 아니고,
+   * 그 위에서 계산한 콜 금액·최소 레이즈로 베팅하면 거절되거나 의도와 다른 금액이 나간다.
+   */
+  const staleReason = syncFailed ? d.room.staleGate : null
 
   // 재시도로 복구 불가한 실패 — 세션 만료는 로그인으로, 추방·미참가는 홈으로 보낸다.
+  // 말없이 튕기면 사용자는 자기가 뭘 잘못 눌렀다고 읽는다 — 사유를 먼저 알린다.
   useEffect(() => {
     if (!authError) return
-    router.push(authError === AUTH_ERROR_KEYS.loginRequired ? '/login' : '/')
-  }, [authError, router])
+    if (authError === AUTH_ERROR_KEYS.loginRequired) {
+      toast(d.room.sessionExpired, 'error')
+      // 재로그인 후 홈이 아니라 이 방으로 돌아오게 한다.
+      router.push(`/login?next=${encodeURIComponent(`/rooms/${roomCode}`)}` as Route)
+      return
+    }
+    toast(translateError(d, authError), 'error')
+    router.push('/')
+  }, [authError, router, toast, d, roomCode])
 
   const afterMutation = useCallback(
     async (broadcast?: BroadcastSpec) => {
@@ -265,11 +224,13 @@ export function RoomClient({
     [snapshot.recentRounds],
   )
 
-  function toggleMute() {
-    const next = !muted
-    setMuted(next)
-    setMutedState(next)
-  }
+  const toggleMute = useCallback(() => {
+    setMutedState((current) => {
+      const next = !current
+      setMuted(next)
+      return next
+    })
+  }, [])
 
   /** 첫 판 전 로비 — 코드 공유와 참가자 확인에 집중한다. */
   const isLobby = snapshot.room.status === 'waiting'
@@ -277,102 +238,40 @@ export function RoomClient({
   const isBettingGame = snapshot.room.gameType !== 'gostop'
   const canBet = Boolean(self && self.role !== 'observer') && isBettingGame && !isLobby
 
-  const sheetMember = seatUserId
+  const seatMember = seatUserId
     ? (snapshot.members.find((member) => member.userId === seatUserId) ?? null)
     : null
-
-  // 48px 터치 타깃 안에서 아이콘이 너무 작으면 빈 상자처럼 보인다 — 글리프를 키우고
-  // 옅은 배경을 깔아 네 개가 한 묶음으로 읽히게 한다.
-  const iconLinkClass =
-    'inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-lg leading-none transition-colors hover:border-gold/40 hover:bg-white/10'
+  /**
+   * 시트는 닫히는 동안(퇴장 애니메이션 180ms)에도 내용을 그려야 한다 — seatUserId 가
+   * 비워져도 마지막으로 연 멤버를 유지한다. 렌더 중 상태 조정은 React 공식 패턴이다.
+   */
+  const [sheetMember, setSheetMember] = useState<MemberView | null>(null)
+  if (seatMember && seatMember !== sheetMember) setSheetMember(seatMember)
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 pb-56 pt-5 lg:px-8 lg:pb-12 lg:pt-8">
-      <header className="rise-in mb-5 flex items-center justify-between lg:mb-8">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link
-            href="/"
-            aria-label={d.room.backAria}
-            className="inline-flex min-h-12 min-w-12 items-center justify-center text-xl text-muted transition-colors hover:text-text"
-          >
-            ←
-          </Link>
-          <div className="min-w-0">
-            <h1 className="truncate font-brush text-xl font-bold leading-tight lg:text-3xl">
-              {snapshot.room.name}
-            </h1>
-            {/* 판 진행 상태는 방 정보와 같은 줄에 둔다 — 아이콘 버튼(48px) 옆에 두면
-                뱃지 높이가 맞지 않아 헤더가 들쭉날쭉해진다. */}
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted lg:text-sm">
-              <span>
-                {d.room.codeLabel}{' '}
-                <span className="font-mono font-bold tracking-widest">{snapshot.room.code}</span>
-                {' · '}
-                {d.games[snapshot.room.gameType]}
-                {' · '}
-                {snapshot.room.inputMode === 'trust' ? d.inputMode.trust : d.inputMode.approval}
-              </span>
-              <Badge tone={snapshot.currentRound ? 'win' : 'muted'}>
-                {snapshot.currentRound
-                  ? format(d.room.roundLive, { seq: snapshot.currentRound.seq })
-                  : d.common.waiting}
-              </Badge>
-            </div>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          {syncFailed || showDisconnected ? (
-            <button
-              type="button"
-              onClick={() => {
-                // 채널 재구독 + 즉시 refetch — 채널이 멀쩡한데 동기화만 죽은 경우도 복구한다.
-                reconnect()
-                void refetch()
-              }}
-              className="min-h-11 rounded-md bg-warn/20 px-2 py-1 text-xs font-bold text-warn"
-            >
-              {syncFailed ? d.room.syncFailedReconnect : d.room.disconnectedReconnect}
-            </button>
-          ) : null}
-          {/* 서버 렌더는 항상 muted(🔇) — localStorage 값과 다를 수 있어 경고만 억제한다. */}
-          <button
-            type="button"
-            onClick={toggleMute}
-            aria-pressed={muted}
-            aria-label={muted ? d.room.soundOnAria : d.room.soundOffAria}
-            suppressHydrationWarning
-            className={iconLinkClass}
-          >
-            {muted ? '🔇' : '🔊'}
-          </button>
-          <Link
-            href={`/rooms/${snapshot.room.code}/result`}
-            aria-label={d.room.resultAria}
-            title={d.room.resultAria}
-            className={iconLinkClass}
-          >
-            🧾
-          </Link>
-          <Link
-            href={`/rooms/${snapshot.room.code}/monitor`}
-            aria-label={d.room.monitorAria}
-            title={d.room.monitorTitle}
-            className={iconLinkClass}
-          >
-            📺
-          </Link>
-          {isHost ? (
-            <Link
-              href={`/rooms/${snapshot.room.code}/settings`}
-              aria-label={d.room.settingsAria}
-              title={d.room.settingsTitle}
-              className={iconLinkClass}
-            >
-              ⚙️
-            </Link>
-          ) : null}
-        </div>
-      </header>
+    <main
+      id="main"
+      // 하단 고정 ActionBar 높이는 레이즈 패널 개폐로 114~274px 사이를 오간다. 상수로
+      // 잡아 두면 로비·고스톱·관전 화면에는 죽은 여백이, 레이즈 중에는 가림이 생긴다 —
+      // ActionBar 가 ResizeObserver 로 실제 높이를 --action-bar-h 에 쓴다.
+      className="mx-auto w-full max-w-6xl px-4 pb-[calc(var(--action-bar-h,0px)+1.5rem)] pt-5 lg:px-8 lg:pb-12 lg:pt-8"
+    >
+      <RoomHeader
+        snapshot={snapshot}
+        isHost={isHost}
+        muted={muted}
+        onToggleMute={toggleMute}
+      />
+
+      <RoomConnectionBar
+        syncFailed={syncFailed}
+        disconnected={showDisconnected}
+        onReconnect={() => {
+          // 채널 재구독 + 즉시 refetch — 채널이 멀쩡한데 동기화만 죽은 경우도 복구한다.
+          reconnect()
+          void refetch()
+        }}
+      />
 
       {isLobby ? (
         <div className="rise-in rise-in-1 mx-auto max-w-xl">
@@ -381,6 +280,7 @@ export function RoomClient({
             online={online}
             selfId={selfId}
             runAction={runAction}
+            staleReason={staleReason}
             onMemberTap={setSeatUserId}
           />
         </div>
@@ -388,7 +288,12 @@ export function RoomClient({
         <div className="lg:grid lg:grid-cols-12 lg:gap-6">
           <div className="lg:col-span-7 xl:col-span-8">
             <div className="rise-in rise-in-1">
-              <FairnessPanel snapshot={snapshot} selfId={selfId} runAction={runAction} />
+              <FairnessPanel
+                snapshot={snapshot}
+                selfId={selfId}
+                runAction={runAction}
+                staleReason={staleReason}
+              />
             </div>
             {snapshot.lastResult && !snapshot.currentRound ? (
               <p className="rise-in rise-in-1 mb-2 text-center text-xs text-muted lg:text-sm">
@@ -442,7 +347,13 @@ export function RoomClient({
                 모바일 바는 fixed 라 DOM 위치와 무관하게 하단에 붙는다. */}
             {canBet && self ? (
               <div className={isDesktop ? 'rise-in rise-in-3' : undefined}>
-                <ActionBar snapshot={snapshot} self={self} runAction={runAction} inline={isDesktop} />
+                <ActionBar
+                  snapshot={snapshot}
+                  self={self}
+                  runAction={runAction}
+                  staleReason={staleReason}
+                  inline={isDesktop}
+                />
               </div>
             ) : null}
           </div>
@@ -455,6 +366,7 @@ export function RoomClient({
                   pendingActions={pendingActions}
                   selfId={selfId}
                   runAction={runAction}
+                  staleReason={staleReason}
                 />
               </div>
             ) : null}
@@ -468,6 +380,7 @@ export function RoomClient({
 
       {sheetMember ? (
         <MemberSheet
+          open={seatUserId !== null}
           member={sheetMember}
           snapshot={snapshot}
           selfId={selfId}

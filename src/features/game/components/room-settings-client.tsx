@@ -7,7 +7,7 @@ import { sendOneShotRoomEvent } from '@/lib/realtime/client'
 import { translateError, useDict } from '@/lib/i18n/client'
 import { updateRoomSettings } from '../actions'
 import type { RoomView } from '../types'
-import { Button, Field, Input, Panel, Stepper, useToast } from '@/components/ui'
+import { Button, Field, Input, Panel, Segmented, Stepper, useToast } from '@/components/ui'
 
 /**
  * 방 옵션 편집 — 이름·입력 모드·점당 칩(고스톱)·삥 단위(베팅 게임)·정원·관전 입장.
@@ -71,11 +71,12 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-xl space-y-6 px-4 pb-16 pt-8">
+    <main id="main" className="mx-auto w-full max-w-xl space-y-6 px-4 pb-16 pt-8">
       <header className="flex items-center gap-3">
+        {/* 방 화면·전광판과 같은 48px 타깃 — 여기만 글리프 크기(≈24px)로 남아 있었다. */}
         <Link
           href={`/rooms/${room.code}`}
-          className="text-2xl text-muted"
+          className="inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center text-2xl text-muted transition-colors hover:text-text"
           aria-label={d.room.backAria}
         >
           ←
@@ -100,26 +101,16 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
         </Field>
 
         <Field label={d.inputMode.label}>
-          <div className="grid grid-cols-2 gap-2">
-            <Button
-              type="button"
-              variant={inputMode === 'trust' ? 'primary' : 'surface'}
-              className={inputMode === 'trust' ? '' : 'border border-white/10'}
-              pressed={inputMode === 'trust'}
-              onClick={() => setInputMode('trust')}
-            >
-              {d.inputMode.trust}
-            </Button>
-            <Button
-              type="button"
-              variant={inputMode === 'approval' ? 'primary' : 'surface'}
-              className={inputMode === 'approval' ? '' : 'border border-white/10'}
-              pressed={inputMode === 'approval'}
-              onClick={() => setInputMode('approval')}
-            >
-              {d.inputMode.approval}
-            </Button>
-          </div>
+          <Segmented
+            value={inputMode}
+            onChange={setInputMode}
+            ariaLabel={d.inputMode.label}
+            className="grid-cols-2"
+            options={[
+              { value: 'trust', label: d.inputMode.trust },
+              { value: 'approval', label: d.inputMode.approval },
+            ]}
+          />
           <p className="mt-1.5 text-xs text-muted">
             {inputMode === 'trust' ? d.inputMode.trustHint : d.inputMode.approvalHint}
           </p>
@@ -133,6 +124,8 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
               min={1}
               max={100_000}
               ariaLabel={d.roomForm.pointValueAria}
+              decreaseLabel={d.ui.decrease}
+              increaseLabel={d.ui.increase}
             />
             <p className="mt-1.5 text-xs text-muted">{d.roomForm.pointValueHint}</p>
           </Field>
@@ -144,6 +137,8 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
               min={1}
               max={100_000}
               ariaLabel={d.roomForm.baseBetAria}
+              decreaseLabel={d.ui.decrease}
+              increaseLabel={d.ui.increase}
             />
             <p className="mt-1.5 text-xs text-muted">{d.roomForm.baseBetHint}</p>
           </Field>
@@ -159,6 +154,8 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
                 max={1_000_000}
                 step={10}
                 ariaLabel={d.roomForm.startingChipsAria}
+                decreaseLabel={d.ui.decrease}
+                increaseLabel={d.ui.increase}
               />
               <p className="mt-1.5 text-xs text-muted">{d.settings.startingChipsEditHint}</p>
             </>
@@ -179,6 +176,8 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
             min={2}
             max={10}
             ariaLabel={d.settings.maxMembersLabel}
+            decreaseLabel={d.ui.decrease}
+            increaseLabel={d.ui.increase}
           />
           <p className="mt-1.5 text-xs text-muted">{d.settings.maxMembersHint}</p>
         </Field>
@@ -186,13 +185,8 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
         <div>
           <Button
             type="button"
-            variant={joinAsObserver ? 'primary' : 'surface'}
-            className={
-              joinAsObserver
-                ? 'w-full justify-between'
-                : 'w-full justify-between border border-white/10'
-            }
-            pressed={joinAsObserver}
+            selected={joinAsObserver}
+            className="w-full justify-between"
             onClick={() => setJoinAsObserver((value) => !value)}
           >
             <span>{d.settings.joinAsObserverLabel}</span>
@@ -207,13 +201,8 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
           <Field label={d.fairness.settingsLabel}>
             <Button
               type="button"
-              variant={fairDealing === 'verified' ? 'primary' : 'surface'}
-              className={
-                fairDealing === 'verified'
-                  ? 'w-full justify-between'
-                  : 'w-full justify-between border border-white/10'
-              }
-              pressed={fairDealing === 'verified'}
+              selected={fairDealing === 'verified'}
+              className="w-full justify-between"
               disabled={room.status !== 'waiting'}
               disabledReason={room.status !== 'waiting' ? d.fairness.settingsLocked : undefined}
               onClick={() =>
@@ -238,6 +227,8 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
                   max={120}
                   step={5}
                   ariaLabel={d.fairness.seedTimeoutLabel}
+                  decreaseLabel={d.ui.decrease}
+                  increaseLabel={d.ui.increase}
                 />
                 <p className="mt-1.5 text-xs text-muted">{d.fairness.seedTimeoutHint}</p>
               </div>
@@ -250,10 +241,11 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
           variant="primary"
           size="lg"
           className="w-full"
-          disabled={isPending}
+          loading={isPending}
+          loadingLabel={d.common.saving}
           onClick={save}
         >
-          {isPending ? d.common.saving : d.common.save}
+          {d.common.save}
         </Button>
       </Panel>
     </main>

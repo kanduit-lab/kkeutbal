@@ -78,14 +78,54 @@ interface RegisterFields {
   name: string
 }
 
-function backTo(path: '/register' | '/login', code: AuthErrorCode, fields?: RegisterFields): never {
+/**
+ * 실패를 폼 화면으로 되돌린다. `next` 는 반드시 함께 실어야 한다 — 비밀번호 오타는
+ * 흔한 실패라, 여기서 목적지를 잃으면 재로그인 성공 후 홈으로 떨어지는 게 기본 경험이 된다.
+ * 게스트 경로(loginWithGuestToken)는 이미 next 를 보존하고 있었다.
+ */
+function backTo(
+  path: '/register' | '/login',
+  code: AuthErrorCode,
+  fields?: RegisterFields,
+  next?: string,
+  invalid?: readonly RegisterFieldName[],
+): never {
   const params = new URLSearchParams({ error: code })
   if (fields) {
     // 폼이 지워지지 않게 비민감 필드만 쿼리로 보존한다. 길이는 폼 maxLength 에 맞춰 자른다.
+    // 전화번호·비밀번호는 절대 쿼리에 싣지 않는다 (docs/07-auth-and-security.md).
     params.set('username', fields.username.slice(0, 20))
     params.set('name', fields.name.slice(0, 20))
   }
+  // 잘못된 필드 전부를 실어 한 번의 왕복으로 모두 표시한다 — 예전에는 첫 이슈만 돌려줘서
+  // 아이디와 전화번호가 같이 틀리면 왕복이 두 번 필요했다. 필드명은 고정 화이트리스트다.
+  if (invalid && invalid.length > 0) params.set('invalid', invalid.join(','))
+  // '/' 는 기본값이라 실을 이유가 없다 — 쿼리를 짧게 유지한다.
+  if (next && next !== '/') params.set('next', next)
   redirect(`${path}?${params.toString()}` as Route)
+}
+
+/** `?invalid=` 에 실리는 필드 이름 — 페이지가 이 목록으로만 해석한다. */
+export type RegisterFieldName = 'username' | 'password' | 'passwordConfirm' | 'name' | 'phone'
+
+const REGISTER_FIELD_NAMES: readonly RegisterFieldName[] = [
+  'username',
+  'password',
+  'passwordConfirm',
+  'name',
+  'phone',
+]
+
+/** zod 이슈 전부에서 필드명을 뽑는다. 알 수 없는 경로는 버린다. */
+function invalidFields(issues: readonly z.ZodIssue[]): readonly RegisterFieldName[] {
+  const seen = new Set<RegisterFieldName>()
+  for (const issue of issues) {
+    const name = issue.path[0]
+    if (typeof name === 'string' && (REGISTER_FIELD_NAMES as readonly string[]).includes(name)) {
+      seen.add(name as RegisterFieldName)
+    }
+  }
+  return [...seen]
 }
 
 /** zod 첫 이슈의 필드명을 필드별 에러 코드로 바꾼다 — 페이지가 구체적 문구를 보여줄 수 있게. */
@@ -105,6 +145,8 @@ function validationCode(issuePath: PropertyKey | undefined): AuthErrorCode {
 }
 
 export async function registerAndLogin(formData: FormData): Promise<void> {
+  // 초대 링크로 온 신규 회원이 가입을 마치고 방이 아니라 홈에 떨어지지 않게 목적지를 이어받는다.
+  const next = safeInternalPath(String(formData.get('next') ?? '/'))
   const [hasAccess, registrationCodeId, initialAdminSetupId, firstAccount] = await Promise.all([
     hasRegistrationAccess(),
     registrationAccessCodeId(),
@@ -115,7 +157,7 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
     if (firstAccount) {
       redirect('/login?error=initial_admin_setup_required&mode=registration')
     }
-    backTo('/login', 'registration_code_required')
+    backTo('/login', 'registration_code_required', undefined, next)
   }
 
   const raw = {
@@ -129,10 +171,16 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
 
   const parsed = registerSchema.safeParse(raw)
   if (!parsed.success) {
-    backTo('/register', validationCode(parsed.error.issues[0]?.path[0]), rawFields)
+    backTo(
+      '/register',
+      validationCode(parsed.error.issues[0]?.path[0]),
+      rawFields,
+      next,
+      invalidFields(parsed.error.issues),
+    )
   }
   if (parsed.data.password !== passwordConfirm) {
-    backTo('/register', 'password_mismatch', rawFields)
+    backTo('/register', 'password_mismatch', rawFields, next, ['passwordConfirm'])
   }
 
   const { username, password, name, phone } = parsed.data
@@ -152,7 +200,7 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
       windowMs: 60 * 60 * 1000,
     },
   ])
-  if (!registrationRate.allowed) backTo('/register', 'register_failed', fields)
+  if (!registrationRate.allowed) backTo('/register', 'register_failed', fields, next)
 
   const { db, schema } = await import('@/lib/db')
   const [taken] = await db
@@ -161,7 +209,13 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
     .where(or(eq(schema.users.username, username), eq(schema.users.phone, phone)))
     .limit(1)
   if (taken) {
-    backTo('/register', taken.username === username ? 'username_taken' : 'phone_taken', fields)
+    backTo(
+      '/register',
+      taken.username === username ? 'username_taken' : 'phone_taken',
+      fields,
+      next,
+      [taken.username === username ? 'username' : 'phone'],
+    )
   }
 
   try {
@@ -181,7 +235,7 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
       redirect('/login?error=initial_admin_setup_required&mode=registration')
     }
     console.error('registerAndLogin failed:', error)
-    backTo('/register', 'register_failed', fields)
+    backTo('/register', 'register_failed', fields, next)
   }
 
   try {
@@ -190,7 +244,7 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
     // 계정 생성은 이미 커밋됐다. 쿠키 정리 실패를 가입 실패로 오인시키지 않는다.
     console.error('registration access cookie cleanup failed:', error)
   }
-  await signIn('password', { username, password, redirectTo: '/' })
+  await signIn('password', { username, password, redirectTo: next })
 }
 
 /** 서버 콘솔의 초기 설정 코드를 확인하고 첫 관리자 가입용 10분 증표를 발급한다. */
@@ -264,7 +318,7 @@ export async function loginWithPassword(formData: FormData): Promise<void> {
     await signIn('password', { username, password, redirectTo })
   } catch (error) {
     if (error instanceof AuthError) {
-      backTo('/login', 'invalid_credentials')
+      backTo('/login', 'invalid_credentials', undefined, redirectTo)
     }
     throw error
   }

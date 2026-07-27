@@ -10,7 +10,16 @@ import { useEffect, useState } from 'react'
  * 인코딩되므로 data URI 로 넣어도 마크업 주입 여지가 없다.
  * 생성 실패 시에는 아무것도 렌더하지 않는다 (호출부가 코드 텍스트를 함께 보여준다).
  */
-export function QrCode({ value, size = 176 }: { value: string; size?: number }) {
+export function QrCode({
+  value,
+  size = 176,
+  alt,
+}: {
+  value: string
+  size?: number
+  /** 로케일 문자열을 호출부가 넘긴다. */
+  alt: string
+}) {
   const [svg, setSvg] = useState<string | null>(null)
 
   useEffect(() => {
@@ -34,7 +43,7 @@ export function QrCode({ value, size = 176 }: { value: string; size?: number }) 
       {/* eslint-disable-next-line @next/next/no-img-element -- 로컬 생성 data URI 라 next/image 최적화 대상이 아니다 */}
       <img
         src={`data:image/svg+xml;utf8,${encodeURIComponent(svg)}`}
-        alt="입장 QR 코드"
+        alt={alt}
         width={size}
         height={size}
         style={{ width: size, height: size }}

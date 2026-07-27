@@ -68,6 +68,7 @@ export function GuestNamePicker() {
     <div className="space-y-3">
       <Input
         name="code"
+        aria-label={d.auth.tokenPlaceholder}
         placeholder={d.auth.tokenPlaceholder}
         maxLength={8}
         required
@@ -89,19 +90,21 @@ export function GuestNamePicker() {
         variant="surface"
         size="md"
         className="w-full"
-        disabled={loading}
+        loading={loading}
         onClick={(event) => {
           const field = event.currentTarget.form?.elements.namedItem('code')
           void load('button', field instanceof HTMLInputElement ? field.value : '')
         }}
       >
-        {loading ? d.common.loading : d.auth.loadNames}
+        {d.auth.loadNames}
       </Button>
 
+      {/* 에러는 assertive 로 즉시 읽혀야 한다 — 다음 행동이 토큰 재입력이라 polite 로 미루면
+          사용자가 이미 다시 타이핑을 시작한 뒤에 알려 준다. */}
       {notice ? (
         <p
-          role="status"
-          className={notice.tone === 'error' ? 'text-xs text-[#ff9a94]' : 'text-xs text-muted'}
+          role={notice.tone === 'error' ? 'alert' : 'status'}
+          className={notice.tone === 'error' ? 'text-xs text-danger' : 'text-xs text-muted'}
         >
           {notice.text}
         </p>
@@ -139,8 +142,20 @@ export function GuestNamePicker() {
         </div>
       ) : (
         <>
-          <Input name="name" placeholder={d.auth.namePlaceholder} maxLength={20} required autoComplete="off" />
-          <SubmitButton variant="primary" size="lg" className="w-full" pendingLabel={d.auth.guestEnterPending}>
+          <Input
+            name="name"
+            aria-label={d.auth.nameLabel}
+            placeholder={d.auth.namePlaceholder}
+            maxLength={20}
+            required
+            autoComplete="off"
+          />
+          <SubmitButton
+            variant="primary"
+            size="lg"
+            className="w-full"
+            pendingLabel={d.auth.guestEnterPending}
+          >
             {d.auth.guestEnter}
           </SubmitButton>
         </>

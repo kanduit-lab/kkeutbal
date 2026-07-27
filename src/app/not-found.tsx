@@ -2,7 +2,7 @@ import { SEOTDA_DECK } from '@/features/hwatu/cards'
 import type { HwatuCard } from '@/features/hwatu/types'
 import { evaluateSeotdaHand } from '@/features/seotda/engine'
 import { HwatuCardView } from '@/components/hwatu-card'
-import { ButtonLink, Panel } from '@/components/ui'
+import { ButtonLink, PageShell, Panel } from '@/components/ui'
 import { getDict } from '@/lib/i18n/server'
 
 /**
@@ -44,7 +44,7 @@ export default async function NotFound() {
   const { d } = await getDict()
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-6">
+    <PageShell width="narrow" center>
       <Panel className="space-y-4 py-8 text-center">
         {MANGTONG ? (
           <div className="flex items-end justify-center gap-3">
@@ -71,6 +71,6 @@ export default async function NotFound() {
           </ButtonLink>
         </div>
       </Panel>
-    </main>
+    </PageShell>
   )
 }

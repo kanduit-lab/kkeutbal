@@ -31,6 +31,11 @@ export interface MemberView {
   readonly buyInTotal: number
   /** 입장 시각 (ISO 8601). */
   readonly joinedAt: string
+  /**
+   * 호스트가 이름만으로 만든 대리 기록용 좌석. 본인 화면이 없으므로 온라인 표시를 하지 않고
+   * 모든 조작은 딜러의 대리 입력으로만 이뤄진다.
+   */
+  readonly isManaged: boolean
 }
 
 export interface BetActionView {

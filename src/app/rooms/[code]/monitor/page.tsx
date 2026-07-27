@@ -3,6 +3,8 @@ import { auth } from '@/lib/auth'
 import { findRoomByCode, getRoomSnapshot } from '@/features/game/queries'
 import { normalizeRoomCode } from '@/features/game/room-code'
 import { MonitorClient } from '@/features/game/components/monitor-client'
+import { RoomEntryError } from '@/features/game/components/room-entry-error'
+import { getDict, format } from '@/lib/i18n/server'
 
 /**
  * 모니터링 화면 — 판 옆 태블릿·TV 용 읽기 전용 전광판.
@@ -20,14 +22,33 @@ export default async function MonitorPage({
 
   const { code: rawCode } = await params
   const code = normalizeRoomCode(rawCode)
+  // 방 없음·스냅샷 실패는 형제 라우트 5개가 공유하는 한 가지 표면으로 그린다 —
+  // 같은 오타가 경로마다 다른 결과(홈 배너 / 무성 리다이렉트 / 404)를 내면 안 된다.
+  const { d } = await getDict()
   const room = await findRoomByCode(code)
-  if (!room) redirect('/?error=errors.roomNotFound')
+  if (!room) {
+    return (
+      <RoomEntryError
+        title={d.room.notFoundTitle}
+        hint={format(d.room.notFoundHint, { code })}
+        homeLabel={d.common.home}
+      />
+    )
+  }
   if (room.status === 'settled' || room.status === 'closed') {
     redirect(`/rooms/${room.code}/result`)
   }
 
   const snapshot = await getRoomSnapshot(room.id)
-  if (!snapshot) redirect('/')
+  if (!snapshot) {
+    return (
+      <RoomEntryError
+        title={d.room.snapshotFailedTitle}
+        hint={d.room.snapshotFailedHint}
+        homeLabel={d.common.home}
+      />
+    )
+  }
 
   return <MonitorClient initial={snapshot} selfId={session.user.id} />
 }

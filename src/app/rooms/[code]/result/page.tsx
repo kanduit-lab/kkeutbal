@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { findRoomByCode } from '@/features/game/queries'
@@ -7,7 +6,30 @@ import { getDict, format } from '@/lib/i18n/server'
 import { getRoundHistory, getSessionStandings } from '@/features/ranking/queries'
 import { computeSettlementTransfers } from '@/features/ranking/settlement'
 import { ShareResultButton } from '@/features/ranking/components/share-result-button'
-import { Badge, Button, EmptyState, Panel } from '@/components/ui'
+import { RoomEntryError } from '@/features/game/components/room-entry-error'
+import { Badge, ButtonLink, EmptyState, Panel } from '@/components/ui'
+import type { Metadata } from 'next'
+
+/**
+ * 결과 화면은 링크로 공유되는 유일한 화면이다 — og 태그가 없으면 카카오톡·슬랙이
+ * 방 이름 대신 앱 기본 설명만 보여준다. 방을 못 찾으면 기본 메타데이터로 둔다.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ code: string }>
+}): Promise<Metadata> {
+  const { code: rawCode } = await params
+  const { d } = await getDict()
+  const room = await findRoomByCode(normalizeRoomCode(rawCode))
+  if (!room) return {}
+  const title = format(d.result.shareTitle, { name: room.name })
+  return {
+    title,
+    openGraph: { title, description: d.result.title },
+    twitter: { card: 'summary', title, description: d.result.title },
+  }
+}
 
 export default async function RoomResultPage({
   params,
@@ -18,10 +40,20 @@ export default async function RoomResultPage({
   if (!session?.user?.id) redirect('/login')
 
   const { code: rawCode } = await params
-  const room = await findRoomByCode(normalizeRoomCode(rawCode))
-  if (!room) redirect('/')
-
+  // 형제 라우트 5개가 공유하는 한 가지 표면으로 맞춘다 — 아무 설명 없이 홈으로
+  // 던지면 사용자는 자기가 뭘 잘못했는지 알 수 없다.
+  const code = normalizeRoomCode(rawCode)
   const { d } = await getDict()
+  const room = await findRoomByCode(code)
+  if (!room) {
+    return (
+      <RoomEntryError
+        title={d.room.notFoundTitle}
+        hint={format(d.room.notFoundHint, { code })}
+        homeLabel={d.common.home}
+      />
+    )
+  }
 
   const standings = await getSessionStandings(room.id)
   const rounds = await getRoundHistory(room.id)
@@ -37,7 +69,7 @@ export default async function RoomResultPage({
   const displayName = (userId: string) => nameById.get(userId) ?? d.common.unknownPlayer
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8">
+    <main id="main" className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8">
       <header>
         <p className="text-sm text-muted">
           {room.name} · {d.games[room.gameType]} ·{' '}
@@ -176,7 +208,12 @@ export default async function RoomResultPage({
                 {round.status === 'ended' && round.penalties.length > 0 ? (
                   <p className="mt-0.5 text-xs text-muted">
                     {round.penalties
-                      .map((penalty) => `${displayName(penalty.userId)} 박×${penalty.factor}`)
+                      .map((penalty) =>
+                        format(d.result.penaltyLine, {
+                          name: displayName(penalty.userId),
+                          factor: penalty.factor,
+                        }),
+                      )
                       .join(' · ')}
                   </p>
                 ) : null}
@@ -198,25 +235,26 @@ export default async function RoomResultPage({
             }))}
           />
         ) : null}
+        {/* Link 안에 Button 을 중첩하면 <a><button> 이 되어 탭 스톱이 둘로 늘고
+            스크린리더가 "링크, 버튼"으로 읽는다 — ButtonLink 가 그 자리다. */}
         <div className="grid grid-cols-2 gap-2">
           {room.status !== 'settled' && room.status !== 'closed' ? (
-            <Link href={`/rooms/${room.code}`} className="block">
-              <Button variant="surface" className="w-full border border-white/10">
-                {d.result.toRoom}
-              </Button>
-            </Link>
+            <ButtonLink href={`/rooms/${room.code}`} variant="outline" className="w-full">
+              {d.result.toRoom}
+            </ButtonLink>
           ) : (
-            <Link href="/ranking" className="block">
-              <Button variant="surface" className="w-full border border-white/10">
-                {d.home.ranking}
-              </Button>
-            </Link>
+            <ButtonLink href="/ranking" variant="outline" className="w-full">
+              {d.home.ranking}
+            </ButtonLink>
           )}
-          <Link href="/" className="block">
-            <Button variant="primary" className="w-full">
-              {d.common.home}
-            </Button>
-          </Link>
+          {/* 정산된 방은 되돌아갈 곳이 없다 — 다음 판으로 이어지는 길을 같이 준다.
+              여기서 막히면 사용자는 홈으로 나갔다가 방을 다시 만들어야 한다. */}
+          <ButtonLink href="/rooms/new" variant="outline" className="w-full">
+            {d.newRoom.create}
+          </ButtonLink>
+          <ButtonLink href="/" variant="primary" className="col-span-2 w-full">
+            {d.common.home}
+          </ButtonLink>
         </div>
       </div>
     </main>

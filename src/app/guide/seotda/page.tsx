@@ -1,7 +1,16 @@
+import { BackToTop } from '../_components/back-to-top'
 import { CardPair } from '../_components/card-pair'
 import { GuideHeader } from '../_components/guide-header'
+import { ScrollTable } from '../_components/scroll-table'
 import { TocNav } from '../_components/toc-nav'
-import { Panel, Badge } from '@/components/ui'
+import { PageShell, Panel, Badge } from '@/components/ui'
+import type { Metadata } from 'next'
+import { getDict } from '@/lib/i18n/server'
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { d } = await getDict()
+  return { title: `섯다 가이드 · ${d.common.appName}` }
+}
 
 const TOC = [
   { href: '#flow', label: '진행 방식' },
@@ -38,19 +47,26 @@ const RANK_ROWS: readonly RankRow[] = [
   },
 ]
 
-export default function SeotdaGuidePage() {
+export default async function SeotdaGuidePage() {
+  const { d } = await getDict()
+
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 pb-16 pt-8 lg:px-8 lg:pt-12">
+    <PageShell width="wide">
       <GuideHeader
         backHref="/guide"
-        backLabel="가이드 목록으로"
+        backLabel={d.guide.backToList}
         emoji="🎴"
         title="섯다"
         description="두 장을 받고 베팅한 뒤 족보를 겨루는 게임. 서열이 높은 쪽이 판돈을 가져가요"
       />
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <div className="space-y-8 lg:col-span-9">
+        {/* 목차가 먼저 온다 — 1열(모바일)에서는 본문 위, lg 에서는 order 로 우측 컬럼. */}
+        <div className="min-w-0 lg:order-2 lg:col-span-3">
+          <TocNav items={TOC} />
+        </div>
+
+        <div className="min-w-0 space-y-8 lg:order-1 lg:col-span-9">
           <section id="flow" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">진행 방식</h2>
             <Panel className="space-y-3">
@@ -68,7 +84,7 @@ export default function SeotdaGuidePage() {
 
           <section id="rank" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">족보 서열표</h2>
-            <Panel className="overflow-x-auto p-0">
+            <ScrollTable title="족보 서열표">
               <table className="w-full min-w-[480px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-gold/15 text-xs text-muted">
@@ -87,7 +103,7 @@ export default function SeotdaGuidePage() {
                   ))}
                 </tbody>
               </table>
-            </Panel>
+            </ScrollTable>
 
             <Panel className="space-y-3">
               <p className="text-sm font-medium text-muted">대표 족보 예시</p>
@@ -126,13 +142,11 @@ export default function SeotdaGuidePage() {
               />
             </div>
           </section>
-        </div>
 
-        <div className="lg:col-span-3">
-          <TocNav items={TOC} />
+          <BackToTop />
         </div>
       </div>
-    </main>
+    </PageShell>
   )
 }
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { placeBet } from '@/features/betting/actions'
 import {
   contributedBy,
@@ -32,15 +32,21 @@ import {
  *   재전송돼 서버 멱등키에 흡수된다. 응답이 안 온 경우 refetch 로 반영 여부를 판정한다.
  * - 고스톱 방은 이 컴포넌트를 렌더하지 않는다 (점수 정산)
  */
+/** 진행 표시를 붙일 버튼 자리. 세 버튼이 한꺼번에 도는 대신 누른 버튼만 돌게 한다. */
+type ActionSlot = 'call' | 'raise' | 'fold'
+
 export function ActionBar({
   snapshot,
   self,
   runAction,
+  staleReason = null,
   inline = false,
 }: {
   snapshot: RoomSnapshot
   self: MemberView
   runAction: RunAction
+  /** 스냅샷이 낡아 조작을 잠글 사유. null 이면 정상. */
+  staleReason?: string | null
   /** true = 데스크톱 본문 안 정적 패널, false = 모바일 하단 고정 바 */
   inline?: boolean
 }) {
@@ -51,6 +57,33 @@ export function ActionBar({
   const [raiseOpen, setRaiseOpen] = useState(false)
   const [raiseAmount, setRaiseAmount] = useState(0)
   const [isPending, startTransition] = useTransition()
+  /** 현재 요청이 걸린 버튼 자리 — 스피너를 그 버튼에만 붙인다. */
+  const [firingSlot, setFiringSlot] = useState<ActionSlot | null>(null)
+  const barRef = useRef<HTMLDivElement | null>(null)
+
+  /**
+   * 하단 고정 바의 실제 높이를 --action-bar-h 로 내보낸다. 레이즈 패널이 열리면
+   * 바는 114px → 최대 274px 까지 자란다 — 본문의 하단 여백을 상수로 잡아 두면
+   * 로비·고스톱 화면에는 죽은 여백이, 레이즈 중에는 가려진 내용이 생긴다.
+   * inline(데스크톱)일 때는 바가 문서 흐름 안에 있으므로 변수를 지운다.
+   */
+  useEffect(() => {
+    const root = document.documentElement
+    if (inline) {
+      root.style.removeProperty('--action-bar-h')
+      return
+    }
+    const node = barRef.current
+    if (!node) return
+    const apply = () => root.style.setProperty('--action-bar-h', `${node.offsetHeight}px`)
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(node)
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty('--action-bar-h')
+    }
+  }, [inline])
   /**
    * 진행 중 베팅 의도 — 같은 의도의 재시도가 같은 actionId 를 쓰게 붙잡아 둔다.
    * 확정 성공·확정 실패 시 비우고, 타임아웃(결과 불명)에는 유지한다.
@@ -82,7 +115,7 @@ export function ActionBar({
         ? d.actionBar.allinGate
         : hasPendingAction
           ? d.actionBar.pendingGate
-          : null
+          : (staleReason ?? null)
 
   /** 콜·레이즈는 액션 한 번의 금액이 아니라 사용자별 이번 판 누적 납입액에서 계산한다. */
   const betting = useMemo(() => roundBetState(snapshot.actions), [snapshot.actions])
@@ -108,7 +141,7 @@ export function ActionBar({
     return balance > 0 ? [...standard, { label: labels.allin, amount: balance }] : standard
   }, [gameType, lastBet, pot, base, balance, labels.allin, minRaise, contribution, d.presets])
 
-  function fire(action: BetActionKind, amount: number) {
+  function fire(action: BetActionKind, amount: number, slot: ActionSlot) {
     // 렌더 게이트와 별개로 한 번 더 막는다 — 연타·이벤트 경합으로 새는 요청 차단.
     if (!round || isPending || gateReason) return
     // 같은 의도(액션+금액)의 재시도는 같은 actionId — 서버가 멱등키로 흡수한다.
@@ -118,7 +151,10 @@ export function ActionBar({
         ? previous
         : { id: crypto.randomUUID(), action, amount }
     intentRef.current = intent
-    startTransition(async () => {
+    setFiringSlot(slot)
+
+    /** 실제 전송·확인 절차. 스피너 해제를 finally 한곳으로 모으려고 분리했다. */
+    const runIntent = async () => {
       /**
        * placeBet 의 실제 응답 — null 이면 결과 불명(타임아웃·네트워크 단절).
        * runAction 의 15초 레이스가 버린 늦은 성공 응답도 여기 잡힌다 — 그 경우를
@@ -186,14 +222,25 @@ export function ActionBar({
       if (action === 'fold') playFold()
       else if (amount > 0) playChip()
       setRaiseOpen(false)
+    }
+
+    startTransition(async () => {
+      try {
+        await runIntent()
+      } finally {
+        setFiringSlot(null)
+      }
     })
   }
 
+  // 진행 중에는 나머지 버튼도 잠근다 — fire() 가 어차피 요청을 막으므로, 열어 두면
+  // 탭이 아무 반응 없이 삼켜진다. 스피너는 누른 버튼 하나만(loading), 나머지는 흐림.
   const disabled = !round || isPending || gateReason !== null
   const reason = noRoundReason ?? gateReason ?? undefined
 
   return (
     <div
+      ref={barRef}
       className={
         inline
           ? 'lacquer mt-4 rounded-2xl'
@@ -246,12 +293,8 @@ export function ActionBar({
                   key={preset.label}
                   type="button"
                   size="sm"
-                  variant={raiseAmount === preset.amount ? 'primary' : 'surface'}
-                  className={
-                    raiseAmount === preset.amount
-                      ? 'flex-col gap-0'
-                      : 'flex-col gap-0 border border-white/10'
-                  }
+                  selected={raiseAmount === preset.amount}
+                  className="flex-col gap-0"
                   disabled={preset.amount > balance}
                   disabledReason={
                     preset.amount > balance ? d.actionBar.insufficientBalance : undefined
@@ -273,6 +316,8 @@ export function ActionBar({
                 max={balance}
                 step={base}
                 ariaLabel={d.actionBar.raiseAmount}
+                decreaseLabel={d.ui.decrease}
+                increaseLabel={d.ui.increase}
                 className="flex-1"
               />
               <Button
@@ -280,6 +325,8 @@ export function ActionBar({
                 variant="primary"
                 size="lg"
                 className="px-6"
+                loading={firingSlot === 'raise'}
+                loadingLabel={d.ui.processing}
                 disabled={isPending || raiseAmount < minRaise || raiseAmount > balance}
                 disabledReason={
                   raiseAmount < minRaise
@@ -288,7 +335,9 @@ export function ActionBar({
                       ? d.actionBar.insufficientBalance
                       : undefined
                 }
-                onClick={() => fire(raiseAmount >= balance ? 'allin' : 'raise', raiseAmount)}
+                onClick={() =>
+                  fire(raiseAmount >= balance ? 'allin' : 'raise', raiseAmount, 'raise')
+                }
               >
                 {format(d.actionBar.confirmAction, {
                   label: raiseAmount >= balance ? labels.allin : labels.raise,
@@ -305,9 +354,11 @@ export function ActionBar({
               variant="win"
               size="lg"
               className="whitespace-nowrap px-1 text-lg"
+              loading={firingSlot === 'call'}
+              loadingLabel={d.ui.processing}
               disabled={disabled}
               disabledReason={reason}
-              onClick={() => fire('check', 0)}
+              onClick={() => fire('check', 0, 'call')}
             >
               {labels.check}
             </Button>
@@ -317,9 +368,11 @@ export function ActionBar({
               variant="win"
               size="lg"
               className="flex-col gap-0 whitespace-nowrap px-1"
+              loading={firingSlot === 'call'}
+              loadingLabel={d.ui.processing}
               disabled={disabled || callAmount < 1}
               disabledReason={reason ?? (callAmount < 1 ? d.actionBar.noBalance : undefined)}
-              onClick={() => fire(callIsAllin ? 'allin' : 'call', callAmount)}
+              onClick={() => fire(callIsAllin ? 'allin' : 'call', callAmount, 'call')}
             >
               <span className="text-lg leading-tight">
                 {callIsAllin ? labels.allin : labels.call}
@@ -354,9 +407,11 @@ export function ActionBar({
             variant="danger"
             size="lg"
             className="whitespace-nowrap px-1 text-lg"
+            loading={firingSlot === 'fold'}
+            loadingLabel={d.ui.processing}
             disabled={disabled}
             disabledReason={reason}
-            onClick={() => fire('fold', 0)}
+            onClick={() => fire('fold', 0, 'fold')}
           >
             {labels.fold}
           </Button>

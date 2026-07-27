@@ -1,15 +1,17 @@
 'use server'
 
-import { and, eq } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
-import { lockRoom, requireRole, type Tx } from './action-helpers'
+import { lockRoom, readMaxMembers, requireRole, type Tx } from './action-helpers'
+import { readFundingMode } from './funding-mode'
 
-/** 멤버 역할 액션 — 방장 위임·역할 변경·내보내기·나가기. */
+/** 멤버 역할 액션 — 방장 위임·역할 변경·내보내기·나가기·로컬 플레이어 추가. */
 
-const { rooms, roomMembers, rounds, roundParticipants } = schema
+const { rooms, roomMembers, rounds, roundParticipants, users, buyIns, chipLedger } = schema
 
 /** 판 참가자는 종료·무효 전까지 멤버십을 고정한다 — 중도 퇴장은 승자·정산 대상의 기준을 흔든다. */
 async function isActiveRoundParticipant(tx: Tx, roomId: string, userId: string): Promise<boolean> {
@@ -200,6 +202,111 @@ export async function removeMember(
   } catch (error) {
     console.error('removeMember failed:', error)
     return fail('errors.removeMemberFailed')
+  }
+}
+
+const addLocalMemberSchema = z.object({
+  roomId: z.string().uuid(),
+  name: z.string().trim().min(1).max(20),
+})
+
+/**
+ * 로컬 플레이어 추가 — 계정 없이 이름만으로 좌석을 만든다 (가족 게임 기록장 용도).
+ *
+ * 각자 폰으로 로그인하지 않고 호스트 한 대로 전원을 대신 기록하는 흐름이다.
+ * 만들어지는 `users` 행은 `is_managed` 이고 `authentik_sub` 이 `managed:{roomId}:{uuid}` 라
+ * 비밀번호·게스트 토큰·SSO 중 어떤 인증 경로로도 로그인되지 않는다. 실제 조작은
+ * 딜러의 대리 베팅(ProxyBetSection)과 딜러 패널이 담당한다.
+ *
+ * 좌석·정원·시작 칩 규칙은 joinRoom 과 같다. 계정 크레딧 방은 참가자마다 실제 크레딧
+ * 계정에서 잠금이 걸려야 하므로 로컬 플레이어를 받지 않는다.
+ */
+export async function addLocalMember(
+  input: z.infer<typeof addLocalMemberSchema>,
+): Promise<ActionResult<{ userId: string; name: string; seatNo: number }>> {
+  const userId = await currentUserId()
+  if (!userId) return fail('errors.loginRequired')
+
+  const parsed = addLocalMemberSchema.safeParse(input)
+  if (!parsed.success) return fail('errors.invalidInput')
+  const { roomId, name } = parsed.data
+
+  try {
+    return await db.transaction(async (tx) => {
+      await lockRoom(tx, roomId)
+      if (!(await requireRole(tx, roomId, userId, ['host', 'dealer']))) {
+        return fail('errors.dealerOrHostOnlyLocalMember')
+      }
+
+      const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
+      if (!room) return fail('errors.roomNotFound')
+      if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
+      if (readFundingMode(room.rulePreset) === 'account_credit') {
+        return fail('errors.localMemberNeedsSessionChips')
+      }
+
+      const maxMembers = readMaxMembers(room.rulePreset)
+      const [active] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(roomMembers)
+        .where(and(eq(roomMembers.roomId, roomId), isNull(roomMembers.leftAt)))
+      if ((active?.count ?? 0) >= maxMembers) return fail('errors.roomFull')
+
+      // 같은 방에서 같은 이름이 둘이면 대리 입력 때 누구를 고르는지 알 수 없다.
+      const [duplicate] = await tx
+        .select({ id: users.id })
+        .from(roomMembers)
+        .innerJoin(users, eq(users.id, roomMembers.userId))
+        .where(
+          and(
+            eq(roomMembers.roomId, roomId),
+            isNull(roomMembers.leftAt),
+            eq(users.displayName, name),
+          ),
+        )
+        .limit(1)
+      if (duplicate) return fail('errors.localMemberDuplicateName')
+
+      const [created] = await tx
+        .insert(users)
+        .values({
+          // 어떤 인증 경로와도 겹치지 않는 네임스페이스. 로그인에 쓰이지 않는다
+          // (내부 계정은 `local:{username}`, 게스트는 `guest:{tokenId}:{name}`).
+          authentikSub: `managed:${roomId}:${randomUUID()}`,
+          displayName: name,
+          isManaged: true,
+        })
+        .returning({ id: users.id })
+      if (!created) throw new Error('local member user insert failed')
+
+      // 좌석 번호는 나간 멤버 포함 최댓값 +1 — (roomId, seatNo) unique 제약을 지킨다.
+      const [seat] = await tx
+        .select({ next: sql<number>`coalesce(max(${roomMembers.seatNo}), -1) + 1` })
+        .from(roomMembers)
+        .where(eq(roomMembers.roomId, roomId))
+      const seatNo = seat?.next ?? 0
+      await tx.insert(roomMembers).values({ roomId, userId: created.id, role: 'player', seatNo })
+
+      // 시작 칩은 일반 참가자와 같은 경로로 지급한다 — 원장이 정본이라 여기를 건너뛰면
+      // 손익 계산에서 이 좌석만 바이인 0 으로 남는다.
+      const [initialBuyIn] = await tx
+        .insert(buyIns)
+        .values({ roomId, userId: created.id, amount: room.startingChips, createdBy: userId })
+        .returning({ id: buyIns.id })
+      if (!initialBuyIn) throw new Error('local member initial buy-in insert failed')
+      await tx.insert(chipLedger).values({
+        roomId,
+        userId: created.id,
+        delta: room.startingChips,
+        reason: 'buy_in',
+        refBuyInId: initialBuyIn.id,
+      })
+
+      return ok({ userId: created.id, name, seatNo })
+    })
+  } catch (error) {
+    console.error('addLocalMember failed:', error)
+    return fail('errors.addLocalMemberFailed')
   }
 }
 

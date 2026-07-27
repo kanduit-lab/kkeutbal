@@ -1,12 +1,11 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { joinRoom } from '@/features/game/actions'
 import { findRoomByCode, getRoomSnapshot } from '@/features/game/queries'
 import { normalizeRoomCode } from '@/features/game/room-code'
 import { RoomClient } from '@/features/game/components/room-client'
-import { getDict } from '@/lib/i18n/server'
-import { Button, Panel } from '@/components/ui'
+import { RoomEntryError } from '@/features/game/components/room-entry-error'
+import { getDict, format } from '@/lib/i18n/server'
 
 /**
  * 방 화면. QR/링크로 바로 들어와도 되도록, 참가자가 아니면 자동 입장을 시도한다.
@@ -22,10 +21,17 @@ export default async function RoomPage({
 
   const { code: rawCode } = await params
   const code = normalizeRoomCode(rawCode)
+  const { d } = await getDict()
 
   const room = await findRoomByCode(code)
   if (!room) {
-    return <ErrorScreen title="방을 찾을 수 없습니다" hint={`코드 ${code} 를 확인하세요.`} />
+    return (
+      <RoomEntryError
+        title={d.room.notFoundTitle}
+        hint={format(d.room.notFoundHint, { code })}
+        homeLabel={d.common.home}
+      />
+    )
   }
 
   if (room.status === 'settled' || room.status === 'closed') {
@@ -39,37 +45,30 @@ export default async function RoomPage({
     const joined = await joinRoom(code)
     if (!joined.success) {
       // joinRoom 은 `errors.*` 사전 키를 돌려준다 — 그대로 그리면 화면에 키가 노출된다.
-      const { d } = await getDict()
+      // 사전에 없는 새 키가 오면 원문(= 키 문자열) 대신 일반 실패 문구로 떨어뜨린다.
       const key = joined.error.startsWith('errors.')
         ? (joined.error.slice('errors.'.length) as keyof typeof d.errors)
         : null
       return (
-        <ErrorScreen title="입장할 수 없습니다" hint={(key && d.errors[key]) || joined.error} />
+        <RoomEntryError
+          title={d.room.cannotJoinTitle}
+          hint={(key ? d.errors[key] : undefined) ?? d.errors.joinRoomFailed}
+          homeLabel={d.common.home}
+        />
       )
     }
     snapshot = await getRoomSnapshot(room.id)
   }
 
   if (!snapshot) {
-    return <ErrorScreen title="방 상태를 불러오지 못했습니다" hint="잠시 후 다시 시도하세요." />
+    return (
+      <RoomEntryError
+        title={d.room.snapshotFailedTitle}
+        hint={d.room.snapshotFailedHint}
+        homeLabel={d.common.home}
+      />
+    )
   }
 
   return <RoomClient initial={snapshot} selfId={userId} />
-}
-
-function ErrorScreen({ title, hint }: { title: string; hint: string }) {
-  return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-6">
-      <Panel className="space-y-3 py-8 text-center">
-        <p className="text-3xl">🎴</p>
-        <h1 className="text-xl font-bold">{title}</h1>
-        <p className="text-sm text-muted">{hint}</p>
-        <Link href="/" className="block pt-2">
-          <Button variant="primary" className="w-full">
-            홈으로
-          </Button>
-        </Link>
-      </Panel>
-    </main>
-  )
 }

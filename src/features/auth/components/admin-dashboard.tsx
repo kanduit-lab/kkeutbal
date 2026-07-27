@@ -6,7 +6,7 @@ import { ADMIN_SECTIONS, type AdminSection, type AdminSectionData } from '../adm
 import { AdminClient } from './admin-client'
 import { CreditAdmin } from '@/features/wallet/components/credit-admin'
 import { PromotionsAdmin } from '@/features/promotions/components/promotions-admin'
-import { Badge, Button, ButtonLink, Panel } from '@/components/ui'
+import { Alert, Badge, Button, ButtonLink, Panel, Skeleton } from '@/components/ui'
 import { translateError, useDict } from '@/lib/i18n/client'
 
 interface SectionLoadState {
@@ -23,16 +23,20 @@ const SECTION_ICON: Record<AdminSection, string> = {
   operations: '📣',
 }
 
-function SectionSkeleton({ label }: { label: string }) {
+/**
+ * 섹션 로딩 자리. 라우트 스켈레톤(app/admin/loading.tsx)도 이 모양을 그대로 쓴다 —
+ * 두 스켈레톤이 서로 다른 모양이면 진입할 때마다 골격이 한 번 갈아끼워지며 깜빡인다.
+ */
+export function SectionSkeleton({ label }: { label: string }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2" role="status" aria-live="polite">
       <span className="sr-only">{label}</span>
       {[0, 1].map((index) => (
         <Panel key={index} className="min-h-52 space-y-4">
-          <div className="h-5 w-32 animate-pulse rounded-md bg-white/10" />
-          <div className="h-12 animate-pulse rounded-xl bg-white/10" />
-          <div className="h-12 animate-pulse rounded-xl bg-white/10" />
-          <div className="h-10 animate-pulse rounded-xl bg-white/10" />
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-12" radius="xl" />
+          <Skeleton className="h-12" radius="xl" />
+          <Skeleton className="h-10" radius="xl" />
         </Panel>
       ))}
     </div>
@@ -128,7 +132,6 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
         return (
           <AdminClient
             section="settings"
-            selfId={selfId}
             ssoSettings={data.ssoSettings}
             visionSettings={data.visionSettings}
             onDataChanged={reload}
@@ -138,7 +141,6 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
         return (
           <AdminClient
             section="access"
-            selfId={selfId}
             tokens={data.tokens}
             registrationCodes={data.registrationCodes}
             onDataChanged={reload}
@@ -159,12 +161,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
       case 'operations':
         return (
           <div className="grid items-start gap-4 lg:grid-cols-2">
-            <AdminClient
-              section="operations"
-              selfId={selfId}
-              rooms={data.rooms}
-              onDataChanged={reload}
-            />
+            <AdminClient section="operations" rooms={data.rooms} onDataChanged={reload} />
             <PromotionsAdmin promotions={data.promotions} onDataChanged={reload} />
           </div>
         )
@@ -252,9 +249,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
                 </p>
                 <div>
                   <p className="font-bold">
-                    {permissionDenied
-                      ? d.adminDashboard.deniedTitle
-                      : d.adminDashboard.loadFailed}
+                    {permissionDenied ? d.adminDashboard.deniedTitle : d.adminDashboard.loadFailed}
                   </p>
                   <p className="mt-1 text-sm text-muted">
                     {state?.error
@@ -278,12 +273,12 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
           return (
             <div key={section} className="space-y-3">
               {state.error ? (
-                <Panel className="flex items-center justify-between gap-3 border border-accent/25 py-3">
-                  <p className="text-sm text-[#ff9a94]">{translateError(d, state.error)}</p>
+                <Alert tone="error" className="flex items-center justify-between gap-3">
+                  <span>{translateError(d, state.error)}</span>
                   <Button size="sm" onClick={() => void load(section, true)}>
                     {d.common.retry}
                   </Button>
-                </Panel>
+                </Alert>
               ) : state.loading ? (
                 <p role="status" className="px-1 text-xs text-muted">
                   {d.adminDashboard.refreshing}

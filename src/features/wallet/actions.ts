@@ -48,7 +48,7 @@ export async function getMyCreditWallet(): Promise<ActionResult<CreditWalletSnap
     })
   } catch (error) {
     console.error('getMyCreditWallet failed:', error)
-    return fail('가상 크레딧을 조회하지 못했습니다')
+    return fail('errors.walletLoadFailed')
   }
 }
 
@@ -57,7 +57,12 @@ const adminAdjustCreditsSchema = z.object({
   requestId: z.string().uuid(),
   targetUserId: z.string().uuid(),
   /** 양수=지급, 음수=회수. 0은 허용하지 않는다. */
-  amount: z.number().int().min(-1_000_000).max(1_000_000).refine((amount) => amount !== 0),
+  amount: z
+    .number()
+    .int()
+    .min(-1_000_000)
+    .max(1_000_000)
+    .refine((amount) => amount !== 0),
   reason: z.string().trim().min(1).max(200),
 })
 
@@ -70,10 +75,10 @@ export async function adminAdjustCredits(
 ): Promise<ActionResult<{ transactionId: string; targetUserId: string }>> {
   const adminId = await currentUserId()
   if (!adminId) return fail('errors.loginRequired')
-  if (!(await isAdminUser(adminId))) return fail('관리자만 가상 크레딧을 조정할 수 있습니다')
+  if (!(await isAdminUser(adminId))) return fail('errors.walletAdminOnly')
 
   const parsed = adminAdjustCreditsSchema.safeParse(input)
-  if (!parsed.success) return fail('입력값이 올바르지 않습니다')
+  if (!parsed.success) return fail('errors.invalidInput')
   const { requestId, targetUserId, amount, reason } = parsed.data
 
   try {
@@ -83,7 +88,7 @@ export async function adminAdjustCredits(
         .from(users)
         .where(eq(users.id, targetUserId))
         .limit(1)
-      if (!target) return fail('대상 사용자를 찾을 수 없습니다')
+      if (!target) return fail('errors.walletTargetNotFound')
 
       const [transaction] = await tx.execute(sql<{ transactionId: string }>`
         select public.admin_adjust_credit(
@@ -95,13 +100,15 @@ export async function adminAdjustCredits(
         ) as "transactionId"
       `)
       const transactionId =
-        transaction && typeof transaction.transactionId === 'string' ? transaction.transactionId : null
+        transaction && typeof transaction.transactionId === 'string'
+          ? transaction.transactionId
+          : null
       if (!transactionId) throw new Error('credit transaction was not posted')
       return ok({ transactionId, targetUserId })
     })
   } catch (error) {
     console.error('adminAdjustCredits failed:', error)
-    return fail('가상 크레딧 조정에 실패했습니다. 잔액과 사유를 확인하세요')
+    return fail('errors.walletAdjustFailed')
   }
 }
 

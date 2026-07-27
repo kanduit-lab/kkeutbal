@@ -204,10 +204,12 @@ async function resolveProviderUser(input: {
   const { sub, displayName, avatarUrl, hints } = input
   const { db, schema } = await import('./db')
 
+  // 대리 기록용 로컬 플레이어 행은 어떤 인증 경로로도 잡히면 안 된다. sub 네임스페이스가
+  // 이미 다르지만, 로그인 대상 조회에서 명시적으로도 배제한다 — 이 행에는 로그인 수단이 없다.
   const [bySub] = await db
     .select({ id: schema.users.id })
     .from(schema.users)
-    .where(eq(schema.users.authentikSub, sub))
+    .where(and(eq(schema.users.authentikSub, sub), eq(schema.users.isManaged, false)))
     .limit(1)
   if (bySub) {
     await db
@@ -225,7 +227,7 @@ async function resolveProviderUser(input: {
     const matches = await db
       .select({ id: schema.users.id })
       .from(schema.users)
-      .where(or(...conditions))
+      .where(and(or(...conditions), eq(schema.users.isManaged, false)))
       .limit(2)
 
     // 아이디와 전화번호가 서로 다른 두 계정을 가리키면 어느 쪽도 자동 병합하지 않는다.

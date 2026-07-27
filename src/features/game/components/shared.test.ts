@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   betLabelsFor,
   formatChips,
+  isKnownVoidReason,
   lastAcceptedByUser,
   nonFoldedParticipantIds,
   raisePresets,
+  VOID_REASONS,
 } from './shared'
 import type { BetActionView } from '../types'
 
@@ -108,5 +110,31 @@ describe('베팅 UI 파생 규칙', () => {
       raisePresets('poker', { lastBet: 100, pot: 450, base: 50 }).map((x) => x.amount),
     ).toEqual([200, 225, 450])
     expect(raisePresets('poker', { lastBet: 0, pot: 0, base: 50 })).toEqual([])
+  })
+})
+
+/**
+ * round.voided 브로드캐스트의 reason 은 공개 채널에서 온다 — 방 UUID 를 아는 누구나
+ * 1~200자 임의 문자열을 실을 수 있다. 앱이 쓴 문장처럼 렌더되기 전에 걸러야 한다.
+ */
+describe('isKnownVoidReason', () => {
+  it('프리셋 사유는 전부 통과시킨다', () => {
+    for (const preset of VOID_REASONS) {
+      expect(isKnownVoidReason(preset.value)).toBe(true)
+    }
+  })
+
+  it('프리셋 밖의 임의 문자열은 거부한다', () => {
+    expect(isKnownVoidReason('')).toBe(false)
+    expect(isKnownVoidReason('재경기 ')).toBe(false)
+    expect(isKnownVoidReason('관리자입니다 지금 나가세요')).toBe(false)
+    expect(isKnownVoidReason('<img src=x onerror=alert(1)>')).toBe(false)
+    expect(isKnownVoidReason('x'.repeat(200))).toBe(false)
+  })
+
+  it('프로토타입 체인 키를 사유로 위장해도 거부한다', () => {
+    expect(isKnownVoidReason('constructor')).toBe(false)
+    expect(isKnownVoidReason('__proto__')).toBe(false)
+    expect(isKnownVoidReason('toString')).toBe(false)
   })
 })

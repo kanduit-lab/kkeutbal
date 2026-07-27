@@ -1,6 +1,5 @@
 'use client'
 
-import { clsx } from 'clsx'
 import type { ReactNode } from 'react'
 
 /** 시트 내부 섹션 — 아이콘·제목·힌트가 있는 카드. */
@@ -26,24 +25,5 @@ export function Section({
       </div>
       {children}
     </section>
-  )
-}
-
-export function StatTile({
-  label,
-  value,
-  valueClass,
-}: {
-  label: string
-  value: string
-  valueClass?: string
-}) {
-  return (
-    <div className="rounded-xl bg-bg-deep/60 px-2 py-2.5 text-center">
-      <p className="text-[11px] font-medium text-muted">{label}</p>
-      <p className={clsx('mt-0.5 text-lg font-black tabular-nums leading-tight', valueClass)}>
-        {value}
-      </p>
-    </div>
   )
 }

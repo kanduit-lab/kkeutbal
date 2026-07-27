@@ -6,10 +6,19 @@ import { isAdminUser } from '@/features/auth/roles'
 import { joinRoomAndGo } from '@/features/game/actions'
 import { getMyActiveRooms, getMyRecentSessions } from '@/features/game/queries'
 import { GAME_BADGE_TONE } from '@/features/game/labels'
-import { Badge, Button, ButtonLink, EmptyState, Input, Panel, SubmitButton } from '@/components/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  ButtonLink,
+  EmptyState,
+  Input,
+  PageShell,
+  Panel,
+  SubmitButton,
+} from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
-import { getDict } from '@/lib/i18n/server'
-import type { Dictionary } from '@/lib/i18n/server'
+import { getDict, translateError } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/config'
 
 function formatSessionDate(iso: string | null, locale: Locale): string | null {
@@ -21,14 +30,17 @@ function formatSessionDate(iso: string | null, locale: Locale): string | null {
 }
 
 /**
- * `?error=` 배너 값 해석. joinRoomAndGo 는 실패 시 서버 액션이 돌려준 `errors.*` 키를
- * 그대로 쿼리에 싣는다 — 여기서 사전으로 옮기고, 모르는 키(구버전 링크·예상 밖 값)는
- * 원문을 그대로 보여준다 (translateError 와 동일한 폴백 규칙).
+ * 홈 헤더의 보조 내비 링크. 44px 터치 타깃 + ghost 버튼 룩을 맞춘다.
  */
-function localizeError(d: Dictionary, raw: string): string {
-  if (!raw.startsWith('errors.')) return raw
-  const key = raw.slice('errors.'.length) as keyof Dictionary['errors']
-  return d.errors[key] ?? raw
+function HeaderNavLink({ href, children }: { href: Route; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-muted transition hover:text-text"
+    >
+      {children}
+    </Link>
+  )
 }
 
 export default async function HomePage({
@@ -48,27 +60,17 @@ export default async function HomePage({
   ])
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 pb-16 pt-8 lg:px-8 lg:pt-12">
-      <header className="rise-in mb-8 flex items-end justify-between lg:mb-12">
-        <div>
-          <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
-            {d.common.appName}<span className="text-accent">.</span>
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href={'/wallet' as Route}
-            className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-text"
-          >
-            내 크레딧
-          </Link>
+    <PageShell width="wide">
+      {/* 좁은 화면에서는 액션 줄이 제목 아래로 접힌다 — 360px 에서 헤더가 넘치던 원인. */}
+      <header className="rise-in mb-8 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 lg:mb-12">
+        <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
+          {d.common.appName}
+          <span className="text-accent">.</span>
+        </h1>
+        <div className="flex flex-wrap items-center justify-end gap-1">
+          <HeaderNavLink href={'/wallet' as Route}>{d.common.myCredits}</HeaderNavLink>
           {isAdmin ? (
-            <Link
-              href={'/admin' as Route}
-              className="rounded-lg border border-white/10 px-2.5 py-1.5 text-sm text-muted transition-colors hover:text-text"
-            >
-              {d.common.admin}
-            </Link>
+            <HeaderNavLink href={'/admin' as Route}>{d.common.admin}</HeaderNavLink>
           ) : null}
           <LocaleSwitcher />
           <form
@@ -84,10 +86,20 @@ export default async function HomePage({
         </div>
       </header>
 
+      {/* ?error= 는 URL 에 남아 새로고침마다 다시 뜬다 — 쿼리를 지우는 닫기 링크를 함께 준다. */}
       {error ? (
-        <p className="mb-6 rounded-xl border border-accent/30 bg-[#471a17] px-4 py-3 text-sm font-medium text-[#ff9a94]">
-          {localizeError(d, error)}
-        </p>
+        <Alert tone="error" className="mb-6">
+          <span className="flex items-center justify-between gap-3">
+            {translateError(d, error)}
+            <Link
+              href="/"
+              replace
+              className="inline-flex min-h-11 shrink-0 items-center px-2 text-xs font-semibold underline underline-offset-4"
+            >
+              {d.common.close}
+            </Link>
+          </span>
+        </Alert>
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-12">
@@ -121,19 +133,25 @@ export default async function HomePage({
           <div className="grid grid-cols-3 gap-3">
             <Link href="/advisor" className="rise-in rise-in-2 block">
               <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
-                <p className="text-3xl">🔮</p>
+                <p aria-hidden className="text-3xl">
+                  🔮
+                </p>
                 <p className="font-brush mt-2 text-lg font-bold">{d.home.advisor}</p>
               </Panel>
             </Link>
             <Link href="/ranking" className="rise-in rise-in-2 block">
               <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
-                <p className="text-3xl">🏆</p>
+                <p aria-hidden className="text-3xl">
+                  🏆
+                </p>
                 <p className="font-brush mt-2 text-lg font-bold">{d.home.ranking}</p>
               </Panel>
             </Link>
             <Link href={'/guide' as Route} className="rise-in rise-in-2 block">
               <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
-                <p className="text-3xl">📖</p>
+                <p aria-hidden className="text-3xl">
+                  📖
+                </p>
                 <p className="font-brush mt-2 text-lg font-bold">{d.home.guide}</p>
               </Panel>
             </Link>
@@ -143,7 +161,7 @@ export default async function HomePage({
         <section className="rise-in rise-in-3 space-y-3 lg:col-span-7">
           <h2 className="px-1 text-lg font-bold">{d.home.activeRooms}</h2>
           {myRooms.length === 0 ? (
-            <EmptyState title={d.home.emptyTitle} />
+            <EmptyState title={d.home.emptyTitle} hint={d.home.emptyHint} />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {myRooms.map((room) => (
@@ -213,11 +231,11 @@ export default async function HomePage({
       <footer className="mt-12 text-center">
         <Link
           href={'/about' as Route}
-          className="text-xs text-muted underline underline-offset-4 hover:text-text"
+          className="inline-flex min-h-11 items-center text-xs text-muted underline underline-offset-4 hover:text-text"
         >
           {d.home.aboutLink}
         </Link>
       </footer>
-    </main>
+    </PageShell>
   )
 }

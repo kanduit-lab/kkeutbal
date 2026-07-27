@@ -10,6 +10,7 @@ import type { MemberView, RoomSnapshot } from '../types'
 import { Badge } from '@/components/ui'
 import { useRoomSync } from './use-room-sync'
 import { useWakeLock } from './use-wake-lock'
+import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
 import { RoundLog } from './round-log'
 
@@ -46,8 +47,6 @@ export function MonitorClient({
     refetch,
     reconnect,
   } = useRoomSync({ initial, selfId, spectator: true, onEvent })
-  // 연결 배너 — 채널 단절·최초 연결 실패·스냅샷 동기화 실패를 한 슬롯에서 알린다.
-  const showBanner = (everConnected && !connected) || connectTimedOut || syncFailed
 
   const { fullscreenSupported, isFullscreen, toggleFullscreen } = useFullscreen()
 
@@ -72,7 +71,7 @@ export function MonitorClient({
   const leaderNet = leader ? leader.balance - leader.buyInTotal : 0
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 py-4 lg:px-8">
+    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 py-4 lg:px-8">
       <header className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link
@@ -87,19 +86,6 @@ export function MonitorClient({
           <Badge tone="accent">{d.games[snapshot.room.gameType]}</Badge>
         </div>
         <div className="flex items-center gap-2">
-          {showBanner ? (
-            <button
-              type="button"
-              onClick={() => {
-                // 채널 재구독 + 즉시 refetch — 채널이 멀쩡한데 동기화만 죽은 경우도 복구한다.
-                reconnect()
-                void refetch()
-              }}
-              className="min-h-11 rounded-md bg-warn/20 px-2 py-1 text-xs font-bold text-warn"
-            >
-              {syncFailed ? d.room.syncFailedReconnect : d.room.disconnectedReconnect}
-            </button>
-          ) : null}
           <span className="font-mono text-2xl font-black tracking-[0.3em] text-muted lg:text-3xl">
             {snapshot.room.code}
           </span>
@@ -120,6 +106,18 @@ export function MonitorClient({
           ) : null}
         </div>
       </header>
+
+      {/* 연결 경고는 헤더 아이콘 줄이 아니라 전용 슬롯에서 알린다 — 소켓이 깜빡일 때마다
+          방 코드·뱃지가 밀리면 상시 표시 화면에서 특히 눈에 거슬린다. */}
+      <RoomConnectionBar
+        syncFailed={syncFailed}
+        disconnected={(everConnected && !connected) || connectTimedOut}
+        onReconnect={() => {
+          // 채널 재구독 + 즉시 refetch — 채널이 멀쩡한데 동기화만 죽은 경우도 복구한다.
+          reconnect()
+          void refetch()
+        }}
+      />
 
       {snapshot.lastResult && !snapshot.currentRound ? (
         <p className="mb-1 text-center text-sm text-muted lg:text-lg">
@@ -197,7 +195,12 @@ export function MonitorClient({
                     {round.status === 'ended' && round.penalties.length > 0 ? (
                       <p className="mt-0.5 text-xs text-muted">
                         {round.penalties
-                          .map((penalty) => `${nameOf(penalty.userId)} 박×${penalty.factor}`)
+                          .map((penalty) =>
+                            format(d.monitor.penaltyLine, {
+                              name: nameOf(penalty.userId),
+                              factor: penalty.factor,
+                            }),
+                          )
                           .join(' · ')}
                       </p>
                     ) : null}

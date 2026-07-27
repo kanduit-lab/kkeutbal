@@ -1,34 +1,35 @@
-import { Panel } from '@/components/ui'
+import { PageShell, Skeleton, SkeletonPanel } from '@/components/ui'
+import { getDict } from '@/lib/i18n/server'
 
-function Bar({ className = '' }: { className?: string }) {
-  return <div className={`rounded-md bg-white/10 motion-safe:animate-pulse ${className}`} />
-}
+/** 선수 전적 화면 모양의 스켈레톤 — 헤더(뒤로·아바타·이름) + 요약 3칸 + 게임별 전적을 흉내낸다. */
+export default async function Loading() {
+  const { d } = await getDict()
 
-/** 선수 전적 화면 모양의 스켈레톤 — 헤더(아바타·이름) + 요약 3칸 + 게임별 전적을 흉내낸다. */
-export default function Loading() {
   return (
-    <main
-      className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8"
-      role="status"
-      aria-live="polite"
-    >
-      <span className="sr-only">전적 불러오는 중…</span>
-      <header className="flex items-center gap-3">
-        <Bar className="h-12 w-12 shrink-0 rounded-full" />
-        <Bar className="h-12 w-12 shrink-0 rounded-full" />
-        <Bar className="h-9 w-40" />
-      </header>
+    <PageShell width="content">
+      <div role="status" aria-live="polite" className="space-y-6">
+        <span className="sr-only">{d.loading.playerStats}</span>
 
-      <section className="grid grid-cols-3 gap-2">
-        <Panel className="h-20 motion-safe:animate-pulse">{null}</Panel>
-        <Panel className="h-20 motion-safe:animate-pulse">{null}</Panel>
-        <Panel className="h-20 motion-safe:animate-pulse">{null}</Panel>
-      </section>
+        <header className="flex items-center gap-2">
+          <Skeleton className="size-11 shrink-0" radius="xl" />
+          <Skeleton className="size-11 shrink-0" radius="full" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-7 w-40" />
+            <Skeleton className="h-4 w-44" />
+          </div>
+        </header>
 
-      <section className="space-y-2">
-        <Panel className="h-28 motion-safe:animate-pulse">{null}</Panel>
-        <Panel className="h-28 motion-safe:animate-pulse">{null}</Panel>
-      </section>
-    </main>
+        <div className="grid grid-cols-3 gap-2">
+          <SkeletonPanel className="h-20" />
+          <SkeletonPanel className="h-20" />
+          <SkeletonPanel className="h-20" />
+        </div>
+
+        <div className="space-y-2">
+          <SkeletonPanel className="h-28" />
+          <SkeletonPanel className="h-28" />
+        </div>
+      </div>
+    </PageShell>
   )
 }

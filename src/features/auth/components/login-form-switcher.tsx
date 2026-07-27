@@ -5,7 +5,8 @@ import { loginWithGuestToken, loginWithPassword } from '@/features/auth/actions'
 import { GuestNamePicker } from '@/features/auth/components/guest-name-picker'
 import { RegistrationCodeForm } from '@/features/auth/components/registration-code-form'
 import { InitialAdminSetupForm } from '@/features/auth/components/initial-admin-setup-form'
-import { Button, Input, Panel, SubmitButton } from '@/components/ui'
+import { Alert, Button, Input, Panel, SubmitButton } from '@/components/ui'
+import { PasswordInput } from '@/features/auth/components/password-input'
 import { useDict } from '@/lib/i18n/client'
 
 type LoginMode = 'password' | 'guest' | 'registration'
@@ -24,6 +25,8 @@ export function LoginFormSwitcher({
 }) {
   const { d } = useDict()
   const [mode, setMode] = useState<LoginMode>(initialMode)
+  // 방 링크로 튕겨 온 사람의 실제 진입 경로는 게스트 토큰이다 — 그때만 눈에 띄게 올린다.
+  const roomBound = redirectTo.startsWith('/rooms/')
 
   if (mode === 'guest') {
     return (
@@ -58,9 +61,7 @@ export function LoginFormSwitcher({
             <InitialAdminSetupForm onCancel={() => setMode('password')} />
           ) : (
             <div className="space-y-3">
-              <p role="alert" className="text-sm text-[#ff9a94]">
-                {d.auth.initialAdminSetupUnavailable}
-              </p>
+              <Alert tone="error">{d.auth.initialAdminSetupUnavailable}</Alert>
               <Button
                 type="button"
                 variant="ghost"
@@ -92,16 +93,19 @@ export function LoginFormSwitcher({
       <p className="font-bold">{d.auth.passwordLoginTitle}</p>
       <form className="space-y-3" action={loginWithPassword}>
         <input type="hidden" name="next" value={redirectTo} />
+        {/* 플레이스홀더는 첫 타이핑에 사라진다 — 탭으로 돌아왔을 때 어느 칸인지 알 수 있게
+            접근 가능한 이름을 따로 준다 (registration-code-form 과 같은 규칙). */}
         <Input
           name="username"
+          aria-label={d.auth.usernameLabel}
           placeholder={d.auth.usernamePlaceholder}
           maxLength={20}
           required
           autoComplete="username"
         />
-        <Input
+        <PasswordInput
           name="password"
-          type="password"
+          aria-label={d.auth.passwordLabel}
           placeholder={d.auth.passwordPlaceholder}
           maxLength={72}
           required
@@ -122,13 +126,18 @@ export function LoginFormSwitcher({
           type="button"
           variant="ghost"
           size="sm"
-          className="min-h-0 px-0 py-0 font-bold text-text underline underline-offset-4"
+          className="min-h-11 px-1 font-bold text-text underline underline-offset-4"
           onClick={() => setMode('registration')}
         >
           {firstAccount ? d.auth.initialAdminLink : d.auth.registerLink}
         </Button>
       </p>
-      <Button type="button" variant="ghost" className="w-full" onClick={() => setMode('guest')}>
+      <Button
+        type="button"
+        variant={roomBound ? 'surface' : 'ghost'}
+        className="w-full"
+        onClick={() => setMode('guest')}
+      >
         {d.auth.guestTokenSummary}
       </Button>
     </Panel>

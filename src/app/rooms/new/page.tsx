@@ -40,8 +40,10 @@ export default function NewRoomPage() {
         fundingMode,
       })
       if (result.success) {
+        setAccountCreditConfirmOpen(false)
         router.push(`/rooms/${result.data.code}`)
       } else {
+        // 실패하면 다이얼로그를 열어 둬 재원 선택을 다시 확인하고 재시도할 수 있게 한다.
         toast(translateError(d, result.error), 'error')
       }
     })
@@ -57,9 +59,14 @@ export default function NewRoomPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-xl space-y-6 px-4 pb-16 pt-8">
+    <main id="main" className="mx-auto w-full max-w-xl space-y-6 px-4 pb-16 pt-8">
       <header className="flex items-center gap-3">
-        <Link href="/" className="text-2xl text-muted">
+        {/* 접근 가능한 이름 없는 `←` 글리프 + 24px 타깃이었다 — 방 화면 헤더와 같게 맞춘다. */}
+        <Link
+          href="/"
+          aria-label={d.common.back}
+          className="inline-flex min-h-12 min-w-12 shrink-0 items-center justify-center text-2xl text-muted transition-colors hover:text-text"
+        >
           ←
         </Link>
         <h1 className="font-brush text-3xl font-black">{d.newRoom.title}</h1>
@@ -81,9 +88,7 @@ export default function NewRoomPage() {
               <Button
                 key={type}
                 type="button"
-                variant={gameType === type ? 'primary' : 'surface'}
-                className={gameType === type ? '' : 'border border-white/10'}
-                pressed={gameType === type}
+                selected={gameType === type}
                 onClick={() => setGameType(type)}
               >
                 {GAME_LABELS[type].emoji} {d.games[type]}
@@ -99,9 +104,7 @@ export default function NewRoomPage() {
                 key={preset}
                 type="button"
                 size="sm"
-                variant={startingChips === preset ? 'primary' : 'surface'}
-                className={startingChips === preset ? '' : 'border border-white/10'}
-                pressed={startingChips === preset}
+                selected={startingChips === preset}
                 onClick={() => setStartingChips(preset)}
               >
                 {preset}
@@ -115,6 +118,8 @@ export default function NewRoomPage() {
             max={1_000_000}
             step={10}
             ariaLabel={d.roomForm.startingChipsAria}
+            decreaseLabel={d.ui.decrease}
+            increaseLabel={d.ui.increase}
             className="mt-2"
           />
         </Field>
@@ -123,18 +128,14 @@ export default function NewRoomPage() {
           <div className="grid grid-cols-2 gap-2">
             <Button
               type="button"
-              variant={fundingMode === 'session' ? 'primary' : 'surface'}
-              className={fundingMode === 'session' ? '' : 'border border-white/10'}
-              pressed={fundingMode === 'session'}
+              selected={fundingMode === 'session'}
               onClick={() => setFundingMode('session')}
             >
               {d.roomForm.sessionFunding}
             </Button>
             <Button
               type="button"
-              variant={fundingMode === 'account_credit' ? 'primary' : 'surface'}
-              className={fundingMode === 'account_credit' ? '' : 'border border-white/10'}
-              pressed={fundingMode === 'account_credit'}
+              selected={fundingMode === 'account_credit'}
               onClick={() => setFundingMode('account_credit')}
             >
               {d.roomForm.accountCreditFunding}
@@ -155,6 +156,8 @@ export default function NewRoomPage() {
               min={1}
               max={100_000}
               ariaLabel={d.roomForm.pointValueAria}
+              decreaseLabel={d.ui.decrease}
+              increaseLabel={d.ui.increase}
             />
             <p className="mt-1.5 text-xs text-muted">{d.roomForm.pointValueHint}</p>
           </Field>
@@ -166,6 +169,8 @@ export default function NewRoomPage() {
               min={1}
               max={100_000}
               ariaLabel={d.roomForm.baseBetAria}
+              decreaseLabel={d.ui.decrease}
+              increaseLabel={d.ui.increase}
             />
             <p className="mt-1.5 text-xs text-muted">{d.roomForm.baseBetHint}</p>
           </Field>
@@ -175,18 +180,14 @@ export default function NewRoomPage() {
           <div className="grid grid-cols-2 gap-2">
             <Button
               type="button"
-              variant={inputMode === 'trust' ? 'primary' : 'surface'}
-              className={inputMode === 'trust' ? '' : 'border border-white/10'}
-              pressed={inputMode === 'trust'}
+              selected={inputMode === 'trust'}
               onClick={() => setInputMode('trust')}
             >
               {d.inputMode.trust}
             </Button>
             <Button
               type="button"
-              variant={inputMode === 'approval' ? 'primary' : 'surface'}
-              className={inputMode === 'approval' ? '' : 'border border-white/10'}
-              pressed={inputMode === 'approval'}
+              selected={inputMode === 'approval'}
               onClick={() => setInputMode('approval')}
             >
               {d.inputMode.approval}
@@ -202,10 +203,11 @@ export default function NewRoomPage() {
           variant="primary"
           size="lg"
           className="w-full"
-          disabled={isPending}
+          loading={isPending}
+          loadingLabel={d.newRoom.creating}
           onClick={submit}
         >
-          {isPending ? d.newRoom.creating : d.newRoom.create}
+          {d.newRoom.create}
         </Button>
       </Panel>
 
@@ -215,10 +217,10 @@ export default function NewRoomPage() {
         body={d.roomForm.accountCreditConfirmBody}
         confirmLabel={d.roomForm.accountCreditConfirmLabel}
         cancelLabel={d.common.cancel}
-        onConfirm={() => {
-          setAccountCreditConfirmOpen(false)
-          create()
-        }}
+        // 계정 크레딧을 잠그는 되돌리기 어려운 동작이다 — 요청이 도는 동안 다이얼로그를
+        // 열어 둔 채 확인 버튼에 진행 표시를 남긴다. 성공하면 라우팅이 화면을 걷어간다.
+        loading={isPending}
+        onConfirm={create}
         onClose={() => setAccountCreditConfirmOpen(false)}
       />
     </main>

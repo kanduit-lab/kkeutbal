@@ -77,6 +77,12 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   /** 관리자 — 게스트 토큰 발급·관리자 지정·SSO 설정 권한. */
   isAdmin: boolean('is_admin').notNull().default(false),
+  /**
+   * 대리 기록용 로컬 플레이어. 방 호스트가 이름만으로 만든 좌석이며 로그인 경로가 없다
+   * (`authentik_sub` 이 `managed:{roomId}:{uuid}` 형태라 어떤 인증 경로와도 겹치지 않는다).
+   * 전역 누적 랭킹에서는 제외한다 — 가족 게임 기록이 실제 계정 랭킹을 덮지 않게 한다.
+   */
+  isManaged: boolean('is_managed').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { verifyInitialAdminSetupCode, type InitialAdminSetupState } from '@/features/auth/actions'
-import { Button, Input, SubmitButton } from '@/components/ui'
+import { Alert, Button, Input, SubmitButton } from '@/components/ui'
 import { useDict } from '@/lib/i18n/client'
 
 /** 서버 콘솔의 1회용 코드를 검증한 브라우저만 최초 관리자 가입 화면으로 보낸다. */
@@ -33,7 +33,7 @@ export function InitialAdminSetupForm({ onCancel }: { onCancel: () => void }) {
         autoFocus
       />
       {state.status === 'error' ? (
-        <p role="alert" className="text-sm text-[#ff9a94]">
+        <Alert tone="error">
           {state.error === 'invalid' ? (
             <>
               <span className="block">{d.auth.initialAdminCodeInvalid}</span>
@@ -42,7 +42,7 @@ export function InitialAdminSetupForm({ onCancel }: { onCancel: () => void }) {
           ) : (
             d.auth.initialAdminSetupUnavailable
           )}
-        </p>
+        </Alert>
       ) : null}
       <div className="grid grid-cols-2 gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}>

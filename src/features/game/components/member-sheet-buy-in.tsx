@@ -1,6 +1,5 @@
 'use client'
 
-import { clsx } from 'clsx'
 import { useMemo, useState } from 'react'
 import { addBuyIn } from '@/features/budget/actions'
 import { format, useDict } from '@/lib/i18n/client'
@@ -35,6 +34,11 @@ export function BuyInSection({
 }) {
   const { d } = useDict()
   const [buyInAmount, setBuyInAmount] = useState(startingChips)
+  /**
+   * isPending 은 시트 전체가 공유한다 — 역할 변경이나 대리 베팅이 도는 동안에도 참이라
+   * 그것만 보고 스피너를 붙이면 엉뚱한 버튼이 돈다. 이 섹션이 쏜 요청만 따로 표시한다.
+   */
+  const [granting, setGranting] = useState(false)
 
   const buyInPresets = useMemo(() => {
     const half = Math.max(1, Math.round(startingChips / 2))
@@ -51,8 +55,8 @@ export function BuyInSection({
           <Button
             key={preset.label}
             size="sm"
-            variant={buyInAmount === preset.amount ? 'primary' : 'surface'}
-            className={clsx('flex-col gap-0', buyInAmount !== preset.amount && 'border border-white/10')}
+            selected={buyInAmount === preset.amount}
+            className="flex-col gap-0"
             onClick={() => setBuyInAmount(preset.amount)}
           >
             {preset.label}
@@ -69,23 +73,35 @@ export function BuyInSection({
         max={1_000_000}
         step={baseBet}
         ariaLabel={d.memberSheet.buyInAria}
+        decreaseLabel={d.ui.decrease}
+        increaseLabel={d.ui.increase}
       />
       <Button
         variant="win"
         size="lg"
         className="w-full"
+        loading={granting}
+        loadingLabel={d.ui.processing}
         disabled={isPending}
-        onClick={() =>
-          run(() =>
-            runAction(() =>
-              addBuyIn({
-                roomId,
-                amount: buyInAmount,
-                targetUserId: memberId,
-              }),
-            ),
+        onClick={() => {
+          setGranting(true)
+          run(
+            async () => {
+              const success = await runAction(() =>
+                addBuyIn({
+                  roomId,
+                  amount: buyInAmount,
+                  targetUserId: memberId,
+                }),
+              )
+              setGranting(false)
+              return success
+            },
+            // 시트를 열어 둬 잔액이 올라간 것을 바로 확인하게 한다 — 지급 취소 경로와 같은 규칙.
+            // 여러 명에게 연속 지급할 때 매번 좌석을 다시 탭하지 않아도 된다.
+            false,
           )
-        }
+        }}
       >
         💰 {format(d.memberSheet.grant, { n: buyInAmount.toLocaleString() })}
       </Button>
@@ -95,6 +111,7 @@ export function BuyInSection({
         className="w-full"
         disabled={isPending || memberBuyInTotal <= 0}
         disabledReason={memberBuyInTotal <= 0 ? d.memberSheet.nothingToUndo : undefined}
+        aria-haspopup="dialog"
         onClick={onUndoRequest}
       >
         ↩ {d.memberSheet.undoLast}

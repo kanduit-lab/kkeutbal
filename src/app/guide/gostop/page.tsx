@@ -1,7 +1,16 @@
+import { BackToTop } from '../_components/back-to-top'
 import { CardPair } from '../_components/card-pair'
 import { GuideHeader } from '../_components/guide-header'
+import { ScrollTable } from '../_components/scroll-table'
 import { TocNav } from '../_components/toc-nav'
-import { Panel } from '@/components/ui'
+import { PageShell, Panel } from '@/components/ui'
+import type { Metadata } from 'next'
+import { getDict } from '@/lib/i18n/server'
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { d } = await getDict()
+  return { title: `고스톱 가이드 · ${d.common.appName}` }
+}
 
 const TOC = [
   { href: '#flow', label: '진행 방식' },
@@ -44,19 +53,26 @@ const MULTIPLIER_ROWS: readonly MultiplierRow[] = [
   { source: '총통', effect: '처음 받은 패에 같은 월 4장이 모이면 그 자리에서 즉시 승리' },
 ]
 
-export default function GostopGuidePage() {
+export default async function GostopGuidePage() {
+  const { d } = await getDict()
+
   return (
-    <main className="mx-auto w-full max-w-6xl px-5 pb-16 pt-8 lg:px-8 lg:pt-12">
+    <PageShell width="wide">
       <GuideHeader
         backHref="/guide"
-        backLabel="가이드 목록으로"
+        backLabel={d.guide.backToList}
         emoji="🌸"
         title="고스톱"
         description="바닥 패와 맞춰 광·열끗·띠·피를 모으고, 점수가 나면 고 또는 스톱을 선택합니다"
       />
 
       <div className="grid gap-6 lg:grid-cols-12">
-        <div className="space-y-8 lg:col-span-9">
+        {/* 목차가 먼저 온다 — 1열(모바일)에서는 본문 위, lg 에서는 order 로 우측 컬럼. */}
+        <div className="min-w-0 lg:order-2 lg:col-span-3">
+          <TocNav items={TOC} />
+        </div>
+
+        <div className="min-w-0 space-y-8 lg:order-1 lg:col-span-9">
           <section id="flow" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">진행 방식</h2>
             <Panel>
@@ -71,7 +87,7 @@ export default function GostopGuidePage() {
 
           <section id="score" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">점수표</h2>
-            <Panel className="overflow-x-auto p-0">
+            <ScrollTable title="점수표">
               <table className="w-full min-w-[480px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-gold/15 text-xs text-muted">
@@ -90,7 +106,7 @@ export default function GostopGuidePage() {
                   ))}
                 </tbody>
               </table>
-            </Panel>
+            </ScrollTable>
             <p className="text-xs text-muted">
               기본 룰에서는 3점 이상 모아야 스톱을 선언할 수 있습니다
             </p>
@@ -127,7 +143,7 @@ export default function GostopGuidePage() {
 
           <section id="multiplier" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">배수</h2>
-            <Panel className="overflow-x-auto p-0">
+            <ScrollTable title="배수표">
               <table className="w-full min-w-[480px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-gold/15 text-xs text-muted">
@@ -144,14 +160,12 @@ export default function GostopGuidePage() {
                   ))}
                 </tbody>
               </table>
-            </Panel>
+            </ScrollTable>
           </section>
-        </div>
 
-        <div className="lg:col-span-3">
-          <TocNav items={TOC} />
+          <BackToTop />
         </div>
       </div>
-    </main>
+    </PageShell>
   )
 }

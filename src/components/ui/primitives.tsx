@@ -6,11 +6,75 @@ import type { ReactNode } from 'react'
 export function Panel({
   className,
   children,
+  as: Tag = 'section',
 }: {
   className?: string
-  children: ReactNode
+  /** 스켈레톤처럼 내용 없는 블록으로도 쓰인다 — 그때 {null} 을 넘기게 하지 않는다. */
+  children?: ReactNode
+  as?: 'section' | 'div' | 'article'
 }) {
-  return <section className={clsx('lacquer rounded-2xl p-5', className)}>{children}</section>
+  return <Tag className={clsx('lacquer rounded-2xl p-5', className)}>{children}</Tag>
+}
+
+/**
+ * 로딩 자리 표시자. 같은 2줄짜리 구현이 loading.tsx 6개에 복붙돼 있었고
+ * 그중 하나는 motion-safe 가드를 잃어 reduced-motion 을 무시하고 있었다.
+ */
+export function Skeleton({
+  className,
+  radius = 'md',
+}: {
+  className?: string
+  radius?: 'md' | 'xl' | 'full' | 'none'
+}) {
+  return (
+    <div
+      aria-hidden
+      className={clsx(
+        'bg-white/10 motion-safe:animate-pulse',
+        radius === 'md' && 'rounded-md',
+        radius === 'xl' && 'rounded-xl',
+        radius === 'full' && 'rounded-full',
+        className,
+      )}
+    />
+  )
+}
+
+/** 패널 모양의 로딩 블록. */
+export function SkeletonPanel({ className }: { className?: string }) {
+  return <Panel as="div" className={clsx('motion-safe:animate-pulse', className)} />
+}
+
+/**
+ * 숫자 한 개를 라벨과 함께 보여주는 타일. inset(패널 안 오목한 칩)과
+ * panel(단독 옻칠 패널) 두 톤이 같은 개념으로 따로 구현돼 있던 걸 합쳤다.
+ */
+export function StatTile({
+  label,
+  children,
+  tone = 'inset',
+  valueClass,
+}: {
+  label: string
+  children: ReactNode
+  tone?: 'inset' | 'panel'
+  valueClass?: string
+}) {
+  return (
+    <div
+      className={clsx(
+        'px-2 text-center',
+        tone === 'inset' && 'rounded-xl bg-bg-deep/60 py-2.5',
+        tone === 'panel' && 'lacquer rounded-2xl py-4',
+      )}
+    >
+      <p className="text-micro font-medium text-muted">{label}</p>
+      <p className={clsx('font-black leading-tight tabular-nums', valueClass ?? 'text-lg')}>
+        {children}
+      </p>
+    </div>
+  )
 }
 
 const AVATAR_COLORS = [

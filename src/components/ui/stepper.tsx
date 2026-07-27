@@ -58,8 +58,8 @@ export function Stepper({
   step = 1,
   ariaLabel,
   className,
-  decreaseLabel = '줄이기',
-  increaseLabel = '늘리기',
+  decreaseLabel,
+  increaseLabel,
 }: {
   value: number
   onChange: (next: number) => void
@@ -68,10 +68,12 @@ export function Stepper({
   step?: number
   ariaLabel: string
   className?: string
-  /** −버튼 aria-label. 기본은 한국어 '줄이기' — i18n 소비자는 로케일 문자열로 오버라이드한다. */
-  decreaseLabel?: string
-  /** +버튼 aria-label. 기본은 한국어 '늘리기'. */
-  increaseLabel?: string
+  /**
+   * −/+ 버튼의 aria-label. 한국어 기본값을 두면 넘기는 걸 잊은 곳이 조용히 한국어로
+   * 남는다 — 필수 prop 으로 두어 컴파일러가 잡게 한다.
+   */
+  decreaseLabel: string
+  increaseLabel: string
 }) {
   // 홀드 반복 콜백이 항상 최신 value 를 읽도록 ref 로 추적한다.
   const valueRef = useRef(value)

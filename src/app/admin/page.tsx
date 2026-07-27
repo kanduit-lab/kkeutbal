@@ -1,9 +1,9 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
 import { isAdminUser } from '@/features/auth/roles'
 import { AdminDashboard } from '@/features/auth/components/admin-dashboard'
-import { Badge, ButtonLink, Panel } from '@/components/ui'
+import { LocaleSwitcher } from '@/components/locale-switcher'
+import { Badge, ButtonLink, PageHeader, PageShell, Panel } from '@/components/ui'
 import { getDict } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
@@ -16,9 +16,11 @@ export default async function AdminPage() {
   const isAdmin = await isAdminUser(session.user.id)
   if (!isAdmin) {
     return (
-      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-6">
+      <PageShell width="narrow" center>
         <Panel className="space-y-3 py-8 text-center">
-          <p className="text-3xl">🔒</p>
+          <p className="text-3xl" aria-hidden="true">
+            🔒
+          </p>
           <h1 className="text-xl font-bold">{d.adminDashboard.deniedTitle}</h1>
           <p className="text-sm text-muted">{d.adminDashboard.deniedBody}</p>
           <div className="flex justify-center pt-1">
@@ -30,28 +32,22 @@ export default async function AdminPage() {
             </ButtonLink>
           </div>
         </Panel>
-      </main>
+      </PageShell>
     )
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 px-4 pb-16 pt-6 sm:px-6 lg:px-8 lg:pt-10">
-      <header className="flex items-start gap-3">
-        <Link
-          href="/"
-          aria-label={d.common.home}
-          className="mt-1 grid size-10 shrink-0 place-items-center rounded-xl border border-white/10 text-xl text-muted transition-colors hover:text-text"
-        >
-          ←
-        </Link>
-        <div>
-          <h1 className="font-brush text-3xl font-black sm:text-4xl">
-            {d.adminDashboard.title}
-          </h1>
-          <p className="mt-1 text-sm text-muted">{d.adminDashboard.subtitle}</p>
-        </div>
-      </header>
+    <PageShell width="wide">
+      {/* 콘솔 본문이 전부 사전을 타므로 여기에도 스위처를 둔다 — 실수로 EN 을 눌렀을 때
+          홈까지 나가야만 되돌릴 수 있던 구간을 없앤다. */}
+      <PageHeader
+        title={d.adminDashboard.title}
+        subtitle={d.adminDashboard.subtitle}
+        backHref="/"
+        backLabel={d.common.home}
+        actions={<LocaleSwitcher />}
+      />
       <AdminDashboard selfId={session.user.id} />
-    </main>
+    </PageShell>
   )
 }

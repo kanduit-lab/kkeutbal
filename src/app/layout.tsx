@@ -63,7 +63,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0b0b0f',
+  // 본문 그라디언트 상단(#14432f)과 맞춘다 — 브라우저 크롬이 닿는 영역이 여기다.
+  themeColor: '#14432f',
   viewportFit: 'cover',
 }
 
@@ -73,7 +74,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang={locale}>
       <body>
         <I18nProvider locale={locale} dict={d}>
-          <ToastProvider>
+          <ToastProvider closeLabel={d.common.close}>
+            {/* 페이지마다 반복되는 헤더를 건너뛴다. PageShell 이 <main id="main"> 을 렌더한다. */}
+            <a href="#main" className="skip-link">
+              {d.common.skipToContent}
+            </a>
             <PromotionHost promotions={promotions} />
             {children}
           </ToastProvider>

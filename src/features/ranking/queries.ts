@@ -222,10 +222,12 @@ export async function getCumulativeRanking(
   const userIds = sessionRows.map((row) => row.userId)
   if (userIds.length === 0) return []
 
+  // 로컬 플레이어(대리 기록용 좌석)는 전역 누적 랭킹에서 뺀다 — 가족 게임 기록이
+  // 실제 계정들의 순위를 덮지 않게 한다. 방 안 결과·정산에는 그대로 들어간다.
   const userRows = await db
     .select({ id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl })
     .from(users)
-    .where(inArray(users.id, userIds))
+    .where(and(inArray(users.id, userIds), eq(users.isManaged, false)))
 
   const balanceMap = new Map(
     chipRows.map((row) => [row.userId, toSafeChipInteger(row.balance, 'Cumulative balance')]),
@@ -239,6 +241,7 @@ export async function getCumulativeRanking(
   const userMap = new Map(userRows.map((row) => [row.id, row]))
 
   return sessionRows
+    .filter((row) => userMap.has(row.userId))
     .map((row) => {
       const user = userMap.get(row.userId)
       const balance = balanceMap.get(row.userId) ?? 0

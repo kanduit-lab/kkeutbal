@@ -125,6 +125,8 @@ export function GostopScoreForm({
           min={1}
           max={maxBaseFor(state)}
           ariaLabel={d.dealer.scoreAria}
+          decreaseLabel={d.ui.decrease}
+          increaseLabel={d.ui.increase}
           className="flex-1"
         />
       </div>
@@ -143,6 +145,8 @@ export function GostopScoreForm({
               min={0}
               max={MAX_DECLARATION_COUNT}
               ariaLabel={ariaLabel}
+              decreaseLabel={d.ui.decrease}
+              increaseLabel={d.ui.increase}
               className="flex-1"
             />
           </div>

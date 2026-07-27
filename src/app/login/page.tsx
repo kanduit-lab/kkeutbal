@@ -6,8 +6,8 @@ import { prepareInitialAdminSetup } from '@/features/auth/initial-admin-setup'
 import { findCard } from '@/features/hwatu/cards'
 import { HwatuCardView } from '@/components/hwatu-card'
 import { LocaleSwitcher } from '@/components/locale-switcher'
-import { Button } from '@/components/ui'
-import { getDict, type Dictionary } from '@/lib/i18n/server'
+import { Alert, Button } from '@/components/ui'
+import { format, getDict, type Dictionary } from '@/lib/i18n/server'
 
 const SHOWCASE_CARD_IDS = ['03-gwang', '08-gwang', '01-gwang'] as const
 
@@ -40,14 +40,21 @@ export default async function LoginPage({
   const redirectTo = next && next.startsWith('/') ? next : '/'
   const initialMode =
     mode === 'guest' ? 'guest' : mode === 'registration' ? 'registration' : 'password'
+  // 방 링크로 튕겨 온 사용자에게 "로그인하면 어디로 가는지"를 알려 준다 — 없으면
+  // 로그인 화면이 잘못된 링크처럼 보인다.
+  const roomCode = /^\/rooms\/([A-Za-z0-9]{4,8})(?:[/?#]|$)/.exec(redirectTo)?.[1] ?? null
   const initialAdminSetupReady = firstAccount ? await prepareInitialAdminSetup() : false
   const showcase = SHOWCASE_CARD_IDS.map((id) => findCard(id)).filter(
     (card): card is NonNullable<typeof card> => card !== undefined,
   )
 
   return (
-    <main className="relative mx-auto grid min-h-dvh w-full max-w-6xl items-center gap-10 px-6 py-10 lg:grid-cols-2 lg:gap-16">
-      <div className="absolute right-4 top-4 z-10">
+    <main
+      id="main"
+      className="relative mx-auto grid min-h-dvh w-full max-w-6xl items-center gap-10 px-6 py-10 lg:grid-cols-2 lg:gap-16"
+    >
+      {/* 모바일에서는 흐름 안에 둔다 — 절대 배치하면 바로 아래 화투 카드 위에 겹쳐 얹힌다. */}
+      <div className="flex justify-end lg:absolute lg:right-4 lg:top-4 lg:z-10">
         <LocaleSwitcher />
       </div>
       <section className="rise-in text-center lg:text-left">
@@ -81,10 +88,10 @@ export default async function LoginPage({
 
       <section className="rise-in rise-in-2 w-full max-w-sm justify-self-center lg:justify-self-start">
         <div className="space-y-4">
-          {errorMessage ? (
-            <p className="rounded-xl border border-accent/30 bg-[#471a17] px-4 py-3 text-sm font-medium text-[#ff9a94]">
-              {errorMessage}
-            </p>
+          {errorMessage ? <Alert tone="error">{errorMessage}</Alert> : null}
+
+          {roomCode ? (
+            <Alert tone="info">{format(d.auth.continueToRoom, { code: roomCode })}</Alert>
           ) : null}
 
           <LoginFormSwitcher

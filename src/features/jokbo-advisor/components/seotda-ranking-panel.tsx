@@ -30,16 +30,24 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
     }
   }, [cards])
 
+  /**
+   * `open` 도 의존성에 넣는다. 모바일에서는 접혀 있는 동안 목록이 `display:none` 이라
+   * 카드를 고르는 시점의 scrollIntoView 가 아무 효과가 없었고, 나중에 펼쳐도 effect 가
+   * 다시 돌지 않아 25행짜리 표의 맨 위(광땡)에서 내 패를 눈으로 찾아야 했다.
+   * 펼친 직후에는 레이아웃이 아직 안 잡혀 있으므로 rAF 한 프레임을 기다린다.
+   */
   useEffect(() => {
     if (currentRank === null) return
     const reduceMotion =
-      typeof window !== 'undefined' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    activeRowRef.current?.scrollIntoView({
-      block: 'nearest',
-      behavior: reduceMotion ? 'auto' : 'smooth',
+      typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const frame = window.requestAnimationFrame(() => {
+      activeRowRef.current?.scrollIntoView({
+        block: 'nearest',
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      })
     })
-  }, [currentRank])
+    return () => window.cancelAnimationFrame(frame)
+  }, [currentRank, open])
 
   const categoryLabel: Readonly<Record<SeotdaCategory, string>> = {
     gwangttaeng: d.advisor.ranking.categoryGwangttaeng,
@@ -86,6 +94,7 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
                   ) : null}
                   <div
                     ref={isActive ? activeRowRef : undefined}
+                    aria-current={isActive ? 'true' : undefined}
                     className={clsx(
                       'flex min-h-8 items-center justify-between rounded-lg px-2 py-1 text-xs',
                       isActive ? 'bg-accent/25 font-bold text-accent' : 'text-text/80',
