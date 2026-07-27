@@ -41,10 +41,23 @@ export type ClientEnv = z.infer<typeof clientSchema>
 /**
  * 서버 환경변수. 서버 컨텍스트에서만 호출한다.
  * 클라이언트 컴포넌트에서 import 하면 빌드 시점에 드러나도록 명시적으로 던진다.
+ *
+ * `SKIP_ENV_VALIDATION` 은 **빌드 전용** 탈출구다. `next build` 의 page data 수집이
+ * 모듈 평가를 유발해 이 함수를 빌드 시점에 실행시키는데, 그때까지 검증을 강제하면
+ * `DATABASE_URL`·`AUTH_SECRET` 같은 런타임 전용 시크릿을 빌드 인자로 넘겨야 하고
+ * 그 값은 이미지 레이어에 남는다. 빌드는 스키마를 통과할 필요가 없으므로 건너뛴다.
+ *
+ * 런타임에는 절대 켜지 말 것 — 값이 비어 있어도 조용히 통과한다.
+ * `dockerfiles/Dockerfile.nextjs` 는 builder 스테이지에서만 이 값을 세우고,
+ * runner 스테이지는 새 이미지라 이어받지 않는다.
  */
 export function serverEnv(): ServerEnv {
   if (typeof window !== 'undefined') {
     throw new Error('serverEnv() must not be called on the client')
+  }
+
+  if (process.env.SKIP_ENV_VALIDATION) {
+    return process.env as unknown as ServerEnv
   }
 
   const parsed = serverSchema.safeParse(process.env)

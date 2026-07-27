@@ -67,8 +67,39 @@ function createSql() {
   })
 }
 
-const sql = globalForDb.kkeutbalSql ?? createSql()
-if (process.env.NODE_ENV !== 'production') globalForDb.kkeutbalSql = sql
+type Db = ReturnType<typeof drizzle<typeof schema>>
 
-export const db = drizzle(sql, { schema })
+let cachedDb: Db | undefined
+
+function getDb(): Db {
+  if (!cachedDb) {
+    const sql = globalForDb.kkeutbalSql ?? createSql()
+    if (process.env.NODE_ENV !== 'production') globalForDb.kkeutbalSql = sql
+    cachedDb = drizzle(sql, { schema })
+  }
+  return cachedDb
+}
+
+/**
+ * 커넥션은 **첫 사용 시점에** 만든다.
+ *
+ * 최상위에서 `createSql()` 을 부르면 이 모듈을 import 하는 것만으로 커넥션이 생긴다.
+ * `next build` 의 page data 수집은 라우트 모듈을 평가하므로, 그 방식이면 빌드가
+ * `DATABASE_URL`·`DATABASE_CA_CERT_BASE64` 를 요구하게 되고 시크릿을 빌드 인자로
+ * 넘길 수밖에 없다 — 그 값은 이미지 레이어에 남는다. 지연 생성이면 빌드는 모듈
+ * 평가만 하고 지나가고, 실제 커넥션은 런타임 첫 쿼리에서 만들어진다.
+ *
+ * 호출부는 그대로 `db.select()` 처럼 쓴다. 메서드는 실제 인스턴스에 바인딩해서
+ * 넘기므로 drizzle 내부의 `this` 참조가 깨지지 않는다.
+ */
+export const db = new Proxy({} as Db, {
+  get(_target, prop) {
+    // receiver 를 넘기지 않는다 — 넘기면 접근자 프로퍼티의 `this` 가 이 Proxy 가 되어
+    // 트랩을 다시 타고, 그 안에서 또 프로퍼티를 읽으면 재귀한다.
+    const instance = getDb()
+    const value = Reflect.get(instance, prop)
+    return typeof value === 'function' ? value.bind(instance) : value
+  },
+})
+
 export { schema }

@@ -18,7 +18,22 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# NEXT_PUBLIC_* vars injected as .env.production.local by deploy.sh.
+# NEXT_PUBLIC_* 는 클라이언트 번들에 인라인되므로 빌드 시점에 있어야 한다.
+# 공급 경로가 두 가지고, 둘 다 지원한다:
+#   - deploy hub: .env.production.local 을 컨텍스트에 떨궈 준다
+#   - 그 외 빌더(Coolify 등): --build-arg 로 넘긴다
+# ARG 는 선언한 스테이지의 RUN 에 환경변수로 노출된다. 전달되지 않으면 비어 있고,
+# 그 경우 Next 가 .env.production.local 을 읽는다 — 그래서 ENV 로 승격하지 않는다.
+# 승격하면 빈 문자열이 파일 값을 덮어써서 hub 경로가 조용히 깨진다.
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+# 서버 전용 시크릿은 빌드에 넘기지 않는다. next build 의 page data 수집이
+# serverEnv() 를 실행시키므로 검증만 끈다. 이 ENV 는 builder 스테이지 한정이고
+# runner 는 새 이미지라 이어받지 않는다 — 런타임 검증은 그대로 살아 있다.
+ENV SKIP_ENV_VALIDATION=1
+
 # Keep /robots.txt from accidentally falling through to an app route in projects
 # that do not ship crawler metadata yet. Sitemaps need canonical domain URLs, so
 # they must be supplied by the app instead of guessed by this template.
