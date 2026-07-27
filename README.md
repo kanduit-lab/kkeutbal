@@ -80,7 +80,7 @@ pnpm dev                     # http://localhost:3000
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` |  ✅  | Realtime 공개 채널 구독                                                                       |
 | `DATABASE_URL`                                                      |  ✅  | `kkeutbal_app` 롤. 5432(session) 또는 6543(transaction) pooler — 포트별 연결 옵션은 자동 적용 |
 | `DATABASE_CA_CERT_BASE64`                                           |  ✅  | Supabase 대시보드의 CA 인증서를 base64로 인코딩한 값                                          |
-| `AUTH_SECRET`                                                       |  ✅  | `openssl rand -base64 32`; SSO secret·초기 관리자 코드 보호의 루트 키                        |
+| `AUTH_SECRET`                                                       |  ✅  | `openssl rand -base64 32`; SSO secret·초기 관리자 코드 보호의 루트 키                         |
 | `AUTH_TRUST_HOST`                                                   |  ✅  | 프록시 환경의 Auth.js 호스트 검증                                                             |
 | `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`                              |  —   | 사진 인식 공급자 키. `/admin`은 설정 여부를 표시하고 공급자·모델·활성화를 관리                |
 
@@ -149,6 +149,7 @@ pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 | [`docs/08-database-migrations.md`](docs/08-database-migrations.md)                   | DB 적용·검증·복구 런북               |
 | [`docs/09-roadmap.md`](docs/09-roadmap.md)                                           | 우선순위·마일스톤                    |
 | [`docs/10-virtual-credit-and-fair-play.md`](docs/10-virtual-credit-and-fair-play.md) | 전역 가상 크레딧·공정 셔플 확장 설계 |
+| [`docs/11-container-build-contract.md`](docs/11-container-build-contract.md)         | 빌드 인자·시크릿 경계·런타임 계약    |
 
 실행 잔여 작업: [`TODO.md`](TODO.md) · 에이전트 가이드: [`CLAUDE.md`](CLAUDE.md)
 

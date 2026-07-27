@@ -38,6 +38,8 @@ const clientSchema = z.object({
 export type ServerEnv = z.infer<typeof serverSchema>
 export type ClientEnv = z.infer<typeof clientSchema>
 
+const BUILD_PHASE = 'phase-production-build'
+
 /**
  * 서버 환경변수. 서버 컨텍스트에서만 호출한다.
  * 클라이언트 컴포넌트에서 import 하면 빌드 시점에 드러나도록 명시적으로 던진다.
@@ -45,6 +47,13 @@ export type ClientEnv = z.infer<typeof clientSchema>
 export function serverEnv(): ServerEnv {
   if (typeof window !== 'undefined') {
     throw new Error('serverEnv() must not be called on the client')
+  }
+
+  if (process.env.SKIP_ENV_VALIDATION === '1') {
+    if (process.env.NEXT_PHASE !== BUILD_PHASE) {
+      throw new Error('SKIP_ENV_VALIDATION is build-only and must not be set at runtime')
+    }
+    return process.env as unknown as ServerEnv
   }
 
   const parsed = serverSchema.safeParse(process.env)

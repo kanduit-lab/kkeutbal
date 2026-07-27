@@ -67,8 +67,25 @@ function createSql() {
   })
 }
 
-const sql = globalForDb.kkeutbalSql ?? createSql()
-if (process.env.NODE_ENV !== 'production') globalForDb.kkeutbalSql = sql
+type Db = ReturnType<typeof drizzle<typeof schema>>
 
-export const db = drizzle(sql, { schema })
+let cachedDb: Db | undefined
+
+function getDb(): Db {
+  if (!cachedDb) {
+    const sql = globalForDb.kkeutbalSql ?? createSql()
+    if (process.env.NODE_ENV !== 'production') globalForDb.kkeutbalSql = sql
+    cachedDb = drizzle(sql, { schema })
+  }
+  return cachedDb
+}
+
+export const db = new Proxy({} as Db, {
+  get(_target, prop) {
+    const instance = getDb()
+    const value = Reflect.get(instance, prop)
+    return typeof value === 'function' ? value.bind(instance) : value
+  },
+})
+
 export { schema }
