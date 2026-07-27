@@ -101,21 +101,23 @@ Authentik SSO도 `/admin`의 SSO 설정에서 연결합니다.
 
 ```
 src/
-├── app/                # 라우트 — rooms/[code] (방·monitor·settings·result), advisor,
-│   │                   #   ranking, guide, admin, about, login, register
+├── app/                # 라우트 — (home), rooms/new, rooms/[code](monitor·settings·result·fairness),
+│   │                   #   advisor, ranking, guide, admin, wallet, about, login, register
 ├── features/           # 도메인 모듈 (경계 = 폴더)
 │   ├── hwatu/ seotda/ gostop/ poker/   # 카드 모델·순수 함수 엔진
 │   ├── game/           # 방·판 상태머신 + 테이블·로비·모니터 UI
-│   ├── betting/ budget/ ranking/       # 베팅·바이인·랭킹
+│   ├── betting/ budget/ ranking/       # 베팅·바이인·랭킹·정산
 │   ├── wallet/                         # 계정 귀속 가상 크레딧·관리자 조정·거래 이력
 │   ├── fairness/                       # commit-reveal 셔플·공개 안전 영수증 순수 도메인
+│   ├── promotions/                     # 공지 배너·팝업
 │   ├── jokbo-advisor/  # 수동 피커 + vision
 │   └── auth/           # 계정·역할·관리자
-├── lib/                # env·db·auth·realtime·sound
-└── components/         # 공용 UI (버튼·스테퍼·아바타·화투 카드)
+├── lib/                # env·db·auth·i18n·realtime·supabase
+└── components/         # ui/ 프리미티브 + 화투·포커 카드·QR·로케일 스위처
 
-drizzle/                # 스키마 (typed source of truth)
-supabase/migrations/    # RLS·realtime SQL
+drizzle/schema.ts       # 스키마 (typed source of truth)
+drizzle/migrations/     # 테이블·인덱스·제약
+supabase/migrations/    # RLS·grant·트리거·함수
 dockerfiles/            # Dockerfile.nextjs
 ```
 

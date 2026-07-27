@@ -6,7 +6,7 @@
 | Audience        | engineering / reviewers / operators                        |
 | Status          | active                                                     |
 | Source of truth | 구현은 코드·스키마, 이 문서는 스택·배포 토폴로지·모듈 경계 |
-| Last reviewed   | 2026-07-25                                                 |
+| Last reviewed   | 2026-07-28                                                 |
 
 ## Context
 
@@ -108,7 +108,7 @@ docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfi
   쓴다.
 - `authConfigBase`(`auth-config.ts`)는 edge-safe 부분만 분리해 둔 것 — DB(postgres-js)를 물지
   않아 proxy 번들에 안전하게 들어간다. `src/proxy.ts`는 이 설정만으로 NextAuth 인스턴스를
-  만들어 JWT 쿠키 유무만 검사한다. `/`, `/rooms`, `/ranking`, `/advisor`, `/admin`만 로그인으로
+  만들어 JWT 쿠키 유무만 검사한다. `/`, `/rooms`, `/ranking`, `/advisor`, `/admin`, `/wallet`만 로그인으로
   유도하고 나머지 경로는 공개 페이지 또는 App Router 404로 둔다. **미들웨어는 UX 게이트일 뿐이며
   실제 권한 검사는 하지 않는다** — 각 Server Action이 다시 세션을 확인한다.
 

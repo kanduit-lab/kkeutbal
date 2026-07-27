@@ -6,7 +6,7 @@
 | Audience | operators / maintainers |
 | Status | active |
 | Source of truth | this document (DB 적용 순서·검증·복구) |
-| Last reviewed | 2026-07-25 |
+| Last reviewed | 2026-07-28 |
 
 ## Purpose
 
@@ -42,10 +42,9 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    pnpm db:migrate
    ```
 
-   live DB는 2026-07-25 기준 `0000`~`0019` 이력이 동기화되어 있다. 전역 가상 크레딧과
-   게임·credit FK 인덱스, credit 안전 정수 제약, 공정 딜 라운드 상태 테이블을 포함하는 버전은
-   `0018`(Vision provider 설정 테이블)과 `0019`(최초 관리자 설정 가드)까지 적용하므로 같은 커밋에서
-   재실행하면 새 마이그레이션만 적용된다.
+   live DB는 2026-07-28 기준 `0000`~`0020` 이력이 동기화되어 있다. 마지막 두 개는
+   `0019`(최초 관리자 설정 가드), `0020`(`users.is_managed` — 대리 기록용 로컬 플레이어)다.
+   같은 커밋에서 재실행하면 새 마이그레이션만 적용된다.
 
 3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`,
    `0009_virtual_credits_security.sql`, `0010_credit_posting_hardening.sql`,

@@ -6,7 +6,7 @@
 | Audience        | engineering / reviewers                                           |
 | Status          | active                                                            |
 | Source of truth | 구현 스키마는 `drizzle/schema.ts`, 이 문서는 관계·불변식·RLS 경계 |
-| Last reviewed   | 2026-07-25                                                        |
+| Last reviewed   | 2026-07-28                                                        |
 
 구현 스키마는 `drizzle/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
 `supabase/migrations/0007_database_hardening.sql`과 신규 테이블 보강용 `0008`·`0016`이 소유한다.
@@ -168,12 +168,10 @@ erDiagram
 - `authentik_sub` — 유일 키. OIDC `sub` 클레임 또는 내부 계정의 `local:{username}` 형태.
   같은 sub → 같은 계정. 로그인 시 upsert.
 - 표시 이름·아바타는 로컬 편집 가능(방에서 부르는 별명).
-- `is_managed` — 대리 기록용 **로컬 플레이어**. 방 호스트·딜러가 로비에서 이름만으로 만든
-  좌석이며 `authentik_sub`이 `managed:{roomId}:{uuid}`라 비밀번호·게스트 토큰·SSO 어느
-  경로로도 로그인되지 않는다. 가족·모임에서 각자 로그인 없이 한 기기로 전원을 기록할 때 쓴다.
-  - 좌석·시작 칩·원장은 일반 참가자와 **완전히 같은 경로**를 탄다 — 방 안 손익·정산·결과는 동일.
-  - 전역 누적 랭킹(`getCumulativeRanking`)에서만 제외한다. 실제 계정들의 순위를 덮지 않기 위해서다.
-  - 계정 크레딧 방에는 추가할 수 없다(크레딧 계정이 없으므로 세션 칩 방 전용).
+- `is_managed` — 대리 기록용 로컬 플레이어. 방 호스트·딜러가 로비에서 이름만으로 만든 좌석이고
+  `authentik_sub`이 `managed:{roomId}:{uuid}`라 어느 로그인 경로로도 잡히지 않는다.
+  좌석·시작 칩·원장은 일반 참가자와 같은 경로를 타므로 방 안 손익·정산·결과는 동일하다.
+  전역 누적 랭킹(`getCumulativeRanking`)에서만 제외한다. 계정 크레딧 방에는 추가할 수 없다.
 
 ### `guest_tokens`
 

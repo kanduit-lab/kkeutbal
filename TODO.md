@@ -35,10 +35,6 @@
   - 변경 범위: `features/game/**`, `features/betting/**`, DB 테스트 harness
   - 완료 기준: 누적 베팅 재레이즈, 판중 퇴장·강퇴 거부, 승인 순서, 동시 start/bet 요청을 실제 DB 트랜잭션으로 검증
 
-- [ ] **관리자·Vision 오류 i18n 전환**: `auth/admin-actions.ts`와 `jokbo-advisor/vision/actions.ts`의 한국어 원문 오류를 사전 키로 통일
-  - 변경 범위: 관리자·어드바이저 액션 및 ko/en 사전
-  - 완료 기준: 모든 Server Action 오류가 안정된 `errors.*` 키로 반환되고 영어 화면에서도 번역됨
-
 ## Notes
 
 - **문서 정본**: 설계·프로토콜은 `docs/`, 실제 구현은 `src/`와 `drizzle/schema.ts`를 따른다. 완료 이력은 Git 커밋과 문서 Change History에서 확인한다.

@@ -32,27 +32,32 @@ private 채널·RLS realtime 정책은 마이그레이션에 존재하나 현재
 ```
 src/
 ├── app/                # 라우트·레이아웃·API 라우트
+│   ├── (home)/         # 로그인 후 첫 화면 (방 입장·참여 중인 방)
 │   ├── api/auth, api/health
-│   ├── login, register, about, admin        # 계정·소개·관리자(게스트 토큰 발급)
-│   ├── rooms, rooms/new, rooms/[code]       # + [code]/monitor(전광판)·settings(방 옵션)·result
-│   ├── advisor, ranking
-│   └── guide, guide/seotda, guide/gostop, guide/poker, guide/usage  # 정적 규칙·사용법 가이드
+│   ├── login, register, about, admin, wallet
+│   ├── rooms/new, rooms/[code]              # + [code]/monitor·settings·result·fairness/[seq]
+│   ├── advisor, ranking, ranking/player/[id]
+│   ├── guide, guide/{seotda,gostop,poker,usage}   # 정적 규칙·사용법 (본문은 한국어 고정)
+│   └── manifest.ts, error.tsx, not-found.tsx, loading.tsx
 ├── features/           # 도메인 모듈 (경계 = 폴더)
 │   ├── hwatu/          # 화투 48장 카드 모델 (섯다·고스톱 공통 기반)
 │   ├── seotda/         # 섯다 끗/족보 엔진 (순수 함수)
 │   ├── gostop/         # 고스톱 점수 엔진 (순수 함수)
 │   ├── poker/          # 포커 카드 모델(52장)·족보 엔진 (순수 함수)
 │   ├── game/           # 방·세션·라운드 상태머신 — actions(방)·round-actions(판)·member-actions(역할)
-│   │                   #   components/: 테이블·액션바·딜러패널·로비·멤버시트·모니터·useRoomSync
 │   ├── betting/        # 베팅 액션·승인 플로우
-│   ├── ranking/        # 승패·랭킹 집계
+│   ├── fairness/       # commit-reveal 시드·영수증·덱 재계산
+│   ├── ranking/        # 승패·랭킹 집계·정산 이체 계산
 │   ├── budget/         # 개인 예산·바이인
-│   ├── jokbo-advisor/  # 수동 피커 + vision 인식 + 통계 (components/, vision/, stats.ts)
+│   ├── wallet/         # 계정 귀속 가상 크레딧·관리자 조정
+│   ├── promotions/     # 공지 배너·팝업
+│   ├── jokbo-advisor/  # 수동 피커 + vision 인식 + 통계
 │   └── auth/           # 세션·역할·관리자 (actions, admin-actions, roles)
-├── lib/                # env·db·auth·realtime/·supabase/·sound 등 공용 인프라
-└── components/         # 공용 UI (ui.tsx — 버튼·스테퍼·아바타 / hwatu-card.tsx — 화투 스프라이트)
+├── lib/                # env·db·auth·i18n/·realtime/·supabase/ 공용 인프라
+└── components/         # ui/ 프리미티브 배럴 + 화투·포커 카드·QR·로케일 스위처
 drizzle/schema.ts       # 스키마 (typed source of truth)
-supabase/migrations/    # RLS·realtime SQL
+drizzle/migrations/     # 테이블·인덱스·제약 (drizzle-kit)
+supabase/migrations/    # RLS·grant·트리거·함수 (drizzle 관리 밖)
 docs/                   # 설계 문서
 ```
 
