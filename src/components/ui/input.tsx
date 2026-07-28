@@ -47,8 +47,8 @@ export function Checkbox({
     <div className="space-y-1.5">
       <label
         className={clsx(
-          'flex min-h-12 items-center gap-3 rounded-xl bg-bg-deep/60 px-4 text-sm font-medium',
-          props.disabled && 'opacity-60',
+          'flex min-h-12 cursor-pointer items-center gap-3 rounded-xl bg-bg-deep/60 px-4 font-medium',
+          props.disabled && 'cursor-not-allowed opacity-60',
           className,
         )}
       >
@@ -56,7 +56,7 @@ export function Checkbox({
           {...props}
           type="checkbox"
           aria-describedby={hintId}
-          className="size-4 accent-accent"
+          className="size-5 shrink-0 accent-accent"
         />
         {label}
       </label>

@@ -6,6 +6,7 @@ export type { FieldControlProps } from './input'
 export { Stepper } from './stepper'
 export {
   Panel,
+  PanelHeader,
   Badge,
   Spinner,
   EmptyState,

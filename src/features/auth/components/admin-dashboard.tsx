@@ -1,5 +1,6 @@
 'use client'
 
+import { clsx } from 'clsx'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadAdminSection } from '../admin-dashboard-actions'
 import { ADMIN_SECTIONS, type AdminSection, type AdminSectionData } from '../admin-dashboard-types'
@@ -165,42 +166,42 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <nav
         aria-label={d.adminDashboard.sectionNavLabel}
-        className="grid grid-cols-2 gap-2 lg:grid-cols-4"
+        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
       >
         {ADMIN_SECTIONS.map((section) => {
           const copy = d.adminDashboard.sections[section]
           const active = activeSection === section
           const loaded = Boolean(states[section]?.data)
           return (
-            <button
+            <Button
               key={section}
               type="button"
-              aria-pressed={active}
+              variant={active ? 'surface' : 'outline'}
+              pressed={active}
               onClick={() => setActiveSection(section)}
-              className={`rounded-2xl border px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 ${
-                active
-                  ? 'border-gold/50 bg-gold/15 text-text'
-                  : 'border-white/10 bg-bg-deep/35 text-muted hover:border-white/20 hover:text-text'
-              }`}
+              className={clsx(
+                'min-h-24 flex-col items-start justify-start gap-0 rounded-2xl p-4 text-left',
+                active ? 'border-gold/50 bg-gold/15 text-text' : 'bg-bg-deep/35 text-muted',
+              )}
             >
-              <span className="flex items-center justify-between gap-2">
-                <span className="text-xl" aria-hidden="true">
+              <span className="flex w-full items-center justify-between gap-2">
+                <span className="text-2xl" aria-hidden="true">
                   {SECTION_ICON[section]}
                 </span>
-                {loaded ? <span className="size-1.5 rounded-full bg-win" /> : null}
+                {loaded ? <span className="size-2 rounded-full bg-win" /> : null}
               </span>
-              <span className="mt-2 block text-sm font-bold">{copy.label}</span>
-              <span className="mt-0.5 hidden text-xs sm:block">{copy.short}</span>
-            </button>
+              <span className="mt-2 block font-bold text-text">{copy.label}</span>
+              <span className="mt-0.5 hidden text-sm font-medium sm:block">{copy.short}</span>
+            </Button>
           )
         })}
       </nav>
       <section aria-labelledby={`admin-${activeSection}-title`}>
-        <div className="mb-4 flex items-end justify-between gap-4 px-1">
-          <div>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-1">
+          <div className="min-w-0 flex-1 basis-56">
             <h2 id={`admin-${activeSection}-title`} className="text-xl font-black">
               {d.adminDashboard.sections[activeSection].label}
             </h2>
@@ -224,9 +225,9 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
             return (
               <div key={section} className="space-y-3">
                 {state?.slow ? (
-                  <Panel className="border border-gold/20 bg-gold/5 py-3">
-                    <p className="text-sm font-bold">{d.adminDashboard.slowTitle}</p>
-                    <p className="mt-1 text-xs text-muted">{d.adminDashboard.slowBody}</p>
+                  <Panel className="border border-gold/20 bg-gold/5 py-4">
+                    <p className="font-bold">{d.adminDashboard.slowTitle}</p>
+                    <p className="mt-1 text-sm text-muted">{d.adminDashboard.slowBody}</p>
                   </Panel>
                 ) : null}
                 <SectionSkeleton label={d.common.loading} />
@@ -274,7 +275,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
                   </Button>
                 </Alert>
               ) : state.loading ? (
-                <p role="status" className="px-1 text-xs text-muted">
+                <p role="status" className="px-1 text-sm text-muted">
                   {d.adminDashboard.refreshing}
                 </p>
               ) : null}

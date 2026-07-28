@@ -1,7 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Alert, Badge, Button, Field, Input, Panel, Segmented, useToast } from '@/components/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  Field,
+  Input,
+  Panel,
+  PanelHeader,
+  Segmented,
+  useToast,
+} from '@/components/ui'
 import { useDict } from '@/lib/i18n/client'
 
 const EXPIRY_PRESETS = [
@@ -79,10 +89,7 @@ export function IssueSecretPanel({
 
   return (
     <Panel className="space-y-4">
-      <div>
-        <h2 className="font-bold">{title}</h2>
-        <p className="mt-1 text-sm text-muted">{description}</p>
-      </div>
+      <PanelHeader title={title} description={description} />
       <Field label={d.adminConsole.memoLabel}>
         {(control) => (
           <Input

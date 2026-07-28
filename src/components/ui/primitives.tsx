@@ -16,6 +16,26 @@ export function Panel({
   return <Tag className={clsx('lacquer rounded-2xl p-5', className)}>{children}</Tag>
 }
 
+export function PanelHeader({
+  title,
+  description,
+  badge,
+}: {
+  title: ReactNode
+  description?: ReactNode
+  badge?: ReactNode
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="text-lg font-bold leading-snug">{title}</h2>
+        {badge ? <span className="mt-0.5 shrink-0">{badge}</span> : null}
+      </div>
+      {description ? <p className="text-sm text-muted">{description}</p> : null}
+    </div>
+  )
+}
+
 export function Skeleton({
   className,
   radius = 'md',

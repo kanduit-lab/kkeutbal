@@ -9,6 +9,7 @@ import {
   Field,
   Input,
   Panel,
+  PanelHeader,
   useToast,
 } from '@/components/ui'
 import { format, translateError, useDict } from '@/lib/i18n/client'
@@ -46,10 +47,14 @@ export function MembersPanel({
   return (
     <>
       <Panel className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-bold">{d.adminConsole.members.title}</h2>
-          <Badge tone="muted">{format(d.adminConsole.members.count, { n: filtered.length })}</Badge>
-        </div>
+        <PanelHeader
+          title={d.adminConsole.members.title}
+          badge={
+            <Badge tone="muted">
+              {format(d.adminConsole.members.count, { n: filtered.length })}
+            </Badge>
+          }
+        />
         <Field label={d.adminConsole.members.searchLabel}>
           {(control) => (
             <Input
@@ -87,12 +92,14 @@ export function MembersPanel({
         )}
       </Panel>
       <Panel className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-bold">{d.adminConsole.permissions.title}</h2>
-          {normalized ? (
-            <Badge tone="warn">{format(d.adminConsole.permissions.filteredBy, { query })}</Badge>
-          ) : null}
-        </div>
+        <PanelHeader
+          title={d.adminConsole.permissions.title}
+          badge={
+            normalized ? (
+              <Badge tone="warn">{format(d.adminConsole.permissions.filteredBy, { query })}</Badge>
+            ) : null
+          }
+        />
         {filtered.length === 0 ? (
           <EmptyState title={d.adminConsole.members.empty} hint={emptyHint} />
         ) : (

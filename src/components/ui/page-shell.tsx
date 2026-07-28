@@ -53,21 +53,23 @@ export function PageHeader({
   className?: string
 }) {
   return (
-    <header className={clsx('mb-6 flex items-start gap-3', className)}>
+    <header className={clsx('mb-6 flex flex-wrap items-start gap-x-3 gap-y-2', className)}>
       {backHref ? (
         <Link
           href={backHref}
           aria-label={backLabel}
-          className="-ml-2 inline-flex size-11 shrink-0 items-center justify-center rounded-xl text-xl text-muted transition hover:text-text"
+          className="-ml-2 inline-flex size-12 shrink-0 items-center justify-center rounded-xl text-xl text-muted transition hover:text-text"
         >
           ←
         </Link>
       ) : null}
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-48">
         <h1 className="font-brush truncate text-2xl font-black">{title}</h1>
-        {subtitle ? <p className="mt-0.5 text-sm text-muted">{subtitle}</p> : null}
+        {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        <div className="ms-auto flex shrink-0 items-center gap-2">{actions}</div>
+      ) : null}
     </header>
   )
 }

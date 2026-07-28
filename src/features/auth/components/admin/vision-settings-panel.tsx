@@ -1,7 +1,17 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Badge, Button, Checkbox, Field, Input, Panel, Select, useToast } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  Checkbox,
+  Field,
+  Input,
+  Panel,
+  PanelHeader,
+  Select,
+  useToast,
+} from '@/components/ui'
 import { translateError, useDict } from '@/lib/i18n/client'
 import { saveVisionSettings } from '@/features/jokbo-advisor/vision/settings-actions'
 import type { VisionProvider, VisionSettingsView } from '@/features/jokbo-advisor/vision/settings'
@@ -49,13 +59,13 @@ export function VisionSettingsPanel({
 
   return (
     <Panel className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-bold">{d.adminConsole.vision.title}</h2>
-          <p className="mt-1 text-sm text-muted">{d.adminConsole.vision.description}</p>
-        </div>
-        <Badge tone={live ? 'win' : 'muted'}>{live ? d.adminConsole.on : d.adminConsole.off}</Badge>
-      </div>
+      <PanelHeader
+        title={d.adminConsole.vision.title}
+        description={d.adminConsole.vision.description}
+        badge={
+          <Badge tone={live ? 'win' : 'muted'}>{live ? d.adminConsole.on : d.adminConsole.off}</Badge>
+        }
+      />
       <Checkbox
         label={d.adminConsole.vision.enable}
         checked={enabled}

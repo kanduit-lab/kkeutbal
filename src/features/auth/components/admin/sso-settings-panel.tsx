@@ -9,6 +9,7 @@ import {
   Field,
   Input,
   Panel,
+  PanelHeader,
   useToast,
 } from '@/components/ui'
 import { translateError, useDict } from '@/lib/i18n/client'
@@ -74,15 +75,15 @@ export function SsoSettingsPanel({
 
   return (
     <Panel className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="font-bold">{d.adminConsole.sso.title}</h2>
-          <p className="mt-1 text-sm text-muted">{d.adminConsole.sso.description}</p>
-        </div>
-        <Badge tone={enabled ? 'win' : 'muted'}>
-          {enabled ? d.adminConsole.on : d.adminConsole.off}
-        </Badge>
-      </div>
+      <PanelHeader
+        title={d.adminConsole.sso.title}
+        description={d.adminConsole.sso.description}
+        badge={
+          <Badge tone={enabled ? 'win' : 'muted'}>
+            {enabled ? d.adminConsole.on : d.adminConsole.off}
+          </Badge>
+        }
+      />
       <Checkbox
         label={d.adminConsole.sso.enable}
         checked={enabled}

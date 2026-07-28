@@ -1,6 +1,6 @@
 'use client'
 
-import { Badge, Button, EmptyState, Panel } from '@/components/ui'
+import { Badge, Button, EmptyState, Panel, PanelHeader } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { formatDate } from './format'
 
@@ -31,7 +31,7 @@ export function RevocableList<T extends RevocableItem>({
   const { d, locale } = useDict()
   return (
     <Panel className="space-y-3">
-      <h2 className="font-bold">{heading}</h2>
+      <PanelHeader title={heading} />
       {items.length === 0 ? (
         <EmptyState title={emptyTitle} hint={emptyHint} />
       ) : (

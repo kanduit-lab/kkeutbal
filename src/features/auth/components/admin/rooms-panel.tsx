@@ -1,7 +1,15 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { Badge, Button, ConfirmDialog, EmptyState, Panel, useToast } from '@/components/ui'
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  EmptyState,
+  Panel,
+  PanelHeader,
+  useToast,
+} from '@/components/ui'
 import { GAME_BADGE_TONE } from '@/features/game/components/shared'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import { adminCloseRoom } from '../../admin-actions'
@@ -22,7 +30,7 @@ export function RoomsPanel({
 
   return (
     <Panel className="space-y-3">
-      <h2 className="font-bold">{d.adminConsole.rooms.title}</h2>
+      <PanelHeader title={d.adminConsole.rooms.title} />
       {rooms.length === 0 ? (
         <EmptyState title={d.adminConsole.rooms.empty} hint={d.adminConsole.rooms.emptyHint} />
       ) : (
