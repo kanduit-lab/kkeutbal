@@ -63,7 +63,7 @@ export default async function HomePage({
           {d.common.appName}
           <span className="text-accent">.</span>
         </h1>
-        <div className="flex flex-wrap items-center justify-end gap-1">
+        <div className="flex basis-full flex-wrap items-center justify-start gap-2 sm:basis-auto sm:justify-end">
           <HeaderNavLink href={'/wallet' as Route}>{d.common.myCredits}</HeaderNavLink>
           {isAdmin ? (
             <HeaderNavLink href={'/admin' as Route}>{d.common.admin}</HeaderNavLink>
@@ -125,27 +125,27 @@ export default async function HomePage({
           </Panel>
           <div className="grid grid-cols-3 gap-3">
             <Link href="/advisor" className="rise-in rise-in-2 block">
-              <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
+              <Panel className="flex h-full flex-col items-center justify-center px-2 py-5 text-center transition-transform hover:-translate-y-0.5">
                 <p aria-hidden className="text-3xl">
                   🔮
                 </p>
-                <p className="font-brush mt-2 text-lg font-bold">{d.home.advisor}</p>
+                <p className="font-brush mt-2 text-base font-bold sm:text-lg">{d.home.advisor}</p>
               </Panel>
             </Link>
             <Link href="/ranking" className="rise-in rise-in-2 block">
-              <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
+              <Panel className="flex h-full flex-col items-center justify-center px-2 py-5 text-center transition-transform hover:-translate-y-0.5">
                 <p aria-hidden className="text-3xl">
                   🏆
                 </p>
-                <p className="font-brush mt-2 text-lg font-bold">{d.home.ranking}</p>
+                <p className="font-brush mt-2 text-base font-bold sm:text-lg">{d.home.ranking}</p>
               </Panel>
             </Link>
             <Link href={'/guide' as Route} className="rise-in rise-in-2 block">
-              <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
+              <Panel className="flex h-full flex-col items-center justify-center px-2 py-5 text-center transition-transform hover:-translate-y-0.5">
                 <p aria-hidden className="text-3xl">
                   📖
                 </p>
-                <p className="font-brush mt-2 text-lg font-bold">{d.home.guide}</p>
+                <p className="font-brush mt-2 text-base font-bold sm:text-lg">{d.home.guide}</p>
               </Panel>
             </Link>
           </div>
