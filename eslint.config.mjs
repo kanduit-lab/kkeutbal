@@ -14,6 +14,9 @@ const config = [
       '.next/**',
       'node_modules/**',
       'coverage/**',
+
+      '.qa-reports/**',
+      '.playwright-mcp/**',
       'drizzle/migrations/**',
       'next-env.d.ts',
     ],
