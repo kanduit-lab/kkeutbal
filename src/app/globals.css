@@ -8,7 +8,7 @@
   --color-surface-raised: #17402f;
 
   --color-text: #f4efe2;
-  --color-muted: #9db8a8;
+  --color-muted: #b0c9ba;
 
   --color-accent: #d8433f;
 
@@ -27,7 +27,17 @@
   --font-display:
     var(--font-display-bundled, 'Gungsuh'), 'GungsuhChe', 'Batang', 'AppleMyungjo', serif;
 
-  --text-micro: 0.6875rem;
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1.35;
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.55;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.5;
+
   --shadow-raised: 0 2px 0 rgb(0 0 0 / 0.35);
 }
 
@@ -75,6 +85,12 @@ body {
   font-family:
     var(--font-body-bundled, 'Pretendard'), 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui,
     sans-serif;
+  font-size: var(--text-base);
+  font-weight: 450;
+  line-height: 1.6;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
   overscroll-behavior-y: contain;
 
   background-color: var(--color-bg);
