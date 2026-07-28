@@ -12,7 +12,7 @@ type ButtonVariant = 'primary' | 'surface' | 'outline' | 'danger' | 'ghost' | 'w
 type ButtonSize = 'sm' | 'md' | 'lg' | 'icon'
 
 const BASE_CLASS =
-  'inline-flex items-center justify-center gap-1.5 rounded-xl font-semibold transition duration-100'
+  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl font-semibold transition duration-100'
 
 const SIZE_CLASS: Record<ButtonSize, string> = {
   lg: 'min-h-14 px-5 text-lg',
