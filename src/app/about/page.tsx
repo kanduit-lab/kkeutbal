@@ -86,9 +86,11 @@ export default async function AboutPage() {
       </div>
 
       <footer className="mt-10 text-center text-xs text-muted">
+        {/* 세로는 min-h-11 로 맞았지만 '홈으로' 두 글자라 가로가 31px 뿐이었다 —
+            타깃은 두 축 모두 충족해야 한다. */}
         <Link
           href="/"
-          className="inline-flex min-h-11 items-center underline underline-offset-4 hover:text-text"
+          className="inline-flex min-h-11 items-center px-3 underline underline-offset-4 hover:text-text"
         >
           {d.common.home}
         </Link>

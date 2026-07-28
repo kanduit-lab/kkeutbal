@@ -77,9 +77,11 @@ export default async function LoginPage({
         </h1>
         <p className="mt-4 text-lg text-muted">{d.auth.tagline}</p>
         <p className="mt-2">
+          {/* 로그인 화면의 유일한 탈출구다. 줄 높이(16px)만 한 타깃이라 한 손으로 누르면
+              빗나간다 — 다른 단독 링크들과 같은 min-h-11 + 좌우 여백으로 맞춘다. */}
           <Link
             href="/about"
-            className="text-sm text-muted underline underline-offset-4 hover:text-text"
+            className="inline-flex min-h-11 items-center px-2 text-sm text-muted underline underline-offset-4 hover:text-text"
           >
             {d.auth.aboutLink}
           </Link>
