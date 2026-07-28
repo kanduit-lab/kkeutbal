@@ -1,23 +1,3 @@
-/**
- * 한국어 원본 사전. 모든 로케일의 키 구조는 이 파일이 결정한다.
- * UI 문자열은 여기에만 둔다 — 컴포넌트 하드코딩 금지.
- *
- * 말투 기준:
- * - 초대·설명·안내·상태 문구는 친근한 해요체로 말을 건다.
- * - 버튼·라벨·서버 액션 에러 등 기능 문구는 정중체(~습니다)로 짧고 분명하게.
- * - 괄호로 문장에 설명을 덧붙이지 않는다 — 필요하면 문장으로 풀거나 가운뎃점(·)으로 잇는다.
- *
- * 번역 경계:
- * - `/guide/**` 페이지는 콘텐츠(게임 규칙·사용법 문서)다 — 사전 대상이 아니며 한국어로 유지한다.
- * - 게임 용어(섯다·고스톱·화투·끗·땡·광땡·삥·따당·고·스톱·피·광·다이·올려 등)는 어떤 로케일에서도
- *   번역하지 않는다. 영어 사전에서도 원어 그대로 두고, 도움이 되는 곳에 괄호 주석을 한 번만 단다.
- * - 서버 액션 에러는 `errors.*` 키를 반환한다 — translateError 참고. 과거 원문 오류는 호환을 위해
- *   그대로 통과시키지만, 새 서버 액션은 원문을 반환하지 않는다.
- *
- * 템플릿 값은 `format(template, params)` 로 치환한다 — `{n}`, `{name}`, `{seq}` 자리표시자.
- * 섹션은 화면 단위(surface)로 묶는다. 여러 화면이 공유하는 문자열만 common·roles·bet 등
- * 공용 섹션에 둔다.
- */
 export const ko = {
   meta: {
     title: '끗발',
@@ -57,10 +37,8 @@ export const ko = {
     dealer: '딜러',
     player: '플레이어',
     observer: '관전자',
-    /** 좌석·시트 뱃지용 축약형. */
     observerShort: '관전',
   },
-  /** 베팅 액션 라벨 — 게임별 표기. 고스톱은 베팅 UI 가 없어 섯다 라벨로 폴백한다. */
   bet: {
     seotda: {
       check: '체크',
@@ -77,7 +55,6 @@ export const ko = {
       allin: '올인',
     },
   },
-  /** 레이즈 프리셋 버튼 라벨 (shared.ts raisePresets). */
   presets: {
     pping: '삥',
     ttadang: '따당',
@@ -86,7 +63,6 @@ export const ko = {
     pot: '팟',
     double: '따블',
   },
-  /** 방 입력 모드 — 방 만들기·방 옵션·방 헤더가 공유. */
   inputMode: {
     label: '입력 모드',
     trust: '바로 반영',
@@ -94,7 +70,6 @@ export const ko = {
     trustHint: '각자 입력한 베팅이 바로 반영돼요',
     approvalHint: '딜러가 승인한 베팅만 반영돼요',
   },
-  /** 로그인·회원가입 페이지 카피. */
   auth: {
     tagline: '섯다·고스톱·포커 판 기록',
     aboutLink: '이 앱 소개',
@@ -114,6 +89,8 @@ export const ko = {
     guestEnterPending: '입장 중…',
     errorInvalidCredentials: '아이디 또는 비밀번호가 올바르지 않습니다',
     errorGuestTokenInvalid: '토큰이 유효하지 않거나 만료되었습니다',
+    errorTooManyAttempts:
+      '로그인 시도가 너무 많습니다. 같은 와이파이를 쓰는 사람이 많으면 함께 걸릴 수 있어요. 잠시 후 다시 시도해 주세요',
     errorLoginFailed: '로그인에 실패했습니다',
     initialAdminTitle: '초기 관리자 설정',
     initialAdminDescription: '처음 실행된 인스턴스입니다.',
@@ -171,7 +148,6 @@ export const ko = {
     loadNamesFailed: '이름을 불러오지 못했습니다',
     showPassword: '비밀번호 표시',
     hidePassword: '비밀번호 숨기기',
-    /** 로그인 화면이 `?next=/rooms/*` 로 왔을 때 상단에 띄우는 맥락 배너. */
     continueToRoom: '로그인하면 {code} 방으로 들어가요',
   },
   adminDashboard: {
@@ -209,10 +185,6 @@ export const ko = {
       },
     },
   },
-  /**
-   * 관리자 콘솔 패널 본문 (auth/components/admin/**). adminDashboard 는 셸(내비·로딩·거부)
-   * 이고, 여기는 그 안에서 실제로 조작하는 패널들의 문구다.
-   */
   adminConsole: {
     on: '사용 중',
     off: '꺼짐',
@@ -301,7 +273,8 @@ export const ko = {
       empty: '발급된 가입코드가 없습니다',
       emptyHint: '위에 발급 메모를 입력하고 가입코드 발급을 누르세요',
       revokeTitle: '가입코드 {label} 을 회수할까요?',
-      revokeBody: '회수하면 이 코드로 새 계정을 만들 수 없습니다. 이미 가입한 계정에는 영향이 없습니다.',
+      revokeBody:
+        '회수하면 이 코드로 새 계정을 만들 수 없습니다. 이미 가입한 계정에는 영향이 없습니다.',
       revokedToast: '가입코드를 회수했습니다',
     },
     guestTokens: {
@@ -358,7 +331,6 @@ export const ko = {
       closedToast: '방을 강제 정산했습니다',
     },
   },
-  /** 가상 크레딧 지갑 (/wallet) 과 관리자 조정 패널 (wallet/components). */
   wallet: {
     title: '내 가상 크레딧',
     subtitle: '계정 귀속 · 현금 가치 없음 · 모든 변동 기록 보존',
@@ -412,7 +384,6 @@ export const ko = {
       revokedToast: '가상 크레딧을 회수했습니다',
     },
   },
-  /** 배너·팝업 관리 패널 (promotions/components/promotions-admin). */
   promotionsAdmin: {
     title: '배너 · 팝업',
     kindLabel: '종류',
@@ -462,17 +433,14 @@ export const ko = {
     emptyTitle: '아직 들어가 있는 방이 없어요',
     emptyHint: '방 코드로 입장하거나 새 방을 만들어 보세요',
     recentSessions: '지난 세션',
-    /** {n} 자리에 인원 수가 들어가는 템플릿. */
     memberCount: '{n}명',
     aboutLink: '끗발 소개',
   },
-  /** 방 화면 헤더·토스트 (room-client). */
   room: {
     backAria: '뒤로 가기',
     codeLabel: '코드',
     roundLive: '{seq}판 진행 중',
     lastRoundSummary: '지난 {seq}판: {name} +{pot}',
-    /** 연결·동기화 배너 — 제목·본문·버튼을 나눠 헤더가 아닌 전용 슬롯에 렌더한다. */
     disconnectedTitle: '연결이 끊겼어요',
     syncFailedTitle: '동기화가 멈췄어요',
     staleBody: '화면의 칩·팟이 실제와 다를 수 있어요',
@@ -491,36 +459,30 @@ export const ko = {
     toastRoundStarted: '{seq}판 시작',
     toastRoundWon: '🏆 {name} 승리 +{pot}',
     toastRoundVoided: '{seq}판 무효: {reason}',
-    /** 무효 사유가 프리셋 화이트리스트를 벗어나면 자유 문자열을 버리고 이 문구만 띄운다. */
     toastRoundVoidedNoReason: '{seq}판 무효',
     serverSlow: '서버 응답이 늦어요. 반영됐는지 확인하고 있어요',
     networkError: '네트워크 오류입니다. 연결을 확인하고 다시 시도하세요',
     removedFromRoom: '방에서 내보내졌어요',
     sessionExpired: '로그인이 만료됐어요. 다시 로그인하면 이 방으로 돌아와요',
-    /** 방 진입 실패 화면 (rooms/[code]/page). */
     notFoundTitle: '방을 찾을 수 없어요',
     notFoundHint: '코드 {code} 를 다시 확인해 주세요.',
     cannotJoinTitle: '입장할 수 없어요',
     snapshotFailedTitle: '방 상태를 불러오지 못했어요',
     snapshotFailedHint: '잠시 후 다시 시도해 주세요.',
-    /** 팟 변동을 스크린리더에 읽어 주는 라이브 리전 문구. */
     potAnnounce: '팟 {n}',
   },
-  /** 게임 테이블 좌석·팟 (game-table). */
   table: {
     balanceAria: '잔액 {n}',
     winner: '승리',
     waiting: '대기',
     potLabel: 'pot',
   },
-  /** 하단 베팅 바 (action-bar). */
   actionBar: {
     myChips: '내 칩',
     toCall: '받을 금액',
     beforeFirstBet: '첫 베팅 전',
     raiseAmount: '레이즈 금액',
     minRaise: '최소 {n}',
-    /** 액션 확정 버튼 — 동작 이름만 단독으로 보여준다. */
     confirmAction: '{label}',
     noRound: '딜러가 판을 깔면 베팅할 수 있어요',
     foldedGate: '이번 판은 다이했어요 — 다음 판에 다시 들어와요',
@@ -531,7 +493,6 @@ export const ko = {
     alreadyApplied: '이미 반영됐어요',
     networkRetry: '네트워크 오류 — 다시 시도하세요',
   },
-  /** 좌석 탭 → 멤버 시트 (member-sheet). */
   memberSheet: {
     sheetAria: '{name} 멤버 메뉴',
     statBalance: '잔액',
@@ -562,8 +523,6 @@ export const ko = {
     transferConfirmBody: '방장을 넘기면 나는 플레이어가 되고, 역할 변경과 정산 권한을 잃어요.',
     transferConfirmLabel: '위임',
     removeConfirmTitle: '{name} 님을 내보낼까요?',
-    // 서버는 leftAt 만 찍고 joinRoom 이 재합류를 허용한다 — 라벨이 약속하지 않는 보증을
-    // 문구에서 걷어낸다 (영구 차단은 스키마 변경이 필요하다).
     removeConfirmBody:
       '잔액과 손익 기록은 최종 정산에 그대로 남아요. 방 코드를 알면 다시 들어올 수 있어요',
     viewOnlyHint: '이 사람의 잔액·손익 요약이에요. 조작 권한이 있으면 여기에 버튼이 생겨요',
@@ -574,12 +533,10 @@ export const ko = {
     undoConfirmBody: '마지막 바이인을 도로 가져와요. 이미 쓴 칩이면 취소할 수 없어요',
     undoConfirmLabel: '지급 취소',
   },
-  /** 입장 대기 로비 (lobby-panel). */
   lobby: {
     codeTitle: '입장 코드',
     joinHint: '계정이 있는 사람은 이 링크로 바로 들어와요',
     qrAlt: '입장 QR 코드',
-    /** 초대 대상 전환 — QR·링크 복사가 같은 선택을 따른다. */
     inviteTargetAria: '초대 대상',
     inviteMember: '계정 있는 사람',
     inviteGuest: '게스트',
@@ -592,7 +549,6 @@ export const ko = {
     membersCount: '참가자 {n}명',
     startRound: '판 시작',
     waitingForDealer: '방장이나 딜러가 판을 시작하면 게임 화면으로 바뀌어요',
-    /** 계정 없이 이름만으로 만드는 대리 기록용 좌석. */
     addLocalMember: '이름만으로 사람 추가',
     addLocalMemberHint:
       '각자 폰으로 로그인하지 않고 이 기기에서 대신 기록할 사람이에요. 베팅은 딜러가 대신 눌러 주고, 손익·정산에는 똑같이 들어가요',
@@ -601,7 +557,6 @@ export const ko = {
     addLocalMemberNameRequired: '이름을 먼저 입력하세요',
     localBadge: '대리',
   },
-  /** 딜러 컨트롤 패널 (dealer-panel). */
   dealer: {
     title: '딜러 컨트롤',
     startRound: '판 시작',
@@ -660,7 +615,6 @@ export const ko = {
     gostopPenaltyTitle: '패자별 박 · 피박·광박은 각각 ×2',
     revertTarget: '{name}의 {label} {amount}',
   },
-  /** 전광판 (monitor-client). */
   monitor: {
     backToRoom: '방으로 돌아가기',
     fullscreenEnter: '전체 화면',
@@ -670,10 +624,8 @@ export const ko = {
     roundN: '{seq}판',
     voided: '무효',
     lastRoundSummary: '지난 {seq}판 · {name} +{pot}',
-    /** 박은 게임 용어라 원어를 유지하되, 조합 순서는 로케일이 정한다. */
     penaltyLine: '{name} 박×{factor}',
   },
-  /** 현재 판 액션 로그 (round-log). */
   roundLog: {
     title: '이번 판 기록',
     empty: '아직 액션이 없어요',
@@ -683,7 +635,6 @@ export const ko = {
     proxyBy: '대리: {name}',
     reasonLine: '사유: {reason}',
   },
-  /** 방 옵션 폼 필드 — 방 만들기(rooms/new)·방 옵션(settings)이 공유. */
   roomForm: {
     nameLabel: '방 이름',
     namePlaceholder: '방 이름',
@@ -707,7 +658,6 @@ export const ko = {
     baseBetAria: '삥 단위',
     baseBetHint: '레이즈 프리셋과 스테퍼가 이 단위로 움직여요',
   },
-  /** 방 옵션 페이지 (room-settings-client). */
   settings: {
     title: '방 옵션',
     hostOnly: '방장만 방 옵션을 바꿀 수 있어요',
@@ -723,13 +673,11 @@ export const ko = {
     joinAsObserverOff: '꺼짐',
     saved: '방 옵션을 저장했어요',
   },
-  /** 방 만들기 페이지 (rooms/new). */
   newRoom: {
     title: '방 만들기',
     create: '방 만들기',
     creating: '만드는 중…',
   },
-  /** 세션 결과·정산 페이지 (rooms/[code]/result) + 공유 버튼. */
   result: {
     title: '세션 결과',
     settled: '정산 완료',
@@ -748,7 +696,6 @@ export const ko = {
     roundHistoryCount: '판 기록 · {n}',
     voided: '무효',
     rematch: '재경기',
-    /** 박은 게임 용어라 원어를 유지하되, 조합 순서는 로케일이 정한다. */
     penaltyLine: '{name} 박×{factor}',
     toRoom: '방으로',
     share: '결과 공유',
@@ -758,7 +705,6 @@ export const ko = {
     copied: '복사됨',
     copyFailed: '복사가 안 돼요',
   },
-  /** 누적 랭킹 페이지 + 개인 전적 페이지 (ranking/page, ranking/player/[id]/page). */
   ranking: {
     subtitle: '정산이 끝난 세션만 집계합니다',
     filterNavAria: '랭킹 필터',
@@ -786,14 +732,9 @@ export const ko = {
     playerEmptyHint: '방을 정산하면 여기에 전적이 쌓입니다',
     filterPeriodNavAria: '기간 필터',
     listAria: '누적 랭킹 순위',
-    /** 목록은 상위 {n}명까지만 그린다 — 그 아래에 있으면 내 행을 따로 덧붙인다. */
     topNNote: '상위 {n}명만 표시합니다',
     myPositionAria: '내 순위',
   },
-  /**
-   * 가이드 화면의 UI 크롬만 담는다. 규칙·사용법 본문은 콘텐츠라
-   * 파일 상단 번역 경계에 따라 한국어로 유지한다.
-   */
   guide: {
     indexTitle: '가이드',
     indexSubtitle: '족보 서열표와 앱 사용법',
@@ -801,10 +742,8 @@ export const ko = {
     backToList: '가이드 목록으로',
     tocTitle: '목차',
     backToTop: '맨 위로',
-    /** 가로로 넘치는 표를 감싸는 스크롤 영역 이름. `{title}` 에 섹션 제목이 들어간다. */
     tableAria: '{title} — 가로로 스크롤할 수 있습니다',
   },
-  /** 소개 페이지 (about). */
   about: {
     tagline: '섯다·고스톱·포커의 베팅과 결과를 기록합니다.',
     featureRealtimeTitle: '실시간 테이블',
@@ -826,12 +765,6 @@ export const ko = {
     start: '시작하기',
     guideLink: '게임 가이드',
   },
-  /**
-   * 족보 판독 — 패별 상황 안내. 키 이름은 seotda/advice.ts 의 SeotdaAdviceCode 와 1:1 이다.
-   * `{rate}` 자리에는 그 잡는 패가 상대에게 나올 확률이 들어간다.
-   * `monthLabel`·`ranking` 은 섯다 카드 피커(card-picker)와 족보 순위 참고 패널
-   * (seotda-ranking-panel)이 쓴다.
-   */
   advisor: {
     advice: {
       gusaReplay: '멍텅구리 구사 · 재경기',
@@ -842,9 +775,7 @@ export const ko = {
       unbeatable: '38광땡 · 최상위 패',
       lowest: '망통 · 최하위 끗',
     },
-    /** 카드 피커의 월별 그룹 라벨. `{month}` 자리에 1~12 숫자가 들어간다. */
     monthLabel: '{month}월',
-    /** 섯다 족보 순위 참고 패널 (seotda-ranking-panel). */
     ranking: {
       title: '섯다 족보 순위',
       show: '족보 순위 보기',
@@ -855,27 +786,21 @@ export const ko = {
       categorySpecial: '특수패',
       categoryKkeut: '끗',
     },
-    /** 카드 선택 헤더 (advisor-client) — 화투·트럼프 두 탭이 공유하는 템플릿. */
     cardSelectionCount: '카드 선택 ({n}/{max})',
-    /** 카드 피커 토글 버튼 — aria 이름과 상한 도달 사유. */
     cardToggleAria: '{card} 선택',
     pickerFullReason: '카드 {max}장까지만 선택할 수 있어요. 선택한 카드를 다시 눌러 해제하세요',
-    /** 결과 패널의 시각적으로 숨긴 헤딩 — 라이브 리전 변경을 랜드마크로도 찾게 한다. */
     resultHeading: '판정 결과',
-    /** 판정 결과 패널 (advisor-results) — 선택 안내·판정 불가 메시지. */
     selectTwoCards: '카드 2장을 선택하세요',
     invalidCombination: '판정할 수 없는 조합입니다',
     selectCapturedCards: '획득한 패를 선택하세요',
     noScoreYet: '아직 점수가 나지 않았습니다',
     pokerMoreCards: '카드 {n}장 더 선택',
-    /** 섯다 결과 — 서열·승/재경기/패 확률. */
     winRateLabel: '이길 확률 {rate}',
     replayRateLabel: '재경기 {rate}',
     loseRateLabel: '질 확률 {rate}',
     tierPosition: '서열 {position}위 / {total}단계',
     sameTierCount: '동급 조합 {n}개',
     remainingCardsFootnote: '남은 18장 기준 · 상대 패 153가지',
-    /** 고스톱 결과 — 획득 패 요약·점수. */
     gostopScorePoints: '{n}점',
     gostopCaptureLine: '광 {gwang} · 열끗 {yeol} · 띠 {tti} · 피 {pi}',
     chongtongSuffix: ' · 총통!',
@@ -885,10 +810,8 @@ export const ko = {
     bombCountLabel: '폭탄',
     countDecreaseAria: '{label} 감소',
     countIncreaseAria: '{label} 증가',
-    /** 포커 결과. */
     pokerRankPosition: '족보 {position}위 / 10',
     pokerProbability: '5장을 뽑았을 때 나올 확률 {probability}',
-    /** 사진 인식 버튼 (vision-capture). */
     vision: {
       captureButton: '📷 사진으로 확인',
       checking: '확인하는 중…',
@@ -896,9 +819,7 @@ export const ko = {
       downscaleFailed: '사진을 읽을 수 없어요. 아래에서 직접 선택하세요',
       noCardsDetected: '카드를 인식하지 못했어요. 아래에서 직접 선택하세요',
       recognizedToast: '카드 {n}장 인식 · 정확도 {confidence}%',
-      /** 인식 장수가 상한에 잘렸을 때 — 토스트가 실제 반영 장수와 어긋나면 안 된다. */
       truncated: '{detected}장 중 {applied}장만 반영했어요',
-      /** 결과 패널에 남는 지속 배지 — 토스트가 사라진 뒤에도 출처를 알 수 있게. */
       sourceBadge: '사진 인식 · 정확도 {confidence}% · 확인하세요',
       undo: '되돌리기',
       undone: '이전 선택으로 되돌렸어요',
@@ -908,7 +829,6 @@ export const ko = {
       retake: '다시 촬영',
     },
   },
-  /** 배너·팝업 공지 (features/promotions). 내용은 DB 가 갖고, 여기는 조작 문구만 둔다. */
   promo: {
     close: '닫기',
     dismissFor: '{hours}시간 동안 보지 않기',
@@ -948,13 +868,11 @@ export const ko = {
     auditInvalid: '감사 자료 검증 실패',
     auditBack: '방으로 돌아가기',
   },
-  /** 공용 UI 프리미티브 (components/ui.tsx). */
   ui: {
     processing: '처리 중…',
     decrease: '줄이기',
     increase: '늘리기',
   },
-  /** 라우트 로딩 화면 (app 하위 loading.tsx). */
   loading: {
     default: '불러오는 중…',
     enteringRoom: '방에 들어가는 중…',
@@ -965,7 +883,6 @@ export const ko = {
     advisor: '족보 판독 여는 중…',
     wallet: '가상 크레딧 불러오는 중…',
   },
-  /** 에러 경계·404 (app/error.tsx, app/not-found.tsx). */
   errorPage: {
     title: '문제가 생겼어요',
     body: '잠시 후 다시 시도해 주세요.',
@@ -984,7 +901,6 @@ export const ko = {
     invalidRoom: '방 정보가 올바르지 않습니다',
     codeLength: '방 코드는 6자입니다',
     syncFailed: '동기화에 실패했습니다',
-    // 방 수명주기 (game/actions.ts)
     createRoomFailed: '방 생성에 실패했습니다',
     roomCodeGenFailed: '방 코드 생성에 실패했습니다. 다시 시도해주세요',
     joinRoomFailed: '입장에 실패했습니다',
@@ -1000,7 +916,6 @@ export const ko = {
     activeRoundBeforeSettle: '진행 중인 판을 먼저 끝내거나 무효화하세요',
     settlementNotBalanced: '세션 손익 합계가 맞지 않아 정산할 수 없습니다',
     settleFailed: '정산에 실패했습니다',
-    // 멤버 역할 (game/member-actions.ts)
     cannotTransferSelf: '자기 자신에게는 위임할 수 없습니다',
     hostOnlyTransfer: '방장만 위임할 수 있습니다',
     targetNotMember: '대상이 방 참가자가 아닙니다',
@@ -1028,7 +943,6 @@ export const ko = {
       '이번 판에 확정된 베팅이 있어 나갈 수 없습니다 — 판이 끝난 뒤 나가거나 관전자로 전환하세요',
     cannotLeaveGostopRound: '고스톱 판에 참가 중이라 지금은 나갈 수 없습니다',
     leaveRoomFailed: '나가기에 실패했습니다',
-    // 베팅 (betting/actions.ts)
     betAmountRequired: '베팅 금액을 입력하세요',
     proxyDealerOnly: '대리 입력은 딜러만 할 수 있습니다',
     observerCannotBet: '관전자는 베팅할 수 없습니다',
@@ -1065,7 +979,6 @@ export const ko = {
     onlyAcceptedCanRevert: '확정된 액션만 정정할 수 있습니다',
     revertLatestFirst: '가장 최근에 확정된 액션부터 역순으로 정정해 주세요',
     revertBetFailed: '정정에 실패했습니다',
-    // 바이인 (budget/actions.ts)
     proxyBuyInDealerOnly: '다른 사람 바이인은 딜러만 추가할 수 있습니다',
     observerCannotBuyIn: '관전자는 참가자로 변경한 뒤 바이인을 추가할 수 있습니다',
     addBuyInFailed: '바이인 추가에 실패했습니다',
@@ -1073,7 +986,6 @@ export const ko = {
     nothingToUndoBuyIn: '취소할 바이인이 없습니다',
     buyInAlreadySpent: '이미 사용한 칩이라 지급 취소가 불가합니다 — 정정 베팅으로 조정하세요',
     undoBuyInFailed: '지급 취소에 실패했습니다',
-    // 판 진행 (game/round-actions.ts — 다른 에이전트가 이 파일을 이 키로 전환한다)
     dealerOrHostOnlyStartRound: '딜러 또는 방장만 판을 시작할 수 있습니다',
     roundAlreadyActive: '진행 중인 판이 있습니다',
     roundNeedsTwoPlayers: '판을 시작하려면 참가자가 2명 이상 필요합니다',
@@ -1091,7 +1003,6 @@ export const ko = {
     noRoundToVoid: '무효화할 판이 없습니다',
     refundExceedsBalance: '되돌릴 칩이 잔액보다 많습니다 — 바이인 추가 후 다시 시도하세요',
     voidRoundFailed: '판 무효화에 실패했습니다',
-    // 검증 가능한 섯다 공정 딜 (fairness/fairness-actions.ts)
     fairnessNotEnabled: '이 판에는 검증 딜이 설정되지 않았습니다',
     fairnessNotCollecting: '지금은 시드를 제출할 수 없습니다',
     fairnessNotParticipant: '이번 판의 공정 딜 참가자가 아닙니다',
@@ -1104,7 +1015,6 @@ export const ko = {
     fairnessHandFailed: '내 검증 패를 불러오지 못했습니다',
     fairnessAuditNotReady: '판 종료 뒤에만 전체 공정성 검증 자료를 볼 수 있습니다',
     fairnessAuditFailed: '공정성 검증 자료를 불러오지 못했습니다',
-    // 관리자 도구 (auth/admin-actions.ts)
     adminOnlyChange: '관리자만 변경할 수 있습니다',
     adminDashboardLoadFailed: '관리자 데이터를 불러오지 못했습니다',
     visionProviderKeyMissing: '선택한 공급자의 API key 환경변수가 필요합니다',
@@ -1128,12 +1038,10 @@ export const ko = {
     setAdminFailed: '권한 변경에 실패했습니다',
     adminOnlyCloseRoom: '관리자만 강제 정산할 수 있습니다',
     adminCloseRoomFailed: '강제 정산에 실패했습니다',
-    // 가상 크레딧 (wallet/actions.ts)
     walletLoadFailed: '가상 크레딧을 조회하지 못했습니다',
     walletAdminOnly: '관리자만 가상 크레딧을 조정할 수 있습니다',
     walletTargetNotFound: '대상 사용자를 찾을 수 없습니다',
     walletAdjustFailed: '가상 크레딧 조정에 실패했습니다. 잔액과 사유를 확인하세요',
-    // 배너·팝업 (promotions/actions.ts)
     promotionAdminOnly: '관리자만 배너·팝업을 관리할 수 있습니다',
     promotionTitleRequired: '제목은 1자 이상 80자 이하입니다',
     promotionLinkUrlInvalid: '링크는 http(s) 주소이거나 / 로 시작하는 앱 내부 경로여야 합니다',
@@ -1143,7 +1051,6 @@ export const ko = {
     promotionNotFound: '배너·팝업을 찾을 수 없습니다',
     promotionToggleFailed: '노출 상태 변경에 실패했습니다',
     promotionDeleteFailed: '배너·팝업 삭제에 실패했습니다',
-    // 족보 사진 인식 (jokbo-advisor/vision/actions.ts)
     visionDisabled: '사진 인식이 비활성화되어 있습니다. 수동 선택을 사용하세요',
     saveVisionSettingsFailed: '사진 인식 설정을 저장하지 못했습니다',
     visionRateLimited: '사진 인식 요청이 너무 많습니다. 잠시 후 다시 시도하세요',
@@ -1159,5 +1066,4 @@ type DeepStrings<T> = {
   readonly [K in keyof T]: T[K] extends string ? string : DeepStrings<T[K]>
 }
 
-/** en 등 다른 로케일이 따라야 하는 구조. */
 export type Dictionary = DeepStrings<typeof ko>

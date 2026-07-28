@@ -1,16 +1,5 @@
 import type { Dictionary } from './ko'
 
-/**
- * English dictionary. Key structure is dictated by ko.ts.
- *
- * Translation boundary:
- * - `/guide/**` pages are content (game rules, usage docs) — not covered by this
- *   dictionary; they stay Korean.
- * - Game terminology is never translated (섯다, 고스톱, 화투, 끗, 땡, 광땡, 삥, 따당,
- *   고, 스톱, 피, 광, 다이, 올려, 족보 …). Terms stay as-is; a romanized or explanatory
- *   gloss in parentheses is added once where helpful. Game names use their established
- *   romanizations (Seotda, Go-Stop, Poker).
- */
 export const en: Dictionary = {
   meta: {
     title: 'Kkeutbal',
@@ -102,6 +91,8 @@ export const en: Dictionary = {
     guestEnterPending: 'Entering…',
     errorInvalidCredentials: 'Username or password is incorrect',
     errorGuestTokenInvalid: 'Token is invalid or expired',
+    errorTooManyAttempts:
+      'Too many sign-in attempts. People sharing the same Wi-Fi count together — please wait a moment and try again',
     errorLoginFailed: 'Sign-in failed',
     initialAdminTitle: 'Initial administrator setup',
     initialAdminDescription: 'This instance has no accounts yet.',
@@ -540,7 +531,8 @@ export const en: Dictionary = {
     removeConfirmTitle: 'Remove {name}?',
     removeConfirmBody:
       'Their balance and net result will remain in the final settlement. They can rejoin if they still know the room code',
-    viewOnlyHint: 'A read-only summary of this player. Controls appear here when you have permission',
+    viewOnlyHint:
+      'A read-only summary of this player. Controls appear here when you have permission',
     leaveConfirmTitle: 'Leave this room?',
     leaveConfirmBody: 'Your balance and net result will remain in the final settlement',
     leaveConfirmLabel: 'Leave',
@@ -920,7 +912,6 @@ export const en: Dictionary = {
     invalidRoom: 'Invalid room',
     codeLength: 'Room codes are 6 characters',
     syncFailed: 'Sync failed',
-    // Room lifecycle (game/actions.ts)
     createRoomFailed: 'Failed to create the room',
     roomCodeGenFailed: 'Failed to generate a room code. Please try again',
     joinRoomFailed: 'Failed to join the room',
@@ -938,7 +929,6 @@ export const en: Dictionary = {
     activeRoundBeforeSettle: 'Finish or void the round in progress first',
     settlementNotBalanced: 'Cannot settle because the session net total is not balanced',
     settleFailed: 'Failed to settle the session',
-    // Member roles (game/member-actions.ts)
     cannotTransferSelf: 'You cannot transfer the host role to yourself',
     hostOnlyTransfer: 'Only the host can transfer the host role',
     targetNotMember: 'The target is not a member of this room',
@@ -968,7 +958,6 @@ export const en: Dictionary = {
       'Cannot leave — you have a confirmed bet this round. Leave after it ends or switch to observer',
     cannotLeaveGostopRound: 'You cannot leave while participating in a Go-Stop round',
     leaveRoomFailed: 'Failed to leave the room',
-    // Betting (betting/actions.ts)
     betAmountRequired: 'Enter a bet amount',
     proxyDealerOnly: 'Only the dealer can enter bets by proxy',
     observerCannotBet: 'Observers cannot bet',
@@ -1005,7 +994,6 @@ export const en: Dictionary = {
     onlyAcceptedCanRevert: 'Only confirmed actions can be corrected',
     revertLatestFirst: 'Correct confirmed actions in reverse order, starting with the latest',
     revertBetFailed: 'Failed to correct the bet',
-    // Buy-ins (budget/actions.ts)
     proxyBuyInDealerOnly: 'Only the dealer can add a buy-in for someone else',
     observerCannotBuyIn: 'Change the observer to a participant before adding a buy-in',
     addBuyInFailed: 'Failed to add the buy-in',
@@ -1014,7 +1002,6 @@ export const en: Dictionary = {
     buyInAlreadySpent:
       'Cannot undo — the chips have already been spent. Adjust with a bet correction instead',
     undoBuyInFailed: 'Failed to undo the buy-in',
-    // Round progress (game/round-actions.ts — another agent migrates this file to these keys)
     dealerOrHostOnlyStartRound: 'Only the dealer or host can start a round',
     roundAlreadyActive: 'A round is already in progress',
     roundNeedsTwoPlayers: 'At least two participants are required to start a round',
@@ -1032,7 +1019,6 @@ export const en: Dictionary = {
     noRoundToVoid: 'No round to void',
     refundExceedsBalance: 'The chips to return exceed the balance — add a buy-in and try again',
     voidRoundFailed: 'Failed to void the round',
-    // Verifiable Seotda fair deal (fairness/fairness-actions.ts)
     fairnessNotEnabled: 'This round does not have verified dealing enabled',
     fairnessNotCollecting: 'Seeds cannot be submitted at this stage',
     fairnessNotParticipant: 'You are not a verified-deal participant for this round',
@@ -1045,7 +1031,6 @@ export const en: Dictionary = {
     fairnessHandFailed: 'Failed to load your verified hand',
     fairnessAuditNotReady: 'The full fairness audit is available only after the round ends',
     fairnessAuditFailed: 'Failed to load the fairness audit',
-    // Admin tools (auth/admin-actions.ts)
     adminOnlyChange: 'Only an administrator can change this',
     adminDashboardLoadFailed: 'Failed to load administrator data',
     visionProviderKeyMissing: 'The selected provider API key environment variable is required',
@@ -1069,12 +1054,10 @@ export const en: Dictionary = {
     setAdminFailed: 'Failed to change the administrator role',
     adminOnlyCloseRoom: 'Only an administrator can force-settle a room',
     adminCloseRoomFailed: 'Failed to force-settle the room',
-    // Virtual credits (wallet/actions.ts)
     walletLoadFailed: 'Could not load virtual credits',
     walletAdminOnly: 'Only admins can adjust virtual credits',
     walletTargetNotFound: 'Target user not found',
     walletAdjustFailed: 'Credit adjustment failed. Check the balance and reason',
-    // Banners and popups (promotions/actions.ts)
     promotionAdminOnly: 'Only admins can manage banners and popups',
     promotionTitleRequired: 'The title must be 1 to 80 characters',
     promotionLinkUrlInvalid: 'The link must be an http(s) URL or an in-app path starting with /',
@@ -1084,7 +1067,6 @@ export const en: Dictionary = {
     promotionNotFound: 'Banner or popup not found',
     promotionToggleFailed: 'Failed to change the visibility state',
     promotionDeleteFailed: 'Failed to delete the banner or popup',
-    // Jokbo photo recognition (jokbo-advisor/vision/actions.ts)
     visionDisabled: 'Photo recognition is disabled. Use manual selection instead',
     saveVisionSettingsFailed: 'Failed to save photo recognition settings',
     visionRateLimited: 'Too many photo recognition requests. Please try again shortly',

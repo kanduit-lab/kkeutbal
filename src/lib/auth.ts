@@ -1,4 +1,4 @@
-import NextAuth from 'next-auth'
+import NextAuth, { CredentialsSignin } from 'next-auth'
 import type { NextAuthConfig } from 'next-auth'
 import Authentik from 'next-auth/providers/authentik'
 import Credentials from 'next-auth/providers/credentials'
@@ -12,14 +12,16 @@ import { getActiveSsoSettings, type ActiveSsoSettings } from '@/features/auth/ss
 import { createUserGrantingFirstAdmin } from '@/features/auth/bootstrap'
 import { guestTokenHash } from '@/features/auth/guest-tokens'
 
-/**
- * Auth.js v5 — 3개 로그인 경로.
- *
- * - `password`: 내부 계정 (아이디·비밀번호). 회원가입은 features/auth/actions.ts.
- * - `authentik`: OIDC SSO. 관리자 화면에서 활성화·저장한 설정이 완전할 때만 노출되며,
- *   아이디 또는 전화번호가 일치하는 내부 계정이 있으면 같은 계정으로 자동 연동한다.
- * - `guest-token`: 관리자가 발급한 토큰 + 이름. 같은 (토큰, 이름) = 같은 계정.
- */
+export const RATE_LIMITED_CODE = 'rate_limited'
+
+class RateLimitedSignIn extends CredentialsSignin {
+  override code = RATE_LIMITED_CODE
+}
+
+const ADDRESS_LIMITS = {
+  password: 120,
+  guest: 200,
+} as const
 
 const passwordSchema = z.object({
   username: z
@@ -68,7 +70,7 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
           {
             scope: 'auth.password.address',
             identifier: address,
-            limit: 30,
+            limit: ADDRESS_LIMITS.password,
             windowMs: 15 * 60 * 1000,
           },
           {
@@ -84,7 +86,7 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
             windowMs: 60 * 60 * 1000,
           },
         ])
-        if (!rate.allowed) return null
+        if (!rate.allowed) throw new RateLimitedSignIn()
 
         const { db, schema } = await import('./db')
         const [row] = await db
@@ -114,7 +116,7 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
           {
             scope: 'auth.guest.address',
             identifier: address,
-            limit: 40,
+            limit: ADDRESS_LIMITS.guest,
             windowMs: 15 * 60 * 1000,
           },
           {
@@ -130,12 +132,11 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
             windowMs: 15 * 60 * 1000,
           },
         ])
-        if (!rate.allowed) return null
+        if (!rate.allowed) throw new RateLimitedSignIn()
 
         const { db, schema } = await import('./db')
         const codeHash = guestTokenHash(code, serverEnv().AUTH_SECRET)
-        // 회수와 신규 로그인을 같은 토큰 행 잠금으로 직렬화한다. 조회 뒤 회수가 커밋되면
-        // 새 세션을 발급하는 경쟁 조건이 생기므로 레거시 원문 해시 전환도 이 트랜잭션에 둔다.
+
         const token = await db.transaction(async (tx) => {
           const [active] = await tx
             .select({
@@ -163,7 +164,7 @@ function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['provider
           return active
         })
         if (!token) return null
-        // 같은 (토큰, 이름)이면 같은 게스트 계정 — 기기를 바꿔도 전적이 이어진다.
+
         return { id: `guest:${token.id}:${name.toLowerCase()}`, name }
       },
     }),
@@ -176,7 +177,6 @@ export async function hasAuthentik(): Promise<boolean> {
   return Boolean(await getActiveSsoSettings())
 }
 
-/** OIDC profile 의 병합 단서 — 표준 클레임에서 아이디·전화번호를 뽑는다. */
 function mergeHints(profile: unknown): { username: string | null; phone: string | null } {
   if (!profile || typeof profile !== 'object') return { username: null, phone: null }
   const p = profile as { preferred_username?: unknown; phone_number?: unknown }
@@ -189,12 +189,6 @@ function mergeHints(profile: unknown): { username: string | null; phone: string 
   }
 }
 
-/**
- * provider 신원(sub)을 public.users 로 해석한다.
- * 1) sub 일치 행이 있으면 그 계정.
- * 2) (OIDC) 아이디·전화번호가 일치하는 내부 계정이 있으면 sub 를 교체해 병합.
- * 3) 없으면 새 행 생성.
- */
 async function resolveProviderUser(input: {
   sub: string
   displayName: string
@@ -204,8 +198,6 @@ async function resolveProviderUser(input: {
   const { sub, displayName, avatarUrl, hints } = input
   const { db, schema } = await import('./db')
 
-  // 대리 기록용 로컬 플레이어 행은 어떤 인증 경로로도 잡히면 안 된다. sub 네임스페이스가
-  // 이미 다르지만, 로그인 대상 조회에서 명시적으로도 배제한다 — 이 행에는 로그인 수단이 없다.
   const [bySub] = await db
     .select({ id: schema.users.id })
     .from(schema.users)
@@ -230,8 +222,6 @@ async function resolveProviderUser(input: {
       .where(and(or(...conditions), eq(schema.users.isManaged, false)))
       .limit(2)
 
-    // 아이디와 전화번호가 서로 다른 두 계정을 가리키면 어느 쪽도 자동 병합하지 않는다.
-    // OR UPDATE 로 둘 다 갱신하면 계정을 잘못 합치거나 authentik_sub UNIQUE 충돌이 난다.
     const [onlyMatch] = matches
     if (matches.length === 1 && onlyMatch) {
       const [linked] = await db
@@ -243,14 +233,9 @@ async function resolveProviderUser(input: {
     }
   }
 
-  // 첫 계정이면 관리자로 승격한다. SSO 가 유일한 로그인 수단인 인스턴스에서도 관리자를
-  // 세울 수 있어야 하므로, 비밀번호 가입과 똑같은 함수를 쓴다.
   try {
     return await createUserGrantingFirstAdmin({ authentikSub: sub, displayName, avatarUrl })
   } catch (error) {
-    // 같은 provider 신원의 최초 로그인 두 건이 겹치면, 한 요청이 먼저 사용자 행을 만들고
-    // 다른 요청은 authentik_sub UNIQUE 충돌을 받는다. 충돌한 쪽도 이미 확정된 정본 행을
-    // 사용해야 재시도 가능한 로그인 오류로 바뀌지 않는다.
     const isUniqueViolation =
       typeof error === 'object' && error !== null && 'code' in error && error.code === '23505'
     if (!isUniqueViolation) throw error
@@ -273,11 +258,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
     callbacks: {
       ...authConfigBase.callbacks,
       async jwt({ token, user, account, profile }) {
-        // 최초 로그인 시에만 실행된다.
         if (user && account) {
           try {
             if (account.provider === 'password') {
-              // authorize 가 내부 사용자 행을 검증했다 — id 가 곧 내부 id.
               token.uid = String(user.id)
               token.name = user.name
               return token
