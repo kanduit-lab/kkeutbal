@@ -127,64 +127,70 @@ export async function prepareInitialAdminSetup(): Promise<boolean> {
     const database = await getOptionalDatabase()
     if (!database) return false
     const { db, schema } = database
+    const { PUBLIC_READ_TIMEOUT_MS, withTimeout } = await import('@/lib/with-timeout')
 
-    const prepared = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${INITIAL_ADMIN_LOCK_KEY}, 42))`,
-      )
-      const [existingUser] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)
-      if (existingUser) return null
+    // 로그인 화면 렌더 경로다 — DB 가 멈추면 안내를 포기하고 화면은 띄운다.
+    const prepared = await withTimeout(
+      db.transaction(async (tx) => {
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${INITIAL_ADMIN_LOCK_KEY}, 42))`,
+        )
+        const [existingUser] = await tx.select({ id: schema.users.id }).from(schema.users).limit(1)
+        if (existingUser) return null
 
-      const [settings] = await tx
-        .select({
-          ciphertext: schema.authSettings.initialAdminSetupCiphertext,
-          expiresAt: schema.authSettings.initialAdminSetupExpiresAt,
-        })
-        .from(schema.authSettings)
-        .where(eq(schema.authSettings.id, SETTINGS_ID))
-        .limit(1)
+        const [settings] = await tx
+          .select({
+            ciphertext: schema.authSettings.initialAdminSetupCiphertext,
+            expiresAt: schema.authSettings.initialAdminSetupExpiresAt,
+          })
+          .from(schema.authSettings)
+          .where(eq(schema.authSettings.id, SETTINGS_ID))
+          .limit(1)
 
-      let ciphertext =
-        settings?.ciphertext && settings.expiresAt && settings.expiresAt.getTime() > Date.now()
-          ? settings.ciphertext
-          : null
-      let expiresAt = settings?.expiresAt ?? null
-      let code: string
-      if (ciphertext) {
-        try {
-          code = decryptSetupCode(ciphertext)
-        } catch {
-          // AUTH_SECRET 교체 등으로 복호화할 수 없으면 기존 코드를 폐기하고 다시 발급한다.
-          ciphertext = null
+        let ciphertext =
+          settings?.ciphertext && settings.expiresAt && settings.expiresAt.getTime() > Date.now()
+            ? settings.ciphertext
+            : null
+        let expiresAt = settings?.expiresAt ?? null
+        let code: string
+        if (ciphertext) {
+          try {
+            code = decryptSetupCode(ciphertext)
+          } catch {
+            // AUTH_SECRET 교체 등으로 복호화할 수 없으면 기존 코드를 폐기하고 다시 발급한다.
+            ciphertext = null
+            code = ''
+          }
+        } else {
           code = ''
         }
-      } else {
-        code = ''
-      }
 
-      if (!ciphertext) {
-        code = generateSetupCode()
-        ciphertext = encryptSetupCode(code)
-        expiresAt = new Date(Date.now() + SETUP_MAX_AGE_MS)
-        await tx
-          .insert(schema.authSettings)
-          .values({
-            id: SETTINGS_ID,
-            initialAdminSetupCiphertext: ciphertext,
-            initialAdminSetupExpiresAt: expiresAt,
-            updatedAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: schema.authSettings.id,
-            set: {
+        if (!ciphertext) {
+          code = generateSetupCode()
+          ciphertext = encryptSetupCode(code)
+          expiresAt = new Date(Date.now() + SETUP_MAX_AGE_MS)
+          await tx
+            .insert(schema.authSettings)
+            .values({
+              id: SETTINGS_ID,
               initialAdminSetupCiphertext: ciphertext,
               initialAdminSetupExpiresAt: expiresAt,
               updatedAt: new Date(),
-            },
-          })
-      }
-      return { code, id: setupId(ciphertext) }
-    })
+            })
+            .onConflictDoUpdate({
+              target: schema.authSettings.id,
+              set: {
+                initialAdminSetupCiphertext: ciphertext,
+                initialAdminSetupExpiresAt: expiresAt,
+                updatedAt: new Date(),
+              },
+            })
+        }
+        return { code, id: setupId(ciphertext) }
+      }),
+      PUBLIC_READ_TIMEOUT_MS,
+      'prepareInitialAdminSetup',
+    )
 
     if (!prepared) return false
     if (globalForSetup.kkeutbalAnnouncedInitialAdminSetupId !== prepared.id) {

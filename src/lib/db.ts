@@ -26,10 +26,14 @@ const TRANSACTION_MODE_PORT = '6543'
  * 포트만 바꾸고 이 설정을 안 바꾸면 런타임에서만 깨지기 때문에 env 하나로 결정되게 묶어 둔다.
  *
  * - 5432 session mode: 커넥션을 세션 내내 붙들 수 있다. 컨테이너 배포(전용 서버)용.
- *   prepared statement 를 그대로 쓸 수 있어 풀을 넉넉히 잡는다.
- * - 6543 transaction mode: 문장/트랜잭션 단위로 커넥션을 빌려준다. 서버리스(람다)용.
+ *   prepared statement 를 그대로 쓸 수 있다.
+ * - 6543 transaction mode: 문장/트랜잭션 단위로 커넥션을 빌려준다.
  *   **prepared statement 를 쓸 수 없다** — postgres-js 의 prepare 를 꺼야 한다.
- *   인스턴스가 수평으로 늘어나므로 인스턴스당 풀은 1로 좁힌다.
+ *
+ * 두 모드 모두 풀은 여러 개다. transaction mode 를 1로 좁혔던 적이 있는데, 그러면 커넥션
+ * 하나가 막히는 순간 앱의 모든 DB 작업이 그 뒤에 큐잉된다 — postgres-js 에는 쿼리 타임아웃이
+ * 없어서 큐가 영영 안 풀린다. 2026-07-27 에 이 경로로 전 페이지가 죽었다. 풀을 넓혀도
+ * 근본 회수는 supabase/migrations/0017 의 롤 타임아웃이 하고, 여기서는 단일 실패점만 없앤다.
  *
  * 방 단위 직렬화에 쓰는 `pg_advisory_xact_lock` 은 트랜잭션 스코프라 두 모드 모두에서 동작한다
  * (세션 스코프 락이었다면 transaction mode 에서 조용히 깨졌을 것이다).
@@ -41,7 +45,7 @@ function poolerOptions(databaseUrl: string): { max: number; prepare?: boolean } 
   } catch {
     // 파싱 실패는 session mode 기본값으로 둔다 — 접속 자체는 postgres-js 가 다시 검증한다.
   }
-  return port === TRANSACTION_MODE_PORT ? { max: 1, prepare: false } : { max: 5 }
+  return port === TRANSACTION_MODE_PORT ? { max: 5, prepare: false } : { max: 5 }
 }
 
 /**
@@ -63,6 +67,9 @@ function createSql() {
     ...poolerOptions(url),
     idle_timeout: 30,
     connect_timeout: 10,
+    // 유휴가 아니라 수명으로도 커넥션을 재활용한다. pooler·NAT 가 조용히 끊어 반쪽만 열린
+    // 소켓이 남으면 idle_timeout 은 그 커넥션을 유휴로 보지 않아 영영 안 닫는다.
+    max_lifetime: 30 * 60,
     ssl: verifiedTls(env.DATABASE_CA_CERT_BASE64),
   })
 }

@@ -58,7 +58,10 @@ docker build -f dockerfiles/Dockerfile.nextjs \
 ## 런타임 계약
 
 - 포트 `3000`, `HOSTNAME=0.0.0.0`
-- 헬스체크 `GET /api/health` (`.deploy.yml` 의 `health_path` 와 같아야 한다)
+- 생존 점검 `GET /api/health` — 프로세스가 응답하는지만 본다. 의존성은 보지 않는다
+- **준비 점검 `GET /api/ready`** — DB `select 1` 을 2초 상한으로 확인하고, 실패하면 `503`.
+  오케스트레이터 헬스체크는 이 경로를 봐야 한다. `/api/health` 만 보면 DB 커넥션이 막혀
+  모든 페이지가 타임아웃하는 동안에도 정상으로 읽힌다 (2026-07-27 장애의 실제 경로)
 - 서버 전용 시크릿은 컨테이너 환경변수로 주입한다
 
 ## DB 커넥션 모드
@@ -68,10 +71,27 @@ docker build -f dockerfiles/Dockerfile.nextjs \
 | 포트   | 모드        | 풀       | prepared statement |
 | ------ | ----------- | -------- | ------------------ |
 | `5432` | session     | `max: 5` | 사용               |
-| `6543` | transaction | `max: 1` | 사용 불가          |
+| `6543` | transaction | `max: 5` | 사용 불가          |
 
-컨테이너 배포는 장수명 프로세스이므로 **`5432`** 다. `6543` 을 쓰면 인스턴스당 커넥션이
-1개로 좁혀져 동시 요청이 직렬화된다. 서버리스(람다) 배포에서만 `6543` 이 맞다.
+컨테이너 배포는 장수명 프로세스이므로 **`5432`** 를 권장한다. 다만 배포 환경이 `6543` 을
+설정하는 경우가 실제로 있으므로 코드는 두 모드를 모두 지탱해야 한다.
+
+`6543` 의 풀은 한때 `max: 1` 이었다. 커넥션 하나가 막히는 순간 앱의 모든 DB 작업이 그 뒤에
+큐잉되고, postgres-js 에는 쿼리 타임아웃이 없어 큐가 영영 안 풀린다 — 2026-07-27 에 이
+경로로 모든 페이지가 524 를 냈다. 풀 크기는 단일 실패점을 없애는 완화책일 뿐이고, 실제
+회수는 아래 롤 타임아웃이 한다.
+
+### 롤 타임아웃 (`supabase/migrations/0017_app_role_timeouts.sql`)
+
+transaction mode pooler 는 postgres-js 의 startup connection 파라미터를 **조용히 버린다**
+(실측: `connection: { statement_timeout }` 을 줘도 백엔드는 그대로 `2min`). 그래서 앱에서는
+이 값을 걸 수 없고, 회수는 서버가 해야 한다. 롤 설정은 pooler 를 거쳐도 그대로 적용된다.
+
+| 설정                                  | 값    | 막는 것                                  |
+| ------------------------------------- | ----- | ---------------------------------------- |
+| `statement_timeout`                   | `15s` | 응답 없는 쿼리에 요청이 매달리는 것      |
+| `lock_timeout`                        | `5s`  | `pg_advisory_xact_lock` 무한 대기        |
+| `idle_in_transaction_session_timeout` | `15s` | 열린 트랜잭션 방치 — 이 장애의 직접 원인 |
 
 ## 하지 말 것
 

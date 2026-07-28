@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import type { Metadata, Viewport } from 'next'
 import { ToastProvider } from '@/components/ui'
 import { I18nProvider } from '@/lib/i18n/client'
@@ -68,8 +69,20 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 }
 
+/**
+ * 공지 슬롯. 레이아웃 본체가 아니라 Suspense 경계 안에서만 DB 를 기다린다.
+ *
+ * 레이아웃이 직접 await 하면 조회가 끝날 때까지 셸이 한 바이트도 안 나간다 — 배너 하나 때문에
+ * 로그인·소개·가이드까지 전부 멈춘다. 2026-07-27 에 실제로 그렇게 모든 페이지가 죽었다.
+ * 조회 자체의 상한은 listActivePromotions 가 따로 건다.
+ */
+async function PromotionSlot() {
+  const promotions = await listActivePromotions()
+  return <PromotionHost promotions={promotions} />
+}
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const [{ locale, d }, promotions] = await Promise.all([getDict(), listActivePromotions()])
+  const { locale, d } = await getDict()
   return (
     <html lang={locale}>
       <body>
@@ -79,7 +92,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <a href="#main" className="skip-link">
               {d.common.skipToContent}
             </a>
-            <PromotionHost promotions={promotions} />
+            <Suspense fallback={null}>
+              <PromotionSlot />
+            </Suspense>
             {children}
           </ToastProvider>
         </I18nProvider>

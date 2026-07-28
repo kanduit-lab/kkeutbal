@@ -3,6 +3,7 @@ import 'server-only'
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
 import type * as schema from '../../../drizzle/schema'
 import { getOptionalDatabase } from '@/lib/optional-database'
+import { PUBLIC_READ_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import {
   INITIAL_ADMIN_LOCK_KEY,
   initialAdminSetupIdFromCiphertext,
@@ -28,10 +29,14 @@ export async function isFirstAccount(): Promise<boolean> {
     const database = await getOptionalDatabase()
     if (!database) return false
     const { db, schema } = database
-    const [row] = await db.select({ id: schema.users.id }).from(schema.users).limit(1)
+    const [row] = await withTimeout(
+      db.select({ id: schema.users.id }).from(schema.users).limit(1),
+      PUBLIC_READ_TIMEOUT_MS,
+      'isFirstAccount',
+    )
     return !row
   } catch (error) {
-    // 마이그레이션 전 등 조회 실패는 "첫 계정 아님"으로 취급한다 — 안내를 잘못 띄우지 않는다.
+    // 마이그레이션 전·무응답 등 조회 실패는 "첫 계정 아님"으로 취급한다 — 안내를 잘못 띄우지 않는다.
     console.error('isFirstAccount failed:', error)
     return false
   }

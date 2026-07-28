@@ -2,22 +2,25 @@ import 'server-only'
 
 import { and, desc, eq, gt, isNull, lte, or } from 'drizzle-orm'
 import { getOptionalDatabase } from '@/lib/optional-database'
+import { PUBLIC_READ_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import type { AdminPromotionView, PromotionView } from './types'
 
 /**
- * 노출 조건을 만족하는 프로모션. 루트 레이아웃에서 부르므로 절대 던지지 않는다 —
- * 광고 슬롯 조회 실패가 페이지 전체를 죽이면 안 된다.
+ * 노출 조건을 만족하는 프로모션. 절대 던지지 않고, 절대 오래 기다리지도 않는다 —
+ * 광고 슬롯 조회 하나가 페이지 전체를 죽이면 안 된다.
+ *
+ * try/catch 만으로는 부족했다. DB 가 응답을 아예 안 주면 catch 는 도달하지 않고 렌더가
+ * 무한정 매달린다 — 2026-07-27 에 이 경로로 모든 페이지가 524 를 냈다. 상한을 함께 건다.
  */
 export async function listActivePromotions(): Promise<PromotionView[]> {
   const now = new Date()
   try {
-    // 루트 레이아웃에서 호출한다. DB 모듈을 지연 로드해야 환경 검증·연결 실패도 이
-    // 경계에서 빈 슬롯으로 강등할 수 있다. 최상단 import면 catch에 도달하기 전에
-    // 모든 공개 페이지가 죽는다.
+    // DB 모듈을 지연 로드해야 환경 검증·연결 실패도 이 경계에서 빈 슬롯으로 강등할 수 있다.
+    // 최상단 import면 catch에 도달하기 전에 모든 공개 페이지가 죽는다.
     const database = await getOptionalDatabase()
     if (!database) return []
     const { db, schema } = database
-    return await db
+    const rows = db
       .select({
         id: schema.promotions.id,
         kind: schema.promotions.kind,
@@ -37,6 +40,7 @@ export async function listActivePromotions(): Promise<PromotionView[]> {
       )
       .orderBy(desc(schema.promotions.priority), desc(schema.promotions.createdAt))
       .limit(20)
+    return await withTimeout(rows, PUBLIC_READ_TIMEOUT_MS, 'listActivePromotions')
   } catch (error) {
     console.error('listActivePromotions failed:', error)
     return []
