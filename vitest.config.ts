@@ -8,8 +8,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      // 단위 테스트로 의미 있게 검증할 수 있는 순수 도메인만 측정한다.
-      // DB Server Action·React 훅은 통합/E2E 대상이며 import되지 않은 파일을 0%로 섞지 않는다.
+
       include: [
         'src/features/auth/phone.ts',
         'src/features/game/components/shared.ts',

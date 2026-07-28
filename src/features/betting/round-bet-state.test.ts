@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  contributedBy,
-  minimumRaiseAmount,
-  neededToCall,
-  roundBetState,
-} from './round-bet-state'
+import { contributedBy, minimumRaiseAmount, neededToCall, roundBetState } from './round-bet-state'
 
 const accepted = (userId: string, action: 'call' | 'raise' | 'allin', amount: number) => ({
   userId,

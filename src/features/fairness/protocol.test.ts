@@ -120,7 +120,10 @@ describe('fairness commit-reveal protocol', () => {
       valid: true,
     })
     await expect(
-      verifyFairShuffle({ ...receipt, shuffledDeckIds: [...result.shuffledDeckIds].reverse() }, deckIds),
+      verifyFairShuffle(
+        { ...receipt, shuffledDeckIds: [...result.shuffledDeckIds].reverse() },
+        deckIds,
+      ),
     ).resolves.toMatchObject({ valid: false, shuffledDeckMatches: false })
   })
 

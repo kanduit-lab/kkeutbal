@@ -14,7 +14,6 @@ const { rooms, roomMembers, buyIns, chipLedger } = schema
 const addBuyInSchema = z.object({
   roomId: z.string().uuid(),
   amount: z.number().int().min(1).max(10_000_000),
-  /** 생략하면 본인 추가 바이인. 지정은 딜러/방장만. */
   targetUserId: z.string().uuid().optional(),
 })
 
@@ -80,8 +79,6 @@ export async function addBuyIn(
         .insert(chipLedger)
         .values({ roomId, userId, delta: amount, reason: 'buy_in', refBuyInId: buyIn.id })
 
-      // 계정 크레딧 방은 세션 칩을 발행한 동일 트랜잭션에서 전역 지갑도 잠근다.
-      // RPC가 잔액·멱등성·room_credit_locks를 검증하며, 실패하면 위 buy-in/원장도 함께 rollback 된다.
       if (readFundingMode(room.rulePreset) === 'account_credit') {
         await tx.execute(sql`
           select public.lock_room_credit_buy_in(
@@ -116,10 +113,6 @@ const undoLastBuyInSchema = z.object({
   targetUserId: z.string().uuid(),
 })
 
-/**
- * 마지막 바이인 지급 취소 — 딜러/방장 전용. 오지급 즉시 회수 용도.
- * 원본 행은 고치지 않고 음수 buy_ins + correction 상쇄 행을 쌓는다 (append-only).
- */
 export async function undoLastBuyIn(
   input: z.infer<typeof undoLastBuyInSchema>,
 ): Promise<ActionResult<{ userId: string; amount: number }>> {
@@ -152,7 +145,6 @@ export async function undoLastBuyIn(
         .limit(1)
       if (!target) return fail('errors.targetNotMember')
 
-      // 최신 행이 음수(이미 취소분)면 되돌릴 지급이 없다 — 연쇄 취소 방지.
       const [lastBuyIn] = await tx
         .select({ id: buyIns.id, amount: buyIns.amount })
         .from(buyIns)
@@ -166,8 +158,6 @@ export async function undoLastBuyIn(
         return fail('errors.buyInAlreadySpent')
       }
 
-      // 신규 데이터는 refBuyInId 로 정확히 연결된다. 마이그레이션 전 레거시 행만
-      // 같은 금액의 최신 원장을 호환 경로로 찾는다.
       const [originalLedger] = await tx
         .select({ id: chipLedger.id })
         .from(chipLedger)
@@ -204,8 +194,6 @@ export async function undoLastBuyIn(
       })
 
       if (readFundingMode(room.rulePreset) === 'account_credit') {
-        // 세션 원장의 상쇄와 같은 트랜잭션에서 원 buy-in의 global lock도 풀어야 한다.
-        // RPC는 원본 buy-in·활성 lock·reversal 행의 연결을 다시 검증한다.
         await tx.execute(sql`
           select public.release_room_credit_buy_in(
             ${roomId}::uuid,

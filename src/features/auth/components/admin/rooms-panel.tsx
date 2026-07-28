@@ -8,11 +8,6 @@ import { adminCloseRoom } from '../../admin-actions'
 import type { AdminRoomView } from '../../admin-queries'
 import { formatAge } from './format'
 
-/**
- * 진행 중인 방 목록과 강제 정산. 확인 다이얼로그는 반드시 대상 방을 이름으로 짚는다 —
- * 목록의 위험 버튼들이 8px 간격으로 붙어 있어 오탭이 쉽고, 잘못 누른 정산은
- * 그 방 참가자 전원의 진행 중인 판을 무효로 만든다.
- */
 export function RoomsPanel({
   rooms,
   onDataChanged,
@@ -41,9 +36,7 @@ export function RoomsPanel({
                 <p className="flex items-center gap-1.5 font-bold">
                   <span className="font-mono tracking-widest">{room.code}</span>
                   <span className="truncate">{room.name}</span>
-                  <Badge tone={GAME_BADGE_TONE[room.gameType]}>
-                    {d.games[room.gameType]}
-                  </Badge>
+                  <Badge tone={GAME_BADGE_TONE[room.gameType]}>{d.games[room.gameType]}</Badge>
                 </p>
                 <p className="truncate text-xs text-muted">
                   {format(d.adminConsole.rooms.meta, {

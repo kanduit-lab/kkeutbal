@@ -5,7 +5,6 @@ import { SEOTDA_RULES_STANDARD, type SeotdaHand, type SeotdaTrait } from '@/feat
 import { catcherTraitAgainst, seotdaAdvice, type SeotdaAdviceCode } from '@/features/seotda/advice'
 import type { PokerCategory } from '@/features/poker/engine'
 
-/** 섯다 20장 전체 190조합. 모듈 로드 시 1회 계산. */
 const ALL_SEOTDA_HANDS: readonly SeotdaHand[] = (() => {
   const hands: SeotdaHand[] = []
   for (let i = 0; i < SEOTDA_DECK.length; i += 1) {
@@ -16,27 +15,25 @@ const ALL_SEOTDA_HANDS: readonly SeotdaHand[] = (() => {
   return hands
 })()
 
-/** 서열 단계: 높은 rank 부터. */
 const SEOTDA_TIERS: readonly number[] = [
   ...new Set(ALL_SEOTDA_HANDS.map((hand) => hand.rank)),
 ].sort((a, b) => b - a)
 
 export interface SeotdaStats {
-  /** 전체 서열 단계 수 */
   readonly totalTiers: number
-  /** 이 패의 서열 순위 (1 = 최강) */
+
   readonly tierPosition: number
-  /** 같은 서열인 조합 수 (본인 포함, 190조합 기준) */
+
   readonly sameTierCount: number
-  /** 남은 18장에서 상대 한 명이 받을 153조합 대비 */
+
   readonly winRate: number
   readonly loseRate: number
   readonly replayRate: number
-  /** 이 패에 붙는 상황 안내 코드 — 문구는 사전이 갖는다. */
+
   readonly advice: readonly SeotdaAdviceCode[]
-  /** 내 패를 잡을 수 있는 상대 판정패. 없으면 null. */
+
   readonly catcherTrait: SeotdaTrait | null
-  /** 상대 153조합 중 그 잡는 패가 나올 비율. catcherTrait 이 없으면 0. */
+
   readonly catcherRate: number
 }
 
@@ -64,7 +61,6 @@ export function seotdaStats(hand: SeotdaHand): SeotdaStats {
         if (outcome.winnerIndex === 0) wins += 1
         else losses += 1
       } else {
-        // replay(구사·동급 재경기)와 tie 는 승부 없음으로 묶는다
         replays += 1
       }
     }
@@ -83,7 +79,6 @@ export function seotdaStats(hand: SeotdaHand): SeotdaStats {
   }
 }
 
-/** 5장 무작위 기준 등장 확률(%). 표준 포커 확률표. */
 export const POKER_CATEGORY_STATS: Record<
   PokerCategory,
   { readonly position: number; readonly probability: number }

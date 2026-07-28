@@ -24,7 +24,6 @@ interface RankRow {
   readonly condition: string
 }
 
-// SEOTDA_RANK · SEOTDA_SPECIALS(features/seotda/types.ts) 순서 그대로. 값 자체가 아니라 대소 관계가 계약이다.
 const RANK_ROWS: readonly RankRow[] = [
   { order: '1', label: '38광땡', condition: '3월 광 + 8월 광. 광땡 중 최강' },
   { order: '2', label: '18광땡', condition: '1월 광 + 8월 광' },
@@ -59,13 +58,10 @@ export default async function SeotdaGuidePage() {
         title="섯다"
         description="두 장을 받고 베팅한 뒤 족보를 겨루는 게임. 서열이 높은 쪽이 판돈을 가져가요"
       />
-
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* 목차가 먼저 온다 — 1열(모바일)에서는 본문 위, lg 에서는 order 로 우측 컬럼. */}
         <div className="min-w-0 lg:order-2 lg:col-span-3">
           <TocNav items={TOC} />
         </div>
-
         <div className="min-w-0 space-y-8 lg:order-1 lg:col-span-9">
           <section id="flow" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">진행 방식</h2>
@@ -74,14 +70,13 @@ export default async function SeotdaGuidePage() {
                 <li>각자 화투 두 장씩 받습니다. 상대 패는 보이지 않습니다</li>
                 <li>순서대로 베팅합니다 — 체크·콜·올려·다이·올인 중 하나</li>
                 <li>남은 사람끼리 패를 공개하고, 서열이 높은 쪽이 판돈을 가져갑니다</li>
-                <li>특수 판정패(암행어사·땡잡이·구사)가 있으면 서열과 무관하게 결과가 바뀔 수 있습니다</li>
+                <li>
+                  특수 판정패(암행어사·땡잡이·구사)가 있으면 서열과 무관하게 결과가 바뀔 수 있습니다
+                </li>
               </ol>
-              <p className="text-xs text-muted">
-                같은 족보로 맞붙으면 기본 룰에서는 재경기합니다
-              </p>
+              <p className="text-xs text-muted">같은 족보로 맞붙으면 기본 룰에서는 재경기합니다</p>
             </Panel>
           </section>
-
           <section id="rank" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">족보 서열표</h2>
             <ScrollTable title="족보 서열표">
@@ -104,7 +99,6 @@ export default async function SeotdaGuidePage() {
                 </tbody>
               </table>
             </ScrollTable>
-
             <Panel className="space-y-3">
               <p className="text-sm font-medium text-muted">대표 족보 예시</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -114,12 +108,11 @@ export default async function SeotdaGuidePage() {
               </div>
             </Panel>
           </section>
-
           <section id="traits" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">특수 판정패</h2>
             <p className="text-sm text-muted">
-              서열표와 별개로, 특정 상대를 만났을 때만 효력이 생기는 판정패입니다. 기본 룰에서는
-              세 가지 모두 켜져 있습니다
+              서열표와 별개로, 특정 상대를 만났을 때만 효력이 생기는 판정패입니다. 기본 룰에서는 세
+              가지 모두 켜져 있습니다
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               <TraitCard
@@ -142,7 +135,6 @@ export default async function SeotdaGuidePage() {
               />
             </div>
           </section>
-
           <BackToTop />
         </div>
       </div>

@@ -2,7 +2,6 @@
 
 import type { ReactNode } from 'react'
 
-/** 시트 내부 섹션 — 아이콘·제목·힌트가 있는 카드. */
 export function Section({
   icon,
   title,

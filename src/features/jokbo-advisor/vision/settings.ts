@@ -13,12 +13,11 @@ export interface VisionSettingsView {
   readonly enabled: boolean
   readonly provider: VisionProvider
   readonly model: string
-  /** API 키의 원문은 반환하지 않는다. 환경변수 준비 여부만 관리자 UI에 전달한다. */
+
   readonly hasAnthropicApiKey: boolean
   readonly hasGeminiApiKey: boolean
 }
 
-/** Server Action에서만 쓰는 활성 공급자 설정. API 키는 환경변수에서만 읽는다. */
 export interface ActiveVisionSettings {
   readonly provider: VisionProvider
   readonly model: string
@@ -39,7 +38,6 @@ function providerAvailability() {
   }
 }
 
-/** 관리자·족보 화면에 필요한 설정과 공급자 준비 상태. API 키는 절대 반환하지 않는다. */
 export async function getVisionSettings(): Promise<VisionSettingsView> {
   const availability = providerAvailability()
   try {
@@ -68,7 +66,6 @@ export async function getVisionSettings(): Promise<VisionSettingsView> {
   }
 }
 
-/** 사진 인식에 쓸 활성 설정. 선택된 공급자의 환경변수 키가 없으면 안전하게 비활성화한다. */
 export async function getActiveVisionSettings(): Promise<ActiveVisionSettings | null> {
   const settings = await getVisionSettings()
   if (!settings.enabled) return null

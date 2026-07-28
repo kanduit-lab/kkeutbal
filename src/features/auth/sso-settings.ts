@@ -55,7 +55,6 @@ export function decryptSsoClientSecret(value: string): string {
   ]).toString('utf8')
 }
 
-/** SSO 미설정 상태 — 조회에 실패해도 이 값으로 떨어뜨린다. */
 const SSO_DISABLED: SsoSettingsView = Object.freeze({
   enabled: false,
   issuer: '',
@@ -63,14 +62,6 @@ const SSO_DISABLED: SsoSettingsView = Object.freeze({
   hasClientSecret: false,
 })
 
-/**
- * 저장된 SSO 설정.
- *
- * 절대 던지지 않고, 절대 오래 기다리지도 않는다. `getActiveSsoSettings` 를 거쳐 NextAuth
- * 설정 빌드에서 호출되므로 — 즉 **모든 `auth()` 호출 경로에 있다** — 여기서 예외가 나거나
- * 응답이 멈추면 SSO 뿐 아니라 비밀번호·게스트 로그인과 모든 인증 페이지가 함께 죽는다.
- * 테이블 미생성·커넥션 오류·무응답 전부 "SSO 미설정"으로 강등하고 나머지 경로는 살린다.
- */
 export async function getSsoSettings(): Promise<SsoSettingsView> {
   try {
     const database = await getOptionalDatabase()
@@ -103,7 +94,6 @@ export async function getSsoSettings(): Promise<SsoSettingsView> {
   }
 }
 
-/** 활성 SSO provider 설정. 조회·복호화 실패는 전부 "SSO 없음"으로 떨어진다 — 던지지 않는다. */
 export async function getActiveSsoSettings(): Promise<ActiveSsoSettings | null> {
   const settings = await getSsoSettings()
   if (!settings.enabled || !settings.issuer || !settings.clientId) return null

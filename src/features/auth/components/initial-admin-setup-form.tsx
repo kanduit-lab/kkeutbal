@@ -6,7 +6,6 @@ import { verifyInitialAdminSetupCode, type InitialAdminSetupState } from '@/feat
 import { Alert, Button, Input, SubmitButton } from '@/components/ui'
 import { useDict } from '@/lib/i18n/client'
 
-/** 서버 콘솔의 1회용 코드를 검증한 브라우저만 최초 관리자 가입 화면으로 보낸다. */
 export function InitialAdminSetupForm({ onCancel }: { onCancel: () => void }) {
   const { d } = useDict()
   const router = useRouter()

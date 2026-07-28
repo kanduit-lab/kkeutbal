@@ -1,12 +1,3 @@
-/**
- * 게임 진행 중 Broadcast/공개 화면에 안전하게 실을 수 있는 공정성 영수증.
- *
- * 이 파일은 commit-reveal의 "공개 commitment"만 표현한다. 원문 server seed, final seed,
- * 셔플된 덱 및 좌석별 패는 절대로 이 타입이나 직렬화 결과에 포함하지 않는다. 라운드 종료 뒤
- * 독립 감사를 허용하는 seed/deck 공개는 별도 인증된 감사 경로에서만 protocol.ts의
- * FairShuffleReceipt를 사용해야 한다.
- */
-
 import { z } from 'zod'
 
 import {
@@ -26,7 +17,6 @@ const encoder = new TextEncoder()
 
 export type FairnessAuditedGame = 'seotda' | 'holdem'
 
-/** 실제 카드가 아닌 배분 규칙의 공개 commitment. */
 export interface PublicFairnessDealPlan {
   readonly game: FairnessAuditedGame
   readonly participantCount: number
@@ -36,10 +26,6 @@ export interface PublicFairnessDealPlan {
   readonly dealPlanCommitment: string
 }
 
-/**
- * 원문 seed 없이도 미리 확인할 수 있는 감사 계획.
- * `finalSeedHash`는 server seed 공개 전에는 결과를 바꿀 수 없게 묶는 용도이며 원문은 아니다.
- */
 export interface PublicFairnessSeedAuditPlan {
   readonly protocol: 'commit-reveal'
   readonly serverSeedCommitment: string
@@ -48,7 +34,6 @@ export interface PublicFairnessSeedAuditPlan {
   readonly revealPolicy: 'after-round-finalized-authenticated-audit'
 }
 
-/** Broadcast, 링크 공유, 관리자 기록에 안전한 라운드 단위 공정성 영수증. */
 export interface PublicFairnessReceipt {
   readonly receiptVersion: typeof FAIRNESS_PUBLIC_RECEIPT_VERSION
   readonly algorithmVersion: typeof FAIRNESS_ALGORITHM_VERSION
@@ -56,7 +41,7 @@ export interface PublicFairnessReceipt {
   readonly game: FairnessAuditedGame
   readonly seedAudit: PublicFairnessSeedAuditPlan
   readonly dealPlan: PublicFairnessDealPlan
-  /** 셔플 결과 전체에 대한 hash. 카드 ID나 좌석별 배분은 공개하지 않는다. */
+
   readonly shuffledDeckCommitment: string
 }
 
@@ -64,7 +49,7 @@ export interface CreatePublicFairnessReceiptInput {
   readonly roundId: string
   readonly game: FairnessAuditedGame
   readonly participantCount: number
-  /** 서버 내부에서만 얻는 결과다. public receipt에는 안전한 commitment만 선택해 담는다. */
+
   readonly shuffle: Pick<
     FairShuffleResult,
     | 'algorithmVersion'
@@ -129,10 +114,13 @@ const GAME_DEAL_RULES: Readonly<
   >
 > = Object.freeze({
   seotda: Object.freeze({ deckSize: 20, privateCardsPerParticipant: 2, publicBoardStages: [] }),
-  holdem: Object.freeze({ deckSize: 52, privateCardsPerParticipant: 2, publicBoardStages: [3, 1, 1] }),
+  holdem: Object.freeze({
+    deckSize: 52,
+    privateCardsPerParticipant: 2,
+    publicBoardStages: [3, 1, 1],
+  }),
 })
 
-/** 섯다(20장·2장 패)와 홀덤(52장·2장 패·flop/turn/river)의 공개 배분 약속을 만든다. */
 export async function createPublicFairnessDealPlan(
   roundId: string,
   game: FairnessAuditedGame,
@@ -172,7 +160,6 @@ export async function createPublicFairnessDealPlan(
   })
 }
 
-/** 서버의 셔플 결과에서 공개 가능한 hash만 뽑아, 안전한 영수증을 만든다. */
 export async function createPublicFairnessReceipt(
   input: CreatePublicFairnessReceiptInput,
 ): Promise<PublicFairnessReceipt> {
@@ -205,7 +192,6 @@ export async function createPublicFairnessReceipt(
   })
 }
 
-/** 외부 JSON을 엄격하게 해석한다. 비밀 필드·개인 카드 같은 알 수 없는 필드는 거부한다. */
 export function parsePublicFairnessReceipt(value: unknown): PublicFairnessReceipt {
   const parsed = publicFairnessReceiptSchema.parse(value)
   const roundId = parseRoundId(parsed.roundId)
@@ -236,10 +222,6 @@ export function parsePublicFairnessReceipt(value: unknown): PublicFairnessReceip
   })
 }
 
-/**
- * 공개 영수증의 **형식과 배분 규칙 commitment만** 확인한다. 이 함수는 시드·덱 공개 전에는
- * 셔플의 공정성을 증명할 수 없다. 종료 후에는 반드시 `verifyPublicFairnessAudit`을 사용한다.
- */
 export async function validatePublicFairnessReceipt(value: unknown): Promise<boolean> {
   try {
     const receipt = parsePublicFairnessReceipt(value)
@@ -254,10 +236,6 @@ export async function validatePublicFairnessReceipt(value: unknown): Promise<boo
   }
 }
 
-/**
- * 종료 뒤 인증된 경로에서 얻은 full reveal로 실제 셔플을 재현한다.
- * 공개 영수증의 hash들이 reveal과 정확히 이어지고, 원래 덱에서 재현한 순서까지 일치할 때만 true다.
- */
 export async function verifyPublicFairnessAudit(
   publicValue: unknown,
   reveal: FairShuffleReceipt,
@@ -291,10 +269,6 @@ export async function verifyPublicFairnessAudit(
   }
 }
 
-/**
- * 안정적인 JSON 문자열을 만든다. 이 직렬화 경계는 strict parser를 통과한 필드만 내보내므로
- * 실수로 serverSeed, finalSeed, shuffledDeckIds, privateCards를 Broadcast에 보내지 못하게 한다.
- */
 export async function serializePublicFairnessReceipt(value: unknown): Promise<string> {
   const receipt = parsePublicFairnessReceipt(value)
   if (!(await validatePublicFairnessReceipt(receipt))) {
@@ -328,8 +302,9 @@ export async function serializePublicFairnessReceipt(value: unknown): Promise<st
   })
 }
 
-/** JSON round-trip을 하면서 commitment와 공개 안전성까지 함께 확인한다. */
-export async function deserializePublicFairnessReceipt(serialized: string): Promise<PublicFairnessReceipt> {
+export async function deserializePublicFairnessReceipt(
+  serialized: string,
+): Promise<PublicFairnessReceipt> {
   let value: unknown
   try {
     value = JSON.parse(serialized) as unknown
@@ -348,7 +323,9 @@ function parseRoundId(value: string): string {
   return idSchema.parse(value)
 }
 
-function canonicalizeClientSeedHashes(entries: readonly ClientSeedHash[]): readonly ClientSeedHash[] {
+function canonicalizeClientSeedHashes(
+  entries: readonly ClientSeedHash[],
+): readonly ClientSeedHash[] {
   const normalized = entries.map((entry) => ({
     userId: parseRoundId(entry.userId),
     seedHash: normalizeHash(entry.seedHash),
@@ -364,7 +341,10 @@ function canonicalizeClientSeedHashes(entries: readonly ClientSeedHash[]): reado
   return Object.freeze(normalized.map((entry) => Object.freeze(entry)))
 }
 
-function assertStaticDealPlan(game: FairnessAuditedGame, plan: z.infer<typeof publicDealPlanSchema>): void {
+function assertStaticDealPlan(
+  game: FairnessAuditedGame,
+  plan: z.infer<typeof publicDealPlanSchema>,
+): void {
   if (plan.game !== game) throw new Error('Receipt game and deal plan game do not match')
   const rules = GAME_DEAL_RULES[game]
   if (
@@ -374,7 +354,10 @@ function assertStaticDealPlan(game: FairnessAuditedGame, plan: z.infer<typeof pu
   ) {
     throw new Error('Receipt deal plan does not match the fixed game rules')
   }
-  if (plan.participantCount * plan.privateCardsPerParticipant + sum(plan.publicBoardStages) > plan.deckSize) {
+  if (
+    plan.participantCount * plan.privateCardsPerParticipant + sum(plan.publicBoardStages) >
+    plan.deckSize
+  ) {
     throw new Error('Receipt deal plan exceeds the fixed game deck')
   }
 }
@@ -385,7 +368,10 @@ function normalizeHash(value: string): string {
 }
 
 async function hashCanonical(value: unknown): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', toArrayBuffer(encoder.encode(JSON.stringify(value))))
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    toArrayBuffer(encoder.encode(JSON.stringify(value))),
+  )
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 

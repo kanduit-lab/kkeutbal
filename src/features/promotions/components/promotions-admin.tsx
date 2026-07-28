@@ -16,8 +16,6 @@ import { format, translateError, useDict } from '@/lib/i18n/client'
 import { createPromotion, deletePromotion, setPromotionActive } from '../actions'
 import type { AdminPromotionView, PromotionKind } from '../types'
 
-/** 관리자 콘솔의 배너·팝업 관리 섹션. admin-client 가 이미 커서 분리해 둔다. */
-
 interface DraftState {
   kind: PromotionKind
   title: string
@@ -42,7 +40,6 @@ const EMPTY_DRAFT: DraftState = {
   endsInHours: '0',
 }
 
-/** 서버 스키마(actions.ts createSchema)와 같은 범위 — 눌러 보고 알게 하지 않는다. */
 const NUMERIC_RANGE = {
   priority: { min: 0, max: 1000 },
   dismissHours: { min: 1, max: 24 * 30 },
@@ -126,7 +123,7 @@ export function PromotionsAdmin({
         toast(translateError(d, result.error), 'error')
         return
       }
-      // 성공 피드백이 없으면 재조회가 끝날 때까지 아무 일도 없어 보여 다시 누르게 된다.
+
       toast(promotion.isActive ? d.promotionsAdmin.paused : d.promotionsAdmin.resumed, 'success')
       onDataChanged?.()
     })
@@ -148,7 +145,6 @@ export function PromotionsAdmin({
   return (
     <section className="space-y-3">
       <h2 className="font-brush text-xl font-bold">{d.promotionsAdmin.title}</h2>
-
       <Panel className="space-y-3">
         <Segmented
           value={draft.kind}
@@ -161,7 +157,6 @@ export function PromotionsAdmin({
           size="sm"
           className="grid-cols-2"
         />
-
         <Field label={d.promotionsAdmin.titleLabel} required>
           {(control) => (
             <Input
@@ -207,7 +202,6 @@ export function PromotionsAdmin({
             />
           )}
         </Field>
-
         <div className="grid grid-cols-2 gap-3">
           {(
             [
@@ -233,7 +227,6 @@ export function PromotionsAdmin({
             </Field>
           ))}
         </div>
-
         <Button
           variant="primary"
           className="w-full"
@@ -245,7 +238,6 @@ export function PromotionsAdmin({
           {d.promotionsAdmin.submit}
         </Button>
       </Panel>
-
       {promotions.length === 0 ? (
         <EmptyState title={d.promotionsAdmin.empty} hint={d.promotionsAdmin.emptyHint} />
       ) : (

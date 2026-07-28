@@ -30,7 +30,6 @@ export type PersistedFairParticipant = Pick<
   'userId' | 'dealOrder' | 'clientSeedHash' | 'seedSubmittedAt' | 'seedTimedOutAt'
 >
 
-/** The DB clock is authoritative for deadline comparisons and persisted fairness transition times. */
 export async function fairDatabaseNow(tx: Tx): Promise<Date> {
   const rows = await tx.execute(sql<{ now: Date }>`select statement_timestamp() as now`)
   const value = (rows[0] as { now?: unknown } | undefined)?.now
@@ -40,7 +39,6 @@ export async function fairDatabaseNow(tx: Tx): Promise<Date> {
   return value
 }
 
-/** Loads the immutable seat snapshot in deal order; never read current room seats for a fair round. */
 export async function loadFairRoundParticipants(
   tx: Tx,
   roundId: string,
@@ -58,10 +56,6 @@ export async function loadFairRoundParticipants(
     .orderBy(asc(roundFairnessParticipants.dealOrder))
 }
 
-/**
- * Seals the seed collection by reproducing the full deterministic deal and persisting only public data.
- * Caller must already hold the room advisory transaction lock.
- */
 export async function sealPersistedFairRound(
   tx: Tx,
   fairRound: PersistedFairRound,
@@ -106,12 +100,16 @@ export async function sealPersistedFairRound(
       shuffledDeckCommitment: deal.shuffle.deckCommitment,
       publicReceipt: deal.publicReceipt,
     })
-    .where(and(eq(roundFairness.roundId, fairRound.roundId), eq(roundFairness.phase, 'collecting_seeds')))
+    .where(
+      and(
+        eq(roundFairness.roundId, fairRound.roundId),
+        eq(roundFairness.phase, 'collecting_seeds'),
+      ),
+    )
 
   return deal
 }
 
-/** Reconstructs and cross-checks a sealed deal before exposing a hand or calculating a result. */
 export async function reconstructSealedFairRound(
   fairRound: PersistedFairRound,
   participants: readonly PersistedFairParticipant[],
@@ -145,7 +143,6 @@ export async function reconstructSealedFairRound(
   return deal
 }
 
-/** Records the append-only full reveal once a round is ended or voided. Idempotent for retry safety. */
 export async function revealPersistedFairRound(
   tx: Tx,
   fairRound: PersistedFairRound | undefined,

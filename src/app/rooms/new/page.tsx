@@ -43,7 +43,6 @@ export default function NewRoomPage() {
         setAccountCreditConfirmOpen(false)
         router.push(`/rooms/${result.data.code}`)
       } else {
-        // 실패하면 다이얼로그를 열어 둬 재원 선택을 다시 확인하고 재시도할 수 있게 한다.
         toast(translateError(d, result.error), 'error')
       }
     })
@@ -61,7 +60,6 @@ export default function NewRoomPage() {
   return (
     <main id="main" className="mx-auto w-full max-w-xl space-y-6 px-4 pb-16 pt-8">
       <header className="flex items-center gap-3">
-        {/* 접근 가능한 이름 없는 `←` 글리프 + 24px 타깃이었다 — 방 화면 헤더와 같게 맞춘다. */}
         <Link
           href="/"
           aria-label={d.common.back}
@@ -71,7 +69,6 @@ export default function NewRoomPage() {
         </Link>
         <h1 className="font-brush text-3xl font-black">{d.newRoom.title}</h1>
       </header>
-
       <Panel className="space-y-5">
         <Field label={d.roomForm.nameLabel}>
           <Input
@@ -81,7 +78,6 @@ export default function NewRoomPage() {
             maxLength={30}
           />
         </Field>
-
         <Field label={d.roomForm.gameLabel}>
           <div className="grid grid-cols-3 gap-2">
             {GAME_TYPES.map((type) => (
@@ -96,7 +92,6 @@ export default function NewRoomPage() {
             ))}
           </div>
         </Field>
-
         <Field label={d.roomForm.startingChipsLabel}>
           <div className="grid grid-cols-4 gap-2">
             {CHIP_PRESETS.map((preset) => (
@@ -123,7 +118,6 @@ export default function NewRoomPage() {
             className="mt-2"
           />
         </Field>
-
         <Field label={d.roomForm.fundingModeLabel}>
           <div className="grid grid-cols-2 gap-2">
             <Button
@@ -147,7 +141,6 @@ export default function NewRoomPage() {
               : d.roomForm.sessionFundingHint}
           </p>
         </Field>
-
         {gameType === 'gostop' ? (
           <Field label={d.roomForm.pointValueLabel}>
             <Stepper
@@ -197,7 +190,6 @@ export default function NewRoomPage() {
             {inputMode === 'trust' ? d.inputMode.trustHint : d.inputMode.approvalHint}
           </p>
         </Field>
-
         <Button
           type="button"
           variant="primary"
@@ -210,15 +202,13 @@ export default function NewRoomPage() {
           {d.newRoom.create}
         </Button>
       </Panel>
-
       <ConfirmDialog
         open={accountCreditConfirmOpen}
         title={d.roomForm.accountCreditConfirmTitle}
         body={d.roomForm.accountCreditConfirmBody}
         confirmLabel={d.roomForm.accountCreditConfirmLabel}
         cancelLabel={d.common.cancel}
-        // 계정 크레딧을 잠그는 되돌리기 어려운 동작이다 — 요청이 도는 동안 다이얼로그를
-        // 열어 둔 채 확인 버튼에 진행 표시를 남긴다. 성공하면 라우팅이 화면을 걷어간다.
+
         loading={isPending}
         onConfirm={create}
         onClose={() => setAccountCreditConfirmOpen(false)}

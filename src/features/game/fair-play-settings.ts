@@ -1,12 +1,6 @@
 import { z } from 'zod'
 import type { RoomGameType } from './types'
 
-/**
- * Stored under `rooms.rule_preset.fair_play`.
- *
- * Keep this boundary independent from Server Actions: a persisted jsonb value is
- * untrusted input, while a host-submitted setting must be complete and explicit.
- */
 export const fairPlaySettingsSchema = z
   .object({
     dealing: z.enum(['manual', 'verified']),
@@ -25,20 +19,11 @@ export const defaultFairPlaySettings: Readonly<FairPlaySettings> = {
   timeoutPolicy: 'pause',
 }
 
-/** Verified dealing is authoritative only for Seotda until the other engines have private-card lifecycles. */
 export function supportsVerifiedDealing(gameType: RoomGameType): boolean {
   return gameType === 'seotda'
 }
 
-/**
- * Validates settings supplied by a trusted caller boundary (for example a host
- * settings form). Unlike the reader below, malformed or partial input is not
- * silently repaired.
- */
-export function parseFairPlaySettings(
-  gameType: RoomGameType,
-  input: unknown,
-): FairPlaySettings {
+export function parseFairPlaySettings(gameType: RoomGameType, input: unknown): FairPlaySettings {
   const settings = fairPlaySettingsSchema.parse(input)
 
   if (settings.dealing === 'verified' && !supportsVerifiedDealing(gameType)) {
@@ -48,11 +33,6 @@ export function parseFairPlaySettings(
   return settings
 }
 
-/**
- * Reads a legacy or externally-written rule preset safely. Any absent,
- * malformed, or game-incompatible fair-play setting becomes the conservative
- * manual/pause default instead of changing a running room's behaviour.
- */
 export function readFairPlaySettings(
   gameType: RoomGameType,
   rulePreset: unknown,

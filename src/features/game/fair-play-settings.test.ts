@@ -40,9 +40,9 @@ describe('fair-play room settings', () => {
     expect(readFairPlaySettings('seotda', { fair_play: verifiedSettings })).toEqual(
       verifiedSettings,
     )
-    expect(readFairPlaySettings('poker', { fair_play: { ...verifiedSettings, extra: true } })).toEqual(
-      defaultFairPlaySettings,
-    )
+    expect(
+      readFairPlaySettings('poker', { fair_play: { ...verifiedSettings, extra: true } }),
+    ).toEqual(defaultFairPlaySettings)
   })
 
   it('falls back to a fresh conservative default for untrusted or incompatible presets', () => {

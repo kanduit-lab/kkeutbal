@@ -4,15 +4,10 @@ import { createHmac } from 'node:crypto'
 import { eq, isNotNull } from 'drizzle-orm'
 import { serverEnv } from '@/lib/env'
 
-/** 게스트 토큰 원문을 저장하지 않기 위한 AUTH_SECRET 기반 안정 해시. */
 export function guestTokenHash(code: string, secret: string): string {
   return createHmac('sha256', secret).update(code).digest('base64url')
 }
 
-/**
- * 0011 이전에 원문으로 저장된 토큰을 HMAC으로 교체한다.
- * 관리자 콘솔 진입 시 한 번 실행하며, 토큰별 행 잠금으로 로그인·회수와 충돌하지 않는다.
- */
 export async function migrateLegacyGuestTokenSecrets(): Promise<void> {
   const secret = serverEnv().AUTH_SECRET
   const { db, schema } = await import('@/lib/db')

@@ -12,21 +12,15 @@ const SIZE_CLASSES: Record<PokerCardSize, string> = {
 
 const RED_SUITS: ReadonlySet<PokerSuit> = new Set(['h', 'd'])
 
-/** 무늬가 빨강 계열(하트·다이아)인지. 카드 잉크 색·무늬 헤더 색상에 공용으로 쓴다. */
 export function isRedPokerSuit(suit: PokerSuit): boolean {
   return RED_SUITS.has(suit)
 }
 
-/*
- * 200x280 뷰박스 = 실물 트럼프 카드 비율(2.5:3.5 인치 = 5:7). 모든 좌표는 이 단위 기준이며
- * 벡터라 어떤 렌더 크기에서도 또렷하다(외부 크기는 wrapper 의 CSS 폭만 바꾼다).
- */
 const VIEW_W = 200
 const VIEW_H = 280
 const CENTER_X = VIEW_W / 2
 const CENTER_Y = VIEW_H / 2
 
-// 코너 인덱스(좌상단) 좌표 — 우하단은 카드 중심 기준 180도 회전으로 재사용한다.
 const CORNER_X = 20
 const CORNER_RANK_Y = 42
 const CORNER_SUIT_Y = 70
@@ -41,7 +35,6 @@ interface PipSpot {
   readonly rotate?: boolean
 }
 
-// 위→아래 9행 기준선. 하단 절반(rotate:true)은 실물 카드처럼 180도 뒤집어 놓는다.
 const PIP_ROWS = [64, 84, 104, 122, 140, 158, 176, 196, 216] as const
 const PIP_COL = { l: 76, c: 100, r: 124 } as const
 
@@ -50,8 +43,15 @@ function buildPipLayouts(): ReadonlyMap<number, readonly PipSpot[]> {
   const y = PIP_ROWS
   const layouts = new Map<number, readonly PipSpot[]>()
 
-  layouts.set(2, [{ x: c.c, y: y[0] }, { x: c.c, y: y[8], rotate: true }])
-  layouts.set(3, [{ x: c.c, y: y[0] }, { x: c.c, y: y[4] }, { x: c.c, y: y[8], rotate: true }])
+  layouts.set(2, [
+    { x: c.c, y: y[0] },
+    { x: c.c, y: y[8], rotate: true },
+  ])
+  layouts.set(3, [
+    { x: c.c, y: y[0] },
+    { x: c.c, y: y[4] },
+    { x: c.c, y: y[8], rotate: true },
+  ])
   layouts.set(4, [
     { x: c.l, y: y[0] },
     { x: c.r, y: y[0] },
@@ -121,8 +121,15 @@ function buildPipLayouts(): ReadonlyMap<number, readonly PipSpot[]> {
 
 const PIP_LAYOUTS = buildPipLayouts()
 
-/** 카드 중앙 그림 — 2~10 은 실물처럼 핍 개수를 배치하고, J/Q/K/A 는 큰 글자/무늬로 표시한다. */
-function CardCenter({ rank, rankChar, suitGlyph }: { rank: number; rankChar: string; suitGlyph: string }) {
+function CardCenter({
+  rank,
+  rankChar,
+  suitGlyph,
+}: {
+  rank: number
+  rankChar: string
+  suitGlyph: string
+}) {
   if (rank === 14) {
     return (
       <text
@@ -199,13 +206,9 @@ function CardCenter({ rank, rankChar, suitGlyph }: { rank: number; rankChar: str
   )
 }
 
-const FONT_STACK = "Pretendard, 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif"
+const FONT_STACK =
+  "Pretendard, 'Malgun Gothic', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif"
 
-/**
- * 실물 트럼프 카드 한 장을 순수 SVG 로 그린다(이미지 자산 없음). 코너 인덱스 + 중앙 핍/글자로
- * 랭크·무늬를 이중으로 표시해 무늬 색상만으로 구분하지 않는다(색맹 대응).
- * HwatuCardView 와 동일한 role="img" + aria-label 패턴을 따른다.
- */
 export function PokerCardView({
   card,
   size = 'md',
@@ -249,7 +252,6 @@ export function PokerCardView({
           stroke="rgba(0,0,0,0.35)"
           strokeWidth={3}
         />
-
         <text
           x={CORNER_X}
           y={CORNER_RANK_Y}
@@ -271,7 +273,6 @@ export function PokerCardView({
         >
           {suitGlyph}
         </text>
-
         <g transform={`rotate(180 ${CENTER_X} ${CENTER_Y})`}>
           <text
             x={CORNER_X}
@@ -295,7 +296,6 @@ export function PokerCardView({
             {suitGlyph}
           </text>
         </g>
-
         <CardCenter rank={card.rank} rankChar={rankChar} suitGlyph={suitGlyph} />
       </svg>
     </div>

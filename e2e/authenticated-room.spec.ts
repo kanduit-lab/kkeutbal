@@ -1,23 +1,10 @@
 import { expect, test, type Page } from '@playwright/test'
 
-/**
- * This spec deliberately never confirms room creation: it validates the
- * account-credit selection and its explicit confirmation boundary without
- * leaving test rooms or credit locks in the configured database.
- *
- * Supply a non-admin, dedicated account only in the test runner environment.
- * Credentials are intentionally not read from application env files.
- */
 const username = process.env.E2E_TEST_USERNAME
 const password = process.env.E2E_TEST_PASSWORD
 const secondUsername = process.env.E2E_SECOND_TEST_USERNAME
 const secondPassword = process.env.E2E_SECOND_TEST_PASSWORD
 
-/**
- * Creating a room mutates the configured database even when it uses only session
- * chips. Keep that path off by default: it is intended solely for an isolated
- * environment with two dedicated E2E accounts.
- */
 const lifecycleEnabled = process.env.E2E_ENABLE_ROOM_LIFECYCLE === 'true'
 const hasLifecycleCredentials = Boolean(username && password && secondUsername && secondPassword)
 const hasDistinctLifecycleAccounts = username !== secondUsername
@@ -43,7 +30,9 @@ test.describe('authenticated room funding', () => {
     'Set E2E_TEST_USERNAME and E2E_TEST_PASSWORD for the dedicated E2E account.',
   )
 
-  test('account-credit room selection requires an explicit final confirmation', async ({ page }) => {
+  test('account-credit room selection requires an explicit final confirmation', async ({
+    page,
+  }) => {
     await loginWithPassword(page, { username: username!, password: password! })
 
     const sessionFunding = page.getByRole('button', { name: '세션 칩', exact: true })
@@ -64,7 +53,9 @@ test.describe('authenticated room funding', () => {
     await expect(page).toHaveURL(/\/rooms\/new$/)
   })
 
-  test('two dedicated accounts complete a manual session-chip room lifecycle', async ({ browser }) => {
+  test('two dedicated accounts complete a manual session-chip room lifecycle', async ({
+    browser,
+  }) => {
     test.skip(!canRunLifecycle, lifecycleSkipReason)
     test.setTimeout(90_000)
 
@@ -89,8 +80,6 @@ test.describe('authenticated room funding', () => {
       const roomCode = new URL(host.url()).pathname.split('/').at(-1)
       expect(roomCode).toMatch(/^[A-Z0-9]{6}$/)
 
-      // Visiting a room URL is the supported join flow. It must create the second
-      // player's seat without using private server actions or database fixtures.
       await guest.goto(`/rooms/${roomCode}`)
       await expect(guest.getByText('참가자 2명')).toBeVisible()
 
@@ -111,8 +100,6 @@ test.describe('authenticated room funding', () => {
       await settleDialog.getByRole('button', { name: '정산', exact: true }).click()
       await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}/result$`))
 
-      // A separate session must observe the terminal state too; this proves the
-      // join/start/end/settle lifecycle did not merely update the host UI.
       await guest.goto(`/rooms/${roomCode}`)
       await expect(guest).toHaveURL(new RegExp(`/rooms/${roomCode}/result$`))
     } finally {
@@ -135,7 +122,9 @@ test.describe('authenticated room funding', () => {
       await loginWithPassword(host, { username: username!, password: password! })
       await loginWithPassword(guest, { username: secondUsername!, password: secondPassword! })
 
-      await host.getByRole('textbox', { name: '방 이름' }).fill(`E2E verified ${Date.now().toString(36)}`)
+      await host
+        .getByRole('textbox', { name: '방 이름' })
+        .fill(`E2E verified ${Date.now().toString(36)}`)
       await host.getByRole('button', { name: '방 만들기', exact: true }).click()
       await expect(host).toHaveURL(/\/rooms\/[A-Z0-9]{6}$/)
       const roomCode = new URL(host.url()).pathname.split('/').at(-1)
@@ -143,7 +132,9 @@ test.describe('authenticated room funding', () => {
 
       await host.goto(`/rooms/${roomCode}/settings`)
       await host.getByRole('button', { name: '수동 딜', exact: true }).click()
-      await expect(host.getByRole('button', { name: '검증 가능한 섯다 딜 사용', exact: true })).toBeVisible()
+      await expect(
+        host.getByRole('button', { name: '검증 가능한 섯다 딜 사용', exact: true }),
+      ).toBeVisible()
       await host.getByRole('button', { name: '저장', exact: true }).click()
       await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}$`))
 
@@ -165,8 +156,6 @@ test.describe('authenticated room funding', () => {
       await expect(host.getByText('내 검증 패')).toBeVisible()
       await expect(guest.getByText('내 검증 패')).toBeVisible()
 
-      // A rare tie/gusa asks the dealer to void and replay. The deterministic winner path is
-      // retried in an isolated test room, so a random deck cannot make this E2E flaky.
       for (let attempt = 0; attempt < 5; attempt += 1) {
         await host.getByRole('button', { name: /판 종료/ }).click()
         const auditAppeared = await host
@@ -193,7 +182,10 @@ test.describe('authenticated room funding', () => {
 
       await host.goto(`/rooms/${roomCode}`)
       await host.getByRole('button', { name: '세션 정산', exact: true }).click()
-      await host.getByRole('dialog', { name: '세션을 정산할까요?' }).getByRole('button', { name: '정산', exact: true }).click()
+      await host
+        .getByRole('dialog', { name: '세션을 정산할까요?' })
+        .getByRole('button', { name: '정산', exact: true })
+        .click()
       await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}/result$`))
     } finally {
       await Promise.all([hostContext.close(), guestContext.close()])

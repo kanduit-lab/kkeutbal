@@ -9,11 +9,8 @@ import { currentUserId } from '../auth/session'
 import { lockRoom, readMaxMembers, requireRole, type Tx } from './action-helpers'
 import { readFundingMode } from './funding-mode'
 
-/** 멤버 역할 액션 — 방장 위임·역할 변경·내보내기·나가기·로컬 플레이어 추가. */
-
 const { rooms, roomMembers, rounds, roundParticipants, users, buyIns, chipLedger } = schema
 
-/** 판 참가자는 종료·무효 전까지 멤버십을 고정한다 — 중도 퇴장은 승자·정산 대상의 기준을 흔든다. */
 async function isActiveRoundParticipant(tx: Tx, roomId: string, userId: string): Promise<boolean> {
   const [participant] = await tx
     .select({ roundId: roundParticipants.roundId })
@@ -35,7 +32,6 @@ const transferHostSchema = z.object({
   targetUserId: z.string().uuid(),
 })
 
-/** 방장 위임 — 현재 방장은 player 로 내려가고 대상이 host 가 된다. */
 export async function transferHost(
   input: z.infer<typeof transferHostSchema>,
 ): Promise<ActionResult<{ newHostId: string }>> {
@@ -86,7 +82,6 @@ const setRoleSchema = z.object({
   role: z.enum(['dealer', 'player', 'observer']),
 })
 
-/** 딜러 재위임 등 역할 변경. host 역할 자체는 이 경로로 바꿀 수 없다. */
 export async function setMemberRole(
   input: z.infer<typeof setRoleSchema>,
 ): Promise<ActionResult<{ targetUserId: string; role: string }>> {
@@ -144,7 +139,6 @@ export async function setMemberRole(
   }
 }
 
-/** 퇴장은 멤버 상태만 바꾼다. 칩·바이인 기록은 최종 제로섬 정산과 전적을 위해 보존한다. */
 async function retireMember(tx: Tx, roomId: string, targetUserId: string): Promise<void> {
   await tx
     .update(roomMembers)
@@ -157,7 +151,6 @@ const removeMemberSchema = z.object({
   targetUserId: z.string().uuid(),
 })
 
-/** 멤버 내보내기 — 방장·딜러 전용. 방장은 내보낼 수 없다. */
 export async function removeMember(
   input: z.infer<typeof removeMemberSchema>,
 ): Promise<ActionResult<{ targetUserId: string }>> {
@@ -210,17 +203,6 @@ const addLocalMemberSchema = z.object({
   name: z.string().trim().min(1).max(20),
 })
 
-/**
- * 로컬 플레이어 추가 — 계정 없이 이름만으로 좌석을 만든다 (가족 게임 기록장 용도).
- *
- * 각자 폰으로 로그인하지 않고 호스트 한 대로 전원을 대신 기록하는 흐름이다.
- * 만들어지는 `users` 행은 `is_managed` 이고 `authentik_sub` 이 `managed:{roomId}:{uuid}` 라
- * 비밀번호·게스트 토큰·SSO 중 어떤 인증 경로로도 로그인되지 않는다. 실제 조작은
- * 딜러의 대리 베팅(ProxyBetSection)과 딜러 패널이 담당한다.
- *
- * 좌석·정원·시작 칩 규칙은 joinRoom 과 같다. 계정 크레딧 방은 참가자마다 실제 크레딧
- * 계정에서 잠금이 걸려야 하므로 로컬 플레이어를 받지 않는다.
- */
 export async function addLocalMember(
   input: z.infer<typeof addLocalMemberSchema>,
 ): Promise<ActionResult<{ userId: string; name: string; seatNo: number }>> {
@@ -252,7 +234,6 @@ export async function addLocalMember(
         .where(and(eq(roomMembers.roomId, roomId), isNull(roomMembers.leftAt)))
       if ((active?.count ?? 0) >= maxMembers) return fail('errors.roomFull')
 
-      // 같은 방에서 같은 이름이 둘이면 대리 입력 때 누구를 고르는지 알 수 없다.
       const [duplicate] = await tx
         .select({ id: users.id })
         .from(roomMembers)
@@ -270,8 +251,6 @@ export async function addLocalMember(
       const [created] = await tx
         .insert(users)
         .values({
-          // 어떤 인증 경로와도 겹치지 않는 네임스페이스. 로그인에 쓰이지 않는다
-          // (내부 계정은 `local:{username}`, 게스트는 `guest:{tokenId}:{name}`).
           authentikSub: `managed:${roomId}:${randomUUID()}`,
           displayName: name,
           isManaged: true,
@@ -279,7 +258,6 @@ export async function addLocalMember(
         .returning({ id: users.id })
       if (!created) throw new Error('local member user insert failed')
 
-      // 좌석 번호는 나간 멤버 포함 최댓값 +1 — (roomId, seatNo) unique 제약을 지킨다.
       const [seat] = await tx
         .select({ next: sql<number>`coalesce(max(${roomMembers.seatNo}), -1) + 1` })
         .from(roomMembers)
@@ -287,8 +265,6 @@ export async function addLocalMember(
       const seatNo = seat?.next ?? 0
       await tx.insert(roomMembers).values({ roomId, userId: created.id, role: 'player', seatNo })
 
-      // 시작 칩은 일반 참가자와 같은 경로로 지급한다 — 원장이 정본이라 여기를 건너뛰면
-      // 손익 계산에서 이 좌석만 바이인 0 으로 남는다.
       const [initialBuyIn] = await tx
         .insert(buyIns)
         .values({ roomId, userId: created.id, amount: room.startingChips, createdBy: userId })
@@ -312,7 +288,6 @@ export async function addLocalMember(
 
 const leaveRoomSchema = z.object({ roomId: z.string().uuid() })
 
-/** 방 나가기 — 본인 전용. 방장은 위임 후에만 나갈 수 있다. */
 export async function leaveRoom(
   input: z.infer<typeof leaveRoomSchema>,
 ): Promise<ActionResult<{ roomId: string }>> {
@@ -333,7 +308,7 @@ export async function leaveRoom(
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
         .limit(1)
       if (!me) return fail('errors.notMember')
-      if (me.leftAt) return ok({ roomId }) // 이미 나감 — 멱등
+      if (me.leftAt) return ok({ roomId })
       if (me.role === 'host') return fail('errors.hostMustTransferBeforeLeave')
 
       const [room] = await tx

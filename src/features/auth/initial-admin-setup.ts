@@ -117,10 +117,6 @@ async function currentActiveSetup(
   return { ciphertext: row.ciphertext, expiresAt: row.expiresAt }
 }
 
-/**
- * 사용자가 한 명도 없을 때만 랜덤 설정 코드를 만들고 서버 콘솔에 출력한다.
- * 암호문을 DB에 보관하므로 서버리스 인스턴스가 바뀌어도 같은 코드를 다시 안내할 수 있다.
- */
 export async function prepareInitialAdminSetup(): Promise<boolean> {
   try {
     const { getOptionalDatabase } = await import('@/lib/optional-database')
@@ -129,7 +125,6 @@ export async function prepareInitialAdminSetup(): Promise<boolean> {
     const { db, schema } = database
     const { PUBLIC_READ_TIMEOUT_MS, withTimeout } = await import('@/lib/with-timeout')
 
-    // 로그인 화면 렌더 경로다 — DB 가 멈추면 안내를 포기하고 화면은 띄운다.
     const prepared = await withTimeout(
       db.transaction(async (tx) => {
         await tx.execute(
@@ -157,7 +152,6 @@ export async function prepareInitialAdminSetup(): Promise<boolean> {
           try {
             code = decryptSetupCode(ciphertext)
           } catch {
-            // AUTH_SECRET 교체 등으로 복호화할 수 없으면 기존 코드를 폐기하고 다시 발급한다.
             ciphertext = null
             code = ''
           }
@@ -212,7 +206,6 @@ export async function prepareInitialAdminSetup(): Promise<boolean> {
   }
 }
 
-/** 콘솔에 표시된 코드가 현재 DB의 최초 관리자 설정 코드와 일치하면 10분짜리 증표를 발급한다. */
 export async function grantInitialAdminSetupAccess(code: string): Promise<boolean> {
   try {
     const normalizedCode = normalizeCode(code)
@@ -249,7 +242,6 @@ export async function grantInitialAdminSetupAccess(code: string): Promise<boolea
   }
 }
 
-/** 현재 브라우저의 설정 증표가 유효하고 아직 폐기되지 않은 DB 코드와 연결되는지 확인한다. */
 export async function initialAdminSetupAccessId(): Promise<string | null> {
   const token = (await cookies()).get(COOKIE_NAME)?.value
   if (!token) return null
@@ -284,7 +276,6 @@ export async function consumeInitialAdminSetupAccess(): Promise<void> {
   })
 }
 
-/** 첫 사용자 삽입 트랜잭션이 검증할 현재 코드 식별자. */
 export function initialAdminSetupIdFromCiphertext(ciphertext: string): string {
   return setupId(ciphertext)
 }

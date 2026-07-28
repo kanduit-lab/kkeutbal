@@ -19,14 +19,8 @@ import {
 
 type PanelMode = 'idle' | 'pickWinner'
 
-/** 진행 표시를 붙일 버튼 자리 — 패널 전체가 아니라 누른 버튼만 돌게 한다. */
 type DealerSlot = 'start' | 'end' | 'void' | 'settle' | 'confirmWinner'
 
-/**
- * 딜러/방장 전용 컨트롤 — 판 시작·종료·무효, 승인 대기열, 정정, 세션 정산.
- * 멤버 단위 조작(바이인·대리 입력·역할·위임)은 좌석 탭 → MemberSheet 로 옮겼다.
- * 권한 없는 사용자에게는 아예 렌더되지 않는다 (숨김 게이팅).
- */
 export function DealerPanel({
   snapshot,
   pendingActions,
@@ -38,7 +32,7 @@ export function DealerPanel({
   pendingActions: readonly BetActionView[]
   selfId: string
   runAction: RunAction
-  /** 스냅샷이 낡아 조작을 잠글 사유. null 이면 정상. */
+
   staleReason?: string | null
 }) {
   const { d } = useDict()
@@ -47,11 +41,11 @@ export function DealerPanel({
   const [note, setNote] = useState('')
   const [gostop, setGostop] = useState<GostopScoreState>(initialGostopScore)
   const [settleOpen, setSettleOpen] = useState(false)
-  /** 무효 확인 대상 — 'current' 진행 중 판, 'last' 마지막으로 끝난 판(승자 오입력 복구). */
+
   const [voidTarget, setVoidTarget] = useState<'current' | 'last' | null>(null)
   const [voidReason, setVoidReason] = useState<VoidReason>('재경기')
   const [isPending, startTransition] = useTransition()
-  /** 현재 요청이 걸린 버튼 자리 — 스피너를 그 버튼에만 붙인다. */
+
   const [firingSlot, setFiringSlot] = useState<DealerSlot | null>(null)
 
   const roomId = snapshot.room.id
@@ -59,11 +53,9 @@ export function DealerPanel({
   const isHost = snapshot.members.find((member) => member.userId === selfId)?.role === 'host'
   const players = snapshot.members.filter((member) => member.role !== 'observer')
   const isGostop = snapshot.room.gameType === 'gostop'
-  const verifiedFairness =
-    snapshot.room.gameType === 'seotda' ? (round?.fairness ?? null) : null
+  const verifiedFairness = snapshot.room.gameType === 'seotda' ? (round?.fairness ?? null) : null
   const verifiedDealReady = verifiedFairness?.phase === 'sealed'
-  // 다이/폴드는 그 판의 승자 후보가 아니다. 서버도 endRound에서 재검증하므로, 이 값은
-  // 스냅샷이 잠시 오래됐더라도 권한 경계를 대신하지 않는다.
+
   const eligibleWinnerIds = new Set(
     nonFoldedParticipantIds(
       players.map((member) => member.userId),
@@ -73,7 +65,7 @@ export function DealerPanel({
   const eligiblePlayers = players.filter((member) => eligibleWinnerIds.has(member.userId))
   const foldWinWinner = !isGostop && eligiblePlayers.length === 1 ? eligiblePlayers[0] : null
   const selectedWinnerIsEligible = winnerId !== null && eligibleWinnerIds.has(winnerId)
-  /** 승자를 뺀 플레이어 — 고스톱 패자별 박 행과 loserPenalties 페이로드의 대상. */
+
   const gostopLosers =
     isGostop && winnerId ? players.filter((member) => member.userId !== winnerId) : []
   const betLabels = d.bet[snapshot.room.gameType === 'poker' ? 'poker' : 'seotda']
@@ -109,7 +101,6 @@ export function DealerPanel({
     setVoidTarget(null)
     run('void', () =>
       runAction(
-        // voidRound 는 진행 중 판이 없으면 마지막으로 끝난 판을 되돌린다 — 서버가 대상을 판정.
         () => voidRound({ roomId, reason }),
         (data) => ({
           event: 'round.voided',
@@ -123,7 +114,6 @@ export function DealerPanel({
     if (!round || !verifiedDealReady) return
     run('end', () =>
       runAction(
-        // verified 섯다는 winnerId를 받지 않는다. 서버가 봉인된 덱으로만 승자를 판정한다.
         () => endRound({ roomId }),
         (data) => ({
           event: 'round.ended',
@@ -141,8 +131,6 @@ export function DealerPanel({
   return (
     <Panel className="mb-4 space-y-4 border border-accent/20">
       <h2 className="text-sm font-bold text-accent">{d.dealer.title}</h2>
-
-      {/* ── 판 시작/종료 ── */}
       {mode === 'idle' ? (
         <div className="grid grid-cols-2 gap-2">
           {!round ? (
@@ -207,10 +195,10 @@ export function DealerPanel({
                     finishVerifiedRound()
                     return
                   }
-                  // 마지막 한 명만 남았다면 다이 승리를 미리 선택해 딜러의 한 단계를 줄인다.
+
                   setWinnerId(foldWinWinner?.userId ?? null)
                   setNote('')
-                  // 배수·박은 판마다 초기화하고 기본 점수는 유지한다 (연속 입력 편의).
+
                   setGostop((current) => ({ ...initialGostopScore, base: current.base }))
                   setMode('pickWinner')
                 }}
@@ -245,8 +233,6 @@ export function DealerPanel({
           ) : null}
         </div>
       ) : null}
-
-      {/* ── 승자 선택 ── */}
       {mode === 'pickWinner' && round ? (
         <div className="space-y-2.5">
           <p className="text-sm font-medium">
@@ -254,7 +240,9 @@ export function DealerPanel({
             {isGostop ? null : (
               <>
                 {` · ${d.dealer.potLabel} `}
-                <span className="tabular-nums font-bold text-warn">{round.pot.toLocaleString()}</span>
+                <span className="tabular-nums font-bold text-warn">
+                  {round.pot.toLocaleString()}
+                </span>
               </>
             )}
           </p>
@@ -301,9 +289,7 @@ export function DealerPanel({
               loadingLabel={d.ui.processing}
               disabled={isPending || !selectedWinnerIsEligible || staleReason !== null}
               disabledReason={
-                !selectedWinnerIsEligible
-                  ? d.dealer.pickWinnerFirst
-                  : (staleReason ?? undefined)
+                !selectedWinnerIsEligible ? d.dealer.pickWinnerFirst : (staleReason ?? undefined)
               }
               onClick={() => {
                 if (!winnerId || !eligibleWinnerIds.has(winnerId)) return
@@ -319,10 +305,8 @@ export function DealerPanel({
                         roomId,
                         winnerId,
                         note: note.trim() || undefined,
-                        // 흔들기·총통 공통 배수는 여기서 미리 곱해 최종 점수로 보낸다.
                         score: isGostop ? gostopEffectiveScore(gostop) : undefined,
-                        loserPenalties:
-                          isGostop && penalties.length > 0 ? penalties : undefined,
+                        loserPenalties: isGostop && penalties.length > 0 ? penalties : undefined,
                       }),
                     (data) => ({
                       event: 'round.ended',
@@ -344,9 +328,6 @@ export function DealerPanel({
         </div>
       ) : null}
 
-      {/* ── 판 무효 확인 (진행 중 판 · 지난 판 공용) ──
-          사유 칩은 ConfirmDialog 의 children 슬롯에 얹는다 — 전용 다이얼로그를 따로
-          두면 모션·포커스 트랩·포탈이 갈라져 같은 버그를 두 번 고치게 된다. */}
       <ConfirmDialog
         open={voidTarget !== null}
         tone="danger"
@@ -374,8 +355,6 @@ export function DealerPanel({
           ))}
         </div>
       </ConfirmDialog>
-
-      {/* ── 세션 정산 확인 ── */}
       <ConfirmDialog
         open={settleOpen}
         title={d.dealer.settleConfirmTitle}
@@ -388,8 +367,6 @@ export function DealerPanel({
         }}
         onClose={() => setSettleOpen(false)}
       />
-
-      {/* ── 승인 대기열 ── */}
       <PendingApprovalQueue
         pendingActions={pendingActions}
         selfId={selfId}
@@ -398,15 +375,12 @@ export function DealerPanel({
         betLabels={betLabels}
         staleReason={staleReason}
       />
-
-      {/* ── 확정 액션 정정 ── */}
       <RevertList
         snapshot={snapshot}
         selfId={selfId}
         runAction={runAction}
         staleReason={staleReason}
       />
-
       <p className="text-xs text-muted">{d.dealer.memberActionsHint}</p>
     </Panel>
   )

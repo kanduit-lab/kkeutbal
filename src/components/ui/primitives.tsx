@@ -9,17 +9,13 @@ export function Panel({
   as: Tag = 'section',
 }: {
   className?: string
-  /** 스켈레톤처럼 내용 없는 블록으로도 쓰인다 — 그때 {null} 을 넘기게 하지 않는다. */
+
   children?: ReactNode
   as?: 'section' | 'div' | 'article'
 }) {
   return <Tag className={clsx('lacquer rounded-2xl p-5', className)}>{children}</Tag>
 }
 
-/**
- * 로딩 자리 표시자. 같은 2줄짜리 구현이 loading.tsx 6개에 복붙돼 있었고
- * 그중 하나는 motion-safe 가드를 잃어 reduced-motion 을 무시하고 있었다.
- */
 export function Skeleton({
   className,
   radius = 'md',
@@ -41,15 +37,10 @@ export function Skeleton({
   )
 }
 
-/** 패널 모양의 로딩 블록. */
 export function SkeletonPanel({ className }: { className?: string }) {
   return <Panel as="div" className={clsx('motion-safe:animate-pulse', className)} />
 }
 
-/**
- * 숫자 한 개를 라벨과 함께 보여주는 타일. inset(패널 안 오목한 칩)과
- * panel(단독 옻칠 패널) 두 톤이 같은 개념으로 따로 구현돼 있던 걸 합쳤다.
- */
 export function StatTile({
   label,
   children,
@@ -89,7 +80,6 @@ const AVATAR_COLORS = [
 ] as const
 
 function avatarColor(name: string): string {
-  // 로컬 accumulator — 함수 밖으로 새지 않음
   let hash = 0
   for (let i = 0; i < name.length; i += 1) {
     hash = (hash * 31 + name.charCodeAt(i)) | 0
@@ -97,7 +87,6 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]!
 }
 
-/** 사람 아이콘 — 프로필 이미지가 없으면 이름 첫 글자 + 이름 기반 고정 색. */
 export function Avatar({
   name,
   url,
@@ -128,7 +117,12 @@ export function Avatar({
         'inline-flex shrink-0 select-none items-center justify-center rounded-full border-2 border-black/40 font-black text-white',
         className,
       )}
-      style={{ width: size, height: size, backgroundColor: avatarColor(name), fontSize: size * 0.42 }}
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: avatarColor(name),
+        fontSize: size * 0.42,
+      }}
       aria-hidden
     >
       {Array.from(name)[0]?.toUpperCase() ?? '?'}

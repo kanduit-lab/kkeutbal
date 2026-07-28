@@ -8,20 +8,9 @@ import {
   toSafeChipInteger,
 } from '@/features/game/chip-integers'
 
-const {
-  rooms,
-  roomMembers,
-  rounds,
-  roundParticipants,
-  betActions,
-  chipLedger,
-  buyIns,
-  users,
-} = schema
+const { rooms, roomMembers, rounds, roundParticipants, betActions, chipLedger, buyIns, users } =
+  schema
 
-/** net = balance - buyInTotal. 방 전체 net 합은 0 (칩 보존 불변식). */
-
-/** 순수 관전자는 전적에서 제외하되, 역할 변경 뒤에도 바이인·판 참가 이력이 있으면 포함한다. */
 function hasPlayedSession(): ReturnType<typeof sql> {
   return sql`(
     ${roomMembers.role} <> 'observer'
@@ -165,15 +154,13 @@ export interface CumulativeRow {
 
 export interface CumulativeRankingFilter {
   readonly gameType?: 'seotda' | 'gostop' | 'poker'
-  /** 이 시각 이후 종료(closedAt)된 방만 집계. closedAt 이 없는 방은 기간 필터에서 제외된다. */
+
   readonly since?: Date
 }
 
-/** 누적 랭킹 — 정산 완료(settled)된 방만 집계한다. 진행 중인 방은 순위를 흔들지 않는다. */
 export async function getCumulativeRanking(
   filter: CumulativeRankingFilter = {},
 ): Promise<CumulativeRow[]> {
-  // 필터는 방 단위로만 건다 — 조건을 만족한 방의 기록 전체가 집계 대상이 된다.
   const roomConditions = [inArray(rooms.status, ['settled', 'closed'])]
   if (filter.gameType) roomConditions.push(eq(rooms.gameType, filter.gameType))
   if (filter.since) roomConditions.push(gte(rooms.closedAt, filter.since))
@@ -222,8 +209,6 @@ export async function getCumulativeRanking(
   const userIds = sessionRows.map((row) => row.userId)
   if (userIds.length === 0) return []
 
-  // 로컬 플레이어(대리 기록용 좌석)는 전역 누적 랭킹에서 뺀다 — 가족 게임 기록이
-  // 실제 계정들의 순위를 덮지 않게 한다. 방 안 결과·정산에는 그대로 들어간다.
   const userRows = await db
     .select({ id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl })
     .from(users)
@@ -266,7 +251,7 @@ export interface RoundHistoryRow {
   readonly note: string | null
   readonly status: 'ended' | 'voided'
   readonly endedAt: string | null
-  /** 고스톱 박(피박/광박) 적용 패자 목록(factor>1 만). 고스톱 외 게임·구버전 판은 빈 배열. */
+
   readonly penalties: readonly RoundPenaltyView[]
 }
 
@@ -306,10 +291,6 @@ function readNote(result: unknown): string | null {
   return null
 }
 
-/**
- * rounds.result jsonb 의 penalties 필드를 방어적으로 읽는다.
- * 구버전 판(필드 없음)·형식이 다른 값은 조용히 빈 배열로 처리한다 — 크래시 금지.
- */
 function readPenalties(result: unknown): RoundPenaltyView[] {
   if (!result || typeof result !== 'object' || !('penalties' in result)) return []
   const raw = (result as { penalties?: unknown }).penalties
@@ -322,8 +303,6 @@ function readPenalties(result: unknown): RoundPenaltyView[] {
     return [{ userId, factor }]
   })
 }
-
-/* ── 개인 전적 ───────────────────────────────────────────── */
 
 export interface PlayerProfile {
   readonly displayName: string
@@ -342,14 +321,13 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfile | 
 export interface PlayerGameStats {
   readonly gameType: 'seotda' | 'gostop' | 'poker'
   readonly sessions: number
-  /** round_participants 스냅샷으로 집계한 실제 참가 판 수. */
+
   readonly rounds: number
   readonly wins: number
   readonly net: number
 }
 
 export interface PlayerStats {
-  /** 세션이 있는 게임만, 섯다 → 고스톱 → 포커 순. */
   readonly perGame: readonly PlayerGameStats[]
   readonly totals: {
     readonly sessions: number
@@ -361,13 +339,7 @@ export interface PlayerStats {
 
 const GAME_ORDER: ReadonlyArray<PlayerGameStats['gameType']> = ['seotda', 'gostop', 'poker']
 
-/**
- * 개인 누적 전적 — 정산 완료(settled/closed)된 방만, 게임별로 집계한다.
- * 멤버 행과 재무 기록은 soft leave 뒤에도 보존되므로 중도 퇴장자의 실제 손익까지
- * 누적 랭킹(getCumulativeRanking)과 같은 기준으로 잡힌다.
- */
 export async function getPlayerStats(userId: string): Promise<PlayerStats> {
-  // 이 사용자가 멤버였던 정산 완료 방 — 판수·승수 집계의 범위.
   const memberRoomIds = db
     .select({ id: roomMembers.roomId })
     .from(roomMembers)
@@ -380,7 +352,6 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
       ),
     )
 
-  // 순수 읽기 5개 — 서로 독립이므로 병렬.
   const [sessionRows, roundRows, winRows, balanceRows, buyInRows] = await Promise.all([
     db
       .select({ gameType: rooms.gameType, sessions: sql<number>`count(*)::int` })
@@ -476,7 +447,6 @@ export async function getPlayerStats(userId: string): Promise<PlayerStats> {
 
 export type PlayerRecentSession = Awaited<ReturnType<typeof getMyRecentSessions>>[number]
 
-/** 최근 정산 세션 — 홈 화면 getMyRecentSessions 와 같은 데이터를 임의 사용자로 조회한다. */
 export async function getPlayerRecentSessions(
   userId: string,
   limit = 10,

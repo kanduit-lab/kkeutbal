@@ -13,7 +13,6 @@ import { listPromotions } from '@/features/promotions/queries'
 
 const sectionSchema = z.enum(ADMIN_SECTIONS)
 
-/** 활성 탭에 필요한 데이터만 가져오는 CSR 관리자 콘솔 경계. 호출마다 관리자 권한을 재확인한다. */
 export async function loadAdminSection(input: {
   section: AdminSection
 }): Promise<ActionResult<AdminSectionData>> {

@@ -1,9 +1,5 @@
 import { getDict } from '@/lib/i18n/server'
 
-/**
- * 긴 가이드 문서 끝에서 다시 목차·제목으로 돌아가는 링크.
- * PageShell 이 렌더하는 `<main id="main">` 을 앵커로 쓴다.
- */
 export async function BackToTop() {
   const { d } = await getDict()
 

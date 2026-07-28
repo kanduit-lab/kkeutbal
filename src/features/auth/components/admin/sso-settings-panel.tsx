@@ -16,7 +16,6 @@ import { saveSsoSettings } from '../../admin-actions'
 import type { SsoSettingsView } from '../../sso-settings'
 import { PasswordInput } from '../password-input'
 
-/** 저장 전에 서버와 같은 전제를 확인한다 — 서버가 거절할 조합을 눌러보고 알게 하지 않는다. */
 function isValidIssuer(value: string): boolean {
   if (!value.trim()) return false
   try {
@@ -27,10 +26,6 @@ function isValidIssuer(value: string): boolean {
   }
 }
 
-/**
- * Authentik OIDC 연결 설정. SSO 를 켜고 끄는 것은 모든 사용자의 로그인 화면을 바꾸므로
- * 상태가 실제로 바뀔 때만 확인 다이얼로그를 거친다.
- */
 export function SsoSettingsPanel({
   settings,
   onDataChanged,
@@ -151,7 +146,6 @@ export function SsoSettingsPanel({
       >
         {d.adminConsole.sso.save}
       </Button>
-
       <ConfirmDialog
         open={confirmOpen}
         title={

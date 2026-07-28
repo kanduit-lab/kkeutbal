@@ -5,18 +5,9 @@ import { getOptionalDatabase } from '@/lib/optional-database'
 import { PUBLIC_READ_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import type { AdminPromotionView, PromotionView } from './types'
 
-/**
- * 노출 조건을 만족하는 프로모션. 절대 던지지 않고, 절대 오래 기다리지도 않는다 —
- * 광고 슬롯 조회 하나가 페이지 전체를 죽이면 안 된다.
- *
- * try/catch 만으로는 부족했다. DB 가 응답을 아예 안 주면 catch 는 도달하지 않고 렌더가
- * 무한정 매달린다 — 2026-07-27 에 이 경로로 모든 페이지가 524 를 냈다. 상한을 함께 건다.
- */
 export async function listActivePromotions(): Promise<PromotionView[]> {
   const now = new Date()
   try {
-    // DB 모듈을 지연 로드해야 환경 검증·연결 실패도 이 경계에서 빈 슬롯으로 강등할 수 있다.
-    // 최상단 import면 catch에 도달하기 전에 모든 공개 페이지가 죽는다.
     const database = await getOptionalDatabase()
     if (!database) return []
     const { db, schema } = database
@@ -47,7 +38,6 @@ export async function listActivePromotions(): Promise<PromotionView[]> {
   }
 }
 
-/** 관리자 목록 — 비활성·예약·종료분까지 전부. 호출 전 isAdminUser 게이트를 통과해야 한다. */
 export async function listPromotions(): Promise<AdminPromotionView[]> {
   const now = Date.now()
   const { db, schema } = await import('@/lib/db')

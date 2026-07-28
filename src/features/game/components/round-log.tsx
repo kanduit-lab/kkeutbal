@@ -6,10 +6,8 @@ import { Badge, EmptyState } from '@/components/ui'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import { betLabelsFor } from './shared'
 
-/** 전광판은 스크롤이 없다 — 최근 몇 개만 크게 보여준다. */
 const BOARD_MAX_ENTRIES = 8
 
-/** 현재 판 액션 로그. 최근 것이 위. */
 export function RoundLog({
   actions,
   members,
@@ -18,9 +16,9 @@ export function RoundLog({
 }: {
   actions: readonly BetActionView[]
   members: readonly MemberView[]
-  /** 'board' = 전광판 확대 렌더 — 최근 8개만, 스크롤 케이지 없이. */
+
   scale?: 'default' | 'board'
-  /** 액션 표기용 — 섯다는 다이, 포커는 폴드. */
+
   gameType?: RoomGameType
 }) {
   const { d } = useDict()
@@ -29,7 +27,6 @@ export function RoundLog({
   const nameOf = (userId: string) =>
     members.find((member) => member.userId === userId)?.displayName ?? '?'
 
-  /** 확정(accepted)이 기본값이라 뱃지를 달지 않는다 — 예외 상태만 눈에 띄게. */
   const statusBadge: Record<
     BetActionView['status'],
     { label: string; tone: 'muted' | 'win' | 'warn' | 'accent' } | null
@@ -40,9 +37,7 @@ export function RoundLog({
     reverted: { label: d.roundLog.statusReverted, tone: 'muted' },
   }
 
-  const rows = board
-    ? [...actions].reverse().slice(0, BOARD_MAX_ENTRIES)
-    : [...actions].reverse()
+  const rows = board ? [...actions].reverse().slice(0, BOARD_MAX_ENTRIES) : [...actions].reverse()
 
   return (
     <section className="mb-4 space-y-1.5">
@@ -52,8 +47,6 @@ export function RoundLog({
       {actions.length === 0 ? (
         <EmptyState title={d.roundLog.empty} />
       ) : (
-        // 판이 도는 동안 여기에만 새 액션이 쌓인다 — 추가분만 읽어 준다.
-        // 목록이 위에서부터 최신이라 additions 만으로 "방금 무슨 일이 있었는지"가 전달된다.
         <ul
           aria-live="polite"
           aria-relevant="additions"

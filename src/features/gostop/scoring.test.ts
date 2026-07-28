@@ -39,10 +39,12 @@ describe('captureOf / hasChongtong', () => {
 
   it('덱 밖 카드와 위조 속성을 각각 거부·정규화한다', () => {
     const canonical = cards('01-gwang')[0]!
-    expect(captureOf([{ ...canonical, kind: 'pi', piValue: 2 }], GOSTOP_RULES_STANDARD).gwang).toHaveLength(1)
-    expect(() =>
-      captureOf([{ ...canonical, id: 'fake' }], GOSTOP_RULES_STANDARD),
-    ).toThrow(/없는 카드/)
+    expect(
+      captureOf([{ ...canonical, kind: 'pi', piValue: 2 }], GOSTOP_RULES_STANDARD).gwang,
+    ).toHaveLength(1)
+    expect(() => captureOf([{ ...canonical, id: 'fake' }], GOSTOP_RULES_STANDARD)).toThrow(
+      /없는 카드/,
+    )
   })
 })
 
@@ -50,10 +52,26 @@ describe('scoreGostop', () => {
   it('광·열끗·띠·피 경계와 고도리·단 점수를 breakdown으로 설명한다', () => {
     const result = scoreGostop(
       capture([
-        '02-yeol', '04-yeol', '08-yeol', '05-yeol', '06-yeol',
-        '01-tti', '02-tti', '03-tti', '04-tti', '05-tti',
-        '01-pi-1', '01-pi-2', '02-pi-1', '02-pi-2', '03-pi-1',
-        '03-pi-2', '04-pi-1', '04-pi-2', '05-pi-1', '05-pi-2',
+        '02-yeol',
+        '04-yeol',
+        '08-yeol',
+        '05-yeol',
+        '06-yeol',
+        '01-tti',
+        '02-tti',
+        '03-tti',
+        '04-tti',
+        '05-tti',
+        '01-pi-1',
+        '01-pi-2',
+        '02-pi-1',
+        '02-pi-2',
+        '03-pi-1',
+        '03-pi-2',
+        '04-pi-1',
+        '04-pi-2',
+        '05-pi-1',
+        '05-pi-2',
       ]),
       EMPTY_CONTEXT,
       GOSTOP_RULES_STANDARD,
@@ -77,8 +95,16 @@ describe('scoreGostop', () => {
 
   it('고·박·흔들기·폭탄 배수를 누적한다', () => {
     const winner = capture([
-      '01-pi-1', '01-pi-2', '02-pi-1', '02-pi-2', '03-pi-1',
-      '03-pi-2', '04-pi-1', '04-pi-2', '05-pi-1', '05-pi-2',
+      '01-pi-1',
+      '01-pi-2',
+      '02-pi-1',
+      '02-pi-2',
+      '03-pi-1',
+      '03-pi-2',
+      '04-pi-1',
+      '04-pi-2',
+      '05-pi-1',
+      '05-pi-2',
     ])
     const opponent = capture(['01-pi-1', '02-pi-1'])
     const result = scoreGostop(

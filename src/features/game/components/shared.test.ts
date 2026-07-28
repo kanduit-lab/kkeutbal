@@ -10,11 +10,6 @@ import {
 } from './shared'
 import type { BetActionView } from '../types'
 
-/**
- * formatChips 로케일별 축약 테스트.
- * ko: 10만(100,000) 미만은 평문, 이상은 '만' 단위 축약.
- * en: 1만(10,000) 미만은 평문, 이상은 k/M 단위 축약.
- */
 describe('formatChips', () => {
   describe('ko (기본값)', () => {
     it('10만 미만은 천 단위 구분자만 붙인다', () => {
@@ -113,10 +108,6 @@ describe('베팅 UI 파생 규칙', () => {
   })
 })
 
-/**
- * round.voided 브로드캐스트의 reason 은 공개 채널에서 온다 — 방 UUID 를 아는 누구나
- * 1~200자 임의 문자열을 실을 수 있다. 앱이 쓴 문장처럼 렌더되기 전에 걸러야 한다.
- */
 describe('isKnownVoidReason', () => {
   it('프리셋 사유는 전부 통과시킨다', () => {
     for (const preset of VOID_REASONS) {

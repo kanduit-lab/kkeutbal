@@ -7,10 +7,7 @@ import {
   sealFairRound,
   submitFairRoundSeed,
 } from './round-state'
-import {
-  FAIRNESS_PUBLIC_RECEIPT_VERSION,
-  type PublicFairnessReceipt,
-} from './receipt'
+import { FAIRNESS_PUBLIC_RECEIPT_VERSION, type PublicFairnessReceipt } from './receipt'
 import { FAIRNESS_ALGORITHM_VERSION } from './protocol'
 
 const ids = {

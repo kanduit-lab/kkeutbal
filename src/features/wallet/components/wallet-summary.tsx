@@ -3,7 +3,6 @@ import { EmptyState, Panel } from '@/components/ui'
 import { format, getDict, type Dictionary } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/config'
 
-/** 지갑 화면의 읽기 전용 잔액·원장 요약. mutation UI와 분리해 다른 프로필 화면에서도 재사용한다. */
 export async function WalletSummary({ wallet }: { wallet: CreditWalletSnapshot }) {
   const { d, locale } = await getDict()
   return (
@@ -24,7 +23,6 @@ export async function WalletSummary({ wallet }: { wallet: CreditWalletSnapshot }
           <p className="text-xs text-muted">{d.wallet.lockedHint}</p>
         </Panel>
       </section>
-
       <Panel className="flex items-center justify-between gap-3 py-4">
         <div>
           <h2 className="font-bold">{d.wallet.total}</h2>
@@ -34,7 +32,6 @@ export async function WalletSummary({ wallet }: { wallet: CreditWalletSnapshot }
           {wallet.totalBalance.toLocaleString(locale)}
         </p>
       </Panel>
-
       <section className="space-y-3" aria-labelledby="credit-history-heading">
         <div>
           <h2 id="credit-history-heading" className="font-bold">
@@ -108,7 +105,6 @@ function transactionLabel(
   }
 }
 
-/** 로케일 기준 날짜·시각. 예전에는 'ko-KR' 이 하드코딩돼 EN 화면에도 한국식 표기가 나왔다. */
 function formatDateTime(locale: Locale, value: string): string {
   return new Intl.DateTimeFormat(locale, {
     dateStyle: 'medium',

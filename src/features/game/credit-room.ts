@@ -1,14 +1,5 @@
 import { type CreditEntryRequest, validateCreditEntries } from '../wallet/ledger'
 
-/**
- * 계정 크레딧 방의 DB posting 전용 순수 명령 구성기.
- *
- * 방 안의 칩은 전역 원장 잔액이 아니다. 참가비는 먼저 `available -> locked`로 옮기고,
- * 방을 종료할 때 모든 lock을 한 거래에서 `locked -> available`로 되돌리며 최종 칩
- * 분배를 반영한다. 실제 행 잠금·음수 잔액 방지는 `post_credit_transaction` DB 함수의
- * 책임이고, 이 모듈은 호출자가 잘못된 거래를 만들지 못하게 하는 도메인 경계다.
- */
-
 export interface RoomCreditLockInput {
   readonly roomId: string
   readonly buyInId: string
@@ -17,12 +8,10 @@ export interface RoomCreditLockInput {
   readonly amount: number
 }
 
-/** `room_credit_locks`에서 읽은, 아직 release 되지 않은 lock의 필요한 부분이다. */
 export interface ActiveRoomCreditLock extends RoomCreditLockInput {
   readonly lockId: string
 }
 
-/** 방 종료 시 lock을 가진 계정마다 하나씩 제출하는 최종 칩 분배다. */
 export interface RoomCreditPayout {
   readonly userId: string
   readonly accountId: string
@@ -34,7 +23,7 @@ export interface RoomCreditPostingRequest {
   readonly idempotencyKey: string
   readonly initiatedBy: string
   readonly roomId: string
-  /** 종료 판과 연결할 수 있으나, 방 자체 종료 정산에는 null을 사용한다. */
+
   readonly roundId: string | null
   readonly reason: string
   readonly snapshot: Readonly<Record<string, unknown>>
@@ -43,19 +32,19 @@ export interface RoomCreditPostingRequest {
 
 export interface RoomCreditLockCommand {
   readonly transaction: RoomCreditPostingRequest
-  /** posting 성공 뒤 `room_credit_locks`에 저장할 불변 근거다. */
+
   readonly lock: RoomCreditLockInput
 }
 
 export interface RoomCreditSettlementCommand {
   readonly transaction: RoomCreditPostingRequest
-  /** posting 성공과 같은 DB 트랜잭션에서 released_transaction_id를 채울 lock ID 목록이다. */
+
   readonly lockIdsToRelease: readonly string[]
 }
 
 export interface RoomCreditSettlementInput {
   readonly roomId: string
-  /** 방을 닫는 마지막 판이 있으면 연결해 감사 추적을 강화한다. */
+
   readonly roundId: string | null
   readonly settlementId: string
   readonly initiatedBy: string
@@ -63,30 +52,18 @@ export interface RoomCreditSettlementInput {
   readonly payouts: readonly RoomCreditPayout[]
 }
 
-/**
- * 같은 buy-in은 재시도해도 반드시 동일한 거래로 수렴한다.
- * 멱등키는 인증 수단이 아니므로, 서버 액션에서 방 멤버십·buy-in 소유권도 별도로 검증해야 한다.
- */
 export function roomCreditLockIdempotencyKey(roomId: string, buyInId: string): string {
   assertUuid(roomId, 'room ID')
   assertUuid(buyInId, 'buy-in ID')
   return `credit-room-lock:v1:${roomId}:${buyInId}`
 }
 
-/**
- * 하나의 방 종료 요청은 UUID settlementId 하나에만 대응한다. 네트워크 재시도에는 같은 ID를
- * 사용하고, 이미 종료된 방을 새 settlementId로 다시 정산하는 일은 서버 액션이 거부해야 한다.
- */
 export function roomCreditSettlementIdempotencyKey(roomId: string, settlementId: string): string {
   assertUuid(roomId, 'room ID')
   assertUuid(settlementId, 'settlement ID')
   return `credit-room-settlement:v1:${roomId}:${settlementId}`
 }
 
-/**
- * 전역 available 잔액에서 방 참가비를 lock한다. 한 계정 엔트리 안에서 available 감소와
- * locked 증가가 상쇄되므로 발행·소각 없이 잔액 보존이 성립한다.
- */
 export function createRoomCreditLockCommand(input: RoomCreditLockInput): RoomCreditLockCommand {
   validateLockInput(input)
 
@@ -119,12 +96,6 @@ export function createRoomCreditLockCommand(input: RoomCreditLockInput): RoomCre
   }
 }
 
-/**
- * 모든 방 lock을 한 원장 거래로 해제하면서 최종 칩을 계정 잔액으로 옮긴다.
- * payout 총합은 lock 총합과 같아야 하며, lock이 없는 계정으로 지급하거나 같은 lock을 두 번
- * 해제할 수 없다. 여러 buy-in이 같은 계정에 속해도 DB의 "한 거래당 한 계정 엔트리" 제약에
- * 맞게 하나의 엔트리로 합친다.
- */
 export function createRoomCreditSettlementCommand(
   input: RoomCreditSettlementInput,
 ): RoomCreditSettlementCommand {
@@ -148,7 +119,8 @@ export function createRoomCreditSettlementCommand(
       throw new Error('A credit account must belong to one room user')
     }
     const nextLockedAmount = (existing?.lockedAmount ?? 0) + lock.amount
-    if (!Number.isSafeInteger(nextLockedAmount)) throw new Error('Room credit lock total is too large')
+    if (!Number.isSafeInteger(nextLockedAmount))
+      throw new Error('Room credit lock total is too large')
     locksByAccount.set(lock.accountId, { userId: lock.userId, lockedAmount: nextLockedAmount })
 
     lockedTotal += lock.amount

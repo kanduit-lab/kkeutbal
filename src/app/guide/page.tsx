@@ -17,10 +17,6 @@ interface GuideEntry {
   readonly description: string
 }
 
-/**
- * 게임 이름은 사전이 정본이다 — 카드 제목은 로케일을 따르고,
- * 설명은 가이드 본문과 같은 콘텐츠 경계라 한국어로 남는다 (en.ts 상단 주석 참조).
- */
 function guideEntries(d: Dictionary): readonly GuideEntry[] {
   return [
     {
@@ -50,10 +46,6 @@ function guideEntries(d: Dictionary): readonly GuideEntry[] {
   ]
 }
 
-/**
- * 등장 지연 클래스는 리터럴로만 쓴다 — `rise-in-${i}` 처럼 조립하면
- * Tailwind 가 클래스를 못 보고 프로덕션 빌드에서 통째로 사라진다.
- */
 const RISE_DELAY = ['rise-in-1', 'rise-in-2', 'rise-in-3', 'rise-in-4'] as const
 
 export default async function GuidePage() {
@@ -74,7 +66,6 @@ export default async function GuidePage() {
         backLabel={d.common.home}
         actions={<LocaleSwitcher />}
       />
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {guideEntries(d).map((entry, index) => (
           <Link

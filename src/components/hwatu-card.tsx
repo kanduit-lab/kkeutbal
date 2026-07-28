@@ -9,7 +9,6 @@ const SIZE_CLASSES: Record<CardSize, { box: string; month: string; label: string
   md: { box: 'w-full max-w-36', month: 'text-xs', label: 'text-[11px]' },
 }
 
-/** 스프라이트 배경 스타일 — 좌표는 원본 viewBox 기준, %로 환산해 컨테이너 크기에 무관하게 맞춘다. */
 function spriteStyle(cardId: string): React.CSSProperties | null {
   const pos = spriteOf(cardId)
   if (!pos) return null
@@ -20,7 +19,6 @@ function spriteStyle(cardId: string): React.CSSProperties | null {
   }
 }
 
-/** 실물 화투 도안(CC BY-SA 4.0 — public/cards/ATTRIBUTION.md) 스프라이트 렌더. */
 export function HwatuCardView({
   card,
   size = 'md',

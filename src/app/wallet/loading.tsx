@@ -1,10 +1,6 @@
 import { PageShell, Panel, Skeleton, SkeletonPanel } from '@/components/ui'
 import { getDict } from '@/lib/i18n/server'
 
-/**
- * 지갑 스켈레톤. 자체 loading.tsx 가 없으면 루트의 홈 모양 스켈레톤이 폴백으로 떠서
- * "방 코드 입력창 + 바로가기" 골격이 먼저 보였다가 전혀 다른 레이아웃으로 갈린다.
- */
 export default async function Loading() {
   const { d } = await getDict()
   return (

@@ -8,17 +8,12 @@ import { Button } from '@/components/ui'
 import type { RunAction } from './shared'
 import { Section } from './member-sheet-parts'
 
-/** 역할 선택지 — 라벨은 사전(d.roles)에서 가져온다. */
 const ROLE_OPTIONS = [
   { role: 'dealer', emoji: '🎩' },
   { role: 'player', emoji: '🎮' },
   { role: 'observer', emoji: '👀' },
 ] as const
 
-/**
- * 역할 변경 섹션 — 방장 전용. "방장 위임"은 transferHost 확인 다이얼로그를 여는
- * 요청만 올리고, 다이얼로그 자체는 MemberSheet 가 소유한다.
- */
 export function RoleSection({
   roomId,
   memberId,
@@ -37,7 +32,7 @@ export function RoleSection({
   onTransferRequest: () => void
 }) {
   const { d } = useDict()
-  /** 요청이 걸린 역할 — 세 칸이 한꺼번에 도는 대신 누른 칸만 돌게 한다. */
+
   const [firingRole, setFiringRole] = useState<MemberRole | null>(null)
   return (
     <Section icon="🎭" title={d.memberSheet.roleTitle} hint={d.memberSheet.roleHint}>
@@ -52,7 +47,6 @@ export function RoleSection({
               loading={firingRole === option.role}
               disabled={isPending}
               onClick={() => {
-                // 이미 선택된 역할 — 재전송할 것이 없다. 시각은 selected 로 유지된다.
                 if (selected) return
                 setFiringRole(option.role)
                 run(async () => {

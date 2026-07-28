@@ -2,24 +2,21 @@ import { SEOTDA_DECK } from '../hwatu/cards'
 import { FAIRNESS_PUBLIC_RECEIPT_VERSION, type PublicFairnessReceipt } from './receipt'
 import { FAIRNESS_ALGORITHM_VERSION } from './protocol'
 
-/** `round_fairness` 행의 순수 도메인 표현 버전. DB 레코드 해석을 변경할 때 올린다. */
 export const FAIR_ROUND_STATE_VERSION = 1 as const
 
-/** 공정 딜의 단방향 수명주기. `aborted`는 seed 공개 전 취소만 표현한다. */
 export type FairRoundPhase = 'collecting_seeds' | 'sealed' | 'revealed' | 'aborted'
 
 export interface FairRoundParticipantState {
   readonly userId: string
-  /** 판 시작 때 고정한 딜 순서. 현재 방 좌석을 나중에 다시 읽지 않는다. */
+
   readonly dealOrder: number
-  /** 원문 seed가 아니라 round/user에 바인딩된 SHA-256 hash만 보관한다. */
+
   readonly clientSeedHash: string | null
   readonly seedSubmittedAt: Date | null
-  /** deadline 후 미제출자를 seal 시점에 확정한다. */
+
   readonly seedTimedOutAt: Date | null
 }
 
-/** 서버 seed 암호문과 종료 뒤 평문 reveal은 DB service 경계에만 남기고, 순수 상태에는 넣지 않는다. */
 export interface FairRoundState {
   readonly stateVersion: typeof FAIR_ROUND_STATE_VERSION
   readonly roundId: string
@@ -31,7 +28,7 @@ export interface FairRoundState {
   readonly seedDeadline: Date
   readonly seedCollectionSealedAt: Date | null
   readonly shuffledDeckCommitment: string | null
-  /** broadcast 가능한 엄격한 public receipt. private cards·seed는 포함하지 않는다. */
+
   readonly publicReceipt: PublicFairnessReceipt | null
   readonly revealedAt: Date | null
   readonly abortedAt: Date | null
@@ -55,13 +52,13 @@ export interface SubmitFairRoundSeedInput {
 
 export interface SealFairRoundInput {
   readonly now: Date
-  /** 서버가 실제 셔플을 계산한 뒤 만들고 strict parser를 통과시킨 안전한 영수증. */
+
   readonly publicReceipt: PublicFairnessReceipt
 }
 
 export interface RevealFairRoundInput {
   readonly now: Date
-  /** rounds.status가 ended/voided인지를 DB transaction에서 읽어 전달한다. */
+
   readonly roundFinalized: boolean
 }
 
@@ -76,7 +73,6 @@ export type FairRoundStateErrorCode =
   | 'FAIR_ROUND_NOT_SEALED'
   | 'FAIR_ROUND_NOT_FINALIZED'
 
-/** 호출자가 사용자에게 노출할 오류 키로 변환하기 쉬운 안정적인 도메인 오류. */
 export class FairRoundStateError extends Error {
   constructor(readonly code: FairRoundStateErrorCode) {
     super(code)
@@ -88,7 +84,6 @@ const HASH_PATTERN = /^[0-9a-f]{64}$/
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const MAX_SEOTDA_PARTICIPANTS = SEOTDA_DECK.length / 2
 
-/** commitment가 공개된 뒤 시작하는 seed collection 상태를 만든다. */
 export function createFairRoundState(input: CreateFairRoundStateInput): FairRoundState {
   assertUuid(input.roundId)
   assertHash(input.serverSeedCommitment)
@@ -130,10 +125,6 @@ export function createFairRoundState(input: CreateFairRoundStateInput): FairRoun
   })
 }
 
-/**
- * 참가자별 commitment 제출. 같은 hash 재전송은 시각과 phase가 바뀌어도 no-op으로 수렴하고,
- * 다른 hash로 바꾸려는 시도는 거부한다.
- */
 export function submitFairRoundSeed(
   state: FairRoundState,
   input: SubmitFairRoundSeedInput,
@@ -161,15 +152,13 @@ export function submitFairRoundSeed(
   })
 }
 
-/**
- * 전원 제출 또는 DB 기준 deadline 도달 뒤 셔플 결과를 영수증으로 봉인한다. deadline으로 진행될 때
- * 미제출자는 `seedTimedOutAt`에 명시적으로 남긴다. 이 함수는 카드·seed 원문을 받지 않는다.
- */
 export function sealFairRound(state: FairRoundState, input: SealFairRoundInput): FairRoundState {
   assertValidDate(input.now)
   if (state.phase !== 'collecting_seeds') fail('FAIR_ROUND_NOT_COLLECTING')
 
-  const allSubmitted = state.participants.every((participant) => participant.clientSeedHash !== null)
+  const allSubmitted = state.participants.every(
+    (participant) => participant.clientSeedHash !== null,
+  )
   if (!allSubmitted && input.now.getTime() < state.seedDeadline.getTime()) {
     fail('FAIR_ROUND_SEED_DEADLINE_NOT_REACHED')
   }
@@ -189,7 +178,6 @@ export function sealFairRound(state: FairRoundState, input: SealFairRoundInput):
   })
 }
 
-/** 종료된 판에서만 full receipt/server seed reveal 레코드를 만들 수 있게 상태를 전이한다. */
 export function revealFairRound(
   state: FairRoundState,
   input: RevealFairRoundInput,
@@ -201,7 +189,6 @@ export function revealFairRound(
   return freezeState({ ...state, phase: 'revealed', revealedAt: copyDate(input.now) })
 }
 
-/** seed 공개 전 취소. 이미 봉인한 딜은 별도 void/reveal 감사 경로로만 종료한다. */
 export function abortFairRound(state: FairRoundState, now: Date, reason: string): FairRoundState {
   assertValidDate(now)
   if (state.phase !== 'collecting_seeds') fail('FAIR_ROUND_NOT_COLLECTING')
@@ -309,7 +296,8 @@ function assertHash(value: string): void {
 }
 
 function assertValidDate(value: Date): void {
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) fail('FAIR_ROUND_INVALID_INPUT')
+  if (!(value instanceof Date) || !Number.isFinite(value.getTime()))
+    fail('FAIR_ROUND_INVALID_INPUT')
 }
 
 function copyDate(value: Date): Date {

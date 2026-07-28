@@ -10,7 +10,6 @@ import {
 } from './protocol'
 import { createPublicFairnessReceipt, type PublicFairnessReceipt } from './receipt'
 
-/** A seat snapshot is the only input used for a verified deal; current room seats are never reread. */
 export interface VerifiedSeotdaParticipant {
   readonly userId: string
   readonly dealOrder: number
@@ -24,7 +23,7 @@ export interface VerifiedSeotdaDeal {
 
 export interface VerifiedSeotdaShowdown {
   readonly outcome: SeotdaOutcome
-  /** Only non-folded contenders, in their original deal order. */
+
   readonly participants: readonly VerifiedSeotdaParticipant[]
   readonly hands: readonly {
     readonly userId: string
@@ -34,10 +33,6 @@ export interface VerifiedSeotdaShowdown {
 
 const CARDS_PER_PARTICIPANT = 2
 
-/**
- * Produces the only authoritative deck and public receipt for a verified Seotda round.
- * The input is intentionally limited to committed seed hashes, never raw client seeds.
- */
 export async function createVerifiedSeotdaDeal(input: {
   readonly roundId: string
   readonly serverSeed: string
@@ -49,7 +44,10 @@ export async function createVerifiedSeotdaDeal(input: {
   if (input.clientSeedHashes.some((entry) => !participantIds.has(entry.userId))) {
     throw new Error('Verified Seotda seed contributors must match the seat snapshot')
   }
-  if (new Set(input.clientSeedHashes.map((entry) => entry.userId)).size !== input.clientSeedHashes.length) {
+  if (
+    new Set(input.clientSeedHashes.map((entry) => entry.userId)).size !==
+    input.clientSeedHashes.length
+  ) {
     throw new Error('Verified Seotda seed contributors must be unique')
   }
 
@@ -69,11 +67,12 @@ export async function createVerifiedSeotdaDeal(input: {
   return Object.freeze({
     shuffle,
     publicReceipt,
-    participants: Object.freeze(participants.map((participant) => Object.freeze({ ...participant }))),
+    participants: Object.freeze(
+      participants.map((participant) => Object.freeze({ ...participant })),
+    ),
   })
 }
 
-/** Returns only one participant's two cards after the fair seed collection has been sealed. */
 export function privateSeotdaHand(
   shuffledDeckIds: readonly string[],
   participants: readonly VerifiedSeotdaParticipant[],
@@ -91,7 +90,6 @@ export function privateSeotdaHand(
   return Object.freeze([first, second])
 }
 
-/** Recomputes all hands from the sealed deck and resolves the Seotda engine outcome server-side. */
 export function resolveVerifiedSeotdaShowdown(
   shuffledDeckIds: readonly string[],
   participants: readonly VerifiedSeotdaParticipant[],
@@ -117,13 +115,15 @@ export function resolveVerifiedSeotdaShowdown(
     participants: Object.freeze(contenders.map((participant) => Object.freeze({ ...participant }))),
     hands: Object.freeze(
       hands.map((hand) =>
-        Object.freeze({ userId: hand.userId, cards: Object.freeze([...hand.cards]) as [HwatuCard, HwatuCard] }),
+        Object.freeze({
+          userId: hand.userId,
+          cards: Object.freeze([...hand.cards]) as [HwatuCard, HwatuCard],
+        }),
       ),
     ),
   })
 }
 
-/** The persisted reveal is deliberately full only after the round is finalized. */
 export function fullVerifiedSeotdaReceipt(
   deal: VerifiedSeotdaDeal,
   serverSeed: string,

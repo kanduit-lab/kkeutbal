@@ -10,10 +10,6 @@ import { RoomEntryError } from '@/features/game/components/room-entry-error'
 import { Badge, ButtonLink, EmptyState, Panel } from '@/components/ui'
 import type { Metadata } from 'next'
 
-/**
- * 결과 화면은 링크로 공유되는 유일한 화면이다 — og 태그가 없으면 카카오톡·슬랙이
- * 방 이름 대신 앱 기본 설명만 보여준다. 방을 못 찾으면 기본 메타데이터로 둔다.
- */
 export async function generateMetadata({
   params,
 }: {
@@ -31,17 +27,12 @@ export async function generateMetadata({
   }
 }
 
-export default async function RoomResultPage({
-  params,
-}: {
-  params: Promise<{ code: string }>
-}) {
+export default async function RoomResultPage({ params }: { params: Promise<{ code: string }> }) {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
 
   const { code: rawCode } = await params
-  // 형제 라우트 5개가 공유하는 한 가지 표면으로 맞춘다 — 아무 설명 없이 홈으로
-  // 던지면 사용자는 자기가 뭘 잘못했는지 알 수 없다.
+
   const code = normalizeRoomCode(rawCode)
   const { d } = await getDict()
   const room = await findRoomByCode(code)
@@ -73,11 +64,12 @@ export default async function RoomResultPage({
       <header>
         <p className="text-sm text-muted">
           {room.name} · {d.games[room.gameType]} ·{' '}
-          {room.status === 'settled' || room.status === 'closed' ? d.result.settled : d.result.inProgress}
+          {room.status === 'settled' || room.status === 'closed'
+            ? d.result.settled
+            : d.result.inProgress}
         </p>
         <h1 className="font-brush text-4xl font-black lg:text-5xl">{d.result.title}</h1>
       </header>
-
       <section className="space-y-2">
         {standings.length === 0 ? (
           <EmptyState title={d.result.noRecords} />
@@ -111,7 +103,6 @@ export default async function RoomResultPage({
           ))
         )}
       </section>
-
       {standings.length > 0 ? (
         <section className="space-y-1">
           <h2 className="px-1 text-sm font-bold text-muted">{d.result.settlementTitle}</h2>
@@ -142,7 +133,6 @@ export default async function RoomResultPage({
           )}
         </section>
       ) : null}
-
       {standings.length > 0 ? (
         <section className="grid grid-cols-2 gap-2">
           {mvp && mvp.net > 0 ? (
@@ -222,7 +212,6 @@ export default async function RoomResultPage({
           </ul>
         )}
       </section>
-
       <div className="space-y-2">
         {standings.length > 0 ? (
           <ShareResultButton
@@ -235,8 +224,7 @@ export default async function RoomResultPage({
             }))}
           />
         ) : null}
-        {/* Link 안에 Button 을 중첩하면 <a><button> 이 되어 탭 스톱이 둘로 늘고
-            스크린리더가 "링크, 버튼"으로 읽는다 — ButtonLink 가 그 자리다. */}
+
         <div className="grid grid-cols-2 gap-2">
           {room.status !== 'settled' && room.status !== 'closed' ? (
             <ButtonLink href={`/rooms/${room.code}`} variant="outline" className="w-full">
@@ -247,8 +235,7 @@ export default async function RoomResultPage({
               {d.home.ranking}
             </ButtonLink>
           )}
-          {/* 정산된 방은 되돌아갈 곳이 없다 — 다음 판으로 이어지는 길을 같이 준다.
-              여기서 막히면 사용자는 홈으로 나갔다가 방을 다시 만들어야 한다. */}
+
           <ButtonLink href="/rooms/new" variant="outline" className="w-full">
             {d.newRoom.create}
           </ButtonLink>

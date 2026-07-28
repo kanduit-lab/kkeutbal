@@ -2,8 +2,6 @@ import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import type { RoomGameType } from '@/features/game/types'
 
-/** 관리자 페이지 전용 조회. 호출 전 isAdminUser 게이트를 통과해야 한다. */
-
 export interface GuestTokenView {
   readonly id: string
   readonly label: string
@@ -22,7 +20,6 @@ export interface RegistrationCodeView {
   readonly revokedAt: string | null
 }
 
-/** 가입코드 원문은 저장하지 않으므로 목록에는 운영 메타데이터만 표시한다. */
 export async function listRegistrationCodes(): Promise<RegistrationCodeView[]> {
   const rows = await db
     .select({
@@ -76,12 +73,11 @@ export interface AdminRoomView {
   readonly gameType: RoomGameType
   readonly status: 'waiting' | 'playing'
   readonly createdAt: string
-  /** leftAt 이 없는 활성 멤버 수. */
+
   readonly memberCount: number
   readonly hostName: string
 }
 
-/** 진행 중(waiting·playing)인 방 목록 — 방치된 방 강제 정산 판단용. */
 export async function listActiveRooms(): Promise<AdminRoomView[]> {
   const rows = await db
     .select({
@@ -104,7 +100,6 @@ export async function listActiveRooms(): Promise<AdminRoomView[]> {
     .orderBy(desc(schema.rooms.createdAt))
     .limit(100)
 
-  // where 절이 이미 걸러내지만 drizzle 타입은 좁혀지지 않는다 — 캐스트 대신 런타임 좁히기.
   return rows.flatMap((row) =>
     row.status === 'waiting' || row.status === 'playing'
       ? [
@@ -127,7 +122,7 @@ export interface AdminUserView {
   readonly id: string
   readonly displayName: string
   readonly username: string | null
-  /** 뒷자리 4자리만 노출한다. */
+
   readonly phoneMasked: string | null
   readonly isAdmin: boolean
   readonly isGuest: boolean

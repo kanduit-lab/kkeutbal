@@ -31,10 +31,6 @@ export interface CreditTransactionView {
   readonly createdAt: string
 }
 
-/**
- * 내 가상 크레딧과 변경 불가 이력. 처음 조회하는 계정은 0 잔액 지갑만 lazy creation 한다.
- * 지급은 이 함수가 아니라 관리자 조정 거래만 할 수 있다.
- */
 export async function getMyCreditWallet(): Promise<ActionResult<CreditWalletSnapshot>> {
   const userId = await currentUserId()
   if (!userId) return fail('errors.loginRequired')
@@ -53,10 +49,8 @@ export async function getMyCreditWallet(): Promise<ActionResult<CreditWalletSnap
 }
 
 const adminAdjustCreditsSchema = z.object({
-  /** 클라이언트가 한 번 생성해 재시도에도 유지하는 UUID. */
   requestId: z.string().uuid(),
   targetUserId: z.string().uuid(),
-  /** 양수=지급, 음수=회수. 0은 허용하지 않는다. */
   amount: z
     .number()
     .int()
@@ -66,10 +60,6 @@ const adminAdjustCreditsSchema = z.object({
   reason: z.string().trim().min(1).max(200),
 })
 
-/**
- * 관리자 가상 크레딧 지급/회수. 서버는 인증·입력 경계만 맡고, 발행 계정과 대상 계정의
- * 복식 엔트리 구성·posting은 DB 전용 RPC가 원자적으로 수행한다. 회수의 음수 잔액도 DB가 거부한다.
- */
 export async function adminAdjustCredits(
   input: z.infer<typeof adminAdjustCreditsSchema>,
 ): Promise<ActionResult<{ transactionId: string; targetUserId: string }>> {

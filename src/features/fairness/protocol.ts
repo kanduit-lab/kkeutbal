@@ -1,10 +1,3 @@
-/**
- * 공정 셔플의 독립 검증 가능한 commit-reveal 프로토콜.
- *
- * 이 모듈은 브라우저와 서버 양쪽에서 같은 Web Crypto 구현으로 실행된다. DB·환경변수·네트워크에
- * 의존하지 않으므로, 종료 뒤 참가자가 공개 영수증만으로 결과를 재현하는 데에도 쓴다.
- */
-
 export const FAIRNESS_ALGORITHM_VERSION = 'kkeutbal-commit-reveal-hmac-fy-v1'
 
 const PROTOCOL_DOMAIN = 'kkeutbal/fairness/v1'
@@ -21,7 +14,7 @@ export interface FairShuffleInput {
   readonly roundId: string
   readonly serverSeed: string
   readonly clientSeedHashes: readonly ClientSeedHash[]
-  /** 게임의 고정 정렬 원본 덱. 카드 ID는 중복될 수 없다. */
+
   readonly deckIds: readonly string[]
 }
 
@@ -51,7 +44,6 @@ export interface FairShuffleVerification {
   readonly valid: boolean
 }
 
-/** Strictly parses the post-round full reveal before it reaches an independent verifier or UI. */
 export function parseFairShuffleReceipt(value: unknown): FairShuffleReceipt {
   if (!isRecord(value)) throw new Error('Invalid fair shuffle receipt')
   const expectedKeys = [
@@ -85,19 +77,21 @@ export function parseFairShuffleReceipt(value: unknown): FairShuffleReceipt {
   })
 }
 
-/** 암호학적으로 무작위인 32-byte hex seed를 만든다. */
 export function generateFairnessSeed(): string {
   const bytes = new Uint8Array(SEED_HEX_LENGTH / 2)
   crypto.getRandomValues(bytes)
   return bytesToHex(bytes)
 }
 
-/** 서버가 배분 전에 공개하는 commitment. */
 export async function commitServerSeed(roundId: string, serverSeed: string): Promise<string> {
-  return sha256Canonical([PROTOCOL_DOMAIN, 'server-commit', requireId(roundId), normalizeSeed(serverSeed)])
+  return sha256Canonical([
+    PROTOCOL_DOMAIN,
+    'server-commit',
+    requireId(roundId),
+    normalizeSeed(serverSeed),
+  ])
 }
 
-/** 참가자의 원문 seed를 저장하지 않고도 기여를 증명할 수 있는 hash. */
 export async function hashClientSeed(
   roundId: string,
   userId: string,
@@ -112,7 +106,6 @@ export async function hashClientSeed(
   ])
 }
 
-/** server seed와 확정된 참가자 hash를 결합한 final seed. */
 export async function deriveFinalSeed(
   roundId: string,
   serverSeed: string,
@@ -127,10 +120,6 @@ export async function deriveFinalSeed(
   ])
 }
 
-/**
- * HMAC-SHA-256 counter stream + rejection sampling으로 Fisher-Yates 셔플을 수행한다.
- * input과 결과를 변경하지 않는다.
- */
 export async function shuffleFairDeck(input: FairShuffleInput): Promise<FairShuffleResult> {
   const roundId = requireId(input.roundId)
   const serverSeed = normalizeSeed(input.serverSeed)
@@ -157,7 +146,6 @@ export async function shuffleFairDeck(input: FairShuffleInput): Promise<FairShuf
   }
 }
 
-/** 공개된 영수증이 원래 덱과 정확히 일치하는지 독립적으로 재계산한다. */
 export async function verifyFairShuffle(
   receipt: FairShuffleReceipt,
   originalDeckIds: readonly string[],
@@ -169,7 +157,8 @@ export async function verifyFairShuffle(
       clientSeedHashes: receipt.clientSeedHashes,
       deckIds: originalDeckIds,
     })
-    const commitmentMatches = result.serverSeedCommitment === normalizeHash(receipt.serverSeedCommitment)
+    const commitmentMatches =
+      result.serverSeedCommitment === normalizeHash(receipt.serverSeedCommitment)
     const deckMatches = result.deckCommitment === normalizeHash(receipt.deckCommitment)
     const shuffledDeckMatches = arraysEqual(result.shuffledDeckIds, receipt.shuffledDeckIds)
     return {
@@ -179,7 +168,6 @@ export async function verifyFairShuffle(
       valid: commitmentMatches && deckMatches && shuffledDeckMatches,
     }
   } catch {
-    // 외부에서 받은 영수증은 형식 오류도 "검증 실패"로 처리한다. UI 검증 화면이 죽으면 안 된다.
     return {
       commitmentMatches: false,
       deckMatches: false,
@@ -231,7 +219,6 @@ async function fisherYates(
   return shuffled
 }
 
-/** HMAC 출력 32 bytes를 네 개의 unsigned 32-bit word로 읽는 결정적 스트림. */
 class HmacWordStream {
   private counter = 0
   private block = new Uint8Array()
@@ -293,7 +280,6 @@ async function sha256Canonical(value: unknown): Promise<string> {
   return bytesToHex(new Uint8Array(digest))
 }
 
-/** 배열만 사용해 객체 key 순서 차이가 verifier 결과에 영향을 주지 않게 한다. */
 function encodeCanonical(value: unknown): Uint8Array {
   return encoder.encode(JSON.stringify(value))
 }
@@ -305,8 +291,7 @@ function canonicalizeClientSeedHashes(
     userId: requireId(entry.userId),
     seedHash: normalizeHash(entry.seedHash),
   }))
-  // UUID 같은 protocol identifier는 locale 규칙이 아니라 code-point 순으로 정렬해야 다른 verifier와
-  // 운영체제가 달라도 같은 final seed를 만든다.
+
   entries.sort((left, right) =>
     left.userId < right.userId ? -1 : left.userId > right.userId ? 1 : 0,
   )
@@ -321,13 +306,15 @@ function canonicalizeClientSeedHashes(
 function normalizeDeck(deckIds: readonly string[]): string[] {
   if (deckIds.length < 2) throw new Error('A fair deck needs at least two cards')
   const normalized = deckIds.map((cardId) => requireId(cardId))
-  if (new Set(normalized).size !== normalized.length) throw new Error('Deck card IDs must be unique')
+  if (new Set(normalized).size !== normalized.length)
+    throw new Error('Deck card IDs must be unique')
   return normalized
 }
 
 function requireId(value: string): string {
   const normalized = value.trim()
-  if (normalized.length === 0 || normalized.length > 200) throw new Error('Invalid protocol identifier')
+  if (normalized.length === 0 || normalized.length > 200)
+    throw new Error('Invalid protocol identifier')
   return normalized
 }
 
@@ -357,7 +344,6 @@ function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-/** Web Crypto DOM typings require a concrete ArrayBuffer, not ArrayBufferLike. */
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength)
   copy.set(bytes)

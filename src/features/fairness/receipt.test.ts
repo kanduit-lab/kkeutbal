@@ -73,8 +73,14 @@ describe('public fairness receipt', () => {
     expect(seedAudit.finalSeedHash).toBe(shuffle.finalSeedHash)
     expect(json.shuffledDeckCommitment).toBe(shuffle.deckCommitment)
     expect(seedAudit.clientSeedHashes).toEqual([
-      { userId: aliceId, seedHash: shuffle.clientSeedHashes.find((entry) => entry.userId === aliceId)?.seedHash },
-      { userId: bobId, seedHash: shuffle.clientSeedHashes.find((entry) => entry.userId === bobId)?.seedHash },
+      {
+        userId: aliceId,
+        seedHash: shuffle.clientSeedHashes.find((entry) => entry.userId === aliceId)?.seedHash,
+      },
+      {
+        userId: bobId,
+        seedHash: shuffle.clientSeedHashes.find((entry) => entry.userId === bobId)?.seedHash,
+      },
     ])
 
     expect(seedAudit.serverSeed).toBeUndefined()
@@ -126,9 +132,9 @@ describe('public fairness receipt', () => {
     const originalDeck = Array.from({ length: 20 }, (_, index) => `card-${index + 1}`)
 
     expect(await verifyPublicFairnessAudit(receipt, reveal, originalDeck)).toBe(true)
-    expect(await verifyPublicFairnessAudit(receipt, { ...reveal, serverSeed: aliceSeed }, originalDeck)).toBe(
-      false,
-    )
+    expect(
+      await verifyPublicFairnessAudit(receipt, { ...reveal, serverSeed: aliceSeed }, originalDeck),
+    ).toBe(false)
   })
 
   it('does not let a shuffle for one deck masquerade as the other game', async () => {

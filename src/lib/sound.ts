@@ -1,11 +1,5 @@
 'use client'
 
-/**
- * 게임 효과음 — WebAudio 합성. 오디오 파일 에셋 없이 동작한다.
- * 첫 사용자 제스처 이후에만 소리가 난다(브라우저 autoplay 정책).
- * 음소거 상태는 localStorage 'kkeutbal:muted' 로 유지한다.
- */
-
 const MUTE_KEY = 'kkeutbal:muted'
 
 let ctx: AudioContext | null = null
@@ -55,7 +49,6 @@ function tone(
   osc.stop(t0 + duration + 0.02)
 }
 
-/** 짧은 노이즈 버스트 — 칩 부딪히는 소리의 몸통. */
 function clack(ac: AudioContext, start = 0, gain = 0.25) {
   const length = Math.floor(ac.sampleRate * 0.04)
   const buffer = ac.createBuffer(1, length, ac.sampleRate)
@@ -75,7 +68,6 @@ function clack(ac: AudioContext, start = 0, gain = 0.25) {
   src.start(ac.currentTime + start)
 }
 
-/** 칩 베팅 — 칩 서로 부딪히는 소리. */
 export function playChip(): void {
   if (isMuted()) return
   const ac = audioContext()
@@ -85,7 +77,6 @@ export function playChip(): void {
   tone(ac, { freq: 1900, duration: 0.05, gain: 0.05, start: 0.01 })
 }
 
-/** 판 시작. */
 export function playRoundStart(): void {
   if (isMuted()) return
   const ac = audioContext()
@@ -94,7 +85,6 @@ export function playRoundStart(): void {
   tone(ac, { freq: 784, start: 0.1, duration: 0.18, type: 'triangle' })
 }
 
-/** 승리 — 팟 귀속. */
 export function playWin(): void {
   if (isMuted()) return
   const ac = audioContext()
@@ -106,7 +96,6 @@ export function playWin(): void {
   clack(ac, 0.36, 0.16)
 }
 
-/** 다이(폴드) — 낮게 떨어지는 소리. */
 export function playFold(): void {
   if (isMuted()) return
   const ac = audioContext()

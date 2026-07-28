@@ -10,24 +10,14 @@ import type { CardId, GameType, Month } from '@/features/hwatu/types'
 import { currentUserId } from '@/features/auth/session'
 import { getActiveVisionSettings } from './settings'
 
-/**
- * 족보 vision 인식 — 사진 한 장에서 화투 카드를 식별해 CardId 목록으로 정규화한다.
- *
- * 인식은 보조다: 결과는 항상 피커에 프리필될 뿐, 최종 확정은 사람이 한다.
- * 모델 출력은 신뢰 경계 밖이므로 zod 로 전부 검증하고,
- * 스키마를 벗어나면 부분 반영 없이 실패를 돌려준다.
- */
-
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
-/** 모델이 채우는 구조. 같은 피 2장은 사진으로 구분 불가하므로 (월, 종류)까지만 요구한다. */
 const visionSchema = z.object({
   cards: z
     .array(
       z.object({
         month: z.number().int().min(1).max(12),
         kind: z.enum(['gwang', 'yeol', 'tti', 'pi']),
-        /** 피일 때 쌍피 여부. 다른 종류면 무시. */
         ssangpi: z.boolean().optional(),
       }),
     )
@@ -36,7 +26,6 @@ const visionSchema = z.object({
   note: z.string().max(200).optional(),
 })
 
-/** Gemini Structured Outputs용 스키마. 결과는 아래 Zod 스키마로 다시 검증한다. */
 const geminiVisionJsonSchema = {
   type: 'object',
   properties: {
@@ -66,7 +55,6 @@ export interface VisionRecognition {
 }
 
 const inputSchema = z.object({
-  /** data URL (data:image/jpeg;base64,...) — 클라이언트에서 1568px 이하로 리사이즈해 보낸다. */
   imageDataUrl: z.string().min(1),
   gameType: z.enum(['seotda', 'gostop']),
 })
@@ -147,7 +135,6 @@ export async function recognizeHand(
       note: result.data.note ?? null,
     })
   } catch {
-    // 공급자 오류에는 인증·요청 정보가 들어갈 수 있으므로 원문은 로그에 남기지 않는다.
     console.error('vision recognition failed')
     return fail('errors.visionRecognitionFailed')
   }
@@ -202,7 +189,6 @@ async function recognizeWithGemini(
   return response.output_text ?? null
 }
 
-/** (월, 종류) 판정을 실제 카드 id 로 정규화한다. 같은 종류가 여럿이면 미사용 인스턴스를 배정한다. */
 function toCardIds(
   detected: ReadonlyArray<{ month: number; kind: string; ssangpi?: boolean }>,
   gameType: GameType,

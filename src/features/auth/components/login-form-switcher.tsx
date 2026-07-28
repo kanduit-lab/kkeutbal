@@ -11,7 +11,6 @@ import { useDict } from '@/lib/i18n/client'
 
 type LoginMode = 'password' | 'guest' | 'registration'
 
-/** 로그인 카드 안에서 내부 계정과 게스트 토큰 폼을 전환한다. */
 export function LoginFormSwitcher({
   redirectTo,
   initialMode,
@@ -25,7 +24,7 @@ export function LoginFormSwitcher({
 }) {
   const { d } = useDict()
   const [mode, setMode] = useState<LoginMode>(initialMode)
-  // 방 링크로 튕겨 온 사람의 실제 진입 경로는 게스트 토큰이다 — 그때만 눈에 띄게 올린다.
+
   const roomBound = redirectTo.startsWith('/rooms/')
 
   if (mode === 'guest') {
@@ -93,8 +92,6 @@ export function LoginFormSwitcher({
       <p className="font-bold">{d.auth.passwordLoginTitle}</p>
       <form className="space-y-3" action={loginWithPassword}>
         <input type="hidden" name="next" value={redirectTo} />
-        {/* 플레이스홀더는 첫 타이핑에 사라진다 — 탭으로 돌아왔을 때 어느 칸인지 알 수 있게
-            접근 가능한 이름을 따로 준다 (registration-code-form 과 같은 규칙). */}
         <Input
           name="username"
           aria-label={d.auth.usernameLabel}

@@ -14,20 +14,9 @@ import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
 import { RoundLog } from './round-log'
 
-/**
- * 읽기 전용 전광판 — 조작 없이 테이블·팟·기록만 크게. 태블릿·TV 상시 표시 전제.
- * 로그인만 하면 참가자가 아니어도 볼 수 있다(서버 refreshRoom 이 참가 여부를 묻지 않는다) —
- * selfId 가 멤버가 아닐 수 있으므로 멤버 조회는 전부 미존재를 허용해야 한다.
- */
-export function MonitorClient({
-  initial,
-  selfId,
-}: {
-  initial: RoomSnapshot
-  selfId: string
-}) {
+export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; selfId: string }) {
   const { d } = useDict()
-  // 전광판은 계속 켜 두는 화면이다 — 화면 꺼짐을 막는다 (미지원이면 조용히 무시).
+
   useWakeLock()
 
   const onEvent = useCallback((event: RoomEvent) => {
@@ -36,7 +25,6 @@ export function MonitorClient({
     if (event.name === 'round.ended') playWin()
   }, [])
 
-  // spectator — 전광판 기기가 접속자·좌석 온라인으로 잡히면 안 된다 (presence track 생략).
   const {
     snapshot,
     online,
@@ -51,16 +39,12 @@ export function MonitorClient({
   const { fullscreenSupported, isFullscreen, toggleFullscreen } = useFullscreen()
 
   const winnerName = snapshot.lastResult
-    ? (snapshot.members.find((m) => m.userId === snapshot.lastResult?.winnerId)?.displayName ??
-      '?')
+    ? (snapshot.members.find((m) => m.userId === snapshot.lastResult?.winnerId)?.displayName ?? '?')
     : null
 
   const nameOf = (userId: string | null) =>
-    userId
-      ? (snapshot.members.find((member) => member.userId === userId)?.displayName ?? '?')
-      : '?'
+    userId ? (snapshot.members.find((member) => member.userId === userId)?.displayName ?? '?') : '?'
 
-  /** 현재 1위 — 관전 제외, 순손익(잔액 − 바이인) 최대. 동률이면 좌석 순 첫 사람. */
   const leader: MemberView | null = useMemo(() => {
     const players = snapshot.members.filter((member) => member.role !== 'observer')
     if (players.length === 0) return null
@@ -106,14 +90,10 @@ export function MonitorClient({
           ) : null}
         </div>
       </header>
-
-      {/* 연결 경고는 헤더 아이콘 줄이 아니라 전용 슬롯에서 알린다 — 소켓이 깜빡일 때마다
-          방 코드·뱃지가 밀리면 상시 표시 화면에서 특히 눈에 거슬린다. */}
       <RoomConnectionBar
         syncFailed={syncFailed}
         disconnected={(everConnected && !connected) || connectTimedOut}
         onReconnect={() => {
-          // 채널 재구독 + 즉시 refetch — 채널이 멀쩡한데 동기화만 죽은 경우도 복구한다.
           reconnect()
           void refetch()
         }}
@@ -163,7 +143,6 @@ export function MonitorClient({
               </span>
             </div>
           ) : null}
-
           {snapshot.recentRounds.length > 0 ? (
             <section className="mb-4 space-y-1.5">
               <h2 className="px-1 text-sm font-bold text-muted">{d.monitor.recentRounds}</h2>
@@ -222,10 +201,6 @@ export function MonitorClient({
   )
 }
 
-/**
- * 전체 화면 토글 — Fullscreen API 미지원(iOS Safari 등)이면 supported=false 로 버튼을 숨긴다.
- * ESC·시스템 제스처로 나가는 경우까지 fullscreenchange 로 상태를 맞춘다.
- */
 function useFullscreen(): {
   fullscreenSupported: boolean
   isFullscreen: boolean
@@ -242,7 +217,6 @@ function useFullscreen(): {
   }, [])
 
   const toggleFullscreen = useCallback(() => {
-    // 전환 거부(권한·제스처 정책)는 조용히 무시 — 전광판 표시 자체에는 영향이 없다.
     if (document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {})
     } else {

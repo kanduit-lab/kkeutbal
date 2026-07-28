@@ -1,11 +1,5 @@
 'use client'
 
-/**
- * 테이블의 칩 시각화 — 액면가 색 배분과 좌석 옆 칩 더미.
- * 좌석 배치·차례 힌트와 아무 상태도 공유하지 않아서 game-table 에서 떼어 냈다.
- */
-
-/** 칩 액면가 → 색. 실물 카지노 칩 관례를 따른다. */
 const CHIP_COLORS: readonly { value: number; bg: string; rim: string }[] = [
   { value: 500, bg: '#7c3aed', rim: '#a78bfa' },
   { value: 100, bg: '#18181b', rim: '#52525b' },
@@ -18,7 +12,6 @@ export function chipBreakdown(
   amount: number,
   maxChips = 5,
 ): readonly { bg: string; rim: string }[] {
-  // 로컬 accumulator — 함수 밖으로 새지 않음
   const chips: { bg: string; rim: string }[] = []
   let rest = Math.max(0, amount)
   for (const denom of CHIP_COLORS) {

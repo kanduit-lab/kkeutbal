@@ -4,11 +4,6 @@ import { clsx } from 'clsx'
 import type { ReactNode } from 'react'
 import { ModalPortal, useModalBehavior } from './modal'
 
-/**
- * 바텀 시트 — 앱에서 가장 많이 쓰는 오버레이. 등장·퇴장 연출, safe-area 하단 여백,
- * 스크롤 체이닝 차단, 넓은 화면에서의 중앙 다이얼로그 폴백을 여기서 한 번만 정의한다.
- * (globals.css 의 sheet-slide-in/out 은 이 컴포넌트가 유일한 소비자다.)
- */
 export function Sheet({
   open,
   onClose,

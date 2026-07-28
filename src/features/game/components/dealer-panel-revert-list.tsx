@@ -16,14 +16,14 @@ export function RevertList({
   snapshot: RoomSnapshot
   selfId: string
   runAction: RunAction
-  /** 스냅샷이 낡아 조작을 잠글 사유. null 이면 정상. */
+
   staleReason?: string | null
 }) {
   const { d } = useDict()
   const [isPending, startTransition] = useTransition()
   const [open, setOpen] = useState(false)
   const [revertTarget, setRevertTarget] = useState<BetActionView | null>(null)
-  /** 확정 후에도 어느 행이 처리 중인지 알아야 스피너를 그 행에만 붙일 수 있다. */
+
   const [revertingId, setRevertingId] = useState<string | null>(null)
   const accepted = snapshot.actions.filter((action) => action.status === 'accepted').slice(-5)
   if (accepted.length === 0) return null
@@ -45,8 +45,6 @@ export function RevertList({
 
   return (
     <>
-      {/* 원래는 raw <details>/<summary> 였다 — 탭 타깃이 20px 남짓이고 브라우저 기본
-          삼각형이 화투판 테마와 겉돌았다. 명시적 토글 버튼으로 바꿔 48px 을 확보한다. */}
       <div className="rounded-xl bg-bg-deep/60 px-2 py-1.5">
         <Button
           type="button"
@@ -104,7 +102,6 @@ export function RevertList({
           startTransition(async () => {
             try {
               await runAction(
-                // reason 은 원장·브로드캐스트에 저장되는 정본 값 — 로케일과 무관하게 한국어 유지.
                 () => revertBet({ actionId: target.id, reason: '딜러 정정' }),
                 () => ({
                   event: 'bet.reverted',

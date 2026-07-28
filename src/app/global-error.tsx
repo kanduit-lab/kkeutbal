@@ -2,17 +2,6 @@
 
 import { useEffect } from 'react'
 
-/**
- * 루트 레이아웃까지 깨졌을 때의 최후 방어선.
- * globals.css 도 I18nProvider 도 없는 상태로 렌더될 수 있어 인라인 스타일 + 고정 문구로 자급자족한다.
- *
- * 색상 리터럴은 globals.css `@theme` 토큰의 사본이다 — 토큰을 바꾸면 여기도 함께 고쳐야 한다.
- * `#071d15` = --color-bg-deep, `#123527` = --color-surface, `#f4efe2` = --color-text,
- * `#9db8a8` = --color-muted, `#d8433f` = --color-accent, `rgb(229 185 84 / …)` = --color-gold.
- *
- * 사전을 못 읽으므로 로케일을 고를 수 없다 — 한국어·영어를 함께 적고 각 블록에 lang 을 달아
- * 스크린리더가 영어 사용자에게 한국어를 읽지 않게 한다.
- */
 export default function GlobalError({ error }: { error: Error & { digest?: string } }) {
   useEffect(() => {
     console.error(error.digest ?? error)

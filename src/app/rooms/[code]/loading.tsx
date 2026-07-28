@@ -1,13 +1,6 @@
 import { Skeleton, SkeletonPanel } from '@/components/ui'
 import { getDict } from '@/lib/i18n/server'
 
-/**
- * 방 화면 모양의 스켈레톤 — 헤더(뒤로가기·아이콘들) + 테이블 자리 + 옆 패널을 흉내낸다.
- *
- * 비율은 GameTable 의 실제 값(aspect-[4/5] → sm 부터 16/10)과 반드시 같아야 한다.
- * 4/3 로 잡아 두던 시절에는 343px 폭 폰에서 257px 만 잡고 실제로는 429px 가 차지해
- * 테이블이 뜨는 순간 아래 내용이 170px 씩 아래로 튀었다.
- */
 export default async function Loading() {
   const { d } = await getDict()
   return (
@@ -29,7 +22,6 @@ export default async function Loading() {
           <Skeleton className="h-12 w-12" radius="xl" />
         </div>
       </header>
-
       <div className="lg:grid lg:grid-cols-12 lg:gap-6">
         <div className="lg:col-span-7 xl:col-span-8">
           <SkeletonPanel className="aspect-[4/5] w-full sm:aspect-[16/10]" />
@@ -38,8 +30,6 @@ export default async function Loading() {
           <SkeletonPanel className="h-40" />
         </div>
       </div>
-
-      {/* 하단 고정 ActionBar 자리 — 이 블록이 없으면 바가 붙는 순간 본문이 한 번 더 튄다. */}
       <div className="fixed inset-x-0 bottom-0 border-t border-gold/15 bg-bg-deep/95 lg:hidden">
         <div className="mx-auto w-full max-w-lg px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3">
           <Skeleton className="h-4 w-32" />

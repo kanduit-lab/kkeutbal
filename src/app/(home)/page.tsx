@@ -29,9 +29,6 @@ function formatSessionDate(iso: string | null, locale: Locale): string | null {
   })
 }
 
-/**
- * 홈 헤더의 보조 내비 링크. 44px 터치 타깃 + ghost 버튼 룩을 맞춘다.
- */
 function HeaderNavLink({ href, children }: { href: Route; children: React.ReactNode }) {
   return (
     <Link
@@ -61,7 +58,6 @@ export default async function HomePage({
 
   return (
     <PageShell width="wide">
-      {/* 좁은 화면에서는 액션 줄이 제목 아래로 접힌다 — 360px 에서 헤더가 넘치던 원인. */}
       <header className="rise-in mb-8 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 lg:mb-12">
         <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
           {d.common.appName}
@@ -85,8 +81,6 @@ export default async function HomePage({
           </form>
         </div>
       </header>
-
-      {/* ?error= 는 URL 에 남아 새로고침마다 다시 뜬다 — 쿼리를 지우는 닫기 링크를 함께 준다. */}
       {error ? (
         <Alert tone="error" className="mb-6">
           <span className="flex items-center justify-between gap-3">
@@ -129,7 +123,6 @@ export default async function HomePage({
               {d.home.newRoom}
             </ButtonLink>
           </Panel>
-
           <div className="grid grid-cols-3 gap-3">
             <Link href="/advisor" className="rise-in rise-in-2 block">
               <Panel className="h-full px-2 py-6 text-center transition-transform hover:-translate-y-0.5">
@@ -157,7 +150,6 @@ export default async function HomePage({
             </Link>
           </div>
         </div>
-
         <section className="rise-in rise-in-3 space-y-3 lg:col-span-7">
           <h2 className="px-1 text-lg font-bold">{d.home.activeRooms}</h2>
           {myRooms.length === 0 ? (
@@ -175,9 +167,7 @@ export default async function HomePage({
                       </p>
                     </div>
                     <div className="ml-3 flex shrink-0 flex-col items-end gap-1.5">
-                      <Badge tone={GAME_BADGE_TONE[room.gameType]}>
-                        {d.games[room.gameType]}
-                      </Badge>
+                      <Badge tone={GAME_BADGE_TONE[room.gameType]}>{d.games[room.gameType]}</Badge>
                       <Badge tone={room.status === 'playing' ? 'win' : 'muted'}>
                         {room.status === 'playing' ? d.common.playing : d.common.waiting}
                       </Badge>
@@ -187,8 +177,6 @@ export default async function HomePage({
               ))}
             </div>
           )}
-
-          {/* 지난 세션 — 이력이 없으면 섹션 자체를 그리지 않는다 (빈 상태 안내 불필요). */}
           {recentSessions.length > 0 ? (
             <div className="space-y-3 pt-4">
               <h2 className="px-1 text-lg font-bold">{d.home.recentSessions}</h2>
@@ -227,7 +215,6 @@ export default async function HomePage({
           ) : null}
         </section>
       </div>
-
       <footer className="mt-12 text-center">
         <Link
           href={'/about' as Route}

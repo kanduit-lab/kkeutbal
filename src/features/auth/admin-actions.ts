@@ -13,15 +13,12 @@ import { generateRegistrationCode, registrationCodeHash } from './registration-c
 import { guestTokenHash } from './guest-tokens'
 import { encryptSsoClientSecret, SETTINGS_ID } from './sso-settings'
 
-/** 관리자 전용 액션 — 게스트 토큰 발급·회수, 관리자 지정, 방 강제 정산. */
-
 async function requireAdmin(): Promise<string | null> {
   const userId = await currentUserId()
   if (!userId) return null
   return (await isAdminUser(userId)) ? userId : null
 }
 
-/** 방 코드와 같은 문자 집합(혼동 문자 제외) 8자. */
 const TOKEN_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 
 function generateTokenCode(): string {
@@ -32,7 +29,6 @@ function generateTokenCode(): string {
 
 const createTokenSchema = z.object({
   label: z.string().trim().min(1).max(40),
-  /** 만료까지의 시간. 0 이면 무기한. */
   expiresInHours: z
     .number()
     .int()
@@ -270,14 +266,8 @@ export async function setAdmin(
   }
 }
 
-/** 강제 정산으로 무효 처리되는 판·베팅에 남기는 사유. */
 const ADMIN_CLOSE_REASON = '관리자 강제 정산'
 
-/**
- * 방 강제 정산 — 방장이 잠수하거나 게스트 로그인을 잃어 방을 못 닫을 때의 회수 경로.
- * closeRoom(game/actions.ts)과 달리 방장 역할 대신 관리자 권한으로 통과하고,
- * 진행 중인 판이 있으면 voidRound(game/round-actions.ts)와 같은 절차로 무효 처리한 뒤 정산한다.
- */
 export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ code: string }>> {
   const adminId = await requireAdmin()
   if (!adminId) return fail('errors.adminOnlyCloseRoom')
@@ -307,7 +297,6 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
         .limit(1)
 
       if (round) {
-        // voidRound 와 동일한 정정 절차 — 아직 정정되지 않은 베팅 행을 전액 반환한다.
         const betRows = await tx
           .select()
           .from(schema.chipLedger)
@@ -359,8 +348,6 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
         return fail('errors.settlementNotBalanced')
       }
       if (readFundingMode(room.rulePreset) === 'account_credit') {
-        // DB RPC도 users.is_admin을 다시 확인한다. 방장이 사라진 복구 경로에서 전역 lock이
-        // session 원장만 남긴 채 고립되는 것을 막기 위해 room 상태 변경과 같은 트랜잭션으로 정산한다.
         await tx.execute(sql`select public.settle_room_credits(${roomId}::uuid, ${adminId}::uuid)`)
       }
 

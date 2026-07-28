@@ -10,7 +10,6 @@ import { format, useDict } from '@/lib/i18n/client'
 
 const SUIT_ORDER: readonly PokerSuit[] = ['s', 'h', 'd', 'c']
 
-/** HwatuCardView 와 톤을 맞춘 트럼프 카드 타일 그리드 — 카드 얼굴 렌더링은 PokerCardView 에 위임한다. */
 export function PokerPicker({
   selected,
   maxSelect,
@@ -44,13 +43,11 @@ export function PokerPicker({
           >
             {SUIT_LABELS[suit]}
           </span>
-          {/* auto-fill + minmax(48px,…) — 화면 폭에 맞춰 열 수를 자동 조절하면서 터치 타겟은 항상 48px 이상 유지 */}
           <div className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(48px,1fr))] gap-1.5">
             {cards.map((card) => {
               const isSelected = selected.has(card.id)
               const isFull = !isSelected && selected.size >= maxSelect
               return (
-                // 상한 도달 카드는 aria-disabled + 사유 토스트 — 화투 피커와 같은 규칙이다.
                 <button
                   key={card.id}
                   type="button"

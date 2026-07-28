@@ -7,12 +7,10 @@ import type { RegistrationCodeState } from '@/features/auth/actions'
 import { Alert, Button, Input, SubmitButton } from '@/components/ui'
 import { useDict } from '@/lib/i18n/client'
 
-/** 회원가입 폼을 열기 전에 가입코드를 확인하는 로그인 카드용 폼. */
 export function RegistrationCodeForm({
   next = '/',
   onCancel,
 }: {
-  /** 초대 링크로 온 사람이 가입 후 방으로 이어지게 목적지를 /register 까지 들고 간다. */
   next?: string
   onCancel: () => void
 }) {

@@ -26,10 +26,15 @@ import { winnerPayout } from './round-settlement'
 import { SEOTDA_RULES_STANDARD } from '../seotda/types'
 import type { RoundPenaltyView } from './types'
 
-/** 판 진행 액션 — 시작·종료·무효. 방 수명주기는 actions.ts. */
-
-const { rooms, roomMembers, rounds, roundParticipants, chipLedger, roundFairness, roundFairnessParticipants } =
-  schema
+const {
+  rooms,
+  roomMembers,
+  rounds,
+  roundParticipants,
+  chipLedger,
+  roundFairness,
+  roundFairnessParticipants,
+} = schema
 
 export async function startRound(
   roomId: string,
@@ -86,9 +91,10 @@ export async function startRound(
           ])
         : [null, null]
       const fairNow = verifiedSeotda ? await fairDatabaseNow(tx) : null
-      const seedDeadline = verifiedSeotda && fairNow
-        ? new Date(fairNow.getTime() + fairPlay.seedCollectionSeconds * 1_000)
-        : null
+      const seedDeadline =
+        verifiedSeotda && fairNow
+          ? new Date(fairNow.getTime() + fairPlay.seedCollectionSeconds * 1_000)
+          : null
 
       const [round] = await tx
         .insert(rounds)
@@ -133,21 +139,14 @@ export async function startRound(
 
 const loserPenaltySchema = z.object({
   userId: z.string().uuid(),
-  /** 2 = 피박 또는 광박, 4 = 둘 다 */
   factor: z.union([z.literal(1), z.literal(2), z.literal(4)]),
 })
 
 const endRoundSchema = z.object({
   roomId: z.string().uuid(),
-  /** verified Seotda ignores a claimed winner and derives it from the sealed deck. */
   winnerId: z.string().uuid().optional(),
   note: z.string().trim().max(60).optional(),
-  /** 고스톱 점수. 고스톱 방에서는 필수 — 점수 × 점당 칩을 패자 전원이 지불한다. */
   score: z.number().int().min(1).max(999).optional(),
-  /**
-   * 고스톱 패자별 박 배수. 목록에 없는 패자는 1배.
-   * 흔들기·총통 같은 공통 배수는 딜러 UI가 score에 미리 곱해서 보낸다.
-   */
   loserPenalties: z
     .array(loserPenaltySchema)
     .max(9)
@@ -203,15 +202,13 @@ export async function endRound(
           .select({ userId: schema.betActions.userId, action: schema.betActions.action })
           .from(schema.betActions)
           .where(
-            and(
-              eq(schema.betActions.roundId, round.id),
-              eq(schema.betActions.status, 'accepted'),
-            ),
+            and(eq(schema.betActions.roundId, round.id), eq(schema.betActions.status, 'accepted')),
           )
           .orderBy(desc(schema.betActions.seq))
         const lastActionByUser = new Map<string, (typeof acceptedActions)[number]['action']>()
         for (const action of acceptedActions) {
-          if (!lastActionByUser.has(action.userId)) lastActionByUser.set(action.userId, action.action)
+          if (!lastActionByUser.has(action.userId))
+            lastActionByUser.set(action.userId, action.action)
         }
         const contenderIds = new Set(
           fairParticipants
@@ -240,10 +237,7 @@ export async function endRound(
         .from(roundParticipants)
         .innerJoin(
           roomMembers,
-          and(
-            eq(roomMembers.roomId, roomId),
-            eq(roomMembers.userId, roundParticipants.userId),
-          ),
+          and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, roundParticipants.userId)),
         )
         .where(
           and(
@@ -272,21 +266,20 @@ export async function endRound(
         if (winnerLastAction?.action === 'fold') return fail('errors.foldedPlayerCannotWin')
       }
 
-      // 승인 대기 중인 액션이 남아 있으면 팟이 확정되지 않는다.
       const [pending] = await tx
         .select({ id: schema.betActions.id })
         .from(schema.betActions)
-        .where(and(eq(schema.betActions.roundId, round.id), eq(schema.betActions.status, 'pending')))
+        .where(
+          and(eq(schema.betActions.roundId, round.id), eq(schema.betActions.status, 'pending')),
+        )
         .limit(1)
       if (pending) return fail('errors.pendingBetsBeforeEnd')
 
       let pot = await getRoundPot(round.id)
-      // 판 결과에 기록할 박 적용 내역 — factor>1 이면서 실제 패자인 항목만. 원장 계산과 무관한 표시용 데이터.
+
       let persistedPenalties: RoundPenaltyView[] = []
 
       if (isGostop && score) {
-        // 점수 정산: 패자(관전 제외, 승자 제외) 전원이 점수 × 점당 칩 × 박 배수를 지불한다.
-        // 잔액보다 크면 잔액 전부(올인)만 지불한다 — 원장 음수 금지 불변식 유지.
         const pointValue = readPointValue(room.rulePreset)
 
         const penalties = loserPenalties ?? []
@@ -294,10 +287,7 @@ export async function endRound(
           .select({ userId: roundParticipants.userId })
           .from(roundParticipants)
           .where(
-            and(
-              eq(roundParticipants.roundId, round.id),
-              ne(roundParticipants.userId, winnerId),
-            ),
+            and(eq(roundParticipants.roundId, round.id), ne(roundParticipants.userId, winnerId)),
           )
         const loserIds = new Set(losers.map((loser) => loser.userId))
         if (penalties.some((penalty) => !loserIds.has(penalty.userId))) {
@@ -322,8 +312,7 @@ export async function endRound(
             reason: 'settlement',
           })
         }
-        // 표시용 기록 — 실제 패자에게 적용된 박(factor>1)만 남긴다. 지급액이 올인으로 깎여도
-        // "박이 적용됐다"는 사실 자체는 바뀌지 않으므로 owed/pay 와 무관하게 입력값 기준으로 남긴다.
+
         persistedPenalties = penalties.flatMap((penalty) => {
           if (penalty.factor === 1) return []
           return [{ userId: penalty.userId, factor: penalty.factor }]
@@ -393,10 +382,6 @@ const voidRoundSchema = z.object({
   reason: z.string().trim().min(1).max(60),
 })
 
-/**
- * 판 무효(재경기·승자 오입력 등) — 이 판의 칩 이동을 전액 정정 행으로 되돌린다.
- * 진행 중인 판이 없으면 마지막으로 끝난 판을 되돌린다 (그 뒤에 새 판이 시작되지 않은 경우만).
- */
 export async function voidRound(
   input: z.infer<typeof voidRoundSchema>,
 ): Promise<ActionResult<{ roundId: string; seq: number }>> {
@@ -423,8 +408,6 @@ export async function voidRound(
 
       let round = playing
       if (!round) {
-        // 승자 오입력 복구 경로 — 방의 최신 판이 '끝난 판'일 때만 되돌린다.
-        // seq 최댓값 기준이라 "그 뒤에 새 판이 시작된 판"은 자연히 제외된다.
         const [latest] = await tx
           .select()
           .from(rounds)
@@ -435,7 +418,6 @@ export async function voidRound(
         round = latest
       }
 
-      // 아직 정정되지 않은 칩 이동(베팅·팟 지급·점수 정산)을 전부 반대 부호로 되돌린다.
       const moveRows = await tx
         .select()
         .from(chipLedger)
@@ -466,7 +448,6 @@ export async function voidRound(
           revertedOf: row.id,
         }))
 
-      // 승자에게서 팟을 회수하면 잔액이 음수가 될 수 있다 — 원장 음수 금지 불변식 보호.
       const giveBack = new Map<string, number>()
       for (const refund of refunds) {
         if (refund.delta < 0) {
@@ -504,11 +485,12 @@ export async function voidRound(
         .limit(1)
       const fairRound = fairRoundRow as PersistedFairRound | undefined
       if (fairRound?.phase === 'collecting_seeds') {
-        // 봉인 전 취소는 server seed 공개 없이 명시적으로 abort한다. 이후 seed 제출·seal은 DB shape로 차단된다.
         await tx
           .update(roundFairness)
           .set({ phase: 'aborted', abortedAt: await fairDatabaseNow(tx), abortReason: reason })
-          .where(and(eq(roundFairness.roundId, round.id), eq(roundFairness.phase, 'collecting_seeds')))
+          .where(
+            and(eq(roundFairness.roundId, round.id), eq(roundFairness.phase, 'collecting_seeds')),
+          )
       } else if (fairRound?.phase === 'sealed') {
         const fairParticipants = await loadFairRoundParticipants(tx, round.id)
         await revealPersistedFairRound(

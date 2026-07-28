@@ -17,14 +17,13 @@ import {
   requireRole,
 } from './action-helpers'
 import { fundingModeSchema, readFundingMode } from './funding-mode'
-import { fairPlaySettingsSchema, parseFairPlaySettings, readFairPlaySettings } from './fair-play-settings'
+import {
+  fairPlaySettingsSchema,
+  parseFairPlaySettings,
+  readFairPlaySettings,
+} from './fair-play-settings'
 import { addSafeChipIntegers, toSafeChipInteger } from './chip-integers'
 import type { RoomSnapshot } from './types'
-
-/**
- * 방 수명주기 액션 — 생성·입장·스냅샷·옵션 변경·정산.
- * 판 진행은 round-actions.ts, 역할 변경은 member-actions.ts.
- */
 
 const { rooms, roomMembers, rounds, chipLedger, buyIns } = schema
 
@@ -33,13 +32,9 @@ const createRoomSchema = z.object({
   gameType: z.enum(['seotda', 'gostop', 'poker']),
   inputMode: z.enum(['trust', 'approval']),
   startingChips: z.number().int().min(1).max(1_000_000),
-  /** 고스톱 점당 칩. 고스톱 외 게임에서는 무시된다. */
   pointValue: z.number().int().min(1).max(100_000).optional(),
-  /** 베팅 기본 단위(삥). 미지정 시 시작 칩의 1%. */
   baseBet: z.number().int().min(1).max(1_000_000).optional(),
-  /** 계정 크레딧 방은 바이인마다 전역 지갑을 같은 트랜잭션에서 lock한다. */
   fundingMode: fundingModeSchema.default('session'),
-  /** 검증 가능한 섯다는 creation time에도 명시할 수 있으며, 미지정은 manual/pause다. */
   fairPlay: fairPlaySettingsSchema.optional(),
 })
 
@@ -66,7 +61,6 @@ export async function createRoom(
     ...(fairPlay ? { fair_play: fairPlay } : {}),
   }
 
-  // 코드 충돌은 UNIQUE 가 잡는다. 확률상 1~2회 재시도면 충분하다.
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const code = generateRoomCode()
     try {
@@ -96,7 +90,6 @@ export async function createRoom(
           refBuyInId: initialBuyIn.id,
         })
         if (fundingMode === 'account_credit') {
-          // 지갑 lock이 실패하면 방·멤버·세션 칩 INSERT도 같은 트랜잭션에서 전부 rollback 된다.
           await tx.execute(sql`
             select public.lock_room_credit_buy_in(
               ${room.id}::uuid,
@@ -128,9 +121,6 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
 
   try {
     return await db.transaction(async (tx) => {
-      // 코드로 id 만 먼저 찾고, 판단에 쓰는 값은 전부 락을 잡은 뒤에 다시 읽는다.
-      // 락 이전에 읽은 status/rulePreset/startingChips 는 그 사이 closeRoom·updateRoomSettings 가
-      // 커밋해 버릴 수 있다 — 그러면 이미 정산된 방에 멤버와 시작 칩이 들어간다.
       const [target] = await tx
         .select({ id: rooms.id })
         .from(rooms)
@@ -151,9 +141,8 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
         .from(roomMembers)
         .where(and(eq(roomMembers.roomId, room.id), eq(roomMembers.userId, userId)))
         .limit(1)
-      if (existing && !existing.leftAt) return ok({ code: room.code }) // 재입장 — 멱등
+      if (existing && !existing.leftAt) return ok({ code: room.code })
 
-      // 정원은 활동 중(leftAt null) 인원 기준 — 나간 자리는 다시 채울 수 있다.
       const maxMembers = readMaxMembers(room.rulePreset)
       const [active] = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -163,20 +152,15 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
         return fail('errors.roomFull')
       }
 
-      // 관전 입장 옵션 — 켜져 있으면 observer 로 들어가고 시작 칩을 받지 않는다.
-      // 이후 setMemberRole 로 player 승격 시 멤버 시트의 바이인(addBuyIn) 흐름으로 칩을 받는다.
       const joinAsObserver = readJoinAsObserver(room.rulePreset)
       const entryRole = joinAsObserver ? 'observer' : 'player'
 
       if (existing) {
-        // 재합류 — 좌석·기존 원장 잔액은 유지하고 역할만 현재 입장 옵션에 맞춘다.
-        // 시작 칩을 다시 주면 나갔다 들어올 때마다 의도하지 않은 바이인이 생긴다.
         await tx
           .update(roomMembers)
           .set({ leftAt: null, role: entryRole, joinedAt: new Date() })
           .where(and(eq(roomMembers.roomId, room.id), eq(roomMembers.userId, userId)))
       } else {
-        // 좌석 번호는 나간 멤버 포함 최댓값 +1 — (roomId, seatNo) unique 제약을 지킨다.
         const [seat] = await tx
           .select({ next: sql<number>`coalesce(max(${roomMembers.seatNo}), -1) + 1` })
           .from(roomMembers)
@@ -186,8 +170,6 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
           .values({ roomId: room.id, userId, role: entryRole, seatNo: seat?.next ?? 0 })
       }
 
-      // 시작 칩은 신규 player 에게만 한 번 지급한다. 재합류자는 기존 스택을 이어 쓴다.
-      // 신규 observer 는 지급하지 않고, player 승격 후 명시적 바이인을 사용한다.
       if (!existing && !joinAsObserver) {
         const [initialBuyIn] = await tx
           .insert(buyIns)
@@ -222,11 +204,6 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
   }
 }
 
-/**
- * form action 용 래퍼 — 성공하면 방으로 이동한다.
- * 실패 시 `result.error`(`errors.*` 키)를 그대로 `?error=` 에 실어 홈으로 돌려보낸다 —
- * 홈 페이지(app/page.tsx)가 그 키를 사전으로 옮겨 렌더한다.
- */
 export async function joinRoomAndGo(formData: FormData): Promise<void> {
   const code = String(formData.get('code') ?? '')
   const result = await joinRoom(code)
@@ -238,14 +215,10 @@ export async function refreshRoom(roomId: string): Promise<ActionResult<RoomSnap
   if (!(await currentUserId())) return fail('errors.loginRequired')
   if (!z.string().uuid().safeParse(roomId).success) return fail('errors.invalidRoom')
 
-  // 클라이언트가 폴링·디바운스로 반복 호출한다 — 일시 오류가 unhandled rejection 으로 새면 안 된다.
   try {
     const snapshot = await getRoomSnapshot(roomId)
     if (!snapshot) return fail('errors.roomNotFound')
-    // 읽기는 로그인 사용자 전원 허용 — 전광판 관전용이고 스냅샷은 점수판 데이터라 비밀이 없다.
-    // 쓰기 액션은 각자 멤버·역할 검사를 유지한다: placeBet 계열은 참가자 확인(betting/actions.ts),
-    // addBuyIn·undoLastBuyIn 은 참가자·딜러 확인(budget/actions.ts), 판·역할·옵션·정산 액션은
-    // requireRole(round-actions.ts·member-actions.ts·이 파일) — 전수 확인함.
+
     return ok(snapshot)
   } catch (error) {
     console.error('refreshRoom failed:', error)
@@ -259,17 +232,12 @@ const updateSettingsSchema = z.object({
   inputMode: z.enum(['trust', 'approval']),
   pointValue: z.number().int().min(1).max(100_000).optional(),
   baseBet: z.number().int().min(1).max(1_000_000).optional(),
-  /** 방 정원 (활동 인원 기준). rulePreset 에 저장된다. */
   maxMembers: z.number().int().min(2).max(10).optional(),
-  /** 신규 입장자를 관전자로 받을지. rulePreset 에 저장된다. */
   joinAsObserver: z.boolean().optional(),
-  /** 시작 칩 — 대기 중 + 판 기록이 없을 때만 변경할 수 있다. */
   startingChips: z.number().int().min(1).max(1_000_000).optional(),
-  /** verified 옵션은 시작 전의 명시적 호스트 설정만 허용한다. */
   fairPlay: fairPlaySettingsSchema.optional(),
 })
 
-/** 방 옵션 변경 — 방장 전용. 진행 중에도 다음 액션부터 새 옵션이 적용된다. */
 export async function updateRoomSettings(
   input: z.infer<typeof updateSettingsSchema>,
 ): Promise<ActionResult<{ roomId: string }>> {
@@ -291,8 +259,6 @@ export async function updateRoomSettings(
       if (!room) return fail('errors.roomNotFound')
       if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
-      // 시작 칩 변경은 첫 판 전에만 — 판이 시작된 뒤에는 손익·팟 계산의 기준이 흔들린다.
-      // 같은 값 재전송은 no-op 으로 통과시킨다 (설정 폼이 현재 값을 항상 보내도 안전).
       const startingChips =
         parsed.data.startingChips !== undefined && parsed.data.startingChips !== room.startingChips
           ? parsed.data.startingChips
@@ -306,8 +272,6 @@ export async function updateRoomSettings(
         return fail('errors.updateSettingsFailed')
       }
       if (startingChips !== undefined) {
-        // account_credit의 초기 스택은 생성 시점에 같은 금액으로 global credit을 lock한다.
-        // 여기서 세션 원장만 바꾸면 정산 보존식이 깨지므로 재원 변경용 별도 흐름이 생길 때까지 고정한다.
         if (readFundingMode(room.rulePreset) === 'account_credit') {
           return fail('errors.updateSettingsFailed')
         }
@@ -340,7 +304,8 @@ export async function updateRoomSettings(
           .limit(1)
         if (
           anyRound &&
-          JSON.stringify(fairPlay) !== JSON.stringify(readFairPlaySettings(room.gameType, room.rulePreset))
+          JSON.stringify(fairPlay) !==
+            JSON.stringify(readFairPlaySettings(room.gameType, room.rulePreset))
         ) {
           return fail('errors.fairPlayLocked')
         }
@@ -370,9 +335,6 @@ export async function updateRoomSettings(
         .where(eq(rooms.id, roomId))
 
       if (startingChips !== undefined) {
-        // 시작 칩을 이미 받은 멤버 전원에게 차액(new - old)을 같은 트랜잭션에서 정정한다.
-        // 나간 player도 재입장 시 기존 스택을 이어 쓰므로 반드시 함께 조정해야 한다.
-        // observer 는 시작 칩을 받지 않았으므로 제외 (승격 시 바이인으로 받는다).
         const delta = startingChips - room.startingChips
         const targets = await tx
           .select({
@@ -386,8 +348,6 @@ export async function updateRoomSettings(
           .from(roomMembers)
           .where(and(eq(roomMembers.roomId, roomId), ne(roomMembers.role, 'observer')))
 
-        // 시작 칩을 낮추면 전원에게서 차액을 회수한다 — 회수액이 잔액을 넘으면 원장 잔액이
-        // 음수가 된다. voidRound·undoLastBuyIn 과 같은 기준으로 미리 막는다.
         if (
           delta < 0 &&
           targets.some(
@@ -470,7 +430,6 @@ export async function closeRoom(roomId: string): Promise<ActionResult<{ code: st
         .limit(1)
       if (!roomBeforeClose) return fail('errors.roomNotFound')
       if (readFundingMode(roomBeforeClose.rulePreset) === 'account_credit') {
-        // 모든 활성 lock을 최종 세션 스택대로 같은 트랜잭션에서 available로 되돌린다.
         await tx.execute(sql`
           select public.settle_room_credits(${roomId}::uuid, ${userId}::uuid)
         `)

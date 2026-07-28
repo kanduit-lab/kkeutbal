@@ -11,7 +11,6 @@ describe('withTimeout', () => {
     await expect(withTimeout(Promise.reject(failure), 50, 'failing')).rejects.toBe(failure)
   })
 
-  // hang 은 throw 가 아니라서 try/catch 로 못 잡는다 — 이 훅이 존재하는 이유.
   it('끝나지 않는 작업을 상한에서 끊는다', async () => {
     vi.useFakeTimers()
     try {

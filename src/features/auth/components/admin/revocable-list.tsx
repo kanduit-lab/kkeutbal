@@ -4,7 +4,6 @@ import { Badge, Button, EmptyState, Panel } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { formatDate } from './format'
 
-/** 가입코드·게스트 토큰이 공유하는 최소 모양 — 두 목록이 같은 컴포넌트를 쓰기 위한 계약. */
 export interface RevocableItem {
   readonly id: string
   readonly label: string
@@ -14,10 +13,6 @@ export interface RevocableItem {
   readonly revokedAt: string | null
 }
 
-/**
- * 회수 가능한 발급물 목록. 가입코드 목록과 게스트 토큰 목록이 라벨과 회수 대상만
- * 다른 채로 통째로 복붙돼 있어서 하나로 합쳤다 — 한쪽만 고쳐서 벌어지던 드리프트를 막는다.
- */
 export function RevocableList<T extends RevocableItem>({
   heading,
   items,

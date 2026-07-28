@@ -34,9 +34,9 @@ describe('verified Seotda deal', () => {
     const alice = privateSeotdaHand(deal.shuffle.shuffledDeckIds, deal.participants, ALICE)
     const bob = privateSeotdaHand(deal.shuffle.shuffledDeckIds, deal.participants, BOB)
     expect(alice).not.toEqual(bob)
-    expect(() => privateSeotdaHand(deal.shuffle.shuffledDeckIds, deal.participants, ROUND_ID)).toThrow(
-      'non-participant',
-    )
+    expect(() =>
+      privateSeotdaHand(deal.shuffle.shuffledDeckIds, deal.participants, ROUND_ID),
+    ).toThrow('non-participant')
   })
 
   it('uses the canonical Seotda engine rather than accepting a claimed winner', async () => {
@@ -66,7 +66,11 @@ describe('verified Seotda deal', () => {
       SEOTDA_RULES_STANDARD,
     )
     expect(result.hands).toHaveLength(3)
-    expect(result.participants.map((participant) => participant.userId)).toEqual([ALICE, BOB, CHARLIE])
+    expect(result.participants.map((participant) => participant.userId)).toEqual([
+      ALICE,
+      BOB,
+      CHARLIE,
+    ])
     expect(['win', 'replay']).toContain(result.outcome.kind)
     const afterCharlieFolds = resolveVerifiedSeotdaShowdown(
       deal.shuffle.shuffledDeckIds,
@@ -74,7 +78,10 @@ describe('verified Seotda deal', () => {
       SEOTDA_RULES_STANDARD,
       new Set([ALICE, BOB]),
     )
-    expect(afterCharlieFolds.participants.map((participant) => participant.userId)).toEqual([ALICE, BOB])
+    expect(afterCharlieFolds.participants.map((participant) => participant.userId)).toEqual([
+      ALICE,
+      BOB,
+    ])
     expect(afterCharlieFolds.hands.map((hand) => hand.userId)).toEqual([ALICE, BOB])
     expect(() =>
       resolveVerifiedSeotdaShowdown(

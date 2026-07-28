@@ -18,11 +18,6 @@ import {
 } from 'drizzle-orm/pg-core'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
-/**
- * 스키마 구현. 설계 근거·불변식은 docs/02-data-model.md 가 소유한다.
- * RLS 정책과 realtime 설정은 supabase/migrations/*.sql 이 소유한다 (여기 아님).
- */
-
 export const gameType = pgEnum('game_type', ['seotda', 'gostop', 'poker'])
 export const roomStatus = pgEnum('room_status', ['waiting', 'playing', 'settled', 'closed'])
 export const inputMode = pgEnum('input_mode', ['trust', 'approval'])
@@ -47,7 +42,7 @@ export const creditTransactionKind = pgEnum('credit_transaction_kind', [
   'correction',
 ])
 export const visionProvider = pgEnum('vision_provider', ['anthropic', 'gemini'])
-/** 공정 딜 라운드의 공개 가능한 단계. 비밀 seed·패는 이 단계와 별도 행에 둔다. */
+
 export const fairRoundPhase = pgEnum('fair_round_phase', [
   'collecting_seeds',
   'sealed',
@@ -55,51 +50,29 @@ export const fairRoundPhase = pgEnum('fair_round_phase', [
   'aborted',
 ])
 
-/** Drizzle이 bigint를 number로 읽는 동안 표현 가능한 정수 경계. */
 const MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
-/**
- * 전역 사용자. 이메일은 저장하지 않는다 (docs/07-auth-and-security.md).
- * `authentik_sub` 는 provider 신원 키다 — OIDC 는 IdP sub, 내부 계정은 `local:{username}`,
- * 개발 게스트는 `dev:{name}`. SSO 로그인 시 아이디 또는 전화번호가 일치하는 내부 계정이 있으면
- * 그 행의 `authentik_sub` 를 OIDC sub 로 교체해 같은 계정으로 병합한다.
- */
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   authentikSub: text('authentik_sub').notNull().unique(),
-  /** 내부 계정 아이디. SSO·게스트 전용 사용자는 null. */
   username: text('username').unique(),
-  /** bcrypt 해시. 내부 계정만 가진다. */
   passwordHash: text('password_hash'),
-  /** 전화번호(숫자만, 예: 01012345678). SSO 자동 연동의 병합 기준. */
   phone: text('phone').unique(),
   displayName: text('display_name').notNull(),
   avatarUrl: text('avatar_url'),
-  /** 관리자 — 게스트 토큰 발급·관리자 지정·SSO 설정 권한. */
   isAdmin: boolean('is_admin').notNull().default(false),
-  /**
-   * 대리 기록용 로컬 플레이어. 방 호스트가 이름만으로 만든 좌석이며 로그인 경로가 없다
-   * (`authentik_sub` 이 `managed:{roomId}:{uuid}` 형태라 어떤 인증 경로와도 겹치지 않는다).
-   * 전역 누적 랭킹에서는 제외한다 — 가족 게임 기록이 실제 계정 랭킹을 덮지 않게 한다.
-   */
   isManaged: boolean('is_managed').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-/**
- * 계정 단위 가상 크레딧의 빠른 현재 잔액. `credit_entries`가 감사 정본이고 이 행은
- * posting 함수가 같은 트랜잭션에서만 갱신하는 materialized balance다.
- */
 export const creditAccounts = pgTable(
   'credit_accounts',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** user 계정만 user_id를 가진다. issuance는 시스템 발행/회수의 상대 계정이다. */
     userId: uuid('user_id').references(() => users.id),
     kind: creditAccountKind('kind').notNull(),
     availableBalance: bigint('available_balance', { mode: 'number' }).notNull().default(0),
     lockedBalance: bigint('locked_balance', { mode: 'number' }).notNull().default(0),
-    /** posting마다 증가하는 관측·감사용 버전. */
     version: bigint('version', { mode: 'number' }).notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -128,11 +101,6 @@ export const creditAccounts = pgTable(
   ],
 )
 
-/**
- * 인스턴스 단위 인증 설정. SSO 비밀값과 최초 관리자 설정 코드는
- * AUTH_SECRET 기반 AES-GCM 암호문으로만 보관한다.
- * id 는 항상 `default` 한 행만 사용한다.
- */
 export const authSettings = pgTable('auth_settings', {
   id: text('id').primaryKey().default('default'),
   ssoEnabled: boolean('sso_enabled').notNull().default(false),
@@ -144,10 +112,6 @@ export const authSettings = pgTable('auth_settings', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
-/**
- * 인스턴스 단위 Vision 설정. API 키는 환경변수에만 두고, 여기서는 선택·모델·활성화만 관리한다.
- * id 는 항상 `default` 한 행만 사용한다.
- */
 export const visionSettings = pgTable(
   'vision_settings',
   {
@@ -162,10 +126,6 @@ export const visionSettings = pgTable(
   ],
 )
 
-/**
- * 로그인·가입코드·Vision 호출 제한 버킷.
- * 식별자는 AUTH_SECRET HMAC으로만 저장해 IP·아이디 원문을 남기지 않는다.
- */
 export const rateLimitBuckets = pgTable(
   'rate_limit_buckets',
   {
@@ -182,19 +142,12 @@ export const rateLimitBuckets = pgTable(
   ],
 )
 
-/**
- * 게스트 초대 토큰. 관리자가 발급하며, 코드 + 이름만으로 게스트 로그인할 수 있다.
- * 같은 (토큰, 이름) 조합은 같은 게스트 계정으로 이어진다 — 기기를 바꿔도 전적 유지.
- */
 export const guestTokens = pgTable(
   'guest_tokens',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** 레거시 원문. 사용 시 codeHash 로 전환하며 신규 발급에는 저장하지 않는다. */
     code: text('code').unique(),
-    /** 입장 코드의 AUTH_SECRET HMAC. */
     codeHash: text('code_hash').unique(),
-    /** 발급 메모 (예: "2026 여름 MT"). */
     label: text('label').notNull(),
     createdBy: uuid('created_by')
       .notNull()
@@ -212,16 +165,11 @@ export const guestTokens = pgTable(
   ],
 )
 
-/**
- * 내부 계정 회원가입 코드. 원문은 발급 직후 한 번만 보여주고, DB에는 AUTH_SECRET 기반 HMAC만 저장한다.
- * 관리자는 만료·회수할 수 있으며, 같은 코드를 다시 조회할 수 없다.
- */
 export const registrationCodes = pgTable(
   'registration_codes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     codeHash: text('code_hash').notNull().unique(),
-    /** 발급 목적을 식별하는 운영 메모. */
     label: text('label').notNull(),
     createdBy: uuid('created_by')
       .notNull()
@@ -236,13 +184,6 @@ export const registrationCodes = pgTable(
   ],
 )
 
-/**
- * 공지·광고 슬롯. `banner` 는 화면 상단 띠, `popup` 은 진입 시 모달로 뜬다.
- * 노출 조건은 `is_active` + `starts_at`/`ends_at` 창이며, 같은 kind 안에서는
- * `priority` 가 큰 행이 먼저다 — 배너는 전부, 팝업은 가장 앞의 하나만 띄운다.
- * "N시간 동안 보지 않기" 의 N 이 `dismiss_hours` 다. 닫음 상태는 서버에 두지 않고
- * 브라우저 localStorage 에만 남긴다 — 비로그인 게스트도 같은 규칙으로 동작한다.
- */
 export const promotions = pgTable(
   'promotions',
   {
@@ -250,7 +191,6 @@ export const promotions = pgTable(
     kind: promotionKind('kind').notNull(),
     title: text('title').notNull(),
     body: text('body'),
-    /** 눌렀을 때 이동할 주소. 없으면 링크 없이 문구만 보여준다. */
     linkUrl: text('link_url'),
     linkLabel: text('link_label'),
     isActive: boolean('is_active').notNull().default(true),
@@ -274,7 +214,6 @@ export const rooms = pgTable(
   'rooms',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** 6자 입장 코드. 혼동 문자(0/O, 1/I) 제외. */
     code: text('code').notNull().unique(),
     hostId: uuid('host_id')
       .notNull()
@@ -283,7 +222,6 @@ export const rooms = pgTable(
     gameType: gameType('game_type').notNull(),
     status: roomStatus('status').notNull().default('waiting'),
     inputMode: inputMode('input_mode').notNull().default('trust'),
-    /** 룰 항목이 게임마다 다르고 자주 늘어난다. 질의 대상이 아니라 엔진 입력값이므로 jsonb. */
     rulePreset: jsonb('rule_preset').notNull().default({}),
     startingChips: integer('starting_chips').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -308,7 +246,6 @@ export const roomMembers = pgTable(
     role: memberRole('role').notNull().default('player'),
     seatNo: integer('seat_no').notNull(),
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
-    /** 나가도 행을 지우지 않는다 — 과거 판의 참가 기록이 필요하다 (soft leave). */
     leftAt: timestamp('left_at', { withTimezone: true }),
   },
   (table) => [
@@ -326,12 +263,10 @@ export const rounds = pgTable(
     roomId: uuid('room_id')
       .notNull()
       .references(() => rooms.id, { onDelete: 'cascade' }),
-    /** 방 내 판 번호. 동시 입력 충돌 판정의 기준. */
     seq: integer('seq').notNull(),
     status: roundStatus('status').notNull().default('playing'),
     pot: bigint('pot', { mode: 'number' }).notNull().default(0),
     winnerId: uuid('winner_id').references(() => users.id),
-    /** 게임별 결과 상세 (섯다: 족보 / 고스톱: 점수 내역). */
     result: jsonb('result'),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp('ended_at', { withTimezone: true }),
@@ -348,7 +283,6 @@ export const rounds = pgTable(
   ],
 )
 
-/** 판 시작 시점의 참가자 스냅샷. 재입장·역할 변경 뒤에도 과거 판 참가 사실을 보존한다. */
 export const roundParticipants = pgTable(
   'round_participants',
   {
@@ -365,28 +299,19 @@ export const roundParticipants = pgTable(
   ],
 )
 
-/**
- * 검증 가능한 딜의 라운드 헤더. 서버 seed는 종료 전까지 암호문으로만 남고, 브라우저·방 스냅샷에
- * 실을 수 있는 값은 commitment와 publicReceipt뿐이다.
- */
 export const roundFairness = pgTable(
   'round_fairness',
   {
     roundId: uuid('round_id')
       .primaryKey()
       .references(() => rounds.id, { onDelete: 'cascade' }),
-    /** 프로토콜 변경 뒤에도 기존 판을 같은 규칙으로 재검증할 수 있는 버전 식별자. */
     algorithmVersion: text('algorithm_version').notNull(),
-    /** 안전한 공개 영수증 형식의 버전. */
     receiptVersion: text('receipt_version').notNull(),
     phase: fairRoundPhase('phase').notNull().default('collecting_seeds'),
-    /** AES-GCM 등 서버 전용 암호문. 평문 server seed는 여기에 저장하지 않는다. */
     serverSeedCiphertext: text('server_seed_ciphertext').notNull(),
     serverSeedCommitment: text('server_seed_commitment').notNull(),
-    /** 서버 DB 시간이 이 시각에 도달하면 미제출 참가자를 timeout으로 봉인할 수 있다. */
     seedDeadline: timestamp('seed_deadline', { withTimezone: true }).notNull(),
     seedCollectionSealedAt: timestamp('seed_collection_sealed_at', { withTimezone: true }),
-    /** sealed 이후에만 존재하는 셔플 덱 hash. 덱 원문·손패는 포함하지 않는다. */
     shuffledDeckCommitment: text('shuffled_deck_commitment'),
     publicReceipt: jsonb('public_receipt'),
     revealedAt: timestamp('revealed_at', { withTimezone: true }),
@@ -459,10 +384,6 @@ export const roundFairness = pgTable(
   ],
 )
 
-/**
- * 판 시작 당시의 확정 좌석 순서와 client seed commitment. 원문 client seed는 DB에 저장하지
- * 않으며, timeout도 명시적으로 남겨 "누가 참여하지 않았는가"를 사후 검증할 수 있다.
- */
 export const roundFairnessParticipants = pgTable(
   'round_fairness_participants',
   {
@@ -470,7 +391,6 @@ export const roundFairnessParticipants = pgTable(
       .notNull()
       .references(() => roundFairness.roundId, { onDelete: 'cascade' }),
     userId: uuid('user_id').notNull(),
-    /** 딜 순서 snapshot. 현재 room_members 좌석을 나중에 다시 읽지 않는다. */
     dealOrder: integer('deal_order').notNull(),
     clientSeedHash: text('client_seed_hash'),
     seedSubmittedAt: timestamp('seed_submitted_at', { withTimezone: true }),
@@ -501,10 +421,6 @@ export const roundFairnessParticipants = pgTable(
   ],
 )
 
-/**
- * 종료 뒤에만 생성되는 완전 영수증. server seed 평문은 이 append-only 행에만 들어가며,
- * `round_fairness.revealed_at`와 함께 접근을 열어야 한다.
- */
 export const roundFairnessReveals = pgTable(
   'round_fairness_reveals',
   {
@@ -530,16 +446,11 @@ export const roundFairnessReveals = pgTable(
   ],
 )
 
-/**
- * 전역 가상 크레딧 이동의 거래 헤더. 잘못된 거래는 UPDATE가 아니라 반대 거래로 되돌린다.
- * `snapshot`은 당시의 방 코드·표시명·정산 근거를 보존한다.
- */
 export const creditTransactions = pgTable(
   'credit_transactions',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     kind: creditTransactionKind('kind').notNull(),
-    /** 서버가 만든 멱등키. 재시도는 같은 거래를 반환한다. */
     idempotencyKey: text('idempotency_key').notNull().unique(),
     roomId: uuid('room_id').references(() => rooms.id),
     roundId: uuid('round_id').references(() => rounds.id),
@@ -547,7 +458,6 @@ export const creditTransactions = pgTable(
     reversesTransactionId: uuid('reverses_transaction_id').references(
       (): AnyPgColumn => creditTransactions.id,
     ),
-    /** 관리자 지급·회수·정정은 빈 사유를 허용하지 않는다. */
     reason: text('reason').notNull(),
     snapshot: jsonb('snapshot').notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -566,7 +476,6 @@ export const creditTransactions = pgTable(
   ],
 )
 
-/** 복식 원장 엔트리. 현재 잔액 계산의 감사 근거이며 UPDATE/DELETE가 금지된다. */
 export const creditEntries = pgTable(
   'credit_entries',
   {
@@ -603,7 +512,6 @@ export const creditEntries = pgTable(
 export const betActions = pgTable(
   'bet_actions',
   {
-    /** 클라이언트가 생성한 UUID = 멱등키. 재전송은 PK 충돌로 흡수된다. */
     id: uuid('id').primaryKey(),
     roomId: uuid('room_id')
       .notNull()
@@ -614,15 +522,12 @@ export const betActions = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id),
-    /** 대리 입력 시 실제 입력자. 본인 입력이면 null. */
     enteredBy: uuid('entered_by').references(() => users.id),
     action: betAction('action').notNull(),
     amount: integer('amount').notNull().default(0),
     status: actionStatus('status').notNull().default('pending'),
     approvedBy: uuid('approved_by').references(() => users.id),
-    /** 거절·정정 사유. 사유 없는 거절은 분쟁을 만든다. */
     reason: text('reason'),
-    /** 서버가 커밋 시 확정하는 판 내 순번. */
     seq: integer('seq').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -637,11 +542,6 @@ export const betActions = pgTable(
   ],
 )
 
-/**
- * 칩 원장. append-only.
- * 잔액 컬럼을 두지 않고 여기 합계로 도출한다 — 근거는 docs/02-data-model.md "칩은 원장이다".
- * UPDATE/DELETE 는 RLS 와 트리거로 금지한다.
- */
 export const chipLedger = pgTable(
   'chip_ledger',
   {
@@ -653,20 +553,16 @@ export const chipLedger = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id),
-    /** 부호 있는 정수. 지출 음수, 획득 양수. */
     delta: bigint('delta', { mode: 'number' }).notNull(),
     reason: chipReason('reason').notNull(),
     refActionId: uuid('ref_action_id').references(() => betActions.id),
-    /** buy_in/correction 원장의 근거 바이인 행. 기존 데이터 호환을 위해 nullable. */
     refBuyInId: uuid('ref_buy_in_id').references((): AnyPgColumn => buyIns.id),
-    /** 정정 행이 원본을 가리킨다. 원본은 수정하지 않는다. */
     revertedOf: uuid('reverted_of').references((): AnyPgColumn => chipLedger.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index('chip_ledger_room_user_idx').on(table.roomId, table.userId),
     index('chip_ledger_room_time_idx').on(table.roomId, table.createdAt),
-    /** 판별 팟 계산(getRoundPot: roundId + reason 필터)용. */
     index('chip_ledger_round_reason_idx').on(table.roundId, table.reason),
     index('chip_ledger_ref_buy_in_idx').on(table.refBuyInId),
     index('chip_ledger_user_idx').on(table.userId),
@@ -696,7 +592,6 @@ export const buyIns = pgTable(
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
-    /** 바이인 취소 행이 원본 바이인을 가리킨다. */
     revertedOf: uuid('reverted_of').references((): AnyPgColumn => buyIns.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -715,10 +610,6 @@ export const buyIns = pgTable(
   ],
 )
 
-/**
- * account-credit 방에서 세션 칩을 발행한 전역 잠금 근거. 한 buy-in은 하나의 lock만 가질 수 있다.
- * 정산 뒤 releasedTransactionId를 연결하되, 원 행을 삭제하지 않는다.
- */
 export const roomCreditLocks = pgTable(
   'room_credit_locks',
   {

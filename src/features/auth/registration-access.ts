@@ -25,7 +25,6 @@ function matches(expected: string, received: string): boolean {
   )
 }
 
-/** 가입코드가 맞으면 10분 동안만 유효한, 위조 방지 서명 쿠키를 발급한다. */
 async function activeDatabaseCodeId(code: string, secret: string): Promise<string | null> {
   const { db, schema } = await import('@/lib/db')
   const now = new Date()
@@ -89,14 +88,12 @@ export async function grantRegistrationAccess(code: string): Promise<Registratio
   }
 }
 
-/** 회원가입 화면과 가입 액션이 모두 확인하는 접근 권한. */
 export async function hasRegistrationAccess(): Promise<boolean> {
   if (await isFirstAccount()) return Boolean(await initialAdminSetupAccessId())
 
   return Boolean(await registrationAccessCodeId())
 }
 
-/** 현재 서명 쿠키가 가리키는 활성 가입코드 id. 첫 계정 비상 경로에는 null 이다. */
 export async function registrationAccessCodeId(): Promise<string | null> {
   const env = serverEnv()
   const token = (await cookies()).get(REGISTRATION_ACCESS_COOKIE)?.value
@@ -132,7 +129,6 @@ export async function registrationAccessCodeId(): Promise<string | null> {
   }
 }
 
-/** 가입 성공 후 접근 쿠키를 지워 같은 검증 세션이 재사용되지 않게 한다. */
 export async function consumeRegistrationAccess(): Promise<void> {
   const store = await cookies()
   store.set(REGISTRATION_ACCESS_COOKIE, '', {

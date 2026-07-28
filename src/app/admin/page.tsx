@@ -8,7 +8,6 @@ import { getDict } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
 
-/** 관리자 콘솔 — 게스트 토큰 발급·회수, 관리자 지정, 방 강제 정산. */
 export default async function AdminPage() {
   const [session, { d }] = await Promise.all([auth(), getDict()])
   if (!session?.user?.id) redirect('/login?next=/admin')
@@ -38,8 +37,6 @@ export default async function AdminPage() {
 
   return (
     <PageShell width="wide">
-      {/* 콘솔 본문이 전부 사전을 타므로 여기에도 스위처를 둔다 — 실수로 EN 을 눌렀을 때
-          홈까지 나가야만 되돌릴 수 있던 구간을 없앤다. */}
       <PageHeader
         title={d.adminDashboard.title}
         subtitle={d.adminDashboard.subtitle}

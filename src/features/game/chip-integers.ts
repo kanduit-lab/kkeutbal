@@ -1,7 +1,3 @@
-/**
- * 브라우저·Server Action 경계에서 직렬화 가능한 세션 칩 정수의 최대값.
- * PostgreSQL bigint 집계는 이 모듈을 통과한 뒤에만 number로 바꾼다.
- */
 export const MAX_SAFE_CHIP_INTEGER = Number.MAX_SAFE_INTEGER
 
 export function toSafeChipInteger(value: unknown, label: string): number {

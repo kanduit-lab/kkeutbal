@@ -7,18 +7,12 @@ import { db, schema } from '@/lib/db'
 import { currentUserId } from '@/features/auth/session'
 import { isAdminUser } from '@/features/auth/roles'
 
-/** 프로모션(배너·팝업) 관리 액션 — 관리자 전용. */
-
 async function requireAdmin(): Promise<string | null> {
   const userId = await currentUserId()
   if (!userId) return null
   return (await isAdminUser(userId)) ? userId : null
 }
 
-/**
- * 링크는 그대로 `href` 로 나가므로 스킴을 좁힌다 — `javascript:` 같은 스킴이 들어오면
- * 관리자 입력이 곧 스크립트 실행이 된다. http(s) 절대주소이거나 앱 내부 경로만 허용한다.
- */
 const linkUrlSchema = z
   .string()
   .trim()
@@ -28,7 +22,6 @@ const linkUrlSchema = z
     'errors.promotionLinkUrlInvalid',
   )
 
-/** 빈 문자열은 미입력으로 본다 — 폼이 빈 칸을 보내도 null 로 저장한다. */
 const optionalText = (max: number) =>
   z
     .string()
@@ -49,7 +42,6 @@ const createSchema = z.object({
     .int()
     .min(1)
     .max(24 * 30),
-  /** 0 이면 즉시 시작 / 무기한. */
   startsInHours: z
     .number()
     .int()
@@ -64,10 +56,6 @@ const createSchema = z.object({
 
 export type CreatePromotionInput = z.infer<typeof createSchema>
 
-/**
- * zod 이슈를 `errors.*` 키로 바꾼다. zod 기본 메시지는 영어라 그대로 내보내면
- * 사전을 우회한 영문 내부 문구가 사용자 화면에 뜬다 — 필드로 판단해 키를 고른다.
- */
 function createIssueKey(issue: z.ZodIssue | undefined): string {
   if (issue?.message.startsWith('errors.')) return issue.message
   switch (issue?.path[0]) {

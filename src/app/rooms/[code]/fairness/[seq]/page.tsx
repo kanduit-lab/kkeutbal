@@ -13,7 +13,6 @@ import { db, schema } from '@/lib/db'
 import { RoomEntryError } from '@/features/game/components/room-entry-error'
 import { getDict, format } from '@/lib/i18n/server'
 
-/** Authenticated original participants can independently recompute a finalized verified Seotda deck. */
 export default async function FairnessAuditPage({
   params,
 }: {
@@ -28,7 +27,7 @@ export default async function FairnessAuditPage({
   if (!Number.isSafeInteger(seq) || seq < 1) notFound()
 
   const [room, { d }] = await Promise.all([findRoomByCode(code), getDict()])
-  // 형제 라우트 5개가 공유하는 한 가지 표면 — 코드 오타는 앱 404 가 아니라 "방 없음"이다.
+
   if (!room) {
     return (
       <RoomEntryError
@@ -74,7 +73,6 @@ export default async function FairnessAuditPage({
   return (
     <main id="main" className="mx-auto w-full max-w-2xl space-y-5 px-4 pb-16 pt-8">
       <header>
-        {/* 48px 타깃 — 원래는 text-sm 글리프 링크뿐이라 한 손 조작에서 잡히지 않았다. */}
         <Link
           href={`/rooms/${code}`}
           className="-ml-2 inline-flex min-h-12 items-center gap-1 rounded-xl px-2 text-sm font-bold text-muted transition-colors hover:text-text"

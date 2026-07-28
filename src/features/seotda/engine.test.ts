@@ -108,9 +108,9 @@ describe('evaluateSeotdaHand', () => {
     const canonical = card(1, 'gwang')
     const forged = { ...canonical, month: 10 as const, kind: 'yeol' as const, label: '위조' }
     expect(evaluateSeotdaHand([forged, card(3, 'gwang')]).label).toBe('13광땡')
-    expect(() =>
-      evaluateSeotdaHand([{ ...canonical, id: 'fake' }, card(3, 'gwang')]),
-    ).toThrow(/없는 카드/)
+    expect(() => evaluateSeotdaHand([{ ...canonical, id: 'fake' }, card(3, 'gwang')])).toThrow(
+      /없는 카드/,
+    )
     expect(() => evaluateSeotdaHand([canonical, canonical])).toThrow(/같은 카드/)
   })
 })
@@ -123,9 +123,10 @@ describe('resolveSeotdaShowdown', () => {
     })
     const tied = [hand(2, 'yeol', 5, 'yeol'), hand(3, 'tti', 4, 'tti')]
     expect(resolveSeotdaShowdown(tied, NO_SPECIALS).kind).toBe('replay')
-    expect(
-      resolveSeotdaShowdown(tied, { ...NO_SPECIALS, tieBreak: 'dealer-wins' }),
-    ).toMatchObject({ kind: 'win', winnerIndex: 0 })
+    expect(resolveSeotdaShowdown(tied, { ...NO_SPECIALS, tieBreak: 'dealer-wins' })).toMatchObject({
+      kind: 'win',
+      winnerIndex: 0,
+    })
   })
 
   it('암행어사·땡잡이·구사를 룰 토글에 따라 적용한다', () => {
@@ -152,10 +153,7 @@ describe('resolveSeotdaShowdown', () => {
       winnerIndex: 0,
     })
     expect(
-      resolveSeotdaShowdown(
-        [ttaeng(10), hand(4, 'tti', 9, 'tti')],
-        SEOTDA_RULES_STANDARD,
-      ).kind,
+      resolveSeotdaShowdown([ttaeng(10), hand(4, 'tti', 9, 'tti')], SEOTDA_RULES_STANDARD).kind,
     ).toBe('replay')
   })
 

@@ -16,12 +16,12 @@ import {
 } from './fair-round-service'
 import { privateSeotdaHand } from './verified-seotda'
 
-const { roomMembers, rounds, roundFairness, roundFairnessParticipants, roundFairnessReveals } = schema
+const { roomMembers, rounds, roundFairness, roundFairnessParticipants, roundFairnessReveals } =
+  schema
 
 const roundIdSchema = z.string().uuid()
 const seedSchema = z.string().regex(/^[0-9a-f]{64}$/i)
 
-/** Submit a locally retained 32-byte client seed. Only its round/user-bound hash is persisted. */
 export async function submitFairnessSeed(input: {
   roomId: string
   roundId: string
@@ -29,7 +29,10 @@ export async function submitFairnessSeed(input: {
 }): Promise<ActionResult<{ roundId: string; submitted: true }>> {
   const userId = await currentUserId()
   if (!userId) return fail('errors.loginRequired')
-  if (!roundIdSchema.safeParse(input.roundId).success || !roundIdSchema.safeParse(input.roomId).success) {
+  if (
+    !roundIdSchema.safeParse(input.roundId).success ||
+    !roundIdSchema.safeParse(input.roomId).success
+  ) {
     return fail('errors.invalidInput')
   }
   if (!seedSchema.safeParse(input.clientSeed).success) return fail('errors.invalidInput')
@@ -40,7 +43,13 @@ export async function submitFairnessSeed(input: {
       const [round] = await tx
         .select({ id: rounds.id })
         .from(rounds)
-        .where(and(eq(rounds.id, input.roundId), eq(rounds.roomId, input.roomId), eq(rounds.status, 'playing')))
+        .where(
+          and(
+            eq(rounds.id, input.roundId),
+            eq(rounds.roomId, input.roomId),
+            eq(rounds.status, 'playing'),
+          ),
+        )
         .limit(1)
       if (!round) return fail('errors.noActiveRound')
 
@@ -49,7 +58,8 @@ export async function submitFairnessSeed(input: {
         .from(roundFairness)
         .where(eq(roundFairness.roundId, input.roundId))
         .limit(1)
-      if (!fairRound || fairRound.phase !== 'collecting_seeds') return fail('errors.fairnessNotCollecting')
+      if (!fairRound || fairRound.phase !== 'collecting_seeds')
+        return fail('errors.fairnessNotCollecting')
 
       const now = await fairDatabaseNow(tx)
       const clientSeedHash = await hashClientSeed(input.roundId, userId, input.clientSeed)
@@ -64,9 +74,11 @@ export async function submitFairnessSeed(input: {
         )
         .limit(1)
       if (!participant) return fail('errors.fairnessNotParticipant')
-      if (participant.clientSeedHash === clientSeedHash) return ok({ roundId: input.roundId, submitted: true })
+      if (participant.clientSeedHash === clientSeedHash)
+        return ok({ roundId: input.roundId, submitted: true })
       if (participant.clientSeedHash !== null) return fail('errors.fairnessSeedAlreadyCommitted')
-      if (now.getTime() >= fairRound.seedDeadline.getTime()) return fail('errors.fairnessSeedDeadlineReached')
+      if (now.getTime() >= fairRound.seedDeadline.getTime())
+        return fail('errors.fairnessSeedDeadlineReached')
 
       await tx
         .update(roundFairnessParticipants)
@@ -86,7 +98,6 @@ export async function submitFairnessSeed(input: {
   }
 }
 
-/** Any active participant may advance a fully submitted or expired seed collection; no dealer availability is required. */
 export async function sealFairnessRound(
   roomId: string,
   roundId: string,
@@ -126,7 +137,11 @@ export async function sealFairnessRound(
         .limit(1)
       if (!membership) return fail('errors.fairnessNotParticipant')
 
-      const [fairRound] = await tx.select().from(roundFairness).where(eq(roundFairness.roundId, roundId)).limit(1)
+      const [fairRound] = await tx
+        .select()
+        .from(roundFairness)
+        .where(eq(roundFairness.roundId, roundId))
+        .limit(1)
       if (!fairRound) return fail('errors.fairnessNotEnabled')
       if (fairRound.phase === 'sealed' || fairRound.phase === 'revealed') {
         return ok({ roundId, sealed: true })
@@ -143,7 +158,6 @@ export async function sealFairnessRound(
   }
 }
 
-/** Server-only hand delivery. The room snapshot and realtime payloads never contain this result. */
 export async function getMyVerifiedSeotdaHand(
   roomId: string,
   roundId: string,
@@ -172,11 +186,13 @@ export async function getMyVerifiedSeotdaHand(
       const participants = await loadFairRoundParticipants(tx, roundId)
       if (!participants.some((participant) => participant.userId === userId)) return undefined
       const deal = await reconstructSealedFairRound(fairRound, participants)
-      return privateSeotdaHand(deal.shuffle.shuffledDeckIds, deal.participants, userId).map((card) => ({
-        id: card.id,
-        month: card.month,
-        label: card.label,
-      }))
+      return privateSeotdaHand(deal.shuffle.shuffledDeckIds, deal.participants, userId).map(
+        (card) => ({
+          id: card.id,
+          month: card.month,
+          label: card.label,
+        }),
+      )
     })
     if (result === undefined) return fail('errors.fairnessNotParticipant')
     if (result === null) return fail('errors.fairnessDealNotReady')
@@ -187,7 +203,6 @@ export async function getMyVerifiedSeotdaHand(
   }
 }
 
-/** Full reveal is available only to an authenticated original participant after the round has finalized. */
 export async function getVerifiedFairnessAudit(
   roomId: string,
   roundId: string,
@@ -213,7 +228,11 @@ export async function getVerifiedFairnessAudit(
           ),
         )
         .limit(1),
-      db.select().from(roundFairnessReveals).where(eq(roundFairnessReveals.roundId, roundId)).limit(1),
+      db
+        .select()
+        .from(roundFairnessReveals)
+        .where(eq(roundFairnessReveals.roundId, roundId))
+        .limit(1),
     ])
     if (!participant[0]) return fail('errors.fairnessNotParticipant')
     const header = fairRound[0] as PersistedFairRound | undefined

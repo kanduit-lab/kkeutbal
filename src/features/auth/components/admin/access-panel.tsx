@@ -13,10 +13,6 @@ import type { GuestTokenView, RegistrationCodeView } from '../../admin-queries'
 import { IssueSecretPanel } from './issue-secret-panel'
 import { RevocableList } from './revocable-list'
 
-/**
- * 접근 관리 섹션 — 가입코드와 게스트 토큰. 두 흐름은 발급물 종류만 다르므로
- * 패널·목록 컴포넌트는 공유하고, 여기서는 어떤 액션을 부를지만 정한다.
- */
 export function AccessPanel({
   tokens,
   registrationCodes,
@@ -83,7 +79,6 @@ export function AccessPanel({
         disabled={isPending}
         onRevoke={setRevokeCodeTarget}
       />
-
       <IssueSecretPanel
         title={d.adminConsole.guestTokens.issueTitle}
         description={d.adminConsole.guestTokens.issueDescription}
@@ -103,7 +98,6 @@ export function AccessPanel({
         disabled={isPending}
         onRevoke={setRevokeTokenTarget}
       />
-
       <ConfirmDialog
         open={revokeCodeTarget !== null}
         title={format(d.adminConsole.registrationCodes.revokeTitle, {
@@ -128,7 +122,6 @@ export function AccessPanel({
         }}
         onClose={() => setRevokeCodeTarget(null)}
       />
-
       <ConfirmDialog
         open={revokeTokenTarget !== null}
         title={format(d.adminConsole.guestTokens.revokeTitle, {

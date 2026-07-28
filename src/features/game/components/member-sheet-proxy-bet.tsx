@@ -8,10 +8,6 @@ import { Button, Stepper } from '@/components/ui'
 import type { RunAction } from './shared'
 import { Section } from './member-sheet-parts'
 
-/**
- * 대리 베팅 섹션 — 딜러가 멤버 대신 체크/콜/레이즈/폴드를 입력한다.
- * MemberSheet 의 canProxy 게이팅 블록에서 그대로 옮겨왔다.
- */
 export function ProxyBetSection({
   roomId,
   memberId,
@@ -38,23 +34,22 @@ export function ProxyBetSection({
   const { d } = useDict()
   const [raiseOpen, setRaiseOpen] = useState(false)
   const [raiseAmount, setRaiseAmount] = useState(baseBet)
-  /** 현재 요청이 걸린 버튼 자리 — 네 버튼이 한꺼번에 도는 대신 누른 버튼만 돌게 한다. */
+
   const [firingSlot, setFiringSlot] = useState<'check' | 'call' | 'raise' | 'fold' | null>(null)
   const callAmount = Math.min(callNeeded, memberBalance)
   const callIsAllIn = callNeeded > 0 && memberBalance <= callNeeded
   const minRaise = lastBet === 0 ? baseBet : callNeeded + 1
-  /** 최소 레이즈에 못 미치는 잔액은 올인으로만 유효하다. */
+
   const raiseInputMin = Math.min(minRaise, memberBalance)
   const canConfirmRaise = raiseAmount >= minRaise || raiseAmount === memberBalance
 
-  /**
-   * 대리 베팅 멱등키 — 같은 의도(대상·액션·금액)의 재시도는 같은 actionId 로 재전송한다.
-   * 타임아웃 후 재탭이 서버에 이중 기록되는 것을 placeBet 멱등 처리로 흡수하기 위함이다.
-   * 성공(확정 응답)하면 비우고, 실패는 타임아웃일 수 있어 키를 유지한다.
-   */
   const proxyIntentRef = useRef<{ key: string; id: string } | null>(null)
 
-  function proxyBet(action: BetActionKind, amount: number, slot: 'check' | 'call' | 'raise' | 'fold') {
+  function proxyBet(
+    action: BetActionKind,
+    amount: number,
+    slot: 'check' | 'call' | 'raise' | 'fold',
+  ) {
     const key = `${memberId}:${action}:${amount}`
     const intent =
       proxyIntentRef.current?.key === key

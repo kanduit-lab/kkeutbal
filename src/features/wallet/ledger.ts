@@ -1,5 +1,3 @@
-/** 전역 가상 크레딧 posting에 넘길 복식 엔트리의 순수 구성·검증 함수. */
-
 export const ISSUANCE_ACCOUNT_ID = '00000000-0000-4000-8000-000000000001'
 
 export interface CreditEntryRequest {
@@ -8,10 +6,6 @@ export interface CreditEntryRequest {
   readonly delta_locked: number
 }
 
-/**
- * 양수는 관리자 지급, 음수는 회수다. 발행 계정은 반대 부호를 가져 거래 전체 합이 항상 0이다.
- * 실제 음수 잔액 검증은 행 잠금 뒤 DB posting 함수가 수행한다.
- */
 export function adminAdjustmentEntries(
   targetAccountId: string,
   amount: number,
@@ -35,7 +29,6 @@ export function adminAdjustmentEntries(
   ]
 }
 
-/** 서버 액션 전 검증용. DB 함수도 동일한 0-sum·한 계정당 한 엔트리 검사를 강제한다. */
 export function validateCreditEntries(entries: readonly CreditEntryRequest[]): void {
   if (entries.length === 0) throw new Error('Credit transaction needs entries')
   const accountIds = new Set<string>()

@@ -25,7 +25,6 @@ interface ScoreRow {
   readonly note: string
 }
 
-// 기본 룰(GOSTOP_RULES_STANDARD, features/gostop/types.ts) 기준. 방마다 룰 프리셋으로 조정될 수 있다.
 const SCORE_ROWS: readonly ScoreRow[] = [
   { combo: '광 3장', points: '3점', note: '비광 제외 3장. 비광 포함이면 2점' },
   { combo: '광 4장', points: '4점', note: '' },
@@ -44,7 +43,10 @@ interface MultiplierRow {
 
 const MULTIPLIER_ROWS: readonly MultiplierRow[] = [
   { source: '1고 / 2고', effect: '+1점 / +2점 고정 가산' },
-  { source: '3고부터', effect: '점수 전체에 배수가 붙습니다. 고를 부를수록 커지지만 역전당하면 그만큼 크게 잃습니다' },
+  {
+    source: '3고부터',
+    effect: '점수 전체에 배수가 붙습니다. 고를 부를수록 커지지만 역전당하면 그만큼 크게 잃습니다',
+  },
   { source: '흔들기', effect: '같은 월 패 3장을 처음부터 들고 흔들면 그 판 점수 ×2' },
   { source: '폭탄', effect: '같은 월 카드로 상대가 낸 패를 한 번에 먹으면 그 판 점수 ×2' },
   { source: '피박', effect: '피를 5장 미만밖에 못 먹은 사람에게는 이긴 사람 점수가 ×2' },
@@ -65,13 +67,10 @@ export default async function GostopGuidePage() {
         title="고스톱"
         description="바닥 패와 맞춰 광·열끗·띠·피를 모으고, 점수가 나면 고 또는 스톱을 선택합니다"
       />
-
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* 목차가 먼저 온다 — 1열(모바일)에서는 본문 위, lg 에서는 order 로 우측 컬럼. */}
         <div className="min-w-0 lg:order-2 lg:col-span-3">
           <TocNav items={TOC} />
         </div>
-
         <div className="min-w-0 space-y-8 lg:order-1 lg:col-span-9">
           <section id="flow" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">진행 방식</h2>
@@ -84,7 +83,6 @@ export default async function GostopGuidePage() {
               </ol>
             </Panel>
           </section>
-
           <section id="score" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">점수표</h2>
             <ScrollTable title="점수표">
@@ -110,18 +108,20 @@ export default async function GostopGuidePage() {
             <p className="text-xs text-muted">
               기본 룰에서는 3점 이상 모아야 스톱을 선언할 수 있습니다
             </p>
-
             <Panel className="space-y-3">
               <p className="text-sm font-medium text-muted">대표 조합 예시</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <CardPair ids={['02-yeol', '04-yeol', '08-yeol']} label="고도리" />
-                <CardPair ids={['01-gwang', '03-gwang', '08-gwang']} label="광 3장" note="비광 제외" />
+                <CardPair
+                  ids={['01-gwang', '03-gwang', '08-gwang']}
+                  label="광 3장"
+                  note="비광 제외"
+                />
                 <CardPair ids={['01-tti', '02-tti', '03-tti']} label="홍단" />
                 <CardPair ids={['06-tti', '09-tti', '10-tti']} label="청단" />
               </div>
             </Panel>
           </section>
-
           <section id="go-stop" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">고 / 스톱</h2>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -140,7 +140,6 @@ export default async function GostopGuidePage() {
               </Panel>
             </div>
           </section>
-
           <section id="multiplier" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">배수</h2>
             <ScrollTable title="배수표">
@@ -162,7 +161,6 @@ export default async function GostopGuidePage() {
               </table>
             </ScrollTable>
           </section>
-
           <BackToTop />
         </div>
       </div>

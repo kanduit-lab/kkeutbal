@@ -7,9 +7,6 @@ import type { BetActionKind, BetActionView } from '../types'
 import { Button, Input } from '@/components/ui'
 import type { RunAction } from './shared'
 
-/**
- * 승인 대기열 — 딜러 확인이 필요한 베팅 액션 목록. 승인은 즉시, 거부는 사유(필수) 입력 후 확정.
- */
 export function PendingApprovalQueue({
   pendingActions,
   selfId,
@@ -23,19 +20,22 @@ export function PendingApprovalQueue({
   runAction: RunAction
   nameOf: (userId: string) => string
   betLabels: Record<BetActionKind, string>
-  /** 스냅샷이 낡아 조작을 잠글 사유. null 이면 정상. */
+
   staleReason?: string | null
 }) {
   const { d } = useDict()
   const [isPending, startTransition] = useTransition()
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  /** 진행 중인 요청의 대상 — 스피너를 그 행의 버튼에만 붙인다. */
+
   const [firing, setFiring] = useState<{ id: string; kind: 'approve' | 'reject' } | null>(null)
 
   if (pendingActions.length === 0) return null
 
-  const run = (target: { id: string; kind: 'approve' | 'reject' }, task: () => Promise<unknown>) => {
+  const run = (
+    target: { id: string; kind: 'approve' | 'reject' },
+    task: () => Promise<unknown>,
+  ) => {
     if (isPending) return
     setFiring(target)
     startTransition(async () => {

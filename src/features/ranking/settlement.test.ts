@@ -2,19 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { computeSettlementTransfers } from './settlement'
 import type { SettlementTransfer } from './settlement'
 
-/**
- * 정산 이체 계산 테스트.
- *
- * 핵심 불변식: net 합이 0인 입력이면 이체를 모두 적용했을 때 전원 잔액 0,
- * 이체 수는 인원-1 이하, 출력은 입력 순서와 무관하게 결정적.
- */
-
 interface NetRow {
   readonly userId: string
   readonly net: number
 }
 
-/** 이체를 적용한 뒤 남는 잔액 — 채무자는 net + 지불액, 채권자는 net - 수령액. */
 function residualNets(
   rows: readonly NetRow[],
   transfers: readonly SettlementTransfer[],

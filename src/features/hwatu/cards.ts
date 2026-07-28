@@ -1,11 +1,9 @@
 import type { CardKind, HwatuCard, Month, TtiKind } from './types'
 
-/** 화투 48장 = 12개월 × 4장. */
-
 interface CardSpec {
   readonly kind: CardKind
   readonly tti?: Exclude<TtiKind, null>
-  /** 피 환산값. 생략 시 일반 피(1). */
+
   readonly pi?: 1 | 2
   readonly godori?: true
   readonly label: string
@@ -100,7 +98,6 @@ const MONTH_SPECS: readonly MonthSpec[] = [
   },
   {
     month: 9,
-    // 국진(술잔)은 룰에 따라 쌍피로 쓸 수 있다. 기본값은 열끗이며 전환은 룰 프리셋이 담당한다.
     name: '국화',
     cards: [
       { kind: 'yeol', label: '국화 국진' },
@@ -131,7 +128,6 @@ const MONTH_SPECS: readonly MonthSpec[] = [
   },
   {
     month: 12,
-    // 비띠는 홍/청/초 어디에도 속하지 않으므로 tti 를 지정하지 않는다.
     name: '비',
     cards: [
       { kind: 'gwang', label: '비광' },
@@ -143,7 +139,6 @@ const MONTH_SPECS: readonly MonthSpec[] = [
 ]
 
 function buildDeck(): readonly HwatuCard[] {
-  // 로컬 accumulator — 함수 밖으로 새지 않으므로 push 사용 (coding-style 예외 규정)
   const deck: HwatuCard[] = []
 
   for (const spec of MONTH_SPECS) {
@@ -169,7 +164,6 @@ function buildDeck(): readonly HwatuCard[] {
         tti: card.kind === 'tti' ? (card.tti ?? null) : null,
         piValue: card.kind === 'pi' ? (card.pi ?? 1) : 0,
         isGodori: card.godori ?? false,
-        // 섯다 덱 = 1~10월의 비(非)피 카드. 월별 정확히 2장씩 = 20장.
         seotda: spec.month <= 10 && card.kind !== 'pi',
         label: card.label,
       })
@@ -179,27 +173,22 @@ function buildDeck(): readonly HwatuCard[] {
   return Object.freeze(deck)
 }
 
-/** 화투 전체 48장. */
 export const HWATU_DECK: readonly HwatuCard[] = buildDeck()
 
-/** 섯다 20장 (1~10월 각 2장). */
 export const SEOTDA_DECK: readonly HwatuCard[] = Object.freeze(
   HWATU_DECK.filter((card) => card.seotda),
 )
 
 const BY_ID: ReadonlyMap<string, HwatuCard> = new Map(HWATU_DECK.map((card) => [card.id, card]))
 
-/** id 로 카드 조회. 없으면 `undefined`. 외부 입력(vision·DB)은 반드시 이 경로로 정규화한다. */
 export function findCard(id: string): HwatuCard | undefined {
   return BY_ID.get(id)
 }
 
-/** 월 기준 카드 목록. */
 export function cardsOfMonth(month: Month): readonly HwatuCard[] {
   return HWATU_DECK.filter((card) => card.month === month)
 }
 
-/** 게임별 사용 덱. */
 export function deckFor(gameType: 'seotda' | 'gostop'): readonly HwatuCard[] {
   return gameType === 'seotda' ? SEOTDA_DECK : HWATU_DECK
 }

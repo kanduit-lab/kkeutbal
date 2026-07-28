@@ -14,7 +14,6 @@ import { format, translateError, useDict } from '@/lib/i18n/client'
 import type { RoomSnapshot } from '../types'
 import type { RunAction } from './shared'
 
-/** The original client seed never enters a room snapshot or realtime event; it stays in session storage. */
 function clientSeedStorageKey(roundId: string): string {
   return `kkeutbal/fairness/client-seed/${roundId}`
 }
@@ -23,11 +22,6 @@ function validSeed(value: string | null): value is string {
   return value !== null && /^[0-9a-f]{64}$/i.test(value)
 }
 
-/**
- * Private-hand and commit controls for an active verified Seotda round.
- * This component deliberately receives only the public fairness view from the room snapshot.
- */
-/** 진행 표시를 붙일 버튼 자리. */
 type FairnessSlot = 'submit' | 'seal' | 'reveal'
 
 export function FairnessPanel({
@@ -39,7 +33,7 @@ export function FairnessPanel({
   snapshot: RoomSnapshot
   selfId: string
   runAction: RunAction
-  /** 스냅샷이 낡아 조작을 잠글 사유. null 이면 정상. */
+
   staleReason?: string | null
 }) {
   const { d, locale } = useDict()
@@ -49,7 +43,7 @@ export function FairnessPanel({
   const [now, setNow] = useState(() => Date.now())
   const [handCardIds, setHandCardIds] = useState<readonly string[] | null>(null)
   const [isPending, startTransition] = useTransition()
-  /** 현재 요청이 걸린 버튼 자리 — 세 버튼이 한꺼번에 도는 대신 누른 버튼만 돌게 한다. */
+
   const [firingSlot, setFiringSlot] = useState<FairnessSlot | null>(null)
 
   const round = snapshot.currentRound
@@ -95,29 +89,23 @@ export function FairnessPanel({
   const deadlineReached = deadline ? now >= deadline.getTime() : false
   const canSeal = Boolean(
     fairness &&
-      isParticipant &&
-      fairness.phase === 'collecting_seeds' &&
-      (deadlineReached || fairness.submittedParticipantCount === fairness.participantCount),
+    isParticipant &&
+    fairness.phase === 'collecting_seeds' &&
+    (deadlineReached || fairness.submittedParticipantCount === fairness.participantCount),
   )
   const handCards = useMemo(
-    () => (handCardIds ?? []).flatMap((id) => {
-      const card = findCard(id)
-      return card && card.seotda ? [card] : []
-    }),
+    () =>
+      (handCardIds ?? []).flatMap((id) => {
+        const card = findCard(id)
+        return card && card.seotda ? [card] : []
+      }),
     [handCardIds],
   )
 
-  /** 마감까지 남은 초 — 이미 1초마다 리렌더하고 있으니 절대 시각 대신 카운트다운을 보여준다. */
-  const secondsLeft = deadline
-    ? Math.max(0, Math.ceil((deadline.getTime() - now) / 1000))
-    : null
+  const secondsLeft = deadline ? Math.max(0, Math.ceil((deadline.getTime() - now) / 1000)) : null
 
   if (!round || !fairness) return null
 
-  /**
-   * 세 액션 모두 useTransition 으로 감싼다. 원래는 아무 진행 표시·중복 차단이 없어서
-   * 시드 수집 창(10~120초)이라는 시간 압박 구간에서 연타가 그대로 중복 요청이 됐다.
-   */
   const runSlot = (slot: FairnessSlot, task: () => Promise<unknown>) => {
     if (isPending) return
     setFiringSlot(slot)
@@ -142,10 +130,6 @@ export function FairnessPanel({
     )
   }
 
-  /**
-   * 내 패는 토글이다. 한 번 열면 다시 못 닫히던 동작은, 폰을 테이블에 내려놓는 게임에서
-   * 상대에게 내 패를 그대로 보여주는 것과 같다 — 공정 딜 모드에서 가장 나쁜 결과다.
-   */
   const toggleHand = () => {
     if (handCardIds) {
       setHandCardIds(null)
@@ -178,9 +162,13 @@ export function FairnessPanel({
           {fairness.phase === 'collecting_seeds' ? d.fairness.collecting : d.fairness.sealed}
         </span>
       </div>
-
       <div className="space-y-1 text-xs text-muted">
-        <p>{format(d.fairness.submitted, { submitted: fairness.submittedParticipantCount, total: fairness.participantCount })}</p>
+        <p>
+          {format(d.fairness.submitted, {
+            submitted: fairness.submittedParticipantCount,
+            total: fairness.participantCount,
+          })}
+        </p>
         {deadline ? (
           <p aria-live="polite">
             {secondsLeft !== null && !deadlineReached
@@ -188,10 +176,7 @@ export function FairnessPanel({
               : format(d.fairness.deadline, { time: deadline.toLocaleTimeString(locale) })}
           </p>
         ) : null}
-        {/*
-          commitment 는 의심하는 사람이 눈으로 대조하라고 있는 값이다. 10px + opacity-70
-          은 제품에서 가장 안 읽히는 글자였다 — 대비를 살리고 복사 버튼을 붙인다.
-        */}
+
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 break-all font-mono text-micro text-muted">
             <span className="sr-only">{d.fairness.commitmentLabel}: </span>
@@ -210,7 +195,6 @@ export function FairnessPanel({
           </Button>
         </div>
       </div>
-
       {fairness.phase === 'collecting_seeds' && isParticipant ? (
         <div className="space-y-2">
           <p className="text-xs text-muted">{d.fairness.seedReady}</p>
@@ -232,9 +216,7 @@ export function FairnessPanel({
               loading={firingSlot === 'seal'}
               loadingLabel={d.ui.processing}
               disabled={!canSeal || isPending || staleReason !== null}
-              disabledReason={
-                !canSeal ? d.fairness.waitForSeeds : (staleReason ?? undefined)
-              }
+              disabledReason={!canSeal ? d.fairness.waitForSeeds : (staleReason ?? undefined)}
               onClick={() =>
                 runSlot('seal', () =>
                   runAction(() => sealFairnessRound(snapshot.room.id, round.id)),
@@ -246,7 +228,6 @@ export function FairnessPanel({
           </div>
         </div>
       ) : null}
-
       {fairness.phase === 'sealed' && isParticipant ? (
         <div className="space-y-2">
           <p className="text-xs text-muted">{d.fairness.dealerWillResolve}</p>

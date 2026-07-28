@@ -7,10 +7,6 @@ import { Button, Stepper } from '@/components/ui'
 import type { RunAction } from './shared'
 import { Section } from './member-sheet-parts'
 
-/**
- * 바이인 섹션 — 딜러가 멤버에게 칩을 지급한다. "지급 취소"는 undoLastBuyIn 확인
- * 다이얼로그를 여는 요청만 올리고, 다이얼로그 자체는 MemberSheet 가 소유한다.
- */
 export function BuyInSection({
   roomId,
   memberId,
@@ -34,10 +30,7 @@ export function BuyInSection({
 }) {
   const { d } = useDict()
   const [buyInAmount, setBuyInAmount] = useState(startingChips)
-  /**
-   * isPending 은 시트 전체가 공유한다 — 역할 변경이나 대리 베팅이 도는 동안에도 참이라
-   * 그것만 보고 스피너를 붙이면 엉뚱한 버튼이 돈다. 이 섹션이 쏜 요청만 따로 표시한다.
-   */
+
   const [granting, setGranting] = useState(false)
 
   const buyInPresets = useMemo(() => {
@@ -85,22 +78,17 @@ export function BuyInSection({
         disabled={isPending}
         onClick={() => {
           setGranting(true)
-          run(
-            async () => {
-              const success = await runAction(() =>
-                addBuyIn({
-                  roomId,
-                  amount: buyInAmount,
-                  targetUserId: memberId,
-                }),
-              )
-              setGranting(false)
-              return success
-            },
-            // 시트를 열어 둬 잔액이 올라간 것을 바로 확인하게 한다 — 지급 취소 경로와 같은 규칙.
-            // 여러 명에게 연속 지급할 때 매번 좌석을 다시 탭하지 않아도 된다.
-            false,
-          )
+          run(async () => {
+            const success = await runAction(() =>
+              addBuyIn({
+                roomId,
+                amount: buyInAmount,
+                targetUserId: memberId,
+              }),
+            )
+            setGranting(false)
+            return success
+          }, false)
         }}
       >
         💰 {format(d.memberSheet.grant, { n: buyInAmount.toLocaleString() })}

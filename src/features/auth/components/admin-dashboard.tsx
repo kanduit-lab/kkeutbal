@@ -23,10 +23,6 @@ const SECTION_ICON: Record<AdminSection, string> = {
   operations: '📣',
 }
 
-/**
- * 섹션 로딩 자리. 라우트 스켈레톤(app/admin/loading.tsx)도 이 모양을 그대로 쓴다 —
- * 두 스켈레톤이 서로 다른 모양이면 진입할 때마다 골격이 한 번 갈아끼워지며 깜빡인다.
- */
 export function SectionSkeleton({ label }: { label: string }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2" role="status" aria-live="polite">
@@ -202,7 +198,6 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
           )
         })}
       </nav>
-
       <section aria-labelledby={`admin-${activeSection}-title`}>
         <div className="mb-4 flex items-end justify-between gap-4 px-1">
           <div>
@@ -215,7 +210,6 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
           </div>
           <Badge tone="muted">{d.adminDashboard.onDemand}</Badge>
         </div>
-
         {ADMIN_SECTIONS.map((section) => {
           const state = states[section]
           if (section !== activeSection) {

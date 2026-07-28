@@ -5,14 +5,12 @@ import { evaluateSeotdaHand } from './engine'
 import { SEOTDA_RULES_STANDARD, type SeotdaRules } from './types'
 import { catcherTraitAgainst, seotdaAdvice } from './advice'
 
-/** 월+종류로 덱에서 카드를 집는다. */
 function card(month: number, kind: HwatuCard['kind']): HwatuCard {
   const found = SEOTDA_DECK.find((c) => c.month === month && c.kind === kind)
   if (!found) throw new Error(`테스트 카드 없음: ${month}월 ${kind}`)
   return found
 }
 
-/** 같은 월 두 장(땡) — 종류가 다른 두 장을 집는다. */
 function ttaeng(month: number) {
   const two = SEOTDA_DECK.filter((c) => c.month === month)
   return evaluateSeotdaHand([two[0] as HwatuCard, two[1] as HwatuCard])

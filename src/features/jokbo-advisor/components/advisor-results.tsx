@@ -13,21 +13,10 @@ import { Badge, Panel, Stepper } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { POKER_CATEGORY_STATS, seotdaStats } from '../stats'
 
-/** 어드바이저 판정 결과 패널 3종 — 게임별 표시만 담당하고 선택 상태는 advisor-client 가 소유한다. */
-
-/** 사진 인식으로 채워진 선택의 출처. 사용자가 카드를 직접 토글하면 advisor-client 가 지운다. */
 export interface VisionSource {
   readonly confidence: number
 }
 
-/**
- * 결과 패널 공통 껍데기. 이 화면의 인터랙션은 "카드를 탭하면 다른 패널의 판정이 바뀐다" 인데
- * 포커스는 카드 버튼에 남으므로, 라이브 리전이 없으면 스크린리더에 변경이 전혀 전달되지 않는다.
- * 결과 영역에 헤딩이 없어 랜드마크 탐색으로도 도달할 수 없던 것도 함께 고친다.
- *
- * 사진 인식 결과는 사람이 고른 것과 시각적으로 구분되지 않으면 저신뢰 오인식을
- * "앱이 판정한 내 패" 로 받아들이게 된다 — 배지를 지속 표시한다.
- */
 function ResultRegion({
   className,
   vision,
@@ -126,10 +115,6 @@ export function SeotdaResult({
   )
 }
 
-/**
- * 패별 상황 안내 — 무엇에 잡히고 무엇을 잡는지. 코드는 엔진(seotda/advice.ts)이 판정하고
- * 문장은 사전이 갖는다. `{rate}` 는 잡는 패가 상대에게 나올 확률로 채운다.
- */
 function SeotdaAdviceList({
   advice,
   catcherRate,
@@ -283,11 +268,6 @@ function formatProbability(percent: number): string {
   return `${percent.toFixed(4)}%`
 }
 
-/**
- * 고/흔들기/폭탄 횟수 — 0~9 카운터. 공용 Stepper(±버튼 48px)를 그대로 써서 터치 타깃을
- * 지킨다 — 예전에는 자체 32px 버튼을 3열 그리드에 욱여넣었지만, 그 폭에서는 48px 버튼
- * 두 개가 물리적으로 들어가지 않아 세로 1열로 쌓는다.
- */
 function CountStepper({
   label,
   value,

@@ -9,7 +9,6 @@ import { Badge, EmptyState, PageHeader, PageShell, Panel, SegmentedLinks } from 
 import { getDict, format } from '@/lib/i18n/server'
 import type { Dictionary } from '@/lib/i18n/server'
 
-/** searchParams 는 외부 입력 — 화이트리스트 밖 값은 전부 '전체'로 폴백한다. */
 const filterSchema = z.object({
   game: z.enum(['all', 'seotda', 'gostop', 'poker']).catch('all'),
   period: z.enum(['all', '7d', '30d']).catch('all'),
@@ -18,10 +17,6 @@ const filterSchema = z.object({
 type GameFilter = z.infer<typeof filterSchema>['game']
 type PeriodFilter = z.infer<typeof filterSchema>['period']
 
-/**
- * 한 화면에 그리는 최대 인원. 누적 랭킹 대상은 정산된 방에 참여한 전체 사용자라
- * 상한이 없으면 사용자 수만큼 Panel 이 늘어난다. 잘려도 내 행은 아래에 따로 붙인다.
- */
 const TOP_LIMIT = 50
 
 function gameChips(d: Dictionary): ReadonlyArray<{ value: GameFilter; label: string }> {
@@ -49,7 +44,6 @@ function periodToSince(period: PeriodFilter): Date | undefined {
   return undefined
 }
 
-/** 기본값(전체)은 쿼리에서 생략해 /ranking 이 canonical URL 로 남게 한다. */
 function filterHref(game: GameFilter, period: PeriodFilter): Route {
   const params = new URLSearchParams()
   if (game !== 'all') params.set('game', game)
@@ -82,11 +76,7 @@ function RankingEntry({
   d: Dictionary
 }) {
   return (
-    <Link
-      // typedRoutes 는 새 동적 라우트를 타입 재생성 전까지 추론하지 못한다
-      href={`/ranking/player/${row.userId}` as Route}
-      className="block"
-    >
+    <Link href={`/ranking/player/${row.userId}` as Route} className="block">
       <Panel
         className={`flex min-h-14 items-center justify-between py-3 transition-transform hover:-translate-y-0.5 ${
           isMe ? 'ring-1 ring-gold/40' : ''
@@ -153,7 +143,6 @@ export default async function RankingPage({
         backLabel={d.common.home}
         actions={<LocaleSwitcher />}
       />
-
       <div className="space-y-2">
         <SegmentedLinks
           ariaLabel={d.ranking.filterNavAria}
@@ -174,7 +163,6 @@ export default async function RankingPage({
           }))}
         />
       </div>
-
       {ranking.length === 0 ? (
         filtered ? (
           <EmptyState title={d.ranking.emptyFilteredTitle} hint={d.ranking.emptyFilteredHint} />
@@ -192,7 +180,6 @@ export default async function RankingPage({
               d={d}
             />
           ))}
-
           {ranking.length > TOP_LIMIT ? (
             <p className="pt-2 text-center text-xs text-muted">
               {format(d.ranking.topNNote, { n: TOP_LIMIT })}
@@ -200,8 +187,6 @@ export default async function RankingPage({
           ) : null}
         </section>
       )}
-
-      {/* 상위 50 밖이면 자기 순위만 따로 붙인다 — 스크롤로 찾게 두지 않는다. */}
       {myRowBelowCut ? (
         <section aria-label={d.ranking.myPositionAria}>
           <RankingEntry row={myRowBelowCut} index={myIndex} isMe d={d} />

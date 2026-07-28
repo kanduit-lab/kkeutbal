@@ -20,22 +20,61 @@ const TOC = [
 interface PokerHandRow {
   readonly label: string
   readonly description: string
-  /** features/poker/cards.ts 의 id 형식 — 랭크문자(2~9,T,J,Q,K,A) + 무늬대문자(S,H,D,C). */
+
   readonly cardIds: readonly string[]
 }
 
-// engine.ts 의 CATEGORY_PRIORITY 와 같은 순서(강함 → 약함). 서열은 이 순서 자체가 계약이다.
 const POKER_HANDS: readonly PokerHandRow[] = [
-  { label: '로열 플러시', description: '한 무늬로 10-J-Q-K-A. 포커에서 가장 강한 패', cardIds: ['TS', 'JS', 'QS', 'KS', 'AS'] },
-  { label: '스트레이트 플러시', description: '한 무늬로 숫자가 5장 연속', cardIds: ['5H', '6H', '7H', '8H', '9H'] },
-  { label: '포카드', description: '같은 숫자 4장 + 아무 카드 1장', cardIds: ['KC', 'KS', 'KH', 'KD', '2C'] },
-  { label: '풀하우스', description: '트리플 + 원페어 조합', cardIds: ['QS', 'QH', 'QD', '7C', '7S'] },
-  { label: '플러시', description: '숫자는 상관없이 같은 무늬 5장', cardIds: ['AD', 'JD', '8D', '6D', '3D'] },
-  { label: '스트레이트', description: '무늬 상관없이 숫자가 5장 연속', cardIds: ['9S', '8H', '7D', '6C', '5S'] },
-  { label: '트리플', description: '같은 숫자 3장 + 아무 카드 2장', cardIds: ['8C', '8S', '8H', 'KD', '4C'] },
-  { label: '투페어', description: '페어 두 쌍 + 아무 카드 1장', cardIds: ['JS', 'JH', '4D', '4C', '9S'] },
-  { label: '원페어', description: '같은 숫자 2장 + 아무 카드 3장', cardIds: ['7H', '7D', 'KS', '9C', '3H'] },
-  { label: '하이카드', description: '위 조합이 하나도 없을 때, 제일 높은 카드로 승부', cardIds: ['AS', 'JH', '8D', '6C', '2S'] },
+  {
+    label: '로열 플러시',
+    description: '한 무늬로 10-J-Q-K-A. 포커에서 가장 강한 패',
+    cardIds: ['TS', 'JS', 'QS', 'KS', 'AS'],
+  },
+  {
+    label: '스트레이트 플러시',
+    description: '한 무늬로 숫자가 5장 연속',
+    cardIds: ['5H', '6H', '7H', '8H', '9H'],
+  },
+  {
+    label: '포카드',
+    description: '같은 숫자 4장 + 아무 카드 1장',
+    cardIds: ['KC', 'KS', 'KH', 'KD', '2C'],
+  },
+  {
+    label: '풀하우스',
+    description: '트리플 + 원페어 조합',
+    cardIds: ['QS', 'QH', 'QD', '7C', '7S'],
+  },
+  {
+    label: '플러시',
+    description: '숫자는 상관없이 같은 무늬 5장',
+    cardIds: ['AD', 'JD', '8D', '6D', '3D'],
+  },
+  {
+    label: '스트레이트',
+    description: '무늬 상관없이 숫자가 5장 연속',
+    cardIds: ['9S', '8H', '7D', '6C', '5S'],
+  },
+  {
+    label: '트리플',
+    description: '같은 숫자 3장 + 아무 카드 2장',
+    cardIds: ['8C', '8S', '8H', 'KD', '4C'],
+  },
+  {
+    label: '투페어',
+    description: '페어 두 쌍 + 아무 카드 1장',
+    cardIds: ['JS', 'JH', '4D', '4C', '9S'],
+  },
+  {
+    label: '원페어',
+    description: '같은 숫자 2장 + 아무 카드 3장',
+    cardIds: ['7H', '7D', 'KS', '9C', '3H'],
+  },
+  {
+    label: '하이카드',
+    description: '위 조합이 하나도 없을 때, 제일 높은 카드로 승부',
+    cardIds: ['AS', 'JH', '8D', '6C', '2S'],
+  },
 ]
 
 export default async function PokerGuidePage() {
@@ -50,31 +89,22 @@ export default async function PokerGuidePage() {
         title="포커"
         description="텍사스 홀덤 기준 족보 서열표. 5~7장 중 가장 좋은 5장 조합으로 승부합니다"
       />
-
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* 목차가 먼저 온다 — 1열(모바일)에서는 본문 위, lg 에서는 order 로 우측 컬럼. */}
         <div className="min-w-0 lg:order-2 lg:col-span-3">
           <TocNav items={TOC} />
         </div>
-
         <div className="min-w-0 space-y-8 lg:order-1 lg:col-span-9">
           <section id="flow" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">진행 방식</h2>
             <Panel>
               <p className="text-sm text-muted">
-                각자 받은 카드와 공용 카드를 합쳐 5~7장 중 가장 좋은 5장으로 족보를 만듭니다.
-                표에서 위에 있을수록 강한 패입니다
+                각자 받은 카드와 공용 카드를 합쳐 5~7장 중 가장 좋은 5장으로 족보를 만듭니다. 표에서
+                위에 있을수록 강한 패입니다
               </p>
             </Panel>
           </section>
-
           <section id="rank" className="scroll-mt-6 space-y-3">
             <h2 className="text-xl font-bold">족보 서열표</h2>
-
-            {/*
-              카드 5장이 들어가는 표는 좁은 화면에서 3화면 가까이 밀어야 읽힌다.
-              모바일은 세로 카드 리스트로, sm 이상에서만 표로 그린다.
-            */}
             <ol className="space-y-2 sm:hidden">
               {POKER_HANDS.map((hand, index) => (
                 <li key={hand.label}>
@@ -95,7 +125,6 @@ export default async function PokerGuidePage() {
                 </li>
               ))}
             </ol>
-
             <div className="hidden sm:block">
               <ScrollTable title="족보 서열표">
                 <table className="w-full min-w-[560px] text-left text-sm">
@@ -129,7 +158,6 @@ export default async function PokerGuidePage() {
               </ScrollTable>
             </div>
           </section>
-
           <BackToTop />
         </div>
       </div>

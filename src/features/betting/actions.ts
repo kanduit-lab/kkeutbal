@@ -18,7 +18,6 @@ import { minimumRaiseAmount, neededToCall, roundBetState } from './round-bet-sta
 
 const { rooms, roomMembers, rounds, roundParticipants, betActions, chipLedger } = schema
 
-/** placeBet 전용 — 역할에 더해 입장 시각·퇴장 여부까지 본다. */
 async function memberInfo(
   tx: Tx,
   roomId: string,
@@ -51,12 +50,10 @@ function toView(action: typeof betActions.$inferSelect): BetActionView {
 }
 
 const placeBetSchema = z.object({
-  /** 클라이언트 생성 UUID = 멱등키. 재전송은 기존 행 반환으로 흡수된다. */
   actionId: z.string().uuid(),
   roomId: z.string().uuid(),
   action: z.enum(['check', 'call', 'raise', 'fold', 'allin']),
   amount: z.number().int().min(0).max(10_000_000),
-  /** 대리 입력 대상. 생략하면 본인. */
   targetUserId: z.string().uuid().optional(),
 })
 
@@ -100,13 +97,7 @@ async function validateBetSemantics(
       status: betActions.status,
     })
     .from(betActions)
-    .where(
-      and(
-        eq(betActions.roundId, roundId),
-        eq(betActions.status, 'accepted'),
-        before,
-      ),
-    )
+    .where(and(eq(betActions.roundId, roundId), eq(betActions.status, 'accepted'), before))
 
   const state = roundBetState(acceptedActions)
   const callNeeded = neededToCall(state, userId)
@@ -183,7 +174,7 @@ export async function placeBet(
 
       const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
       if (!room) return fail('errors.roomNotFound')
-      // 고스톱은 베팅 없이 판 종료 시 점수로 정산한다.
+
       if (room.gameType === 'gostop') return fail('errors.gostopScoreOnly')
 
       const [round] = await tx
@@ -225,7 +216,6 @@ export async function placeBet(
       })
       if (semanticError) return fail(semanticError)
 
-      // 신뢰 모드는 즉시 확정. 승인 모드에서도 딜러 본인/대리 입력은 즉시 확정.
       const autoAccept = room.inputMode === 'trust' || isDealer
       if (autoAccept && room.inputMode === 'approval') {
         const [earlierPending] = await tx
@@ -304,7 +294,6 @@ export async function approveBet(
         return fail('errors.dealerOrHostOnlyApprove')
       }
 
-      // 락 이후 상태 재조회 — 다른 딜러가 먼저 처리했을 수 있다.
       const [fresh] = await tx
         .select()
         .from(betActions)
@@ -403,7 +392,6 @@ export async function approveBet(
 
 const rejectSchema = z.object({
   actionId: z.string().uuid(),
-  /** 사유는 필수 — 사유 없는 거절은 분쟁을 만든다. */
   reason: z.string().trim().min(1).max(200),
 })
 
@@ -451,7 +439,6 @@ const revertSchema = z.object({
   reason: z.string().trim().min(1).max(200),
 })
 
-/** 확정된 베팅 정정 — 원장은 고치지 않고 반대 부호 정정 행을 쌓는다. */
 export async function revertBet(
   input: z.infer<typeof revertSchema>,
 ): Promise<ActionResult<{ action: BetActionView }>> {
@@ -485,8 +472,6 @@ export async function revertBet(
         return fail('errors.cannotRevertEndedRound')
       }
 
-      // 뒤 액션은 이 액션을 전제로 콜·레이즈됐을 수 있다. 역순으로만 정정해야
-      // 남은 액션의 의미와 팟 원장이 일치한다.
       const [laterAccepted] = await tx
         .select({ id: betActions.id })
         .from(betActions)

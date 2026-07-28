@@ -13,7 +13,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const SHOWCASE_CARD_IDS = ['01-gwang', '03-gwang', '08-gwang', '11-gwang', '12-gwang'] as const
 
-/** 앱 소개 — 로그인 없이 볼 수 있는 정적 페이지. */
 export default async function AboutPage() {
   const { d } = await getDict()
   const showcase = SHOWCASE_CARD_IDS.map((id) => findCard(id)).filter(
@@ -47,11 +46,11 @@ export default async function AboutPage() {
           ))}
         </div>
         <h1 className="font-brush text-6xl font-black tracking-tight">
-          {d.common.appName}<span className="text-accent">.</span>
+          {d.common.appName}
+          <span className="text-accent">.</span>
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-lg text-muted">{d.about.tagline}</p>
       </header>
-
       <section className="rise-in rise-in-1 mt-10 grid gap-4 sm:grid-cols-2">
         {features.map((feature) => (
           <Panel key={feature.title} className="space-y-2">
@@ -63,7 +62,6 @@ export default async function AboutPage() {
           </Panel>
         ))}
       </section>
-
       <section className="rise-in rise-in-2 mt-8 space-y-3">
         <h2 className="text-xl font-bold">{d.about.howTitle}</h2>
         <Panel>
@@ -75,7 +73,6 @@ export default async function AboutPage() {
         </Panel>
         <p className="text-xs text-muted">{d.about.disclaimer}</p>
       </section>
-
       <div className="rise-in rise-in-3 mt-10 grid gap-3 sm:grid-cols-2">
         <ButtonLink href="/login" variant="primary" size="lg">
           {d.about.start}
@@ -84,10 +81,7 @@ export default async function AboutPage() {
           {d.about.guideLink}
         </ButtonLink>
       </div>
-
       <footer className="mt-10 text-center text-xs text-muted">
-        {/* 세로는 min-h-11 로 맞았지만 '홈으로' 두 글자라 가로가 31px 뿐이었다 —
-            타깃은 두 축 모두 충족해야 한다. */}
         <Link
           href="/"
           className="inline-flex min-h-11 items-center px-3 underline underline-offset-4 hover:text-text"

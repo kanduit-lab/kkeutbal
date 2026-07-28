@@ -1,10 +1,6 @@
 import Link from 'next/link'
 import type { Route } from 'next'
 
-/**
- * 가이드 하위 페이지 공통 헤더 — 뒤로가기 + 제목 + 한 줄 설명.
- * 뒤로가기는 44px 터치 타깃을 확보한다 (예전 size-9 = 36px).
- */
 export function GuideHeader({
   backHref,
   backLabel,

@@ -11,13 +11,6 @@ const DEFAULT_VISION_MODELS: Record<VisionProvider, string> = {
   gemini: 'gemini-3.6-flash',
 }
 
-/**
- * 사진 인식 공급자·모델 설정. API key 는 환경변수에서만 읽으므로 여기서는
- * "키가 있는가"만 보여주고, 없으면 활성화를 막는다.
- *
- * 비활성 사유는 체크박스 라벨을 덮어쓰지 않고 별도 hint 로 붙인다 — 라벨을 사유로
- * 바꿔 버리면 스크린리더가 컨트롤의 이름을 에러 문장으로 읽어 컨트롤의 정체가 사라진다.
- */
 export function VisionSettingsPanel({
   settings,
   onDataChanged,

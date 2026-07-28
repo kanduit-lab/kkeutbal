@@ -17,7 +17,7 @@ export interface PokerHand {
   readonly category: PokerCategory
   readonly label: string
   readonly cards: readonly PokerCard[]
-  /** 비교용 서열 벡터: [카테고리 우선순위, ...키커 내림차순]. */
+
   readonly ranks: readonly number[]
 }
 
@@ -34,7 +34,6 @@ const CATEGORY_LABEL: Readonly<Record<PokerCategory, string>> = Object.freeze({
   'high-card': '하이카드',
 })
 
-// 카테고리 우선순위(높을수록 강함). ranks[0]에 담기는 1차 비교 키다.
 const CATEGORY_PRIORITY: Readonly<Record<PokerCategory, number>> = Object.freeze({
   'royal-flush': 9,
   'straight-flush': 8,
@@ -68,7 +67,6 @@ function rankChar(rank: number): string {
   return RANK_CHARS[rank] ?? String(rank)
 }
 
-/** n장 중 5장을 고르는 모든 조합. 입력이 5~7장이므로 최대 21개로 작다. */
 function combinationsOf5(cards: readonly PokerCard[]): readonly PokerCard[][] {
   const result: PokerCard[][] = []
 
@@ -94,7 +92,6 @@ interface FiveCardEvaluation {
   readonly orderedCards: readonly PokerCard[]
 }
 
-/** 오름차순 정렬된 유니크 랭크 5개가 연속인지 판정. A-2-3-4-5(백스트레이트) 포함. */
 function detectStraightHigh(descRanks: readonly number[]): number | null {
   const unique = Array.from(new Set(descRanks)).sort((a, b) => b - a)
   if (unique.length !== 5) return null
@@ -102,7 +99,8 @@ function detectStraightHigh(descRanks: readonly number[]): number | null {
   const isNormal = unique.every((rank, i) => i === 0 || (unique[i - 1] ?? 0) - rank === 1)
   if (isNormal) return unique[0] ?? null
 
-  const isWheel = unique[0] === 14 && unique[1] === 5 && unique[2] === 4 && unique[3] === 3 && unique[4] === 2
+  const isWheel =
+    unique[0] === 14 && unique[1] === 5 && unique[2] === 4 && unique[3] === 3 && unique[4] === 2
   if (isWheel) return 5
 
   return null
@@ -119,9 +117,9 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
   for (const rank of descRanks) {
     countByRank.set(rank, (countByRank.get(rank) ?? 0) + 1)
   }
-  // count 내림차순, 동률이면 rank 내림차순 — 트리플/페어/키커 순서 결정에 사용.
+
   const groups = Array.from(countByRank.entries())
-    .sort((a, b) => (b[1] - a[1]) || (b[0] - a[0]))
+    .sort((a, b) => b[1] - a[1] || b[0] - a[0])
     .map(([rank, count]) => ({ rank, count }))
   const shape = groups.map((g) => g.count)
 
@@ -239,13 +237,11 @@ function normalizeInput(cards: readonly PokerCard[]): readonly PokerCard[] {
   return canonical
 }
 
-/** 5~7장 중 최선의 5장 조합으로 족보를 판정한다. */
 export function evaluatePokerHand(cards: readonly PokerCard[]): PokerHand {
   const canonical = normalizeInput(cards)
 
   const candidates = combinationsOf5(canonical).map(evaluateFiveCards)
 
-  // 로컬 accumulator — 함수 밖으로 새지 않으므로 reduce 대신 변형 루프 사용 (coding-style 예외 규정)
   let best = candidates[0]
   if (best === undefined) {
     throw new Error('평가할 5장 조합을 만들 수 없다')
@@ -293,7 +289,6 @@ function describeGroupRanks(hand: PokerHand): string {
   }
 }
 
-/** 족보를 한국어 한 줄 설명으로 변환한다. */
 export function describePokerHand(hand: PokerHand): string {
   return describeGroupRanks(hand)
 }

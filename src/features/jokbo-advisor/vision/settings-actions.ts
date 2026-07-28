@@ -16,7 +16,6 @@ const saveVisionSettingsSchema = z.object({
 
 export type SaveVisionSettingsInput = z.infer<typeof saveVisionSettingsSchema>
 
-/** 공급자·모델·활성 상태만 관리자 DB 설정에 저장한다. API 키는 환경변수에만 존재한다. */
 export async function saveVisionSettings(
   input: SaveVisionSettingsInput,
 ): Promise<ActionResult<undefined>> {

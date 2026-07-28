@@ -3,11 +3,6 @@
 import { clsx } from 'clsx'
 import { useCallback, useEffect, useRef } from 'react'
 
-/**
- * 길게 누르면 자동 반복 — 400ms 홀드 후 120ms 간격으로 fire 를 호출한다.
- * fire 가 false 를 돌려주면(경계 도달) 스스로 멈춘다 — 경계에서 버튼이 disabled 로
- * 바뀌면 pointerup 이 그 버튼에 전달되지 않기 때문. 언마운트 시에도 타이머를 정리한다.
- */
 function useHoldRepeat(fire: () => boolean) {
   const fireRef = useRef(fire)
   useEffect(() => {
@@ -44,12 +39,6 @@ function useHoldRepeat(fire: () => boolean) {
   return { start, stop }
 }
 
-/**
- * 터치 전용 숫자 입력 — 키보드 없이 −/+ 만으로 조작한다.
- * 판 옆에서 한 손으로 쓰는 앱이라 number input 대신 이것을 기본으로 쓴다.
- * 짧은 탭은 1스텝, 길게 누르면 자동 반복. 첫 스텝은 pointerdown 에서 즉시 나가고
- * click 은 키보드 활성화(detail === 0)만 처리해 이중 발화를 막는다.
- */
 export function Stepper({
   value,
   onChange,
@@ -68,14 +57,10 @@ export function Stepper({
   step?: number
   ariaLabel: string
   className?: string
-  /**
-   * −/+ 버튼의 aria-label. 한국어 기본값을 두면 넘기는 걸 잊은 곳이 조용히 한국어로
-   * 남는다 — 필수 prop 으로 두어 컴파일러가 잡게 한다.
-   */
+
   decreaseLabel: string
   increaseLabel: string
 }) {
-  // 홀드 반복 콜백이 항상 최신 value 를 읽도록 ref 로 추적한다.
   const valueRef = useRef(value)
   useEffect(() => {
     valueRef.current = value

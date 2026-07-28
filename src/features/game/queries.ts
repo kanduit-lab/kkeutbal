@@ -94,7 +94,6 @@ export async function getMemberRole(
 }
 
 async function getMembers(roomId: string): Promise<MemberView[]> {
-  // 순수 읽기 3개 — 서로 독립이므로 병렬. 트랜잭션 불필요 (진실은 스냅샷 refetch 가 보장).
   const [memberRows, balanceRows, buyInRows] = await Promise.all([
     db
       .select({
@@ -148,19 +147,13 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
   }))
 }
 
-/** 현재 판의 팟 = 그 판에서 나간 베팅(정정 반영) 합계의 부호 반전. */
 export async function getRoundPot(roundId: string): Promise<number> {
   const [row] = await db
     .select({
       pot: sql<string>`coalesce(-sum(${chipLedger.delta}), 0)::text`,
     })
     .from(chipLedger)
-    .where(
-      and(
-        eq(chipLedger.roundId, roundId),
-        inArray(chipLedger.reason, ['bet', 'correction']),
-      ),
-    )
+    .where(and(eq(chipLedger.roundId, roundId), inArray(chipLedger.reason, ['bet', 'correction'])))
   return toSafeChipInteger(row?.pot ?? '0', 'Round pot')
 }
 
@@ -180,7 +173,6 @@ function toActionView(action: typeof betActions.$inferSelect): BetActionView {
 }
 
 export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | null> {
-  // 순수 읽기 스냅샷 — 독립 쿼리를 병렬로 돌린다. 트랜잭션 불필요 (진실은 refetch 가 보장).
   const [roomRows, members, currentRoundRows, lastEndedRows, endedCountRows, recentRoundRows] =
     await Promise.all([
       db.select().from(rooms).where(eq(rooms.id, roomId)).limit(1),
@@ -237,7 +229,6 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
 
   const [currentRoundRow] = currentRoundRows
 
-  // 2단계 — 현재 판이 있을 때만 필요한 쿼리. 팟·액션은 서로 독립이므로 병렬.
   const [pot, actionRows, fairnessRows, fairnessParticipantRows]: [
     number,
     Array<typeof betActions.$inferSelect>,
@@ -275,8 +266,12 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
           .select({
             participantCount: sql<number>`count(*)::int`,
             submittedParticipantCount: sql<number>`count(${roundFairnessParticipants.clientSeedHash})::int`,
-            participantUserIds: sql<string[]>`coalesce(array_agg(${roundFairnessParticipants.userId} order by ${roundFairnessParticipants.dealOrder}), '{}')`,
-            submittedParticipantUserIds: sql<string[]>`coalesce(array_agg(${roundFairnessParticipants.userId} order by ${roundFairnessParticipants.dealOrder}) filter (where ${roundFairnessParticipants.clientSeedHash} is not null), '{}')`,
+            participantUserIds: sql<
+              string[]
+            >`coalesce(array_agg(${roundFairnessParticipants.userId} order by ${roundFairnessParticipants.dealOrder}), '{}')`,
+            submittedParticipantUserIds: sql<
+              string[]
+            >`coalesce(array_agg(${roundFairnessParticipants.userId} order by ${roundFairnessParticipants.dealOrder}) filter (where ${roundFairnessParticipants.clientSeedHash} is not null), '{}')`,
           })
           .from(roundFairnessParticipants)
           .where(eq(roundFairnessParticipants.roundId, currentRoundRow.id)),
@@ -350,10 +345,6 @@ function readResultNote(result: unknown): string | null {
   return null
 }
 
-/**
- * rounds.result jsonb 의 penalties 필드를 방어적으로 읽는다.
- * 구버전 판(필드 없음)·형식이 다른 값은 조용히 빈 배열로 처리한다 — 크래시 금지.
- */
 function readResultPenalties(result: unknown): RoundPenaltyView[] {
   if (!result || typeof result !== 'object' || !('penalties' in result)) return []
   const raw = (result as { penalties?: unknown }).penalties
@@ -367,7 +358,6 @@ function readResultPenalties(result: unknown): RoundPenaltyView[] {
   })
 }
 
-/** 로그인 사용자가 참가 중인(정산 전) 방 목록 — 홈 화면용. */
 export async function getMyActiveRooms(userId: string): Promise<
   Array<{
     code: string
@@ -376,7 +366,6 @@ export async function getMyActiveRooms(userId: string): Promise<
     status: string
     memberCount: number
   }>
-
 > {
   const roomRows = await db
     .select({
@@ -428,10 +417,6 @@ export async function getMyActiveRooms(userId: string): Promise<
   }))
 }
 
-/**
- * 정산 완료된 방의 내 손익 이력 — 홈/프로필 화면용.
- * myNet = 칩 잔액(원장 합) - 바이인 합. 랭킹 standings 와 같은 계산식.
- */
 export async function getMyRecentSessions(
   userId: string,
   limit = 10,
@@ -489,10 +474,16 @@ export async function getMyRecentSessions(
   ])
 
   const balanceMap = new Map(
-    balanceRows.map((row) => [row.roomId, toSafeChipInteger(row.balance, 'Recent session balance')]),
+    balanceRows.map((row) => [
+      row.roomId,
+      toSafeChipInteger(row.balance, 'Recent session balance'),
+    ]),
   )
   const buyInMap = new Map(
-    buyInRows.map((row) => [row.roomId, toSafeChipInteger(row.total, 'Recent session buy-in total')]),
+    buyInRows.map((row) => [
+      row.roomId,
+      toSafeChipInteger(row.total, 'Recent session buy-in total'),
+    ]),
   )
 
   return roomRows.map((row) => ({

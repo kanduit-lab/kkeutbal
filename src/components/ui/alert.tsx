@@ -3,13 +3,6 @@
 import { clsx } from 'clsx'
 import type { ReactNode } from 'react'
 
-/**
- * 폼·액션 실패를 알리는 배너. 같은 실패 종류가 화면마다 다른 모양(꽉 찬 배너 / 작은 빨간 글씨)으로
- * 나오고 절반은 ARIA role 이 없어서 스크린리더에 아예 안 읽히던 걸 하나로 모은다.
- *
- * error 는 role="alert"(assertive) — 사용자가 방금 한 동작이 실패했으므로 즉시 알려야 한다.
- * 나머지 톤은 role="status"(polite).
- */
 export function Alert({
   tone,
   title,

@@ -13,7 +13,6 @@ import { Avatar, Badge, EmptyState, PageShell, Panel, StatTile } from '@/compone
 import { getDict, format } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/config'
 
-/** params 는 외부 입력 — uuid 가 아니면 DB 캐스트 오류 대신 404 로 보낸다. */
 const paramsSchema = z.object({ id: z.string().uuid() })
 
 function netClass(net: number): string {
@@ -41,11 +40,7 @@ function GameStat({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-export default async function PlayerStatsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default async function PlayerStatsPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
 
@@ -78,7 +73,6 @@ export default async function PlayerStatsPage({
           <p className="mt-0.5 text-sm text-muted">{d.ranking.subtitle}</p>
         </div>
       </header>
-
       <section className="grid grid-cols-3 gap-2" aria-label={d.ranking.overallSummaryAria}>
         <StatTile tone="panel" label={d.ranking.statSessions} valueClass="text-xl">
           {stats.totals.sessions.toLocaleString()}
@@ -90,14 +84,12 @@ export default async function PlayerStatsPage({
           <span className={netClass(stats.totals.net)}>{netLabel(stats.totals.net)}</span>
         </StatTile>
       </section>
-
       {stats.perGame.length === 0 ? (
         <EmptyState title={d.ranking.emptyTitle} hint={d.ranking.playerEmptyHint} />
       ) : (
         <section className="space-y-2">
           <div className="px-1">
             <h2 className="text-sm font-bold text-muted">{d.ranking.perGameTitle}</h2>
-            {/* 판 단위 참가자는 저장하지 않는다 — 판수는 참가한 방에서 끝난 판 전체 기준 */}
             <p className="text-xs text-muted/70">{d.ranking.roundsNote}</p>
           </div>
           {stats.perGame.map((game) => (
@@ -127,8 +119,6 @@ export default async function PlayerStatsPage({
           ))}
         </section>
       )}
-
-      {/* 최근 세션 — 이력이 없으면 섹션 자체를 그리지 않는다 (홈 화면과 같은 규칙). */}
       {recentSessions.length > 0 ? (
         <section className="space-y-2">
           <h2 className="px-1 text-sm font-bold text-muted">{d.ranking.recentSessionsTitle}</h2>
@@ -138,9 +128,7 @@ export default async function PlayerStatsPage({
                 <Panel className="flex min-h-14 items-center justify-between gap-3 py-3 transition-transform hover:-translate-y-0.5">
                   <div className="flex min-w-0 items-center gap-2">
                     <p className="truncate font-bold">{past.name}</p>
-                    <Badge tone={GAME_BADGE_TONE[past.gameType]}>
-                      {d.games[past.gameType]}
-                    </Badge>
+                    <Badge tone={GAME_BADGE_TONE[past.gameType]}>{d.games[past.gameType]}</Badge>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span className="text-xs text-muted">

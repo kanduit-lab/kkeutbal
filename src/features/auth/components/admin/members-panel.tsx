@@ -16,11 +16,6 @@ import { setAdmin } from '../../admin-actions'
 import type { AdminUserView } from '../../admin-queries'
 import { accountTypeLabel, formatDate } from './format'
 
-/**
- * 회원 검색 목록과 권한 관리 목록. 검색 상자는 두 목록을 함께 거르므로 여기서
- * 같이 소유한다 — 예전에는 검색이 회원 패널에만 있고 권한 패널이 조용히 걸러져,
- * 모바일에서 무엇이 필터인지 알 방법이 없었다.
- */
 export function MembersPanel({
   users,
   selfId,
@@ -91,7 +86,6 @@ export function MembersPanel({
           </ul>
         )}
       </Panel>
-
       <Panel className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-bold">{d.adminConsole.permissions.title}</h2>
@@ -149,7 +143,6 @@ export function MembersPanel({
           </ul>
         )}
       </Panel>
-
       <ConfirmDialog
         open={adminTarget !== null}
         title={format(

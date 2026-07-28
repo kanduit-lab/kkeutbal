@@ -16,7 +16,6 @@ import { VisionCapture } from './vision-capture'
 
 type AdvisorTab = 'seotda' | 'gostop' | 'poker'
 
-/** 탭 이모지 — 게임 이름 텍스트는 사전 games.* 를 그대로 쓴다 (중복 정의 금지). */
 const TAB_EMOJI: Record<AdvisorTab, string> = {
   seotda: '🎴',
   gostop: '🌸',
@@ -24,15 +23,14 @@ const TAB_EMOJI: Record<AdvisorTab, string> = {
 }
 
 const POKER_MAX_SELECT = 7
-/** 고스톱에서 실제로 도달 가능한 상한이라 화면에도 이 숫자를 그대로 쓴다 — 예전 표기 `∞` 는 거짓말이었다. */
+
 const GOSTOP_MAX_SELECT = 30
 
-/** 족보 판독 화면 — 탭·카드 선택 상태를 소유하고, 판정 표시는 advisor-results 에 맡긴다. */
 export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
   const [tab, setTab] = useState<AdvisorTab>('seotda')
   const [selected, setSelected] = useState<ReadonlySet<CardId>>(new Set())
   const [pokerSelected, setPokerSelected] = useState<ReadonlySet<string>>(new Set())
-  // 사진 인식으로 채워진 선택인지 — 수동 토글이 들어오면 지운다.
+
   const [vision, setVision] = useState<VisionSource | null>(null)
   const { toast } = useToast()
   const { d } = useDict()
@@ -41,7 +39,6 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
   const maxSelect = hwatuGameType === 'seotda' ? 2 : GOSTOP_MAX_SELECT
 
   function toggle(id: CardId) {
-    // 사람이 한 장이라도 손대면 더 이상 "사진이 판정한 패"가 아니다.
     setVision(null)
     setSelected((current) => {
       const next = new Set(current)
@@ -61,7 +58,6 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
   }
 
   function switchTab(next: AdvisorTab) {
-    // 화투 탭끼리 전환할 때만 선택을 비운다 — 포커 선택은 별도 상태라 건드릴 필요 없음.
     if (next !== 'poker' && tab !== next) {
       setSelected(new Set())
       setVision(null)
@@ -69,14 +65,6 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
     setTab(next)
   }
 
-  /**
-   * 인식 결과 반영. 세 가지를 지킨다.
-   * 1. 토스트의 장수는 실제 반영 장수다 — 예전에는 `ids.length` 라 3장 중 2장만 들어가도
-   *    "3장 인식"이라고 말했다. 잘렸으면 잘렸다고 따로 말한다.
-   * 2. 신뢰도는 토스트가 사라진 뒤에도 결과 패널의 배지로 남는다 — 저신뢰 오인식을
-   *    사람이 직접 고른 것과 구분할 수 없으면 "앱이 판정한 내 패"로 받아들인다.
-   * 3. 덮어쓴 이전 선택은 토스트의 되돌리기로 복구할 수 있다.
-   */
   function applyRecognized(ids: readonly CardId[], confidence: number) {
     const applied = ids.slice(0, maxSelect)
     const previous = selected
@@ -132,7 +120,6 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
         backLabel={d.common.home}
         actions={<LocaleSwitcher />}
       />
-
       <Segmented
         value={tab}
         onChange={switchTab}
@@ -147,17 +134,13 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
         ariaLabel={d.home.advisor}
         className="rise-in rise-in-1 max-w-xl grid-cols-3"
       />
-
       <div className="grid gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-12">
         <div className="lg:order-2 lg:col-span-5 lg:min-h-0 lg:overflow-y-auto">
           <div className="rise-in rise-in-2 space-y-5">
             {tab === 'seotda' ? <SeotdaResult cards={cards} vision={vision} /> : null}
-            {/* 서열표는 결과 쪽 컬럼에 둔다 — 피커 안에 넣으면 카드 그리드가 반으로 눌리고
-                패널이 좁은 스크롤 상자에 갇힌다. */}
             {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
             {tab === 'gostop' ? <GostopResult cards={cards} vision={vision} /> : null}
             {tab === 'poker' ? <PokerResult cards={pokerCards} /> : null}
-
             {tab !== 'poker' ? (
               <VisionCapture
                 gameType={hwatuGameType}
@@ -167,7 +150,6 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
             ) : null}
           </div>
         </div>
-
         <div className="rise-in rise-in-3 lg:order-1 lg:col-span-7 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
           {tab === 'poker' ? (
             <Panel className="space-y-3">
@@ -210,10 +192,6 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
   )
 }
 
-/**
- * 카드 선택 헤더. 상한에 걸렸을 때 유일한 탈출구가 `전체 해제` 인데 스크롤되는 컬럼 안에
- * 있어서 8월·10월까지 내려간 순간 화면 밖으로 사라졌다 — sticky 로 항상 보이게 둔다.
- */
 function PickerHeader({
   count,
   max,

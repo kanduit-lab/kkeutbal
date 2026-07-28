@@ -24,10 +24,6 @@ function hashIdentifier(scope: string, identifier: string): string {
     .digest('hex')
 }
 
-/**
- * 여러 제한을 한 트랜잭션에서 소비한다.
- * 각 버킷은 PK 충돌 갱신으로 원자 증가하므로 다중 프로세스에서도 허용량을 초과 통과시키지 않는다.
- */
 export async function consumeRateLimits(
   rules: readonly RateLimitRule[],
   now = Date.now(),
@@ -37,9 +33,7 @@ export async function consumeRateLimits(
   const { db, schema } = await import('./db')
   return await db.transaction(async (tx) => {
     const nowDate = new Date(now)
-    await tx
-      .delete(schema.rateLimitBuckets)
-      .where(lt(schema.rateLimitBuckets.expiresAt, nowDate))
+    await tx.delete(schema.rateLimitBuckets).where(lt(schema.rateLimitBuckets.expiresAt, nowDate))
 
     let allowed = true
     let retryAfterSeconds = 0
@@ -52,9 +46,7 @@ export async function consumeRateLimits(
       const windowStartMs = Math.floor(now / rule.windowMs) * rule.windowMs
       const windowStart = new Date(windowStartMs)
       const expiresAt = new Date(windowStartMs + rule.windowMs)
-      // Drizzle column values are encoded as timestamps, but a value interpolated
-      // directly into a SQL fragment reaches postgres-js unchanged. Pass ISO text
-      // so the prepared statement never receives a JavaScript Date object.
+
       const windowStartIso = windowStart.toISOString()
       const keyHash = hashIdentifier(rule.scope, rule.identifier)
 
@@ -97,13 +89,8 @@ export async function consumeRateLimits(
   })
 }
 
-/**
- * 배포 프록시가 전달한 클라이언트 주소를 제한 키로 정규화한다.
- * 계정/토큰 단위 제한을 항상 함께 사용하므로 주소 헤더가 없는 환경도 우회 경로가 되지 않는다.
- */
 export function clientAddressFromHeaders(headers: Headers): string {
-  const direct =
-    headers.get('cf-connecting-ip')?.trim() || headers.get('x-real-ip')?.trim() || null
+  const direct = headers.get('cf-connecting-ip')?.trim() || headers.get('x-real-ip')?.trim() || null
   if (direct) return direct.slice(0, 128)
 
   const forwarded = headers.get('x-forwarded-for')

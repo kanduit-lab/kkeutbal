@@ -13,13 +13,6 @@ import {
 } from '../dismissal'
 import type { PromotionView } from '../types'
 
-/**
- * 배너·팝업 노출 지점. 루트 레이아웃에 한 번만 마운트한다.
- *
- * 닫음 상태는 localStorage 라 서버 렌더 결과와 다를 수 있다 — 마운트 전에는 아무것도
- * 그리지 않아 hydration 불일치와 "닫았는데 깜빡 보이는" 현상을 함께 막는다.
- * 배너는 조건을 만족하는 전부, 팝업은 우선순위가 가장 높은 하나만 띄운다.
- */
 export function PromotionHost({ promotions }: { promotions: readonly PromotionView[] }) {
   const [dismissals, setDismissals] = useState<DismissMap | null>(null)
 
@@ -77,7 +70,7 @@ function PromotionBanner({
         onClick={onDismiss}
         aria-label={format(d.promo.dismissFor, { hours: promotion.dismissHours })}
         title={format(d.promo.dismissFor, { hours: promotion.dismissHours })}
-        // -m-1 로 히트 영역만 44px 로 넓힌다 — 배너 높이는 그대로 둔다.
+
         className="-m-1 inline-flex size-11 shrink-0 items-center justify-center rounded-lg text-lg leading-none text-muted hover:text-text"
       >
         <span aria-hidden="true">×</span>
@@ -94,7 +87,7 @@ function PromotionPopup({
   onDismiss: () => void
 }) {
   const { d } = useDict()
-  // 이번 방문에만 숨기는 닫기 — localStorage 를 건드리지 않는다.
+
   const [closed, setClosed] = useState(false)
   const { panelRef, rendered, closing, backdropProps } = useModalBehavior(!closed, () =>
     setClosed(true),
@@ -111,7 +104,6 @@ function PromotionPopup({
         role="dialog"
         aria-modal="true"
         aria-label={promotion.title}
-        // 패널 안에서 누르고 배경에서 뗀 드래그로 팝업이 닫히던 것을 backdropProps 가 막는다.
         {...backdropProps}
       >
         <div
