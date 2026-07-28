@@ -58,17 +58,19 @@ export default async function HomePage({
 
   return (
     <PageShell width="wide">
-      <header className="rise-in mb-8 flex flex-wrap items-end justify-between gap-x-3 gap-y-2 lg:mb-12">
-        <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
-          {d.common.appName}
-          <span className="text-accent">.</span>
-        </h1>
-        <div className="flex basis-full flex-wrap items-center justify-start gap-2 sm:basis-auto sm:justify-end">
+      <header className="rise-in mb-8 space-y-2 lg:mb-12">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
+            {d.common.appName}
+            <span className="text-accent">.</span>
+          </h1>
+          <LocaleSwitcher />
+        </div>
+        <div className="flex flex-wrap items-center gap-1 sm:justify-end">
           <HeaderNavLink href={'/wallet' as Route}>{d.common.myCredits}</HeaderNavLink>
           {isAdmin ? (
             <HeaderNavLink href={'/admin' as Route}>{d.common.admin}</HeaderNavLink>
           ) : null}
-          <LocaleSwitcher />
           <form
             action={async () => {
               'use server'
