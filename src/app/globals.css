@@ -29,7 +29,13 @@
   --color-success-fg: #7ad9a2;
   --color-success-surface: #123c26;
 
-  --font-display: 'Gungsuh', 'GungsuhChe', 'Nanum Myeongjo', 'Batang', 'AppleMyungjo', serif;
+  /*
+   * 번들 명조(src/app/fonts.ts)를 먼저 쓴다. var() 안에 폴백을 넣는 게 중요하다 —
+   * 변수가 미정의면 선언 전체가 invalid-at-computed-value-time 이 되어 뒤에 나열한
+   * 시스템 폰트까지 통째로 무시된다(루트 레이아웃 밖에서 렌더되는 화면이 그렇다).
+   */
+  --font-display:
+    var(--font-display-bundled, 'Gungsuh'), 'GungsuhChe', 'Batang', 'AppleMyungjo', serif;
 
   /* 반복되던 리터럴의 단일 출처 */
   --text-micro: 0.6875rem;
@@ -89,11 +95,7 @@ body {
 body {
   margin: 0;
   font-family:
-    'Pretendard',
-    'Malgun Gothic',
-    'Apple SD Gothic Neo',
-    'Noto Sans KR',
-    system-ui,
+    var(--font-body-bundled, 'Pretendard'), 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui,
     sans-serif;
   overscroll-behavior-y: contain;
   /* 모포 질감: 심도 그라디언트 + 미세 노이즈 */
@@ -109,20 +111,19 @@ body {
   font-family: var(--font-display);
   letter-spacing: 0.02em;
   /*
-   * 궁서·바탕은 시스템에 굵기가 하나뿐이라 font-weight:700/900 이 합성(synthetic bold)된다.
-   * 명조 계열의 얇은 세로획에 합성이 걸리면 획이 갈라져 깨져 보인다.
-   * 실제 획 두께를 stroke 로 더해 보정한다 — em 단위라 글자 크기에 비례해 커진다.
-   * paint-order 로 stroke 를 fill 아래에 깔아 글자 속이 먹히지 않게 한다.
+   * 예전에는 여기에 `-webkit-text-stroke` 로 획 두께를 더했다. 시스템 궁서·바탕에 굵기가
+   * 하나뿐이라 font-weight:700/900 이 합성(synthetic bold)되고, 명조의 얇은 세로획에 합성이
+   * 걸리면 획이 갈라졌기 때문이다.
+   *
+   * 이제 번들 명조가 700·800 실굵기를 제공하므로 그 전제가 사라졌다. stroke 를 그대로 두면
+   * 실굵기 위에 두께가 한 번 더 얹혀 글자 속이 메워진다.
    */
-  -webkit-text-stroke: 0.028em currentColor;
-  paint-order: stroke fill;
 }
 
 /* 옻칠 패널: 미세한 금테 + 안쪽 광 */
 .lacquer {
   background:
-    linear-gradient(160deg, rgb(255 255 255 / 0.04), transparent 40%),
-    var(--color-surface);
+    linear-gradient(160deg, rgb(255 255 255 / 0.04), transparent 40%), var(--color-surface);
   border: 1px solid rgb(229 185 84 / 0.14);
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.05) inset,
@@ -157,10 +158,18 @@ body {
   animation: rise-in 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
-.rise-in-1 { animation-delay: 0.05s; }
-.rise-in-2 { animation-delay: 0.12s; }
-.rise-in-3 { animation-delay: 0.19s; }
-.rise-in-4 { animation-delay: 0.26s; }
+.rise-in-1 {
+  animation-delay: 0.05s;
+}
+.rise-in-2 {
+  animation-delay: 0.12s;
+}
+.rise-in-3 {
+  animation-delay: 0.19s;
+}
+.rise-in-4 {
+  animation-delay: 0.26s;
+}
 
 /* 베팅 칩이 좌석에서 팟으로 날아가는 연출 */
 @keyframes chip-fly {

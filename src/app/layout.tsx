@@ -5,6 +5,7 @@ import { I18nProvider } from '@/lib/i18n/client'
 import { PromotionHost } from '@/features/promotions/components/promotion-host'
 import { listActivePromotions } from '@/features/promotions/queries'
 import { getDict } from '@/lib/i18n/server'
+import { bodyFont, displayFont } from './fonts'
 import './globals.css'
 
 const FALLBACK_METADATA = {
@@ -84,7 +85,7 @@ async function PromotionSlot() {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { locale, d } = await getDict()
   return (
-    <html lang={locale}>
+    <html lang={locale} className={`${displayFont.variable} ${bodyFont.variable}`}>
       <body>
         <I18nProvider locale={locale} dict={d}>
           <ToastProvider closeLabel={d.common.close}>
