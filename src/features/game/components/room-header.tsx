@@ -1,12 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { Badge } from '@/components/ui'
+import { Badge, Button, ButtonLink } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import type { RoomSnapshot } from '../types'
-
-const ICON_LINK_CLASS =
-  'inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-lg leading-none transition-colors hover:border-gold/40 hover:bg-white/10'
 
 export function RoomHeader({
   snapshot,
@@ -51,42 +48,46 @@ export function RoomHeader({
           </div>
         </div>
       </div>
-      <div className="ms-auto flex shrink-0 items-center gap-1.5">
-        <button
+      <div className="ms-auto flex shrink-0 items-center gap-2">
+        <Button
           type="button"
+          variant="outline"
+          size="icon"
           onClick={onToggleMute}
           aria-pressed={muted}
           aria-label={muted ? d.room.soundOnAria : d.room.soundOffAria}
           suppressHydrationWarning
-          className={ICON_LINK_CLASS}
         >
           {muted ? '🔇' : '🔊'}
-        </button>
-        <Link
+        </Button>
+        <ButtonLink
           href={`/rooms/${snapshot.room.code}/result`}
+          variant="outline"
+          size="icon"
           aria-label={d.room.resultAria}
           title={d.room.resultAria}
-          className={ICON_LINK_CLASS}
         >
           🧾
-        </Link>
-        <Link
+        </ButtonLink>
+        <ButtonLink
           href={`/rooms/${snapshot.room.code}/monitor`}
+          variant="outline"
+          size="icon"
           aria-label={d.room.monitorAria}
           title={d.room.monitorTitle}
-          className={ICON_LINK_CLASS}
         >
           📺
-        </Link>
+        </ButtonLink>
         {isHost ? (
-          <Link
+          <ButtonLink
             href={`/rooms/${snapshot.room.code}/settings`}
+            variant="outline"
+            size="icon"
             aria-label={d.room.settingsAria}
             title={d.room.settingsTitle}
-            className={ICON_LINK_CLASS}
           >
             ⚙️
-          </Link>
+          </ButtonLink>
         ) : null}
       </div>
     </header>

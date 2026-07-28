@@ -3,6 +3,7 @@
 import { clsx } from 'clsx'
 import { useRouter } from 'next/navigation'
 import { useTransition } from 'react'
+import { Button } from '@/components/ui'
 import { LOCALES, type Locale } from '@/lib/i18n/config'
 import { setLocale } from '@/lib/i18n/actions'
 import { useI18n } from '@/lib/i18n/client'
@@ -17,13 +18,15 @@ export function LocaleSwitcher() {
   return (
     <div className="inline-flex items-center gap-0.5 rounded-full border border-gold/20 bg-bg-deep/60 p-0.5">
       {LOCALES.map((candidate) => (
-        <button
+        <Button
           key={candidate}
           type="button"
+          variant="ghost"
+          size="sm"
           disabled={isPending || candidate === locale}
           aria-current={candidate === locale ? 'true' : undefined}
           className={clsx(
-            'min-h-12 min-w-12 rounded-full px-3 text-xs font-bold transition-colors',
+            'min-w-11 rounded-full px-2.5 font-bold disabled:opacity-100',
             candidate === locale ? 'bg-gold/20 text-gold' : 'text-muted hover:text-text',
           )}
           onClick={() =>
@@ -34,7 +37,7 @@ export function LocaleSwitcher() {
           }
         >
           {LABELS[candidate]}
-        </button>
+        </Button>
       ))}
     </div>
   )

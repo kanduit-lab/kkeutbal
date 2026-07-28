@@ -9,7 +9,7 @@ import type { ReactNode } from 'react'
 import { ToastContext } from './toast'
 
 type ButtonVariant = 'primary' | 'surface' | 'outline' | 'danger' | 'ghost' | 'win'
-type ButtonSize = 'sm' | 'md' | 'lg'
+type ButtonSize = 'sm' | 'md' | 'lg' | 'icon'
 
 const BASE_CLASS =
   'inline-flex items-center justify-center gap-1.5 rounded-xl font-semibold transition duration-100'
@@ -18,6 +18,7 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
   lg: 'min-h-14 px-5 text-lg',
   md: 'min-h-12 px-4 text-base',
   sm: 'min-h-11 px-3 text-sm',
+  icon: 'size-12 shrink-0 p-0 text-lg leading-none',
 }
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
