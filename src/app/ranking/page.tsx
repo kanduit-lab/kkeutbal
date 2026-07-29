@@ -103,6 +103,7 @@ function RankingEntry({
         >
           {row.net > 0 ? '+' : ''}
           {row.net.toLocaleString()}
+          <span className="ml-1 text-xs font-bold text-muted">{d.ranking.netUnit}</span>
         </p>
       </Panel>
     </Link>
