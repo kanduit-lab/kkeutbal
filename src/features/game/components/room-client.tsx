@@ -16,6 +16,7 @@ import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
 import { ActionBar } from './action-bar'
 import { DealerPanel } from './dealer-panel'
+import { GostopWaitPanel } from './gostop-wait-panel'
 import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
 import { RoundLog } from './round-log'
@@ -195,6 +196,8 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
 
   const isBettingGame = snapshot.room.gameType !== 'gostop'
   const canBet = Boolean(self && self.role !== 'observer') && isBettingGame && !isLobby
+  const showGostopWait =
+    !isBettingGame && !isLobby && Boolean(snapshot.currentRound) && !isDealer
 
   const seatMember = seatUserId
     ? (snapshot.members.find((member) => member.userId === seatUserId) ?? null)
@@ -300,6 +303,11 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
                   staleReason={staleReason}
                   inline={isDesktop}
                 />
+              </div>
+            ) : null}
+            {showGostopWait ? (
+              <div className="rise-in rise-in-3">
+                <GostopWaitPanel />
               </div>
             ) : null}
           </div>
