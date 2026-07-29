@@ -21,12 +21,15 @@ interface Flight {
   fromUserId: string
 }
 
+// Seat radius is measured from the felt oval's rim, not the outer container
+// box: both this offset and the oval's `inset-[...]` below derive from the
+// single --felt-inset constant so they can't drift apart again.
 function seatX(dx: number): string {
-  return `calc(50cqw + (50cqw - var(--seat-half-w)) * ${dx.toFixed(4)})`
+  return `calc(50cqw + (50cqw - var(--felt-inset) * 1cqw - var(--seat-half-w)) * ${dx.toFixed(4)})`
 }
 
 function seatY(dy: number): string {
-  return `calc(50cqh + (50cqh - var(--seat-half-h)) * ${dy.toFixed(4)})`
+  return `calc(50cqh + (50cqh - var(--felt-inset) * 1cqh - var(--seat-half-h)) * ${dy.toFixed(4)})`
 }
 
 export function GameTable({
@@ -143,16 +146,16 @@ export function GameTable({
   return (
     <section
       className={clsx(
-        'relative mx-auto mb-4 w-full max-w-3xl select-none overflow-hidden [container-type:size]',
+        'relative mx-auto mb-4 w-full max-w-3xl select-none overflow-hidden [container-type:size] [--felt-inset:7]',
         compact ? 'aspect-[5/7] sm:aspect-square' : 'aspect-[4/5] sm:aspect-[16/10]',
         board
           ? '[--seat-half-h:6.5rem] [--seat-half-w:7rem]'
           : compact
             ? '[--seat-half-h:3.125rem] [--seat-half-w:2.5rem] sm:[--seat-half-h:5rem] sm:[--seat-half-w:5rem]'
-            : 'max-[359px]:[--seat-half-h:4.5rem] max-[359px]:[--seat-half-w:3.25rem] [--seat-half-h:5rem] [--seat-half-w:4.25rem] sm:[--seat-half-h:5.5rem] sm:[--seat-half-w:5.5rem]',
+            : 'max-[359px]:[--seat-half-h:4rem] max-[359px]:[--seat-half-w:3rem] [--seat-half-h:4.25rem] [--seat-half-w:3.5rem] sm:[--seat-half-h:5.5rem] sm:[--seat-half-w:5.5rem]',
       )}
     >
-      <div className="absolute inset-[7%] rounded-[50%] border-8 border-[#5a3a1e] bg-[radial-gradient(ellipse_at_center,#1d6b45_0%,#145233_55%,#0e3d26_100%)] shadow-[inset_0_0_40px_rgb(0_0_0/0.55),0_6px_24px_rgb(0_0_0/0.45)]" />
+      <div className="absolute inset-[calc(var(--felt-inset)*1%)] rounded-[50%] border-8 border-[#5a3a1e] bg-[radial-gradient(ellipse_at_center,#1d6b45_0%,#145233_55%,#0e3d26_100%)] shadow-[inset_0_0_40px_rgb(0_0_0/0.55),0_6px_24px_rgb(0_0_0/0.45)]" />
       <div className="pointer-events-none absolute inset-[12%] rounded-[50%] border border-white/10" />
       <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-end gap-3 text-center">
         {potChips.length > 0 ? (
@@ -208,8 +211,8 @@ export function GameTable({
                 height: 20,
                 left: seatX(seat.dx),
                 top: seatY(seat.dy),
-                '--fly-x': `calc((50cqw - var(--seat-half-w)) * ${(-seat.dx * 0.9).toFixed(4)})`,
-                '--fly-y': `calc((50cqh - var(--seat-half-h)) * ${(-seat.dy * 0.9).toFixed(4)})`,
+                '--fly-x': `calc((50cqw - var(--felt-inset) * 1cqw - var(--seat-half-w)) * ${(-seat.dx * 0.9).toFixed(4)})`,
+                '--fly-y': `calc((50cqh - var(--felt-inset) * 1cqh - var(--seat-half-h)) * ${(-seat.dy * 0.9).toFixed(4)})`,
               } as React.CSSProperties
             }
           />
@@ -250,7 +253,7 @@ export function GameTable({
                 ? 'min-w-36 px-4 pb-2.5 pt-2'
                 : compact
                   ? 'min-w-16 px-1.5 pb-1.5 pt-1 sm:min-w-20 sm:px-2'
-                  : 'min-w-28 px-3 pb-2 pt-1.5 max-[359px]:min-w-20 max-[359px]:px-2 sm:min-w-32',
+                  : 'min-w-24 px-2.5 pb-2 pt-1.5 max-[359px]:min-w-20 max-[359px]:px-2 sm:min-w-32 sm:px-3',
               folded ? 'border-white/5 bg-black/50 opacity-50' : 'border-gold/20 bg-black/60',
               isSelf && 'border-gold/60',
               isWinner && 'winner-glow border-win',
