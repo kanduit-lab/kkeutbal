@@ -62,10 +62,10 @@ async function hasActiveDatabaseCode(): Promise<boolean> {
 
 export async function grantRegistrationAccess(code: string): Promise<RegistrationAccessResult> {
   const parsed = registrationCodeSchema.safeParse(code)
-  const env = serverEnv()
   if (!parsed.success) return 'invalid'
 
   try {
+    const env = serverEnv()
     const codeId = await activeDatabaseCodeId(parsed.data, env.AUTH_SECRET)
     if (!codeId) {
       return (await hasActiveDatabaseCode()) ? 'invalid' : 'unavailable'
@@ -95,7 +95,6 @@ export async function hasRegistrationAccess(): Promise<boolean> {
 }
 
 export async function registrationAccessCodeId(): Promise<string | null> {
-  const env = serverEnv()
   const token = (await cookies()).get(REGISTRATION_ACCESS_COOKIE)?.value
   if (!token) return null
   const [expiresAtRaw, codeId, receivedSignature, ...rest] = token.split('.')
@@ -103,10 +102,12 @@ export async function registrationAccessCodeId(): Promise<string | null> {
 
   const expiresAt = Number(expiresAtRaw)
   if (!Number.isSafeInteger(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000)) return null
-  const signedValue = `${expiresAtRaw}.${codeId}`
-  if (!matches(signature(signedValue, env.AUTH_SECRET), receivedSignature)) return null
 
   try {
+    const env = serverEnv()
+    const signedValue = `${expiresAtRaw}.${codeId}`
+    if (!matches(signature(signedValue, env.AUTH_SECRET), receivedSignature)) return null
+
     const { db, schema } = await import('@/lib/db')
     const [active] = await db
       .select({ id: schema.registrationCodes.id })

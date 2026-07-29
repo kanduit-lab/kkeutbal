@@ -263,21 +263,26 @@ export async function verifyRegistrationCode(
 ): Promise<RegistrationCodeState> {
   const code = String(formData.get('code') ?? '')
   const address = clientAddressFromHeaders(new Headers(await headers()))
-  const rate = await consumeRateLimits([
-    {
-      scope: 'auth.registration_code.address',
-      identifier: address,
-      limit: 15,
-      windowMs: 15 * 60 * 1000,
-    },
-    {
-      scope: 'auth.registration_code.value_address',
-      identifier: `${code}\0${address}`,
-      limit: 5,
-      windowMs: 15 * 60 * 1000,
-    },
-  ])
-  if (!rate.allowed) return { status: 'error', error: 'invalid' }
+  try {
+    const rate = await consumeRateLimits([
+      {
+        scope: 'auth.registration_code.address',
+        identifier: address,
+        limit: 15,
+        windowMs: 15 * 60 * 1000,
+      },
+      {
+        scope: 'auth.registration_code.value_address',
+        identifier: `${code}\0${address}`,
+        limit: 5,
+        windowMs: 15 * 60 * 1000,
+      },
+    ])
+    if (!rate.allowed) return { status: 'error', error: 'invalid' }
+  } catch (error) {
+    console.error('registration code rate limit check failed:', error)
+    return { status: 'error', error: 'unavailable' }
+  }
 
   const result = await grantRegistrationAccess(code)
   if (result === 'granted') return { status: 'success' }
