@@ -22,11 +22,10 @@
 | Audience        | maintainers                                                           |
 | Status          | active                                                                |
 | Source of truth | 코드(`src/`, `drizzle/`, `.env.example`) — 설계 근거는 `docs/`로 링크 |
-| Last reviewed   | 2026-07-25                                                            |
+| Last reviewed   | 2026-07-29                                                            |
 
-MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 남지 않습니다. 끗발은 실물 게임을
-방해하지 않으면서 — 카드와 칩은 그대로 쓰고 — 베팅·승패·정산만 각자 폰으로 기록하는
-실시간 판 기록 도구입니다.
+MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 남지 않습니다. 끗발은 카드와 칩을
+실물 그대로 쓰면서 베팅·승패·정산만 각자 폰으로 기록합니다.
 
 ## ✨ 기능
 
@@ -102,7 +101,8 @@ Authentik SSO도 `/admin`의 SSO 설정에서 연결합니다.
 ```
 src/
 ├── app/                # 라우트 — (home), rooms/new, rooms/[code](monitor·settings·result·fairness),
-│   │                   #   advisor, ranking, guide, admin, wallet, about, login, register
+│   │                   #   advisor, ranking(+player/[id]), guide, admin, wallet, about, login, register
+│   │                   #   api/auth, api/health, api/ready
 ├── features/           # 도메인 모듈 (경계 = 폴더)
 │   ├── hwatu/ seotda/ gostop/ poker/   # 카드 모델·순수 함수 엔진
 │   ├── game/           # 방·판 상태머신 + 테이블·로비·모니터 UI
@@ -129,6 +129,7 @@ pnpm typecheck      # tsc --noEmit
 pnpm lint           # eslint
 pnpm test           # vitest (단위)
 pnpm test:e2e       # Playwright 모바일 공개 화면 스모크 (DB 없이 실행)
+                    #   방 수명주기 spec은 E2E_ENABLE_ROOM_LIFECYCLE=true + 전용 계정 2개가 있을 때만 실행
 pnpm db:generate    # drizzle 마이그레이션 생성
 pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 ```
@@ -152,7 +153,8 @@ pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 | [`docs/09-roadmap.md`](docs/09-roadmap.md)                                           | 우선순위·마일스톤                    |
 | [`docs/10-virtual-credit-and-fair-play.md`](docs/10-virtual-credit-and-fair-play.md) | 전역 가상 크레딧·공정 셔플 확장 설계 |
 | [`docs/11-container-build-contract.md`](docs/11-container-build-contract.md)         | 빌드 인자·시크릿 경계·런타임 계약    |
-| [`docs/12-handoff.md`](docs/12-handoff.md)                                           | 인수인계 로그 (누적) — 완료/미구현 작업 모음 |
+| [`docs/12-handoff.md`](docs/12-handoff.md)                                           | 인수인계 로그 (누적) — 미구현 작업 모음 |
+| [`docs/design-decisions/`](docs/design-decisions/000_design_timeline.md)             | 확정된 설계 결정 기록과 타임라인       |
 
 실행 잔여 작업: [`TODO.md`](TODO.md) · 에이전트 가이드: [`CLAUDE.md`](CLAUDE.md)
 
