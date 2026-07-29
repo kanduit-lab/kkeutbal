@@ -53,22 +53,24 @@ export function PageHeader({
   className?: string
 }) {
   return (
-    <header className={clsx('mb-6 flex flex-wrap items-start gap-x-3 gap-y-2', className)}>
-      {backHref ? (
-        <Link
-          href={backHref}
-          aria-label={backLabel}
-          className="-ml-2 inline-flex size-12 shrink-0 items-center justify-center rounded-xl text-xl text-muted transition hover:text-text"
-        >
-          ←
-        </Link>
-      ) : null}
-      <div className="min-w-0 flex-1 basis-48">
-        <h1 className="font-brush truncate text-2xl font-black">{title}</h1>
-        {subtitle ? <p className="mt-1 text-sm text-muted">{subtitle}</p> : null}
+    <header className={clsx('mb-6', className)}>
+      <div className="flex flex-nowrap items-center gap-x-3">
+        {backHref ? (
+          <Link
+            href={backHref}
+            aria-label={backLabel}
+            className="-ml-2 inline-flex size-12 shrink-0 items-center justify-center rounded-xl text-xl text-muted transition hover:text-text"
+          >
+            ←
+          </Link>
+        ) : null}
+        <h1 className="font-brush min-w-0 flex-1 truncate text-2xl font-black">{title}</h1>
+        {actions ? (
+          <div className="ms-auto flex shrink-0 items-center gap-2">{actions}</div>
+        ) : null}
       </div>
-      {actions ? (
-        <div className="ms-auto flex shrink-0 items-center gap-2">{actions}</div>
+      {subtitle ? (
+        <p className={clsx('mt-1 text-sm text-muted', backHref && 'ps-[2.5rem]')}>{subtitle}</p>
       ) : null}
     </header>
   )

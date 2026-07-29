@@ -8,6 +8,7 @@ import type { FundingMode, RoomGameType } from '@/features/game/types'
 import { GAME_LABELS } from '@/features/game/labels'
 import { translateError, useDict } from '@/lib/i18n/client'
 import { Button, ConfirmDialog, Field, Input, Panel, Stepper, useToast } from '@/components/ui'
+import { LocaleSwitcher } from '@/components/locale-switcher'
 
 const CHIP_PRESETS = [50, 100, 200, 500] as const
 const GAME_TYPES: readonly RoomGameType[] = ['seotda', 'gostop', 'poker']
@@ -67,7 +68,12 @@ export default function NewRoomPage() {
         >
           ←
         </Link>
-        <h1 className="font-brush text-3xl font-black">{d.newRoom.title}</h1>
+        <h1 className="font-brush min-w-0 flex-1 truncate text-3xl font-black">
+          {d.newRoom.title}
+        </h1>
+        <div className="ms-auto shrink-0">
+          <LocaleSwitcher />
+        </div>
       </header>
       <Panel className="space-y-5">
         <Field label={d.roomForm.nameLabel}>
