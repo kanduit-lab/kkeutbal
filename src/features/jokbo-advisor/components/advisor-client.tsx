@@ -11,6 +11,7 @@ import { format, useDict } from '@/lib/i18n/client'
 import { CardPicker } from './card-picker'
 import { PokerPicker } from './poker-picker'
 import { GostopResult, PokerResult, SeotdaResult, type VisionSource } from './advisor-results'
+import { PokerRankingPanel } from './poker-ranking-panel'
 import { SeotdaRankingPanel } from './seotda-ranking-panel'
 import { VisionCapture } from './vision-capture'
 
@@ -141,6 +142,7 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
             {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
             {tab === 'gostop' ? <GostopResult cards={cards} vision={vision} /> : null}
             {tab === 'poker' ? <PokerResult cards={pokerCards} /> : null}
+            {tab === 'poker' ? <PokerRankingPanel cards={pokerCards} /> : null}
             {tab !== 'poker' ? (
               <VisionCapture
                 gameType={hwatuGameType}

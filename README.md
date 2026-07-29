@@ -152,6 +152,7 @@ pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 | [`docs/09-roadmap.md`](docs/09-roadmap.md)                                           | 우선순위·마일스톤                    |
 | [`docs/10-virtual-credit-and-fair-play.md`](docs/10-virtual-credit-and-fair-play.md) | 전역 가상 크레딧·공정 셔플 확장 설계 |
 | [`docs/11-container-build-contract.md`](docs/11-container-build-contract.md)         | 빌드 인자·시크릿 경계·런타임 계약    |
+| [`docs/12-handoff-registration-crash-fix.md`](docs/12-handoff-registration-crash-fix.md) | 인수인계 — 가입 코드 크래시·RSC 함수 prop 버그 수정 |
 
 실행 잔여 작업: [`TODO.md`](TODO.md) · 에이전트 가이드: [`CLAUDE.md`](CLAUDE.md)
 

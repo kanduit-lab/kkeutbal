@@ -21,7 +21,7 @@ export interface PokerHand {
   readonly ranks: readonly number[]
 }
 
-const CATEGORY_LABEL: Readonly<Record<PokerCategory, string>> = Object.freeze({
+export const POKER_CATEGORY_LABEL: Readonly<Record<PokerCategory, string>> = Object.freeze({
   'royal-flush': '로열 플러시',
   'straight-flush': '스트레이트 플러시',
   'four-of-a-kind': '포카드',
@@ -33,8 +33,9 @@ const CATEGORY_LABEL: Readonly<Record<PokerCategory, string>> = Object.freeze({
   'one-pair': '원페어',
   'high-card': '하이카드',
 })
+const CATEGORY_LABEL = POKER_CATEGORY_LABEL
 
-const CATEGORY_PRIORITY: Readonly<Record<PokerCategory, number>> = Object.freeze({
+export const POKER_CATEGORY_PRIORITY: Readonly<Record<PokerCategory, number>> = Object.freeze({
   'royal-flush': 9,
   'straight-flush': 8,
   'four-of-a-kind': 7,
@@ -127,7 +128,7 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
     const category: PokerCategory = straightHigh === 14 ? 'royal-flush' : 'straight-flush'
     return {
       category,
-      ranks: [CATEGORY_PRIORITY[category], straightHigh],
+      ranks: [POKER_CATEGORY_PRIORITY[category], straightHigh],
       orderedCards: descCards,
     }
   }
@@ -137,7 +138,7 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
     const kicker = groups[1]?.rank ?? 0
     return {
       category: 'four-of-a-kind',
-      ranks: [CATEGORY_PRIORITY['four-of-a-kind'], quad, kicker],
+      ranks: [POKER_CATEGORY_PRIORITY['four-of-a-kind'], quad, kicker],
       orderedCards: descCards,
     }
   }
@@ -147,7 +148,7 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
     const pair = groups[1]?.rank ?? 0
     return {
       category: 'full-house',
-      ranks: [CATEGORY_PRIORITY['full-house'], triple, pair],
+      ranks: [POKER_CATEGORY_PRIORITY['full-house'], triple, pair],
       orderedCards: descCards,
     }
   }
@@ -155,7 +156,7 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
   if (isFlush) {
     return {
       category: 'flush',
-      ranks: [CATEGORY_PRIORITY.flush, ...descRanks],
+      ranks: [POKER_CATEGORY_PRIORITY.flush, ...descRanks],
       orderedCards: descCards,
     }
   }
@@ -163,7 +164,7 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
   if (straightHigh !== null) {
     return {
       category: 'straight',
-      ranks: [CATEGORY_PRIORITY.straight, straightHigh],
+      ranks: [POKER_CATEGORY_PRIORITY.straight, straightHigh],
       orderedCards: descCards,
     }
   }
@@ -173,7 +174,7 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
     const kickers = groups.slice(1).map((g) => g.rank)
     return {
       category: 'three-of-a-kind',
-      ranks: [CATEGORY_PRIORITY['three-of-a-kind'], triple, ...kickers],
+      ranks: [POKER_CATEGORY_PRIORITY['three-of-a-kind'], triple, ...kickers],
       orderedCards: descCards,
     }
   }
@@ -184,7 +185,7 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
     const kicker = groups[2]?.rank ?? 0
     return {
       category: 'two-pair',
-      ranks: [CATEGORY_PRIORITY['two-pair'], highPair, lowPair, kicker],
+      ranks: [POKER_CATEGORY_PRIORITY['two-pair'], highPair, lowPair, kicker],
       orderedCards: descCards,
     }
   }
@@ -194,14 +195,14 @@ function evaluateFiveCards(hand: readonly PokerCard[]): FiveCardEvaluation {
     const kickers = groups.slice(1).map((g) => g.rank)
     return {
       category: 'one-pair',
-      ranks: [CATEGORY_PRIORITY['one-pair'], pair, ...kickers],
+      ranks: [POKER_CATEGORY_PRIORITY['one-pair'], pair, ...kickers],
       orderedCards: descCards,
     }
   }
 
   return {
     category: 'high-card',
-    ranks: [CATEGORY_PRIORITY['high-card'], ...descRanks],
+    ranks: [POKER_CATEGORY_PRIORITY['high-card'], ...descRanks],
     orderedCards: descCards,
   }
 }
