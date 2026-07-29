@@ -1,56 +1,128 @@
 # TODO
 
 실행 단위의 미완료 작업만 관리한다. 제품 단계·우선순위 원칙은
-[`docs/09-roadmap.md`](docs/09-roadmap.md)가 소유한다.
+[`docs/09-roadmap.md`](docs/09-roadmap.md)가, 각 항목의 조사 근거와 미확정 설계
+질문은 [`docs/12-handoff.md`](docs/12-handoff.md)가 소유한다.
+
+우선순위 기준: **판이 규칙대로 돌아가는가 → 폰에서 쓸 만한가 → 흐름이 이어지는가 →
+보기 좋은가**. 자동화된 회귀 가드는 위 네 가지가 선 뒤에 붙인다.
 
 ## Priority
 
-### High — 라이브 경로 검증
+### High — 판 진행 정확성
 
-- [ ] **섯다 검증 배분 실환경 E2E**: 구현된 commit-reveal 시드·개인 손패·종료 후 공개 검증을 전용 두 계정으로 실제 실행
-  - 변경 범위: `e2e/authenticated-room.spec.ts` 실행 환경과 검증 활동
-  - 완료 기준: `E2E_ENABLE_ROOM_LIFECYCLE=true` + 두 전용 계정에서 시드 제출·봉인·손패·종료 후 deck 재계산이 통과
-  - 참조: `docs/10-virtual-credit-and-fair-play.md`
+앱이 베팅 순서를 강제하지 못하면 기록이 실제 판과 어긋난다. 이 그룹이 다른 무엇보다 앞선다.
 
-- [ ] **실배포 2기기 스모크 1회**: 배포된 앱에서 전체 플로우를 엔드투엔드로 완주
+- [ ] **서버 턴 검증**: 자기 차례가 아닌 사람의 베팅이 그대로 accepted 되는 상태를 막는다
+  - 변경 범위: `src/features/betting/actions.ts`(`validateBetSemantics`), `src/features/betting/round-bet-state.ts`, `src/features/game/components/action-bar.tsx`
+  - 완료 기준: 차례가 아닌 사용자의 `placeBet`이 거부된다. 같은 검증이 `approveBet`(대리 베팅 승인)에도 걸린다. 턴 판정이 순수 함수로 분리돼 서버와 클라이언트가 같은 함수를 쓴다. 클라이언트만 고치면 API 직접 호출로 우회되므로 서버가 먼저다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 8번. 턴 계산은 현재 `game-table.tsx`의 `nextActorId` 하나뿐이고 좌석 하이라이트 표시에만 쓰인다
+  - 선행 확인: `nextActorId`의 좌석 순서 기준이 실제 섯다·포커 베팅 순서와 맞는지 먼저 검증
+
+- [ ] **판 자동 종료**: 전원 콜 완료와 전원 다이를 감지해 판을 끝낸다
+  - 변경 범위: `src/features/betting/actions.ts`, `src/features/game/round-actions.ts`, `src/lib/realtime/` 이벤트 정의
+  - 완료 기준: fold하지 않은 전원의 누적 베팅이 같아지면 쇼다운 단계로 넘어간다. fold 안 한 사람이 1명 남으면 그 사람이 승자로 확정된다. 딜러가 "🏁 종료"를 수동으로 누르지 않아도 된다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 9번
+  - 선행: 위 서버 턴 검증. 턴 순서가 강제되지 않으면 "한 바퀴 돌았다"를 판정할 수 없다
+  - 미확정: 사용자가 말한 "다음 세션"이 판(round) 전환인지 새 상위 단위인지 확인 필요. 이 저장소에서 "세션"은 이미 방 하나를 뜻한다
+
+- [ ] **액션바 "첫 베팅 전" 오표시**: 이미 레이즈한 최고 베팅자에게도 첫 베팅 전이라고 뜬다
+  - 변경 범위: `src/features/game/components/action-bar.tsx`, `src/lib/i18n/dictionaries/`
+  - 완료 기준: 콜 필요액 0이 "아무도 베팅 안 함"과 "내가 최고 베팅자라 남을 기다리는 중" 두 경우로 갈린다. 후자에 맞는 문구가 뜬다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 7번
+
+- [ ] **섯다 레이즈 배수·상한 규칙**: 따당·하프·풀이 입력 편의 프리셋일 뿐 서버가 강제하지 않는다
+  - 변경 범위: `src/features/game/actions.ts`(`rulePreset`), `src/features/betting/round-bet-state.ts`, `src/features/betting/actions.ts`, `src/lib/i18n/dictionaries/`
+  - 완료 기준: 방 생성 시 고른 레이즈 규칙이 서버에서 강제된다. 규칙 위반 시 전용 에러 문구가 뜬다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 5번
+  - 미확정: 어떤 규칙을 쓸지 사용자 확정 필요 — 따당 강제, pot-limit, 방별 하우스 룰 선택 중
+
+### High — 모바일 방 화면
+
+방 화면은 판이 도는 내내 보는 유일한 화면이다. 폰에서 한 손으로 읽히지 않으면 앱을 안 쓴다.
+
+- [ ] **방 화면 세로 길이 축소**: 딜러 패널이 하단 고정 액션바에 가려 스크롤해야 보인다
+  - 변경 범위: `src/features/game/components/room-client.tsx`, `game-table.tsx`, `dealer-panel.tsx`
+  - 완료 기준: 딜러 겸 방장 계정으로 2인방과 10인방 양쪽에서 판 종료·판 무효 버튼이 스크롤 없이 닿는다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 4번. `GameTable`의 세로 비율이 인원수와 무관하게 고정이라 2인방도 세로 공간을 다 쓴다
+  - 미확정: 테이블 비율을 인원수에 따라 조절할지, 딜러 패널을 바텀시트로 뺄지
+
+- [ ] **고스톱 판 사이 화면 채우기**: 판이 끝나고 다음 판이 깔리기 전 비딜러 화면이 빈다
+  - 변경 범위: `src/features/game/components/room-client.tsx`(`showGostopWait`), `gostop-wait-panel.tsx`, `src/lib/i18n/dictionaries/`
+  - 완료 기준: 고스톱 방에서 판 진행 중이 아닐 때도 비딜러가 다음 동작 주체를 안다. 섯다·포커의 `actionBar.noRound`와 같은 역할
+  - 참조: 2026-07-29 UI 감사에서 대기 표면을 붙이며 발견. 판 진행 중 구간만 처리했다
+
+### High — 실경로 검증
+
+배포된 앱이 실기기에서 끝까지 돈 적이 아직 없다. 여기가 죽으면 대체 경로가 종이뿐이다.
+
+- [ ] **실배포 2기기 스모크**: 배포된 앱에서 전체 플로우를 실기기 2대로 완주
   - 변경 범위: 검증 활동. 발견한 결함은 별도 구현 작업으로 분리
-  - 완료 기준: 로그인 → 방 생성·입장 → 베팅·동기화 → 판 종료·정산 → 랭킹을 실제 기기 2대로 완주하고 Broadcast 왕복 p95를 기록
-  - 참조: `docs/09-roadmap.md`, `docs/03-realtime-protocol.md`
+  - 완료 기준: 로그인 → 방 생성·입장 → 베팅·동기화 → 판 종료·정산 → 랭킹을 완주하고 Broadcast 왕복 p95를 기록
+  - 참조: [`docs/03-realtime-protocol.md`](docs/03-realtime-protocol.md)
 
 - [ ] **실물 화투 리허설**: 실제 화투 3판 이상을 앱 기록과 대조
   - 변경 범위: 검증 활동
   - 완료 기준: 콘솔·DB 직접 수정 없이 완주하고 한 손 조작·어두운 조명·네트워크 복귀를 확인
-  - 참조: `docs/09-roadmap.md`
 
-### Medium — 자동화
+- [ ] **섯다 검증 배분 실환경 확인**: commit-reveal 시드·개인 손패·종료 후 공개 검증을 실제로 돌린다
+  - 변경 범위: `e2e/authenticated-room.spec.ts` 실행 환경과 검증 활동
+  - 완료 기준: `E2E_ENABLE_ROOM_LIFECYCLE=true` + 전용 계정 2개에서 시드 제출·봉인·손패·종료 후 deck 재계산이 통과
+  - 참조: [`docs/10-virtual-credit-and-fair-play.md`](docs/10-virtual-credit-and-fair-play.md)
 
-- [ ] **인증 후 E2E 흐름 확장**: 공개 화면 모바일 스모크 다음으로 실제 방 흐름을 자동화
-  - 변경 범위: `e2e/`, 테스트용 가입코드·계정 fixture
-  - 완료 기준: 2컨텍스트 동기화, 재접속 복원, 정산 흐름에서 `pnpm test:e2e` 통과. 수동/verified 방 수명주기 spec은 추가됐고 전용 자격 증명 실행만 남음
-  - 참조: `playwright.config.ts`, `e2e/public-surfaces.spec.ts`
+### Medium — 흐름 연결
 
-- [ ] **역할별 렌더링 자동 검증**: 같은 방을 보는 관전자·일반 참가자·딜러·방장이 각각 무엇을 보는지 자동으로 확인
-  - 변경 범위: `e2e/`, 또는 `vitest.config.ts`에 렌더링 환경(jsdom 계열)과 `@testing-library` 도입
-  - 완료 기준: 게임 종류(`seotda`/`gostop`/`poker`) × 역할 조합에서 판 진행 중 화면이 비지 않는 것을 검증. 최소한 고스톱 방의 비딜러 참가자가 대기 상태를 설명하는 표면을 받는지 확인
-  - 참조: `src/features/game/components/room-client.tsx`(`isBettingGame`·`canBet`·`isDealer` 분기), `vitest.config.ts`(현재 `environment: 'node'`라 컴포넌트를 렌더링하지 않음)
+- [ ] **방에서 족보 판독으로 가는 진입점**: 두 화면이 완전히 분리돼 있다
+  - 변경 범위: `src/features/game/components/room-header.tsx`, `src/app/advisor/page.tsx`, `src/lib/i18n/dictionaries/`
+  - 완료 기준: 방 화면에서 족보 판독으로 이동하고 방으로 돌아온다. 헤더 아이콘이 4개가 되는 모바일 레이아웃을 함께 확인
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 10번. `/advisor` 링크는 현재 홈 한 곳뿐이다
+  - 미확정: 현재 판의 카드를 미리 채워 넘길지. 공정 딜 신뢰 모델과 충돌하는지 점검 필요
 
-- [ ] **데스크톱 뷰포트 E2E 프로젝트 추가**: Playwright가 모바일 폭만 띄우는 상태를 해소
+- [ ] **계정 설정 페이지**: 가입 후 표시 이름을 바꿀 방법이 없다
+  - 변경 범위: 새 라우트 `src/app/settings/`, `src/features/auth/`(프로필 액션), `src/lib/i18n/dictionaries/`
+  - 완료 기준: 본인이 `displayName`을 바꾸면 랭킹·방 표시에 반영된다. 게스트 계정은 `authentikSub`이 이름과 묶여 있어 제외하거나 별도 처리
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 3번
+  - 미확정: 아바타·전화번호까지 포함할지. 전화번호는 본인 인증 없이 바꾸면 계정 탈취 경로가 된다
+
+### Medium — 화면 완성도
+
+- [ ] **족보 판독 포커 설명과 부분 선택 미리보기**: 포커 족보에 설명이 없고, 카드를 덜 골랐을 때 아무것도 안 보여준다
+  - 변경 범위: `src/features/jokbo-advisor/components/poker-rank-table.ts`, `poker-ranking-panel.tsx`, 부분 미리보기 헬퍼, `src/lib/i18n/dictionaries/`
+  - 완료 기준: 포커 족보 10단계에 섯다와 같은 수준의 설명이 붙는다. 3장 이상 골랐을 때 남은 덱 기준 족보 확률이 뜬다. 1~2장은 계산하지 않는다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 2번. 계산량 실측표가 거기 있다
+
+- [ ] **모바일 가로 모드 방 화면**: 세로 기준으로만 반응형이 짜여 있다
+  - 변경 범위: `src/app/manifest.ts`(`orientation`), `src/features/game/components/game-table.tsx` 좌석 배치
+  - 완료 기준: 방 화면이 가로에서 좌우로 퍼진 배치를 쓴다. 실기기 iOS·Android 양쪽에서 회전 동작 확인
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 6번. 위 방 화면 세로 길이 항목과 같은 화면이라 함께 설계
+  - 미확정: 가로를 강제할지, 어느 화면까지 대응할지, PWA manifest를 바꿀지 사용자 확정 필요
+
+### Low — 회귀 가드
+
+앞의 결함들이 수동 감사까지 살아남은 구조를 메운다. 위 항목들이 정리된 뒤에 붙인다.
+
+- [ ] **역할별 렌더링 검증**: 같은 방을 보는 관전자·참가자·딜러·방장이 각각 무엇을 보는지 자동 확인
+  - 변경 범위: `vitest.config.ts`에 렌더링 환경 도입, 또는 `e2e/`
+  - 완료 기준: 게임 종류 × 역할 조합에서 판 진행 중 화면이 비지 않는 것을 검증
+  - 참조: `vitest.config.ts`는 현재 `environment: 'node'`라 컴포넌트를 렌더링하지 않는다
+
+- [ ] **데스크톱 뷰포트 E2E 프로젝트**: Playwright가 모바일 폭만 띄운다
   - 변경 범위: `playwright.config.ts`의 `projects`
-  - 완료 기준: 데스크톱 폭 프로젝트가 추가되고, 공개 화면 spec이 모바일·데스크톱 양쪽에서 통과. 2026-07-29 감사가 1280px에서 잡은 좌석 넘침 유형이 자동으로 걸린다
-  - 참조: `playwright.config.ts`(현재 `mobile-chromium`(Pixel 7) 단일 프로젝트), `src/features/game/components/game-table.tsx`
+  - 완료 기준: 공개 화면 spec이 모바일·데스크톱 양쪽에서 통과
+  - 참조: 현재 `mobile-chromium`(Pixel 7) 단일 프로젝트
 
-- [ ] **고스톱 판 사이 화면 채우기**: 판이 끝나고 다음 판이 깔리기 전(`snapshot.currentRound`가 null) 비딜러 참가자 화면이 여전히 빈다
-  - 변경 범위: `src/features/game/components/room-client.tsx`(`showGostopWait` 조건), `src/features/game/components/gostop-wait-panel.tsx`, `src/lib/i18n/dictionaries/`
-  - 완료 기준: 고스톱 방에서 판 진행 중이 아닐 때도 비딜러가 다음 동작 주체를 알 수 있다. 섯다·포커의 `actionBar.noRound`와 같은 역할
-  - 참조: 2026-07-29 감사에서 대기 표면을 붙이며 발견. 판 진행 중 구간만 처리했다
+- [ ] **인증 후 E2E 흐름 확장**: 2컨텍스트 동기화·재접속 복원·정산 흐름 자동화
+  - 변경 범위: `e2e/`, 테스트용 가입코드·계정 fixture
+  - 완료 기준: 위 세 흐름에서 `pnpm test:e2e` 통과
 
-### Low — 구조적 후속 개선
-
-- [ ] **Server Action 상태머신 통합 테스트**: 순수 엔진 외에 방 잠금·권한·판 참가 스냅샷의 DB 경로 검증이 필요
+- [ ] **Server Action 상태머신 통합 테스트**: 방 잠금·권한·판 참가 스냅샷의 DB 경로 검증
   - 변경 범위: `features/game/**`, `features/betting/**`, DB 테스트 harness
   - 완료 기준: 누적 베팅 재레이즈, 판중 퇴장·강퇴 거부, 승인 순서, 동시 start/bet 요청을 실제 DB 트랜잭션으로 검증
 
+---
+
 ## Notes
 
-- **문서 정본**: 설계·프로토콜은 `docs/`, 실제 구현은 `src/`와 `drizzle/schema.ts`를 따른다. 완료 이력은 Git 커밋과 문서 Change History에서 확인한다.
-- **2026-07-29 UI 감사**: 좌석 배치, 고스톱 비딜러 화면, 헤더/로케일 스위처, 순손익 단위 라벨, 지갑 빈 상태, 관리자 거부 화면의 `admin` 토큰 노출은 같은 날 수정했으므로 여기 열지 않았다. 위에 남긴 세 항목은 결함 자체가 아니라 그것들이 수동 감사까지 살아남은 이유(렌더링·뷰포트 자동 검증 부재)와, 이번에 처리 범위 밖이던 판 사이 구간을 다룬다. 우선순위 배경은 [`docs/09-roadmap.md`](docs/09-roadmap.md).
+- **문서 정본**: 설계·프로토콜은 `docs/`, 실제 구현은 `src/`와 `drizzle/schema.ts`를 따른다. 완료 이력은 Git 커밋에서 확인한다.
+- **미확정 표시**: 항목에 `미확정`이 붙어 있으면 구현 전에 사용자 확정이 필요하다. 확정 없이 착수하면 재작업이 난다.
+- **2026-07-29 UI 감사**: 좌석 배치, 고스톱 비딜러 화면, 헤더·로케일 스위처, 순손익 단위 라벨, 지갑 빈 상태, 관리자 거부 화면의 원문 role 토큰은 같은 날 수정했으므로 여기 열지 않았다.
