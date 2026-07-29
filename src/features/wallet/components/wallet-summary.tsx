@@ -1,5 +1,5 @@
 import type { CreditWalletSnapshot } from '../actions'
-import { EmptyState, Panel } from '@/components/ui'
+import { ButtonLink, EmptyState, Panel } from '@/components/ui'
 import { format, getDict, type Dictionary } from '@/lib/i18n/server'
 import type { Locale } from '@/lib/i18n/config'
 
@@ -40,7 +40,15 @@ export async function WalletSummary({ wallet }: { wallet: CreditWalletSnapshot }
           <p className="mt-0.5 text-xs text-muted">{d.wallet.historyHint}</p>
         </div>
         {wallet.transactions.length === 0 ? (
-          <EmptyState title={d.wallet.historyEmpty} hint={d.wallet.historyEmptyHint} />
+          <EmptyState
+            title={d.wallet.historyEmpty}
+            hint={d.wallet.historyEmptyHint}
+            action={
+              <ButtonLink href="/rooms/new" variant="surface" size="sm">
+                {d.home.newRoom}
+              </ButtonLink>
+            }
+          />
         ) : (
           <ul className="space-y-2">
             {wallet.transactions.map((transaction) => {

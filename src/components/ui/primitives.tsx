@@ -181,11 +181,20 @@ export function Spinner({ label }: { label?: string }) {
   )
 }
 
-export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+export function EmptyState({
+  title,
+  hint,
+  action,
+}: {
+  title: string
+  hint?: string
+  action?: ReactNode
+}) {
   return (
     <div className="rounded-2xl border border-dashed border-gold/20 p-8 text-center">
       <p className="font-medium text-muted">{title}</p>
       {hint ? <p className="mt-1.5 text-sm text-muted/70">{hint}</p> : null}
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   )
 }

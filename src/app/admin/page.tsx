@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import { isAdminUser } from '@/features/auth/roles'
 import { AdminDashboard } from '@/features/auth/components/admin-dashboard'
 import { LocaleSwitcher } from '@/components/locale-switcher'
-import { Badge, ButtonLink, PageHeader, PageShell, Panel } from '@/components/ui'
+import { ButtonLink, PageHeader, PageShell, Panel } from '@/components/ui'
 import { getDict } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
@@ -22,9 +22,6 @@ export default async function AdminPage() {
           </p>
           <h1 className="text-xl font-bold">{d.adminDashboard.deniedTitle}</h1>
           <p className="text-sm text-muted">{d.adminDashboard.deniedBody}</p>
-          <div className="flex justify-center pt-1">
-            <Badge tone="accent">admin</Badge>
-          </div>
           <div className="pt-2">
             <ButtonLink href="/" variant="primary" className="w-full">
               {d.common.home}
