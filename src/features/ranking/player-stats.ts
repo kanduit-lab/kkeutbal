@@ -6,7 +6,7 @@ import {
   subtractSafeChipIntegers,
   toSafeChipInteger,
 } from '@/features/game/chip-integers'
-import { hasPlayedSession } from './shared'
+import { hasPlayedSession } from '@/features/game/played-session'
 
 const { rooms, roomMembers, rounds, roundParticipants, chipLedger, buyIns, users } = schema
 
