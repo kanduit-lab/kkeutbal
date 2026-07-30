@@ -1,5 +1,5 @@
 import { test, type Page, type TestInfo } from '@playwright/test'
-import { STORAGE_STATE_PATH, getLifecycleFixture, loginWithPassword } from './support'
+import { STORAGE_STATE_PATH, getLifecycleFixture, openTwoAccountPages } from './support'
 
 /**
  * 스크린샷 수집 전용 스펙. 흐름이 끊기는지, 요소가 비는지는 다른 스펙이 단정(assert)하고,
@@ -81,18 +81,10 @@ test.describe('스크린샷 수집 — 방 화면', () => {
 
   test('대기 중인 방 — 호스트·게스트·모니터', async ({ browser }, testInfo) => {
     test.setTimeout(60_000)
-    const hostContext = await browser.newContext()
-    const guestContext = await browser.newContext()
-    const host = await hostContext.newPage()
-    const guest = await guestContext.newPage()
+    // 저장된 세션 두 개를 쓴다 — 스크린샷 수집이 로그인 한도를 쓸 이유가 없다.
+    const { host, guest, close } = await openTwoAccountPages(browser)
 
     try {
-      await loginWithPassword(host, { username: fixture.username!, password: fixture.password! })
-      await loginWithPassword(guest, {
-        username: fixture.secondUsername!,
-        password: fixture.secondPassword!,
-      })
-
       await host
         .getByRole('textbox', { name: '방 이름' })
         .fill(`E2E screenshot ${Date.now().toString(36)}`)
@@ -108,7 +100,7 @@ test.describe('스크린샷 수집 — 방 화면', () => {
       await host.goto(`/rooms/${roomCode}/monitor`)
       await capture(host, testInfo, 'room-monitor')
     } finally {
-      await Promise.all([hostContext.close(), guestContext.close()])
+      await close()
     }
   })
 })

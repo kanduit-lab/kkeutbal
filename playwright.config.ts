@@ -22,6 +22,10 @@ export default defineConfig({
     baseURL: externalBaseUrl ?? 'http://localhost:3000',
     trace: 'on-first-retry',
   },
+  // 이 앱의 단정은 대부분 Server Action 왕복 + Broadcast → 스냅샷 refetch를 기다린다. 기본 5초는
+  // 워커 여러 개가 개발 서버를 함께 두드릴 때 모자라 실제로 스펙이 흔들렸다. 진짜로 느린 흐름
+  // (검증 딜 봉인, 정산)은 각 단정에서 더 길게 따로 잡는다.
+  expect: { timeout: 10_000 },
   projects: [
     {
       // 세션을 한 번 만들어 파일로 남긴다. 인증 스펙들이 그걸 재사용해서 로그인 횟수를

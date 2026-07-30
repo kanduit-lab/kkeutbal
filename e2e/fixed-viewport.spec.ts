@@ -75,5 +75,8 @@ test('방 화면(/rooms/[code], /monitor, /result)의 문서 스크롤 확인은
   // session-chip room lifecycle" 테스트(E2E_ENABLE_ROOM_LIFECYCLE=true + 전용 계정 2개
   // 필요)에 expectNoDocumentScroll 호출을 얹어서 확인한다. 조용히 빼는 대신 스킵 사유를
   // 여기 남긴다.
-  test.skip(true, 'covered by authenticated-room.spec.ts lifecycle test (E2E_ENABLE_ROOM_LIFECYCLE=true)')
+  test.skip(
+    true,
+    'covered by authenticated-room.spec.ts lifecycle test (E2E_ENABLE_ROOM_LIFECYCLE=true)',
+  )
 })
