@@ -46,7 +46,7 @@
 | Vision 인식 | 구현 완료 | `src/features/jokbo-advisor/vision/actions.ts` |
 | 정산 · 랭킹 | 집계·이체 계산 구현 완료 | `src/features/ranking/`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
 | 고정 뷰포트 UI | 목록·조회·방·모니터 화면이 문서 스크롤을 만들지 않고, e2e가 그 불변식을 지킨다 | `src/components/ui/page-shell.tsx`, `e2e/fixed-viewport.spec.ts` |
-| 자동 검증 | 세 층: 단위 342개(순수 엔진 + jsdom 컴포넌트), Server Action 통합 5개(실제 DB 트랜잭션·advisory lock·트리거, 기본 꺼짐), e2e 88개(모바일·데스크톱 두 프로젝트, 방 수명주기 포함) | `vitest.config.ts`, `test/dom/`, `test/integration/`, `playwright.config.ts` |
+| 자동 검증 | 세 층: 단위 342개(순수 엔진 + jsdom 컴포넌트), Server Action 통합 5개(실제 DB 트랜잭션·advisory lock·트리거, 기본 꺼짐), e2e 90개(모바일·데스크톱 두 프로젝트, 방 수명주기·검증 딜·소켓 끊김 복구 포함) | `vitest.config.ts`, `test/dom/`, `test/integration/`, `playwright.config.ts` |
 | CI/CD | **배포가 동작하지 않는다.** `develop` 푸시마다 워크플로가 0초에 실패하고 staging에 올라간 적이 없다 | `.github/workflows/deploy.yml`, `.deploy.yml` |
 
 ## MVP 경계
@@ -83,9 +83,9 @@ MVP는 "고스톱과 vision 없이도 그날 판이 돌아가는가" 기준으�
    남았다(실제 OAuth 왕복, 실제 네트워크에서의 Broadcast 왕복 지연).
 3. **실물 리허설** — 실제 화투로 3판 이상. 규칙이 서버에서 강제되는 지금이 리허설의 정보량이
    가장 큰 시점이다(사람이 순서를 지킨 결과가 아니라 서버가 지킨 결과를 본다).
-4. **회귀 가드 보강** — 경쟁 상태(동시 판 시작, 같은 actionId 재전송, 승인 순서)는
-   `test/integration/`이 실제 DB 트랜잭션으로 덮었다. 남은 것은 끊김·복원처럼 소켓을 인위적으로
-   끊어야 재현되는 경로다.
+4. **회귀 가드** — 더 열려 있는 항목이 없다. 경쟁 상태(동시 판 시작, 같은 actionId 재전송,
+   승인 순서)는 `test/integration/`이 실제 DB 트랜잭션으로, 끊김·복원은 `e2e/reconnect.spec.ts`가
+   realtime 소켓을 실제로 끊어서 덮는다.
 
 실행 항목과 완료 기준은 [`TODO.md`](../TODO.md)가, 조사 근거와 미확정 설계 질문은
 [`docs/12-handoff.md`](12-handoff.md)가 소유한다.
