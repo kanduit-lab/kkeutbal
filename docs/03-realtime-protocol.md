@@ -210,7 +210,7 @@ Broadcast는 전역 순서를 보장하지 않는다. 순서가 의미를 갖는
 | 반환값 | 조건 | 의미 |
 |--------|------|------|
 | `connected=false` | 채널 오류·끊김·`offline` | 기존 배너 조건(`everConnected && !connected`) |
-| `connectTimedOut` | 구독 시작 후 10초 내 `SUBSCRIBED` 미도달 | 최초 연결 실패 — `everConnected`가 아직 false라 기존 배너 조건에 안 걸리는 구간을 메운다. 배너 조건에 `연결끊김 OR connectTimedOut`으로 더해 쓴다 |
+| `connectTimedOut` | **방에 들어온 시점부터** 10초 내 `SUBSCRIBED` 미도달 | 최초 연결 실패 — `everConnected`가 아직 false라 기존 배너 조건에 안 걸리는 구간을 메운다. 배너 조건에 `연결끊김 OR connectTimedOut`으로 더해 쓴다. 타이머는 채널 effect 밖(마운트 기준)에 있다 — 안에 두면 재구독 시도마다 초기화돼서, 백오프 초반 간격(1·2·5초)이 10초를 못 넘기는 동안 배너가 20~40초까지 밀린다 |
 | `syncFailed` | refetch 연속 2회 실패 (Server Action reject 포함) | 채널과 무관하게 스냅샷 동기화 자체가 죽음. 성공 1회로 해제 |
 | `authError` | `refreshRoom`이 `errors.loginRequired` 또는 `errors.notMember` 오류 키 반환 | 재시도로 복구 불가 — 재로그인·재입장 안내 필요. null이면 정상 |
 
