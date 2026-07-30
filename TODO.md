@@ -34,11 +34,11 @@
 
 ### High — 모바일 방 화면
 
-- [ ] **방 화면 세로 길이 축소**: 딜러 패널이 하단 고정 액션바에 가려 스크롤해야 보인다
+- [ ] **모바일 방 화면 세로 길이 축소**: 딜러 패널이 하단 고정 액션바에 가려 스크롤해야 보인다
   - 변경 범위: `src/features/game/components/room-client.tsx`, `game-table.tsx`, `dealer-panel.tsx`
   - 완료 기준: 딜러 겸 방장 계정으로 2인방과 10인방 양쪽에서 판 종료·판 무효 버튼이 스크롤 없이 닿는다
-  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 4번. `GameTable`의 세로 비율이 인원수와 무관하게 고정이라 2인방도 세로 공간을 다 쓴다
-  - 미확정: 테이블 비율을 인원수에 따라 조절할지, 딜러 패널을 바텀시트로 뺄지
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 4번. 데스크톱은 뷰포트 고정으로 끝났고 남은 것은 모바일뿐이다. `GameTable`의 세로 비율이 인원수와 무관하게 고정이라 2인방도 세로 공간을 다 쓴다
+  - 미확정: 테이블 비율을 인원수에 따라 조절할지, 딜러 패널을 바텀시트로 뺄지. 액션바 위 남는 높이가 승인 큐를 담지 못한다는 실측은 handoff 4번에 있다
 
 - [ ] **고스톱 판 사이 화면 채우기**: 판이 끝나고 다음 판이 깔리기 전 비딜러 화면이 빈다
   - 변경 범위: `src/features/game/components/room-client.tsx`(`showGostopWait`), `gostop-wait-panel.tsx`, `src/lib/i18n/dictionaries/`
@@ -82,6 +82,12 @@
   - 완료 기준: 포커 족보 10단계에 섯다와 같은 수준의 설명이 붙는다. 3장 이상 골랐을 때 남은 덱 기준 족보 확률이 뜬다. 1~2장은 계산하지 않는다
   - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 2번. 계산량 실측표가 거기 있다
 
+- [ ] **남은 문서 스크롤 화면**: 고정 뷰포트 규약을 아직 안 쓴 화면들이 남아 있다
+  - 변경 범위: `src/app/rooms/new/page.tsx`, `src/app/rooms/[code]/result/page.tsx`, `src/app/ranking/player/[id]/page.tsx`, `src/features/game/components/monitor-client.tsx`, `src/features/jokbo-advisor/components/advisor-client.tsx`(모바일)
+  - 완료 기준: 각 화면이 `FixedPage`로 남은 높이만 쓰거나, 목록을 `usePagedRows`로 넘긴다. 문서 스크롤이 남는 화면은 읽는 문서(`/guide/*`, `/about`)뿐이다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 11번에 구성 요소와 줄 높이 규칙이 있다
+  - 선행 확인: `/rooms/new`는 단계형 입력이라 고정 높이로 접으면 단계 분할이 필요한지 먼저 판단
+
 - [ ] **모바일 가로 모드 방 화면**: 세로 기준으로만 반응형이 짜여 있다
   - 변경 범위: `src/app/manifest.ts`(`orientation`), `src/features/game/components/game-table.tsx` 좌석 배치
   - 완료 기준: 방 화면이 가로에서 좌우로 퍼진 배치를 쓴다. 실기기 iOS·Android 양쪽에서 회전 동작 확인
@@ -115,3 +121,4 @@
 - **문서 정본**: 설계·프로토콜은 `docs/`, 실제 구현은 `src/`와 `drizzle/schema.ts`를 따른다. 완료 이력은 Git 커밋에서 확인한다.
 - **미확정 표시**: 항목에 `미확정`이 붙어 있으면 구현 전에 사용자 확정이 필요하다.
 - **2026-07-29 UI 감사**: 좌석 배치, 고스톱 비딜러 화면, 헤더·로케일 스위처, 순손익 단위 라벨, 지갑 빈 상태, 관리자 거부 화면의 원문 role 토큰은 같은 날 수정했으므로 여기 열지 않았다.
+- **고정 뷰포트 규약**: 새 목록·조회 화면은 `FixedPage` + `usePagedRows`를 쓰고 문서 스크롤을 만들지 않는다. 규약과 주의점은 [`docs/12-handoff.md`](docs/12-handoff.md) 11번.
