@@ -2,8 +2,7 @@ import { test } from '@playwright/test'
 import { STORAGE_STATE_PATH, expectNoDocumentScroll } from './support'
 
 /**
- * 고정 뷰포트 레이아웃 회귀 가드 (docs/12-handoff.md 11번, TODO.md "데스크톱 뷰포트 E2E
- * 프로젝트" / "역할별 렌더링 검증"의 일부).
+ * 고정 뷰포트 레이아웃 회귀 가드 (docs/12-handoff.md 11번).
  *
  * 2026-07-30부터 목록·조회 화면은 문서 스크롤을 만들지 않는다는 규약이 생겼다. 여기서는
  * 그 불변식(`expectNoDocumentScroll`, `./support.ts`)을 실제 화면에 걸어 자동으로 지킨다.

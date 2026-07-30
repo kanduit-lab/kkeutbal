@@ -178,7 +178,7 @@ export function useActionBarControls({
               return result
             }),
           (data) =>
-            // 이 베팅으로 판이 자동 종료됐으면(1인 생존·콜 완료 — docs/12-handoff.md 9번) 다른
+            // 이 베팅으로 판이 자동 종료됐으면(1인 생존·콜 완료) 다른
             // 참가자에게는 개별 bet.placed보다 round.ended가 더 중요한 신호다. 한 액션에 한
             // 이벤트만 보낼 수 있어(runAction 계약) 자동 종료 쪽을 우선한다 — bet.placed로 알릴
             // 내용(이 베팅 자체)은 곧이어 오는 state.snapshot과 round.ended 수신 시의 refetch로

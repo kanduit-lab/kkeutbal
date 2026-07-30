@@ -183,7 +183,7 @@ export async function undoLastBuyIn(
       // 레거시 폴백(`refBuyInId = lastBuyIn.id OR refBuyInId IS NULL`)은 제거했다 — 같은
       // 사용자·같은 금액의 refBuyInId-null 원장 행이 여러 개 있으면 정렬 보정이 있어도
       // 실제 되돌리려는 바이인과 무관한 행을 revertedOf로 연결할 수 있었다(레거시 백필
-      // 범위, docs/12-handoff.md 16번). 이제 refBuyInId가 정확히 일치하는 원장 행만 찾고,
+      // 범위 — `0009_perfect_molly_hayes.sql`). 이제 refBuyInId가 정확히 일치하는 원장 행만 찾고,
       // 없으면 조용히 넘어가거나 revertedOf를 null로 두지 않고 되돌리기 자체를 거부한다 —
       // 칩은 맞는데 감사 사슬만 어긋나는 상태가 되돌리기 실패보다 나쁘다.
       const [originalLedger] = await tx

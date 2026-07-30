@@ -143,7 +143,7 @@ export async function placeBet(
       }
 
       // 이 액션이 accept됐으니 판이 자동 종료 조건(1인 생존·콜 완료)에 들었는지 바로 확인한다 —
-      // 딜러가 "🏁 종료"를 누를 때까지 기다리지 않는다(docs/12-handoff.md 9번).
+      // 딜러가 "🏁 종료"를 누를 때까지 기다리지 않는다. 판정은 `round-completion.ts`.
       const roundEnded = autoAccept
         ? ((await autoSettleRoundIfComplete(tx, room, round, callerId)) ?? undefined)
         : undefined
@@ -237,7 +237,7 @@ export async function approveBet(
       }
 
       // 이 승인으로 판이 자동 종료 조건에 들었는지 확인한다 — placeBet과 동일한 이유
-      // (docs/12-handoff.md 9번). 승인 대기 큐의 다른 항목이 남아 있으면 내부적으로 미룬다.
+      // (`round-completion.ts`의 판정). 승인 대기 큐의 다른 항목이 남아 있으면 내부적으로 미룬다.
       const roundEnded =
         (await autoSettleRoundIfComplete(tx, room, { id: round.id, seq: round.seq }, callerId)) ??
         undefined

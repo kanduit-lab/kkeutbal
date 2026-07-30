@@ -67,7 +67,7 @@ export function AdvisorClient({
   }
 
   // `?game=` 링크로 들어왔을 때 그 탭으로 연다. 방 화면 등에서 붙이는 진입 링크는
-  // 다른 작업 범위이고, 여기서는 받는 쪽만 담당한다 — docs/12-handoff.md 10번 참고.
+  // 다른 작업 범위이고, 여기서는 받는 쪽만 담당한다.
   useEffect(() => {
     switchTab(initialTab)
     // initialTab이 바뀔 때만 반응한다. switchTab은 매 렌더 새로 만들어지는 클로저라

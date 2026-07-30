@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/',
     scope: '/',
     display: 'standalone',
-    // 세로가 정본이다(docs/12-handoff.md 6번). 이 필드는 "홈 화면에 추가"로 설치된
+    // 세로가 정본이다 — 가로 전용 배치는 만들지 않는다. 이 필드는 "홈 화면에 추가"로 설치된
     // PWA(standalone display)에서만 OS가 실제로 회전을 잠근다 — 일반 브라우저 탭으로 열면
     // (설치 전, 또는 데스크톱 브라우저) 이 선언은 아무 효과가 없고 기기를 돌리면 그대로
     // 가로가 된다. 그래서 GameTable(src/features/game/components/game-table.tsx)과

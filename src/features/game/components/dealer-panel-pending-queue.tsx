@@ -85,7 +85,7 @@ export function PendingApprovalQueue({
                             },
                           }
                         }
-                        // 이 승인으로 판이 자동 종료됐으면(docs/12-handoff.md 9번) round.ended가
+                        // 이 승인으로 판이 자동 종료됐으면 round.ended가
                         // bet.approved보다 중요한 신호다 — action-bar.tsx의 placeBet 쪽과 같은 이유.
                         return data.roundEnded
                           ? {

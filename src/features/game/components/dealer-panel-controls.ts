@@ -147,7 +147,7 @@ export function useDealerPanelControls({
 
   const cancelPickWinner = () => setMode('idle')
 
-  // 판 자동 종료(docs/12-handoff.md 9번) — 콜이 다 맞아 쇼다운 단계가 되면 딜러가 "🏁 종료"를
+  // 판 자동 종료(`round-completion.ts`) — 콜이 다 맞아 쇼다운 단계가 되면 딜러가 "🏁 종료"를
   // 누르지 않아도 되게 한다. 1인 생존 케이스는 서버(`autoSettleRoundIfComplete`)가 완전
   // 자동으로 끝내므로 여기서는 손댈 게 없다(그 시점엔 이미 `round`가 null이 된다). 2인 이상
   // 남아 콜만 맞춰진 쇼다운 단계는 카드 판정이 필요해서 서버가 승자를 못 정하므로:

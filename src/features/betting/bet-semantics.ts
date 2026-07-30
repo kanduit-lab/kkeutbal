@@ -78,7 +78,7 @@ export async function validateBetSemantics(
   const completion = computeRoundCompletion(participantIds, acceptedActions)
   if (completion.kind !== 'active') return 'errors.roundAwaitingWinner'
 
-  // 차례 강제 — docs/12-handoff.md 8번. UI 하이라이트와 같은 순수 함수(`turn-order.ts`)로 판정한다.
+  // 차례 강제. UI 하이라이트와 같은 순수 함수(`turn-order.ts`)로 판정한다.
   if (!isActorsTurn(participantIds, acceptedActions, userId)) return 'errors.notYourTurn'
 
   const state = roundBetState(acceptedActions)
