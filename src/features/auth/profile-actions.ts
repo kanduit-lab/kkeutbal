@@ -5,10 +5,24 @@ import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { consumeRateLimits } from '@/lib/rate-limit'
+import { hasAuthentik } from '@/lib/auth'
 import { displayNameSchema } from './schemas'
 import { currentUserId } from './session'
+import { isAccountUnlinked } from './account-linkage'
 
 export type AccountAuthType = 'internal' | 'sso' | 'guest'
+
+/**
+ * SSO 연결 상태. `users.authentik_sub`는 `NOT NULL`이라 내부 계정도 항상 값이 있다
+ * (`local:{username}` 센티널) — "연결 안 됨"은 SQL `NULL`이 아니라 이 센티널과 값이
+ * 같은지로 판정한다. `guest`/`native`는 애초에 이 토글 대상이 아니다(둘 다
+ * 아이디·비밀번호 로그인 수단이 없다).
+ */
+export type SsoLinkState =
+  | { kind: 'guest' }
+  | { kind: 'native' }
+  | { kind: 'linked'; canDisconnect: boolean }
+  | { kind: 'unlinked'; available: boolean }
 
 export interface AccountView {
   readonly displayName: string
@@ -17,6 +31,7 @@ export interface AccountView {
   readonly authType: AccountAuthType
   readonly isGuest: boolean
   readonly createdAt: string
+  readonly sso: SsoLinkState
 }
 
 function isGuestSub(authentikSub: string): boolean {
@@ -26,6 +41,18 @@ function isGuestSub(authentikSub: string): boolean {
 function accountAuthType(authentikSub: string, username: string | null): AccountAuthType {
   if (isGuestSub(authentikSub)) return 'guest'
   return username ? 'internal' : 'sso'
+}
+
+async function resolveSsoLinkState(row: {
+  authentikSub: string
+  username: string | null
+  passwordHash: string | null
+}): Promise<SsoLinkState> {
+  if (isGuestSub(row.authentikSub)) return { kind: 'guest' }
+  if (!row.username) return { kind: 'native' }
+  const linked = !isAccountUnlinked(row)
+  if (linked) return { kind: 'linked', canDisconnect: Boolean(row.passwordHash) }
+  return { kind: 'unlinked', available: await hasAuthentik() }
 }
 
 export async function getMyAccount(): Promise<ActionResult<AccountView>> {
@@ -39,6 +66,7 @@ export async function getMyAccount(): Promise<ActionResult<AccountView>> {
         username: schema.users.username,
         phone: schema.users.phone,
         authentikSub: schema.users.authentikSub,
+        passwordHash: schema.users.passwordHash,
         createdAt: schema.users.createdAt,
       })
       .from(schema.users)
@@ -53,6 +81,7 @@ export async function getMyAccount(): Promise<ActionResult<AccountView>> {
       authType: accountAuthType(row.authentikSub, row.username),
       isGuest: isGuestSub(row.authentikSub),
       createdAt: row.createdAt.toISOString(),
+      sso: await resolveSsoLinkState(row),
     })
   } catch (error) {
     console.error('getMyAccount failed:', error)
