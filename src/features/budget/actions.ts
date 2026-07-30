@@ -4,6 +4,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
+import { consumeRateLimits } from '@/lib/rate-limit'
 import { currentUserId } from '../auth/session'
 import { balanceInRoom, lockRoom, requireRole } from '../game/action-helpers'
 import { readFundingMode } from '../game/funding-mode'
@@ -27,6 +28,25 @@ export async function addBuyIn(
   if (!parsed.success) return fail('errors.invalidInput')
   const { roomId, amount } = parsed.data
   const userId = parsed.data.targetUserId ?? callerId
+
+  // 한도는 호출자(딜러 대리 입력 포함) 기준. 정상 사용 최악 케이스: 딜러가 여러 참가자의
+  // 칩을 한꺼번에 top-up하는 짧은 버스트(분당 10회)와, 긴 세션 동안 반복되는 재입금
+  // 누적(시간당 60회 — 10인방 전원이 각각 여러 번 추가 바이인을 해도 여유가 있다).
+  const rate = await consumeRateLimits([
+    {
+      scope: 'game.add_buy_in.user.minute',
+      identifier: callerId,
+      limit: 10,
+      windowMs: 60 * 1000,
+    },
+    {
+      scope: 'game.add_buy_in.user.hour',
+      identifier: callerId,
+      limit: 60,
+      windowMs: 60 * 60 * 1000,
+    },
+  ])
+  if (!rate.allowed) return fail('errors.addBuyInRateLimited')
 
   try {
     return await db.transaction(async (tx) => {
@@ -158,6 +178,12 @@ export async function undoLastBuyIn(
         return fail('errors.buyInAlreadySpent')
       }
 
+      // 레거시 폴백(`refBuyInId = lastBuyIn.id OR refBuyInId IS NULL`)은 제거했다 — 같은
+      // 사용자·같은 금액의 refBuyInId-null 원장 행이 여러 개 있으면 정렬 보정이 있어도
+      // 실제 되돌리려는 바이인과 무관한 행을 revertedOf로 연결할 수 있었다(레거시 백필
+      // 범위, docs/12-handoff.md 16번). 이제 refBuyInId가 정확히 일치하는 원장 행만 찾고,
+      // 없으면 조용히 넘어가거나 revertedOf를 null로 두지 않고 되돌리기 자체를 거부한다 —
+      // 칩은 맞는데 감사 사슬만 어긋나는 상태가 되돌리기 실패보다 나쁘다.
       const [originalLedger] = await tx
         .select({ id: chipLedger.id })
         .from(chipLedger)
@@ -167,11 +193,11 @@ export async function undoLastBuyIn(
             eq(chipLedger.userId, targetUserId),
             eq(chipLedger.reason, 'buy_in'),
             eq(chipLedger.delta, lastBuyIn.amount),
-            sql`(${chipLedger.refBuyInId} = ${lastBuyIn.id} or ${chipLedger.refBuyInId} is null)`,
+            eq(chipLedger.refBuyInId, lastBuyIn.id),
           ),
         )
-        .orderBy(sql`${chipLedger.refBuyInId} is not null desc`, desc(chipLedger.createdAt))
         .limit(1)
+      if (!originalLedger) return fail('errors.undoBuyInLedgerMismatch')
 
       const [reversal] = await tx
         .insert(buyIns)
@@ -190,7 +216,7 @@ export async function undoLastBuyIn(
         delta: -lastBuyIn.amount,
         reason: 'correction',
         refBuyInId: reversal.id,
-        revertedOf: originalLedger?.id ?? null,
+        revertedOf: originalLedger.id,
       })
 
       if (readFundingMode(room.rulePreset) === 'account_credit') {

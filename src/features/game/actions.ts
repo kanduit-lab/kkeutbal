@@ -1,6 +1,6 @@
 'use server'
 
-import { and, eq, isNull, ne, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
@@ -16,16 +16,18 @@ import {
   readMaxMembers,
   requireRole,
 } from './action-helpers'
+import { applyStartingChipsAdjustment, recordInitialBuyIn } from './buy-in-ledger'
+import { settleRoomCredits } from './credit-rpc'
+import { checkCreateRoomRateLimit, checkJoinRoomRateLimit } from './room-rate-limits'
 import { fundingModeSchema, readFundingMode } from './funding-mode'
 import {
   fairPlaySettingsSchema,
   parseFairPlaySettings,
   readFairPlaySettings,
 } from './fair-play-settings'
-import { addSafeChipIntegers, toSafeChipInteger } from './chip-integers'
 import type { RoomSnapshot } from './types'
 
-const { rooms, roomMembers, rounds, chipLedger, buyIns } = schema
+const { rooms, roomMembers, rounds } = schema
 
 const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(30),
@@ -57,6 +59,10 @@ export async function createRoom(
   } catch {
     return fail('errors.invalidInput')
   }
+
+  const rate = await checkCreateRoomRateLimit(userId)
+  if (!rate.allowed) return fail('errors.createRoomRateLimited')
+
   const rulePreset = {
     fundingMode,
     ...(gameType === 'gostop' ? { pointValue: pointValue ?? 10 } : baseBet ? { baseBet } : {}),
@@ -82,29 +88,12 @@ export async function createRoom(
           role: 'host',
           seatNo: 0,
         })
-        const [initialBuyIn] = await tx
-          .insert(buyIns)
-          .values({ roomId: room.id, userId, amount: startingChips, createdBy: userId })
-          .returning({ id: buyIns.id })
-        if (!initialBuyIn) throw new Error('initial buy-in insert failed')
-        await tx.insert(chipLedger).values({
+        await recordInitialBuyIn(tx, {
           roomId: room.id,
           userId,
-          delta: startingChips,
-          reason: 'buy_in',
-          refBuyInId: initialBuyIn.id,
+          amount: startingChips,
+          fundingMode,
         })
-        if (fundingMode === 'account_credit') {
-          await tx.execute(sql`
-            select public.lock_room_credit_buy_in(
-              ${room.id}::uuid,
-              ${userId}::uuid,
-              ${initialBuyIn.id}::uuid,
-              ${startingChips}::bigint,
-              ${userId}::uuid
-            )
-          `)
-        }
         return room.code
       })
       return ok({ code: createdCode })
@@ -123,6 +112,9 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
 
   const code = normalizeRoomCode(codeRaw)
   if (!/^[A-Z2-9]{6}$/.test(code)) return fail('errors.codeLength')
+
+  const rate = await checkJoinRoomRateLimit(userId)
+  if (!rate.allowed) return fail('errors.joinRoomRateLimited')
 
   try {
     return await db.transaction(async (tx) => {
@@ -176,29 +168,12 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
       }
 
       if (!existing && !joinAsObserver) {
-        const [initialBuyIn] = await tx
-          .insert(buyIns)
-          .values({ roomId: room.id, userId, amount: room.startingChips, createdBy: userId })
-          .returning({ id: buyIns.id })
-        if (!initialBuyIn) throw new Error('initial buy-in insert failed')
-        await tx.insert(chipLedger).values({
+        await recordInitialBuyIn(tx, {
           roomId: room.id,
           userId,
-          delta: room.startingChips,
-          reason: 'buy_in',
-          refBuyInId: initialBuyIn.id,
+          amount: room.startingChips,
+          fundingMode: readFundingMode(room.rulePreset),
         })
-        if (readFundingMode(room.rulePreset) === 'account_credit') {
-          await tx.execute(sql`
-            select public.lock_room_credit_buy_in(
-              ${room.id}::uuid,
-              ${userId}::uuid,
-              ${initialBuyIn.id}::uuid,
-              ${room.startingChips}::bigint,
-              ${userId}::uuid
-            )
-          `)
-        }
       }
 
       return ok({ code: room.code })
@@ -340,62 +315,13 @@ export async function updateRoomSettings(
         .where(eq(rooms.id, roomId))
 
       if (startingChips !== undefined) {
-        const delta = startingChips - room.startingChips
-        const targets = await tx
-          .select({
-            userId: roomMembers.userId,
-            balance: sql<string>`(
-              select coalesce(sum(${chipLedger.delta}), 0)::text from ${chipLedger}
-              where ${chipLedger.roomId} = ${roomId}
-                and ${chipLedger.userId} = ${roomMembers.userId}
-            )`,
-          })
-          .from(roomMembers)
-          .where(and(eq(roomMembers.roomId, roomId), ne(roomMembers.role, 'observer')))
-
-        if (
-          delta < 0 &&
-          targets.some(
-            (member) =>
-              addSafeChipIntegers(
-                toSafeChipInteger(member.balance, 'Starting-chip adjustment balance'),
-                delta,
-                'Starting-chip adjusted balance',
-              ) < 0,
-          )
-        ) {
-          return fail('errors.startingChipsBelowBalance')
-        }
-
-        if (targets.length > 0) {
-          const adjustments = await tx
-            .insert(buyIns)
-            .values(
-              targets.map((member) => ({
-                roomId,
-                userId: member.userId,
-                amount: delta,
-                createdBy: userId,
-              })),
-            )
-            .returning({ id: buyIns.id, userId: buyIns.userId })
-          const adjustmentByUser = new Map(
-            adjustments.map((adjustment) => [adjustment.userId, adjustment.id]),
-          )
-          await tx.insert(chipLedger).values(
-            targets.map((member) => {
-              const refBuyInId = adjustmentByUser.get(member.userId)
-              if (!refBuyInId) throw new Error('buy-in adjustment insert failed')
-              return {
-                roomId,
-                userId: member.userId,
-                delta,
-                reason: 'buy_in' as const,
-                refBuyInId,
-              }
-            }),
-          )
-        }
+        const adjustment = await applyStartingChipsAdjustment(tx, {
+          roomId,
+          createdBy: userId,
+          startingChips,
+          previousStartingChips: room.startingChips,
+        })
+        if (!adjustment.ok) return fail(adjustment.error)
       }
 
       return ok({ roomId })
@@ -435,9 +361,7 @@ export async function closeRoom(roomId: string): Promise<ActionResult<{ code: st
         .limit(1)
       if (!roomBeforeClose) return fail('errors.roomNotFound')
       if (readFundingMode(roomBeforeClose.rulePreset) === 'account_credit') {
-        await tx.execute(sql`
-          select public.settle_room_credits(${roomId}::uuid, ${userId}::uuid)
-        `)
+        await settleRoomCredits(tx, roomId, userId)
       }
 
       const [room] = await tx

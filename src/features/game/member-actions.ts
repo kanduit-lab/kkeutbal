@@ -5,6 +5,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
+import { consumeRateLimits } from '@/lib/rate-limit'
 import { currentUserId } from '../auth/session'
 import { lockRoom, readMaxMembers, requireRole, type Tx } from './action-helpers'
 import { readFundingMode } from './funding-mode'
@@ -212,6 +213,26 @@ export async function addLocalMember(
   const parsed = addLocalMemberSchema.safeParse(input)
   if (!parsed.success) return fail('errors.invalidInput')
   const { roomId, name } = parsed.data
+
+  // 호출마다 `users` 행을 만드는 가장 값싼 남용 경로라 가장 좁게 잡는다. 정상 사용
+  // 최악 케이스: 방 정원 상한(10, action-helpers.ts readMaxMembers)만큼 로컬 멤버를
+  // 한 번에 채우면서 중복 이름 오타로 몇 번 더 재시도하는 것(분당), 모임 저녁 동안 방을
+  // 몇 개(게임 종류 전환 등) 새로 꾸리며 그때마다 다시 채우는 것(시간당).
+  const rate = await consumeRateLimits([
+    {
+      scope: 'game.add_local_member.user.minute',
+      identifier: userId,
+      limit: 12,
+      windowMs: 60 * 1000,
+    },
+    {
+      scope: 'game.add_local_member.user.hour',
+      identifier: userId,
+      limit: 30,
+      windowMs: 60 * 60 * 1000,
+    },
+  ])
+  if (!rate.allowed) return fail('errors.addLocalMemberRateLimited')
 
   try {
     return await db.transaction(async (tx) => {
