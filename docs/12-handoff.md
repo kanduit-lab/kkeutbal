@@ -271,6 +271,13 @@ lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남�
 
 ## 16. `undoLastBuyIn`의 레거시 원장 매칭 휴리스틱
 
+> **해결 (2026-07-30)** — 사용자가 "레거시는 잘못된 것이니 지워도 된다"로 확정해 폴백을
+> 제거했다. 이제 `refBuyInId`가 정확히 일치하는 원장 행만 찾고, **없으면
+> `errors.undoBuyInLedgerMismatch`로 거부하고 트랜잭션을 롤백한다** — 칩만 움직이고 원장이
+> 어긋나는 상태를 만들지 않는다. 현재 코드가 만드는 모든 `buy_in` 원장 행은 `refBuyInId`를
+> 채우는 것을 확인했다(`budget/actions.ts`의 `addBuyIn`, `game/actions.ts`의 방 생성·입장
+> 초기 바이인, 정산 조정). 따라서 이 거부가 실제로 발생하는 건 백필 이전 레거시 행뿐이다.
+
 `src/features/budget/actions.ts`가 되돌릴 원장 행을 찾을 때 `refBuyInId = lastBuyIn.id OR
 refBuyInId IS NULL`로 매칭한다. `refBuyInId`가 없는 레거시 행이 같은 사용자에게 같은 금액으로
 여럿 있으면, 정렬(`refBuyInId is not null desc, createdAt desc`)이 최근 것을 고르더라도 실제
@@ -287,6 +294,20 @@ refBuyInId IS NULL`로 매칭한다. `refBuyInId`가 없는 레거시 행이 같
 ---
 
 ## 15. `credit-room.ts`·`wallet/ledger.ts`가 배선되지 않은 검증 로직
+
+> **해결 (2026-07-30)** — SQL RPC 중심으로 확정하고 네 파일(모듈 2 + 테스트 2, 테스트 9개)을
+> 삭제했다. 지우기 전에 TS가 검사하던 불변식을 SQL이 실제로 강제하는지 함수 본문
+> (`raise exception` 경로)에서 항목별로 대조했다: 팟 보존(`0009:141-156` + 정산 전용
+> `0013:101-104`), 계정당 엔트리 1개(`0009:141-156`), 음수 잔액 금지(`0009:232-234` +
+> `credit_accounts_user_balance_nonnegative_ck`), 멱등성(`idempotency_key` 유니크 + RPC별
+> 조회-후-반환), 원장 append-only(`0009:27-64`). **다섯 항목 전부 SQL이 강제한다.**
+> 음수 잔액과 append-only는 애초에 TS 쪽에 대응 코드가 없었다(순수 함수라 현재 잔액을 모름).
+>
+> TS가 추가로 검사하던 "중복 lock ID", "계정이 두 사용자에 걸침"은 SQL에 대응 검사가 없지만
+> 구멍이 아니다 — SQL은 클라이언트가 lock 목록을 넘기는 구조가 아니라 `room_id`로 활성 lock을
+> `FOR UPDATE`로 잠그고 `user_id`로 묶으므로, `credit_accounts_user_uq`와 `room_id` 필터만으로
+> 그 상태가 발생 자체를 못 한다. TS가 그걸 검사한 건 "호출자가 임의 목록을 넘기는" 다른
+> 아키텍처를 전제했기 때문이다.
 
 `src/features/game/credit-room.ts`의 `createRoomCreditLockCommand`/`createRoomCreditSettlementCommand`와
 `src/features/wallet/ledger.ts`의 `adminAdjustmentEntries`/`validateCreditEntries`는 팟 보존·계정당
@@ -308,6 +329,16 @@ refBuyInId IS NULL`로 매칭한다. `refBuyInId`가 없는 레거시 행이 같
 ---
 
 ## 14. 게임플레이 Server Action에 rate limit 부재
+
+> **해결 (2026-07-30)** — 생성 경로에만 붙였다. `createRoom`(5/분, 20/시간),
+> `joinRoom`(10/분, 60/시간), `addLocalMember`(12/분, 30/시간 — 호출마다 `users` 행을 만드는
+> 가장 값싼 남용 경로라 가장 좁게), `addBuyIn`(10/분, 60/시간). 한도는 각각 "정상 사용의 최악
+> 케이스"(설정 잘못 골라 방 재생성, 코드 오타 재시도, 정원 10명을 채우며 중복 이름 오타,
+> 딜러가 여러 참가자 칩을 한꺼번에 top-up)를 잡고 그보다 넉넉하게 뒀다. 검사는 트랜잭션 밖
+> 진입부에서, 식별자는 `currentUserId()`.
+>
+> **`placeBet`에는 붙이지 않았다** — 방 단위 advisory lock으로 이미 직렬화돼 있고, 한도를 잘못
+> 잡으면 빠른 판에서 정상 베팅이 막힌다. 잘못된 rate limit은 남용보다 게임을 더 크게 망친다.
 
 `consumeRateLimits`를 쓰는 곳은 `features/auth/actions.ts`, `profile-actions.ts`,
 `jokbo-advisor/vision/actions.ts`, `lib/auth.ts`뿐이다. `createRoom`·`joinRoom`·`addBuyIn`·
@@ -335,11 +366,36 @@ refBuyInId IS NULL`로 매칭한다. `refBuyInId`가 없는 레거시 행이 같
 > 연결 사실을 `console.warn`으로 남긴다. 정본 문서
 > [`docs/07-auth-and-security.md`](07-auth-and-security.md)도 함께 갱신했다.
 
-### 남은 일
+### 후속 (2026-07-30, 같은 날)
 
-아이디 기반 자동 연결이 없어졌으므로, 내부 계정으로 가입한 사람이 SSO로 들어오면 전화번호가
-검증돼 있지 않은 한 **새 계정**이 생긴다. 제대로 하려면 "로그인한 상태에서 SSO 계정 연결하기"
-흐름이 필요하다 — 세션 주체가 확실한 상태에서 연결하므로 클레임을 신뢰할 필요가 없다.
+**명시적 연결 흐름을 만들었다.** 로그인한 사용자가 `/account`에서 본인 Authentik 계정을 연결한다
+(`sso-link-actions.ts`, `sso-link-cookies.ts`). 세션에서 얻은 `userId`를 HMAC 서명 쿠키
+(HttpOnly, SameSite=Lax, TTL 5분, 1회성)에 담아 OAuth 왕복을 건너 전달하고, 콜백에서 그 쿠키가
+있으면 "연결 모드"로 간다 — 없으면 기존 로그인 경로 그대로다. 거부 조건 4가지: sub가 이미 다른
+계정에 연결됨, 대상 계정에 이미 다른 sub가 연결됨, 그리고 두 경쟁 상태(UNIQUE 위반, 조건부
+UPDATE 영향 행 0). 연결 해제는 username+password가 둘 다 있을 때만 허용한다(SSO 전용 계정은
+유일한 로그인 수단을 잃으므로 버튼 자체를 숨긴다).
+
+**그 과정에서 자동 병합이 죽은 코드였다는 걸 찾았다.** `users.authentik_sub`는 `NOT NULL`이고
+내부 계정은 `local:{username}` 센티널을 갖는다 — 그래서 보안 수정에 넣은
+`isNull(authentikSub)` 조건은 **항상 거짓**이었고 전화번호 자동 연결이 한 번도 매칭되지 않았다.
+Authentik 연동을 나중에 할 예정이므로 기능을 지우지 않고 센티널 기준으로 고쳤고, 판정 정의는
+`src/features/auth/account-linkage.ts` 한 곳에만 두어 자동 연결과 명시적 연결이 같은 기준을
+쓰게 했다(두 경로가 갈라지면 한쪽이 허용하는 계정을 다른 쪽이 거부한다).
+
+### 남은 위험 (알면서 수용)
+
+공격자가 피해자의 이미 로그인된 브라우저에 일시 접근해 "연결" 클릭까지만 하고, 나중에 자신의
+Authentik 계정으로 흐름을 완주하면 피해자 계정에 공격자 sub가 붙을 수 있다(소셜 계정 연결 CSRF
+계열). TTL 5분으로 창을 좁혔지만 "콜백 시점에도 같은 세션인가"를 재검증하지는 않았다 — 그러려면
+next-auth가 공식으로 노출하지 않는 내부 토큰 병합에 의존해야 해서 추측 구현을 하지 않았다.
+원래 취약점(아이디만 알면 원격 탈취)보다 훨씬 좁은 위협 모델(사전 세션 접근 필요)이다.
+
+### 미확정
+
+Authentik이 `phone_number_verified`를 실제로 발급하는지. 발급하지 않으면 자동 연결은 사실상
+꺼진 상태이고 위 연결 흐름이 유일한 경로가 된다. **실제 OAuth 왕복은 검증하지 못했다** —
+Authentik 인스턴스가 아직 없다(연동은 나중 예정).
 
 ### 미확정
 
