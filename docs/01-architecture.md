@@ -6,7 +6,7 @@
 | Audience        | engineering / reviewers / operators                        |
 | Status          | active                                                     |
 | Source of truth | 구현은 코드·스키마, 이 문서는 스택·배포 토폴로지·모듈 경계 |
-| Last reviewed   | 2026-07-28                                                 |
+| Last reviewed   | 2026-07-30                                                 |
 
 ## Context
 
@@ -129,18 +129,19 @@ Realtime 전용이다). `src/lib/realtime/client.ts` + `events.ts`가 프로토�
   한다(`sendRoomEvent`). 서버가 대신 브로드캐스트하지 않는다.
 - 수신 측은 `onRoomEvent`로 이벤트를 받아도 그 payload를 상태에 바로 반영하지 않는다. 이벤트는
   "지금 다시 읽어라"는 힌트 + 토스트 표시용일 뿐이고, 실제 상태 갱신은 항상 `refreshRoom()`
-  Server Action을 다시 호출해 얻은 스냅샷으로 한다(`room-client.tsx`의 `debouncedRefetch`).
+  Server Action을 다시 호출해 얻은 스냅샷으로 한다(`use-room-sync.ts`의 `debouncedRefetch`).
   그래서 이벤트가 유실되거나 위조돼도(공개 채널이라 이론상 가능) 최종 상태는 스냅샷이 정정한다.
 
-**refetch 트리거 4종**(`room-client.tsx`):
+**refetch 트리거**(`use-room-sync.ts`). 이벤트별 처리 정책은
+`src/lib/realtime/event-sync-policy.ts`가 소유하고, 상세는 `03-realtime-protocol.md`가 정본이다:
 
 | 트리거         | 조건                                                        |
 | -------------- | ----------------------------------------------------------- |
-| 이벤트 수신    | 모든 broadcast 이벤트 → 250ms 디바운스 후 refetch           |
-| Presence sync  | 참가자 입장/이탈 감지 시 즉시 디바운스 refetch              |
+| 이벤트 수신    | 정책에 따라 즉시(`round.*`) / 넘김 / 합침 — 250ms 디바운스  |
+| Presence sync  | 모르는 참가자 id가 나타날 때만 refetch                      |
 | 구독 성공 직후 | `channel.subscribe` 콜백에서 즉시 refetch(재연결 공백 복원) |
 | 폴링           | 탭이 visible일 때 20초 간격 `setInterval`                   |
-| 가시성 복귀    | `visibilitychange` 이벤트에서 탭이 다시 보이면 즉시 refetch |
+| 가시성·연결 복귀 | `visibilitychange`/`online`/`pageshow`에서 즉시 refetch    |
 
 payload 검증은 `events.ts`의 `parseEvent()` — envelope(`v`/`id`/`roomId`/`actorId`/`at`) +
 이벤트별 zod 스키마를 한 번에 검증하고, 실패하면 조용히 버린다(상태 미반영, 스냅샷 경로로 복구).
@@ -178,16 +179,27 @@ src/features/<domain>/       도메인별 폴더가 경계
 ```
 
 현재 도메인: `hwatu`(카드 모델, 최하위 공용), `seotda`(끗/족보 엔진), `gostop`(점수 엔진),
-`game`(방·세션·라운드, room-code 발급, 컴포넌트 다수), `betting`(베팅 액션), `budget`(예산),
-`ranking`(랭킹 조회), `jokbo-advisor`(vision + 수동 피커), `auth`(세션 헬퍼).
+`poker`(52장 카드 모델·족보 엔진), `game`(방·세션·라운드, room-code 발급, 컴포넌트 다수),
+`betting`(베팅 액션·규칙), `fairness`(commit-reveal 시드·영수증·덱 재계산), `budget`(예산),
+`wallet`(계정 귀속 가상 크레딧), `ranking`(랭킹 조회), `promotions`(공지 배너·팝업),
+`jokbo-advisor`(vision + 수동 피커), `auth`(세션·역할·관리자).
+
+파일이 400줄을 넘으면 책임 단위로 쪼개고 `actions.ts`/`queries.ts`를 배럴로 남긴다
+(`game/queries.ts`, `ranking/queries.ts`, `fairness/receipt.ts`가 그런 배럴이다). 그래서 문서에
+적힌 `<domain>/queries.ts` 같은 경로는 진입점이고, 구현은 그 옆 모듈에 있을 수 있다.
 
 규칙:
 
 - `features/hwatu`는 다른 feature를 import하지 않는다.
-- `features/seotda`, `features/gostop`은 `hwatu`만 의존한다. 서로 의존 금지.
+- `features/seotda`, `features/gostop`, `features/poker`는 카드 모델만 의존한다. 서로 의존 금지.
 - 엔진(순수 함수)은 `lib/`, `app/`, DB, fetch를 import하지 않는다.
 - DB 접근은 `lib/db`와 각 도메인 `actions.ts`/`queries.ts`에서만 한다. 컴포넌트에서 직접
   쿼리 금지.
+- **`'use server'` 파일은 async 함수만 export한다.** 그 파일의 모든 export가 클라이언트에서
+  호출 가능한 엔드포인트가 되기 때문이다. zod 스키마 같은 값을 하나 export하면 그 번들의 액션
+  **전부**가 죽고(로그인이 500으로 떨어진 실제 사고), `export { x } from './y'` 재export는 내부
+  헬퍼를 무인증 엔드포인트로 공개한다. 공유할 값은 `'use server'`가 아닌 파일에 둔다
+  (`features/auth/schemas.ts`가 그 이유로 생겼다). 타입·lint·단위 테스트는 이걸 못 잡는다.
 - `lib/auth-config.ts`(edge-safe)와 `lib/auth.ts`(DB 포함)는 분리 유지 — 미들웨어는 전자만
   import한다.
 

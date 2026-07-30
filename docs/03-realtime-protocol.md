@@ -6,7 +6,7 @@
 | Audience | engineering / reviewers |
 | Status | active |
 | Source of truth | 구현 프로토콜은 `src/lib/realtime/events.ts`·`client.ts`, 이 문서는 채널·이벤트·동기화 규약 |
-| Last reviewed | 2026-07-24 |
+| Last reviewed | 2026-07-30 |
 
 ## Context
 
@@ -62,19 +62,22 @@ type Envelope = {
 
 `eventPayloads`에 정의된 이벤트는 14개다.
 
-| 이벤트 | 발신 위치 | `room-client.tsx` 수신 처리 |
-|--------|-----------|------------------------------|
-| `round.started` | `dealer-panel.tsx` | 토스트("N번째 판 시작") + refetch |
-| `round.ended` | `dealer-panel.tsx` | 토스트(승자·팟) + refetch |
-| `round.voided` | 딜러의 판 무효 처리 경로 | refetch (payload의 `reason`은 토스트 힌트) |
-| `bet.placed` | `action-bar.tsx`, `dealer-panel.tsx` | refetch만 |
-| `bet.approved` | `dealer-panel.tsx` | refetch만 |
-| `bet.rejected` | `dealer-panel.tsx` | 자기 액션이면 토스트(거절 사유) + refetch |
-| `bet.reverted` | `dealer-panel.tsx` | refetch만 |
-| `member.role_changed` | `dealer-panel.tsx` | refetch만 |
-| `member.left` | 방 나가기 성공 후 — 채널 해제 직전이므로 `sendOneShotRoomEvent` 사용 | refetch만 |
-| `room.settings_changed` | 방 설정 저장 후 (`rooms/[code]/settings`) — 구독 채널 없는 화면이라 `sendOneShotRoomEvent` 사용 | refetch만 (payload 빈 객체) |
-| `state.snapshot` | `room-client.tsx` (모든 성공적 mutation 뒤) | refetch만 |
+발신 위치는 딜러 컨트롤·액션바·좌석 시트가 각자 훅으로 쪼개져 있다. 수신 처리는
+`use-room-sync.ts`(refetch)와 `use-room-event-feedback.ts`(토스트·소리)가 나눠 갖는다.
+
+| 이벤트 | 발신 위치 | 수신 처리 |
+|--------|-----------|-----------|
+| `round.started` | `dealer-panel-controls.ts`, `lobby-panel.tsx` | 토스트("N번째 판 시작") + refetch |
+| `round.ended` | `dealer-panel-controls.ts`, `dealer-panel-pending-queue.tsx`, `use-action-bar-controls.ts` — 자동 종료가 승인·베팅 경로에서도 판을 끝내므로 발신 지점이 셋이다 | 토스트(승자·팟) + refetch |
+| `round.voided` | `dealer-panel-controls.ts` | refetch (payload의 `reason`은 토스트 힌트) |
+| `bet.placed` | `use-action-bar-controls.ts`, `member-sheet-proxy-bet.tsx`(대리 베팅) | refetch만 |
+| `bet.approved` | `dealer-panel-pending-queue.tsx` | refetch만 |
+| `bet.rejected` | `dealer-panel-pending-queue.tsx` | 자기 액션이면 토스트(거절 사유) + refetch |
+| `bet.reverted` | `dealer-panel-revert-list.tsx` | refetch만 |
+| `member.role_changed` | `member-sheet-role.tsx`, `member-sheet.tsx` | refetch만 |
+| `member.left` | `member-sheet.tsx` — 채널 해제 직전이므로 `sendOneShotRoomEvent` 사용 | refetch만 |
+| `room.settings_changed` | `room-settings-client.tsx` — 구독 채널 없는 화면이라 `sendOneShotRoomEvent` 사용 | refetch만 (payload 빈 객체) |
+| `state.snapshot` | `use-room-actions.ts`의 `afterMutation` (모든 성공적 mutation 뒤) | 힌트 반영 + refetch |
 | `member.joined` | 스키마만 존재, 어디서도 send 안 함 | — |
 | `state.request` | 스키마만 존재, 어디서도 send 안 함 | — |
 | `chips.updated` | 스키마만 존재, 어디서도 send 안 함 | — |

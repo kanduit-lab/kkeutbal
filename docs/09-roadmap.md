@@ -6,7 +6,7 @@
 | Audience | engineering |
 | Status | active |
 | Source of truth | 구현 현황은 코드·스키마, 이 문서는 단계 구분·MVP 경계 |
-| Last reviewed | 2026-07-29 |
+| Last reviewed | 2026-07-30 |
 
 실행 단위 잔여 작업은 [`TODO.md`](../TODO.md)가 소유한다. 이 문서는 **순서와 경계**만 정한다.
 
@@ -21,18 +21,12 @@
 우선순위 원칙은 위 전제에서 직접 나온다: **수동 대체 경로가 없는 것부터 검증한다.**
 엔진 판정이 틀리면 사람이 그 자리에서 육안으로 교정할 수 있지만(룰은 사람이 안다),
 배포·인증·실시간 라이브 경로가 죽으면 종이 기록으로 돌아가는 것 외에 대체가 없다.
-2026-07-23 이전 판은 이 원칙과 반대로 엔진 검증(대체 경로 있음)을 P0에, 라이브 경로
-증명(대체 경로 없음)을 P1 이하에 놓았고, P0 실물 리허설이 P1 Authentik 없이는 실행
-불가능한 자기모순도 있었다(프로덕션에서 쓸 수 없는 이름 기반 로그인에 의존). 이 판에서 순서를 뒤집었다.
 
 ## 현재 상태 요약
 
-핵심 기능과 순수 엔진 검증은 구현돼 있다. 남은 것은 **판 진행 규칙의 서버 강제, 모바일 방
-화면, 실배포 라이브 경로 검증, 흐름 연결, 회귀 가드**다.
+코드 레벨 구현은 핵심 경로 전체에서 끝났다. 남은 것은 **실물·실배포에서만 확인되는 것들**이다.
 
-아래 표의 "구현 완료"는 서버 로직과 상태 전이 기준이고 UI 층은 포함하지 않는다.
-2026-07-29 수동 감사가 방·실시간과 정산·랭킹 화면에서 구현 결함을 찾아냈다(상세는
-"남은 작업 우선순위").
+아래 표의 "구현 완료"는 서버 로직과 상태 전이 기준이다. 이 표가 코드와 어긋나면 **코드를 따른다.**
 
 | 영역 | 상태 | 근거 |
 |------|------|------|
@@ -40,22 +34,20 @@
 | 섯다 엔진 | 구현·190조합 전수 테스트 완료 | `src/features/seotda/engine.ts`, `engine.test.ts` |
 | 고스톱 엔진 | 구현·경계/배수 테스트 완료 | `src/features/gostop/scoring.ts`, `scoring.test.ts` |
 | 포커 엔진 | 구현·10개 카테고리/입력 방어 테스트 완료 | `src/features/poker/engine.ts`, `engine.test.ts` |
-| 인증 | Auth.js v5 내부 계정·게스트 토큰 동작, SSO는 관리자 화면에서 연결 가능 | `src/lib/auth.ts`, `registration_codes`/`auth_settings` |
-| DB · RLS | 무결성 마이그레이션·RLS live 적용 완료 | `drizzle/migrations/0006`~`0011`, `supabase/migrations/0007`~`0008` |
-| 방 · 실시간 | 서버·상태 전이 구현 완료. 2026-07-29 감사에서 나온 좌석 배치·고스톱 비딜러 화면 결함은 수정 완료 | `src/features/game/`(actions·queries·room-client), `src/lib/realtime/` |
-| 베팅 · 칩 원장 | 금액 검증·잔액 원장 구현 완료 | `src/features/betting/actions.ts`, `src/features/budget/actions.ts` |
-| 베팅 턴 강제 | **없음.** 서버가 차례를 검사하지 않아 순서를 무시한 베팅이 accepted 된다. 턴 계산은 클라이언트 좌석 하이라이트용 `nextActorId` 하나뿐 | `src/features/betting/actions.ts`(`validateBetSemantics`), `src/features/game/components/game-table.tsx`, `docs/12-handoff.md` 8번 |
-| 판 자동 종료 | **없음.** 전원 콜·전원 다이를 감지하지 않아 딜러가 매번 수동 종료 | `src/features/game/round-actions.ts`(`endRound`), `docs/12-handoff.md` 9번 |
-| 레이즈 배수·상한 | **없음.** 따당·하프·풀은 입력 편의 프리셋일 뿐 서버가 강제하지 않는다 | `src/features/betting/round-bet-state.ts`, `docs/12-handoff.md` 5번 |
-| 족보 Advisor 수동 피커 | 구현 완료 | `src/features/jokbo-advisor/components/` |
+| 인증 | Auth.js v5 내부 계정·게스트 토큰 동작. SSO는 관리자 화면에서 연결 설정, `/account`에서 계정별 연결 | `src/lib/auth.ts`와 `auth-providers`·`provider-account-resolution`·`sso-link-resolution` |
+| DB · RLS | 무결성 마이그레이션·RLS live 적용 완료 | `drizzle/migrations/`, `supabase/migrations/` |
+| 방 · 실시간 | 서버·상태 전이 구현 완료. Broadcast 재구독·백오프·dedup·이벤트별 refetch 정책까지 | `src/features/game/`, `src/lib/realtime/` |
+| 베팅 · 칩 원장 | 금액 검증·잔액 원장 구현 완료 | `src/features/betting/`, `src/features/budget/` |
+| 베팅 턴 강제 | 구현 완료. 서버가 차례를 검사하고 위반은 `errors.notYourTurn`. 좌석 강조·시트가 같은 순수 함수를 쓴다 | `src/features/game/turn-order.ts`, `src/features/betting/bet-semantics.ts` |
+| 판 자동 종료 | 구현 완료. 1인 생존·콜 완료를 감지해 베팅 트랜잭션 안에서 종료·정산까지 간다 | `src/features/betting/round-completion.ts`, `src/features/game/round-finalize.ts` |
+| 레이즈 배수·상한 | 구현 완료. `free`/`ttadang`/`pot_limit` 3종을 방 만들기에서 고르고 서버가 강제한다 | `src/features/betting/raise-rule.ts` |
+| 검증 가능한 섯다 딜 | 구현 완료. 시드 commit-reveal → 봉인 → 개인 손패 → 종료 후 덱 재계산 감사까지 e2e가 매 실행 검증한다 | `src/features/fairness/`, `e2e/authenticated-room.spec.ts` |
+| 족보 Advisor | 수동 피커·포커 설명·부분 선택 미리보기 구현 완료 | `src/features/jokbo-advisor/components/` |
 | Vision 인식 | 구현 완료 | `src/features/jokbo-advisor/vision/actions.ts` |
-| 정산 · 랭킹 | 집계·이체 계산 구현 완료. 순손익 단위 라벨 누락은 2026-07-29 수정 완료 | `src/features/ranking/queries.ts`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
-| CI/CD | production 배포 활성, staging/preview 대기 | `.github/workflows/deploy.yml`, `.deploy.yml`(`preview.enabled: false`, `staging.enabled: false`) |
-| E2E | 공개 화면 8개는 DB 없이 통과. 인증 후 방 수명주기 3개는 spec만 있고 `E2E_ENABLE_ROOM_LIFECYCLE=true`와 전용 계정 2개가 없으면 skip | `playwright.config.ts`, `e2e/public-surfaces.spec.ts`, `e2e/authenticated-room.spec.ts` |
-| UI 자동 검증 | 없음. 단위 테스트는 `environment: 'node'`라 컴포넌트를 렌더링하지 않고, Playwright 프로젝트는 Pixel 7 뷰포트 하나뿐이다 | `vitest.config.ts`, `playwright.config.ts` |
-| 미사용 스키마 | 제거 확정(2026-07-23) — `groups`/`group_members`/`hand_records` 스키마에서 삭제 | `drizzle/schema.ts`, 근거는 `docs/design-decisions/` 001 |
-
-이 표가 코드와 어긋나면 **코드를 따른다.**
+| 정산 · 랭킹 | 집계·이체 계산 구현 완료 | `src/features/ranking/`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
+| 고정 뷰포트 UI | 목록·조회·방·모니터 화면이 문서 스크롤을 만들지 않고, e2e가 그 불변식을 지킨다 | `src/components/ui/page-shell.tsx`, `e2e/fixed-viewport.spec.ts` |
+| 자동 검증 | 단위 342개(순수 엔진 + jsdom 컴포넌트), e2e 88개(모바일·데스크톱 두 프로젝트, 방 수명주기 포함) | `vitest.config.ts`, `playwright.config.ts`, `test/dom/` |
+| CI/CD | **배포가 동작하지 않는다.** `develop` 푸시마다 워크플로가 0초에 실패하고 staging에 올라간 적이 없다 | `.github/workflows/deploy.yml`, `.deploy.yml` |
 
 ## MVP 경계
 
@@ -76,60 +68,25 @@ MVP는 "고스톱과 vision 없이도 그날 판이 돌아가는가" 기준으�
    고스톱 엔진                ← 꺼도 섯다만 진행
 ```
 
-핵심 경로 안의 "베팅"은 금액 계산까지만 구현돼 있다. 차례 강제와 판 자동 종료가 없어서
-지금 상태로 MT를 돌리면 순서를 사람이 지켜야 하고 판 종료를 딜러가 매번 눌러야 한다.
-
----
-
-## 완료된 단계
-
-Phase 0(스캐폴드)부터 핵심 경로 6단계(화투·섯다 / 인증·데이터 / 방·실시간 / 베팅·예산 /
-Advisor / 정산·랭킹), Phase 7(vision), Phase 8(고스톱)까지 코드 레벨 구현이 끝나 있다.
-세부 근거는 위 "현재 상태 요약" 표.
-
-Authentik은 초기 관리자 로그인 뒤 `/admin`의 SSO 설정에서 Issuer URL·Client ID·Client secret을
-입력하고 활성화한다. Authentik 애플리케이션의 Redirect URI 등록만 운영자가 마치면 된다.
-
 ---
 
 ## 남은 작업 우선순위
 
-가장 큰 공백은 **판 진행 규칙이 서버에서 강제되지 않는 것**이다. 차례가 아닌 사람의 베팅이
-그대로 accepted 되고(`docs/12-handoff.md` 8번), 전원 콜이나 전원 다이를 감지하지 않아 딜러가
-매번 수동으로 판을 끝내야 하며(9번), 따당·하프·풀은 금액을 채워주는 프리셋일 뿐 서버가
-검증하지 않는다(5번).
+순서: 배포 → 실경로 검증 → 실물 리허설 → 회귀 가드 보강.
 
-그다음은 **모바일 방 화면**이다. 세로로 길어져 딜러 컨트롤이 하단 액션바에 가린다(4번).
+코드 공백이 아니라 **증명 공백**이 남았다. 판 진행 규칙(차례·자동 종료·레이즈 상한)은 서버가
+강제하고 자동 스위트가 정상 경로를 훑지만, 배포된 앱이 실기기 두 대에서 끝까지 돈 적이 없다.
 
-나머지는 검증·설정 공백이다. 2026-07-29 수동 UI 감사가 찾은 좌석 배치 결함과 고스톱 비딜러
-빈 화면은 같은 날 고쳤다. 좌석 반지름을 `--felt-inset` 상수 하나로 펠트 타원과 묶었고,
-고스톱 비딜러 화면에는 `GostopWaitPanel`을 붙였다. 판과 판 사이(`currentRound`가 null인
-구간)는 아직 비어 있다.
+1. **배포가 먼저다.** 지금은 `develop` 푸시가 워크플로 시작 자체에 실패해서 그 뒤 모든 실경로
+   검증이 막혀 있다. 이게 풀리지 않으면 아래 항목은 순서를 논할 것도 없다.
+2. **실경로 검증** — 실배포 2기기 스모크, SSO 연결 왕복. 둘 다 코드로는 확인할 수 없는 것이
+   남았다(실제 OAuth 왕복, 실제 네트워크에서의 Broadcast 왕복 지연).
+3. **실물 리허설** — 실제 화투로 3판 이상. 규칙이 서버에서 강제되는 지금이 리허설의 정보량이
+   가장 큰 시점이다(사람이 순서를 지킨 결과가 아니라 서버가 지킨 결과를 본다).
+4. **회귀 가드 보강** — 재접속·복원 e2e, Server Action 경쟁 상태 통합 테스트. 브라우저로
+   재현하기 어려운 것만 남았다.
 
-자동 스위트가 그 결함들을 못 잡은 건 우연이 아니다. 단위 테스트는 `vitest.config.ts`가
-`environment: 'node'`라 컴포넌트를 렌더링조차 하지 않고, 커버리지 `include`도 순수 모듈만
-나열한다. Playwright 프로젝트는 Pixel 7 하나뿐이라 데스크톱 폭을 띄운 적이 없다. 역할별
-렌더링과 반응형 배치는 통과한 게 아니라 실행된 적이 없다.
-
-### 우선순위
-
-사용자가 2026-07-29에 지정한 순서는 "E2E보다 전체 흐름, 모바일 UI/UX, 미려한 UI,
-한게임 포커 수준의 안정성"이다. 이를 아래 순서로 적용한다.
-
-**판 진행 정확성 → 모바일 방 화면 → 실경로 검증 → 흐름 연결 → 화면 완성도 → 회귀 가드**
-
-회귀 가드가 맨 뒤인 이유는 서버가 강제하지 않는 규칙 위에 테스트를 얹으면 현재 동작이
-그대로 고정되기 때문이다. 턴 검증이 서버에 생긴 뒤 그 계약을 테스트로 묶는다.
-
-실경로 검증(실배포 2기기 스모크, 실물 화투 리허설)은 앞쪽에 유지한다. 배포된 앱이
-실기기에서 끝까지 돈 적이 없고, 여기가 죽으면 대체 경로가 종이 기록뿐이다. 다만 판 진행
-규칙이 서버에서 강제되기 전에 리허설을 돌리면 사람이 순서를 지킨 결과만 확인하게 되므로,
-턴 검증 뒤에 도는 편이 정보량이 크다.
-
-`ENV_FILE_BASE64` 시크릿을 구성해 `.deploy.yml`의 `preview.enabled`/`staging.enabled`를
-켜는 작업은 MT를 게이팅하지 않는 개발 편의 항목이라 위 순서 밖에 둔다.
-
-실행 항목과 완료 기준은 [`TODO.md`](../TODO.md)가, 각 항목의 조사 근거와 미확정 설계 질문은
+실행 항목과 완료 기준은 [`TODO.md`](../TODO.md)가, 조사 근거와 미확정 설계 질문은
 [`docs/12-handoff.md`](12-handoff.md)가 소유한다.
 
 ### 엔진 정확도
@@ -137,33 +94,30 @@ Authentik은 초기 관리자 로그인 뒤 `/admin`의 SSO 설정에서 Issuer 
 섯다 190조합, 고스톱 경계·배수, 포커 10개 카테고리의 순수 엔진 자동 검증은 완료했다. 남은
 정확도 검증은 실제 플레이 그룹 룰과 점수표를 대조하는 실물 리허설에 포함한다.
 
-구 P3(미사용 스키마 정리)는 2026-07-23 **제거로 확정**되어 우선순위 목록에서 빠졌다.
-`groups`/`group_members`/`hand_records`를 스키마에서 삭제했고, 근거는
-`docs/design-decisions/` 001이다.
-
 ---
 
 ## 릴리스
 
-- 태그는 판 진행 정확성 그룹과 라이브 경로 검증이 끝난 뒤 `v0.1.0`부터. 그 전에는 태그를
-  붙이지 않는다.
-- 현재 배포는 production 채널 하나뿐이다(`.deploy.yml`). staging/preview 전환은 위 순서 밖의
-  개발 편의 항목이다.
+- 태그는 라이브 경로 검증이 끝난 뒤 `v0.1.0`부터. 그 전에는 태그를 붙이지 않는다.
+- 현재 배포 채널은 production 하나뿐이다(`.deploy.yml`). staging/preview 전환(`ENV_FILE_BASE64`
+  시크릿 구성)은 MT를 게이팅하지 않는 개발 편의 항목이다 — 단, 배포 워크플로 자체가 실패하는
+  문제는 편의 항목이 아니라 1순위다.
 
 ## 리스크 순서
 
 가장 먼저 깨질 것부터 검증한다. 정렬 기준은 "수동 대체 경로가 없는 것부터".
 
-1. **판 진행 규칙 미강제** — 차례가 아닌 사람이 베팅해도 서버가 막지 않고, 판이 자동으로
-   끝나지 않는다. 대체 경로는 사람이 순서를 지키는 것뿐이다. `docs/12-handoff.md` 8·9번.
+1. **배포 파이프라인 실패** — 푸시가 워크플로 시작 단계에서 죽는다. 여기가 막히면 아래 전부가
+   막힌다.
 2. **라이브 경로 미증명** — 배포+인증+실시간을 엮은 엔드투엔드가 실배포 상태로 돈 적이 없다.
    여기가 죽으면 종이 기록으로 회귀하는 것 말고 대체가 없다.
 3. **인증 경로 미검증** — 가입코드 확인부터 내부 계정 로그인까지 실배포 왕복이 아직 없다.
-   위 라이브 경로 검증의 선행 조건이다.
+   SSO는 Authentik 인스턴스가 없어 OAuth 왕복 자체가 미검증이다.
 4. **향후 DB 마이그레이션 드리프트** — 현재 live DB와 Drizzle 이력은 동기화됐다. 이후 변경도
    `docs/08-database-migrations.md` 순서로만 적용해 SQL과 이력이 갈라지지 않게 해야 한다.
 5. **현장 네트워크** — 실물 리허설에서만 드러난다. 완화책은 액션 성공 뒤 스냅샷 복원,
    이벤트 수신 refetch·폴링·재연결이다. 로컬 액션 큐는 구현하지 않았다.
-6. **UI 회귀 재발** — 자동 스위트가 화면을 렌더링하지 않으므로 이번에 고친 배치·역할
-   게이팅 결함이 다시 들어와도 CI는 초록이다. 사람이 눈으로 보면 잡히니 위 항목들보다
-   아래지만, 지금은 탐지가 수동 감사에만 걸려 있다.
+6. **런타임 값의 모양** — 타입 선언이 런타임을 보장하지 않는 경로가 남아 있다. drizzle raw
+   `execute`가 파싱되지 않은 문자열을 돌려주는 것을 타입·lint·단위 테스트가 전부 놓쳐 검증 딜이
+   죽어 있었다([`docs/12-handoff.md`](12-handoff.md) "함정"). 같은 형태의 경계는 실행해 보는 것
+   외에 탐지 수단이 없다.

@@ -5,8 +5,8 @@
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
 | Status | in-progress |
-| Source of truth | credit·fair round 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0013`, verified 섯다 실행은 `src/features/fairness/`·`src/features/game/round-actions.ts` |
-| Last reviewed | 2026-07-24 |
+| Source of truth | credit·fair round 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0013`, verified 섯다 실행은 `src/features/fairness/`·`src/features/game/round-fairness-ops.ts` |
+| Last reviewed | 2026-07-30 |
 
 ## 목적과 경계
 
@@ -328,12 +328,18 @@ Broadcast payload에 절대 넣지 않는다. 제출자 식별자는 버튼 복�
 3. [x] 계정 지갑·관리자 지급/회수·거래 내역을 구현하고, 원격 DB rollback 트랜잭션으로 RPC를 검증한다.
 4. [x] account-credit 방의 lock/buy-in/release/settlement 연결과 원격 rollback lifecycle 검증을 구현한다.
 5. [x] 섯다 verified deal, private hand action, 종료 후 fairness receipt 화면을 구현한다.
-6. [ ] 전용 2계정 환경에서 Playwright가 시드 제출·봉인·손패·공개 검증을 실제 실행하게 한다.
+6. [x] 전용 2계정 환경에서 Playwright가 시드 제출·봉인·손패·공개 검증을 실제 실행하게 한다.
 
 각 단계는 현재 수동 기록 방을 깨지 않아야 한다. 2~4단계는 기존 잔액을 이관하지 않는 기본 정책을
 전제로 하며, 이관이 필요해지면 별도 승인된 설계 변경으로 다룬다.
 
 ## Change History
+
+- 2026-07-30: 전용 2계정 e2e가 검증 딜 전 구간(시드 제출 → 봉인 → 본인 손패 → 종료 후 덱 재계산
+  감사)을 실제로 돌기 시작했고, 그 첫 실행이 **검증 딜이 아예 시작되지 않던 결함**을 찾았다.
+  `fairDatabaseNow`가 drizzle raw `execute` 결과를 `Date`로 가정했지만 그 경로는 파싱되지 않은
+  문자열을 돌려준다 — 공정 딜 상태 전이 전체가 죽어 있었다. 해시 입력·직렬화 순서·버전 상수는
+  건드리지 않았다.
 
 - 2026-07-24: account-credit 방 생성 선택, buy-in lock·취소 release·종료 settlement을 live DB RPC와
   Server Action 트랜잭션으로 연결했다. full reveal 없는 공정 영수증은 여전히 검증 완료로 표시하지 않는다.

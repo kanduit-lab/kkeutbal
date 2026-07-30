@@ -6,7 +6,7 @@
 | Audience        | engineering / operators / reviewers                                     |
 | Status          | active                                                                  |
 | Source of truth | 구현은 auth·권한 코드와 스키마, 이 문서는 인증 흐름·역할 권한·보안 경계 |
-| Last reviewed   | 2026-07-28                                                              |
+| Last reviewed   | 2026-07-30                                                              |
 
 ## Context
 
@@ -279,6 +279,17 @@ Vision 업로드는 크기 상한(5MB, `MAX_IMAGE_BYTES`)과 MIME 검증(jpeg/pn
 Vision은 사용자당 분당 6회·시간당 30회로 제한한다. 비밀번호·게스트·회원가입·가입코드 경로도
 `rate_limit_buckets`의 고정 창 카운터를 사용하며 식별자는 `AUTH_SECRET` HMAC으로만 저장한다
 (`src/lib/rate-limit.ts`).
+
+행 증식을 만드는 게임플레이 경로에도 한도가 있다: `createRoom`(5/분, 20/시간),
+`joinRoom`(10/분, 60/시간), `addLocalMember`(12/분, 30/시간 — 호출마다 `users` 행을 만들어
+가장 값싼 남용 경로라 가장 좁다), `addBuyIn`(10/분, 60/시간, 호출자 기준). `placeBet`에는
+붙이지 않았다 — 방 단위 advisory lock으로 이미 직렬화돼 있고, 한도를 잘못 잡으면 빠른 판에서
+정상 베팅이 막힌다.
+
+이 게임플레이 한도는 **관리자에게 면제된다**(`consumeRateLimitsUnlessAdmin`). 인증 이후라
+호출자가 확실하고, 한도에 걸린 뒤에만 관리자 여부를 조회하므로 정상 경로에 쿼리가 늘지 않는다.
+**로그인 경로에는 같은 면제를 두지 않았다** — 비밀번호 검증 전이라 아이디로 먼저 조회해야 하고,
+그러면 가장 보호가 필요한 관리자 계정이 무제한 비밀번호 시도의 유일한 표적이 된다.
 
 ### 체크리스트 (커밋 전 / 배포 전)
 
