@@ -54,6 +54,10 @@ export function FixedPage({
     <main
       id="main"
       className={clsx(
+        // `fixed-page`는 globals.css가 `body:has(> main.fixed-page)`로 셸 높이를 확정하는
+        // 표시다. body가 min-height만 갖고 있으면 컨테이너 높이가 콘텐츠로 먼저 정해져서
+        // flex-1이 아무것도 제한하지 못한다 — 그 상태로는 이 main이 뷰포트를 넘어 자란다.
+        'fixed-page',
         'mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden px-4 pt-4 sm:px-6',
         'pb-[max(1rem,env(safe-area-inset-bottom))]',
         WIDTH_CLASS[width],

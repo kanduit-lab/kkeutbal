@@ -85,6 +85,24 @@ body {
   /* 배너·팝업이 붙어도 고정 페이지가 정확히 남은 높이만 쓰게 만드는 셸 */
   display: flex;
   flex-direction: column;
+}
+
+/*
+ * 고정 페이지가 붙은 문서만 셸 높이를 확정한다.
+ *
+ * body가 `min-height: 100dvh`만 가지면 컨테이너 높이가 콘텐츠로 먼저 정해지고, 그러면
+ * `flex-1 min-h-0`은 아무것도 제한하지 못해 main이 뷰포트를 넘어 자란다(방 만들기 화면이
+ * 실제로 1084px까지 자라 e2e에 잡혔다). 높이를 확정하면 flex-1이 남은 공간만 받으므로
+ * 프로모션 배너가 위에 붙어도 그만큼 빠진 높이를 정확히 쓴다.
+ *
+ * `PageShell`을 쓰는 읽는 문서(/guide, /about)는 이 규칙에 걸리지 않아 문서 스크롤을 유지한다.
+ */
+body:has(> main.fixed-page) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+body {
   font-family:
     var(--font-body-bundled, 'Pretendard'), 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui,
     sans-serif;

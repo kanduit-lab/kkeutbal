@@ -96,7 +96,7 @@ export default function NewRoomPage() {
                 </Field>
               </div>
               <div className="lg:col-span-2">
-                <Field label={d.roomForm.gameLabel}>
+                <Field label={d.roomForm.gameLabel} group>
                   <div className="grid grid-cols-3 gap-2">
                     {GAME_TYPES.map((type) => (
                       <Button
@@ -111,7 +111,7 @@ export default function NewRoomPage() {
                   </div>
                 </Field>
               </div>
-              <Field label={d.roomForm.startingChipsLabel}>
+              <Field label={d.roomForm.startingChipsLabel} group>
                 <div className="grid grid-cols-4 gap-2">
                   {CHIP_PRESETS.map((preset) => (
                     <Button
@@ -137,7 +137,7 @@ export default function NewRoomPage() {
                   className="mt-2"
                 />
               </Field>
-              <Field label={d.roomForm.fundingModeLabel}>
+              <Field label={d.roomForm.fundingModeLabel} group>
                 <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
@@ -190,7 +190,7 @@ export default function NewRoomPage() {
 
               {gameType !== 'gostop' ? (
                 <div className="lg:col-span-2">
-                  <Field label={d.roomForm.raiseRuleLabel}>
+                  <Field label={d.roomForm.raiseRuleLabel} group>
                     <div className="grid grid-cols-3 gap-2">
                       <Button
                         type="button"
@@ -226,7 +226,7 @@ export default function NewRoomPage() {
               ) : null}
 
               <div className="lg:col-span-2">
-                <Field label={d.inputMode.label}>
+                <Field label={d.inputMode.label} group>
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       type="button"
