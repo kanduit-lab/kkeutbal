@@ -13,6 +13,7 @@ export function RoundLog({
   members,
   scale = 'default',
   gameType = 'seotda',
+  scrollable = true,
 }: {
   actions: readonly BetActionView[]
   members: readonly MemberView[]
@@ -20,6 +21,9 @@ export function RoundLog({
   scale?: 'default' | 'board'
 
   gameType?: RoomGameType
+
+  /** false면 자체 max-height/스크롤을 두지 않는다 — 부모(모바일 시트)가 스크롤을 맡을 때 */
+  scrollable?: boolean
 }) {
   const { d } = useDict()
   const board = scale === 'board'
@@ -50,7 +54,7 @@ export function RoundLog({
         <ul
           aria-live="polite"
           aria-relevant="additions"
-          className={clsx('space-y-1.5', !board && 'max-h-48 overflow-y-auto')}
+          className={clsx('space-y-1.5', !board && scrollable && 'max-h-48 overflow-y-auto')}
         >
           {rows.map((action) => {
             const badge = statusBadge[action.status]

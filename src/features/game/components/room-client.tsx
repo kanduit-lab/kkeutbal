@@ -1,5 +1,6 @@
 'use client'
 
+import { clsx } from 'clsx'
 import Link from 'next/link'
 import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
@@ -8,7 +9,7 @@ import { format, translateError, useDict } from '@/lib/i18n/client'
 import { sendRoomEvent } from '@/lib/realtime/client'
 import { isMuted, setMuted } from '@/lib/sound'
 import type { MemberView, RoomSnapshot } from '../types'
-import { useIsDesktop, useToast } from '@/components/ui'
+import { Button, Sheet, useIsDesktop, useToast } from '@/components/ui'
 import { AUTH_ERROR_KEYS, useRoomSync } from './use-room-sync'
 import { useRoomEventFeedback } from './use-room-event-feedback'
 import { RoomHeader } from './room-header'
@@ -16,6 +17,7 @@ import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
 import { ActionBar } from './action-bar'
 import { DealerPanel } from './dealer-panel'
+import { DealerQuickBar } from './dealer-quick-bar'
 import { GostopWaitPanel } from './gostop-wait-panel'
 import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
@@ -29,6 +31,7 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
   const { d } = useDict()
   const [seatUserId, setSeatUserId] = useState<string | null>(null)
   const [muted, setMutedState] = useState(() => isMuted())
+  const [roundLogOpen, setRoundLogOpen] = useState(false)
   const isDesktop = useIsDesktop()
 
   const onEvent = useRoomEventFeedback(selfId)
@@ -196,10 +199,12 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
   return (
     <main
       id="main"
-
-      className="mx-auto flex w-full max-w-6xl flex-col px-4 pb-[calc(var(--action-bar-h,0px)+1.5rem)] pt-5 lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:px-8 lg:pb-6 lg:pt-6"
+      className={clsx(
+        'mx-auto flex w-full max-w-6xl flex-col px-4 pb-[calc(var(--action-bar-h,0px)+1.5rem)] pt-5 lg:px-8 lg:pb-6 lg:pt-6',
+        isLobby ? 'lg:min-h-0 lg:flex-1 lg:overflow-hidden' : 'min-h-0 flex-1 overflow-hidden',
+      )}
     >
-      <div className="lg:shrink-0">
+      <div className="shrink-0">
         <RoomHeader snapshot={snapshot} isHost={isHost} muted={muted} onToggleMute={toggleMute} />
         <RoomConnectionBar
           syncFailed={syncFailed}
@@ -223,104 +228,140 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
           />
         </div>
       ) : (
-        <div className="lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-12 lg:gap-6">
-          <div className="lg:col-span-7 lg:flex lg:min-h-0 lg:flex-col xl:col-span-8">
-            <div className="rise-in rise-in-1 lg:shrink-0">
-              <FairnessPanel
-                snapshot={snapshot}
-                selfId={selfId}
-                runAction={runAction}
-                staleReason={staleReason}
-              />
-            </div>
-            {snapshot.lastResult && !snapshot.currentRound ? (
-              <p className="rise-in rise-in-1 mb-2 text-center text-xs text-muted lg:shrink-0 lg:text-sm">
-                {format(d.room.lastRoundSummary, {
-                  seq: snapshot.lastResult.seq,
-                  name:
-                    snapshot.members.find((m) => m.userId === snapshot.lastResult?.winnerId)
-                      ?.displayName ?? '?',
-                  pot: snapshot.lastResult.pot.toLocaleString(),
-                })}
-                {snapshot.lastResult.note ? ` · ${snapshot.lastResult.note}` : ''}
-                {snapshot.lastResult.hasFairnessAudit ? (
+        <>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:grid lg:grid-cols-12 lg:gap-6 lg:overflow-visible">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:col-span-7 lg:overflow-visible xl:col-span-8">
+              <div className="rise-in rise-in-1 shrink-0">
+                <FairnessPanel
+                  snapshot={snapshot}
+                  selfId={selfId}
+                  runAction={runAction}
+                  staleReason={staleReason}
+                />
+              </div>
+              {snapshot.lastResult && !snapshot.currentRound ? (
+                <p className="rise-in rise-in-1 mb-2 shrink-0 text-center text-xs text-muted lg:text-sm">
+                  {format(d.room.lastRoundSummary, {
+                    seq: snapshot.lastResult.seq,
+                    name:
+                      snapshot.members.find((m) => m.userId === snapshot.lastResult?.winnerId)
+                        ?.displayName ?? '?',
+                    pot: snapshot.lastResult.pot.toLocaleString(),
+                  })}
+                  {snapshot.lastResult.note ? ` · ${snapshot.lastResult.note}` : ''}
+                  {snapshot.lastResult.hasFairnessAudit ? (
+                    <Link
+                      href={
+                        `/rooms/${snapshot.room.code}/fairness/${snapshot.lastResult.seq}` as Route
+                      }
+                      className="ml-2 font-bold text-accent underline underline-offset-2"
+                    >
+                      {d.fairness.auditLink}
+                    </Link>
+                  ) : null}
+                </p>
+              ) : null}
+              {!snapshot.currentRound &&
+              latestAuditableRound &&
+              latestAuditableRound.roundId !== snapshot.lastResult?.roundId ? (
+                <p className="mb-2 shrink-0 text-center text-xs text-muted lg:text-sm">
                   <Link
                     href={
-                      `/rooms/${snapshot.room.code}/fairness/${snapshot.lastResult.seq}` as Route
+                      `/rooms/${snapshot.room.code}/fairness/${latestAuditableRound.seq}` as Route
                     }
-                    className="ml-2 font-bold text-accent underline underline-offset-2"
+                    className="font-bold text-accent underline underline-offset-2"
                   >
                     {d.fairness.auditLink}
                   </Link>
-                ) : null}
-              </p>
-            ) : null}
-            {!snapshot.currentRound &&
-            latestAuditableRound &&
-            latestAuditableRound.roundId !== snapshot.lastResult?.roundId ? (
-              <p className="mb-2 text-center text-xs text-muted lg:shrink-0 lg:text-sm">
-                <Link
-                  href={
-                    `/rooms/${snapshot.room.code}/fairness/${latestAuditableRound.seq}` as Route
-                  }
-                  className="font-bold text-accent underline underline-offset-2"
-                >
-                  {d.fairness.auditLink}
-                </Link>
-              </p>
-            ) : null}
+                </p>
+              ) : null}
 
-            <div className="rise-in rise-in-2 pt-6 lg:flex lg:min-h-0 lg:flex-1 lg:items-center lg:justify-center lg:pt-3">
-              <GameTable
-                members={snapshot.members}
-                online={online}
-                selfId={selfId}
-                pot={snapshot.currentRound?.pot ?? 0}
-                actions={snapshot.actions}
-                winnerId={snapshot.currentRound ? null : (snapshot.lastResult?.winnerId ?? null)}
-                roundActive={Boolean(snapshot.currentRound)}
-                gameType={snapshot.room.gameType}
-                onSeatTap={(member) => setSeatUserId(member.userId)}
-                fit
-              />
-            </div>
-            {canBet && self ? (
-              <div className={isDesktop ? 'rise-in rise-in-3 lg:mt-3 lg:shrink-0' : undefined}>
-                <ActionBar
-                  snapshot={snapshot}
-                  self={self}
-                  runAction={runAction}
-                  staleReason={staleReason}
-                  inline={isDesktop}
+              <div className="rise-in rise-in-2 relative flex min-h-0 flex-1 items-center justify-center pt-6 lg:pt-3">
+                <GameTable
+                  members={snapshot.members}
+                  online={online}
+                  selfId={selfId}
+                  pot={snapshot.currentRound?.pot ?? 0}
+                  actions={snapshot.actions}
+                  winnerId={snapshot.currentRound ? null : (snapshot.lastResult?.winnerId ?? null)}
+                  roundActive={Boolean(snapshot.currentRound)}
+                  gameType={snapshot.room.gameType}
+                  onSeatTap={(member) => setSeatUserId(member.userId)}
+                  fit
                 />
+                {!isDesktop ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="absolute right-1 top-1 z-20"
+                    aria-label={d.roundLog.openAria}
+                    onClick={() => setRoundLogOpen(true)}
+                  >
+                    📋
+                  </Button>
+                ) : null}
               </div>
-            ) : null}
-            {showGostopWait ? (
-              <div className="rise-in rise-in-3 lg:mt-3 lg:shrink-0">
-                <GostopWaitPanel />
+              {isDesktop && canBet && self ? (
+                <div className="rise-in rise-in-3 lg:mt-3 lg:shrink-0">
+                  <ActionBar
+                    snapshot={snapshot}
+                    self={self}
+                    runAction={runAction}
+                    staleReason={staleReason}
+                    inline
+                  />
+                </div>
+              ) : null}
+              {showGostopWait ? (
+                <div className="rise-in rise-in-3 shrink-0 lg:mt-3">
+                  <GostopWaitPanel />
+                </div>
+              ) : null}
+            </div>
+            {isDesktop ? (
+              <div className="lg:col-span-5 lg:flex lg:min-h-0 lg:flex-col xl:col-span-4">
+                <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pe-1">
+                  {isDealer ? (
+                    <div className="rise-in rise-in-2">
+                      <DealerPanel
+                        snapshot={snapshot}
+                        pendingActions={pendingActions}
+                        selfId={selfId}
+                        runAction={runAction}
+                        staleReason={staleReason}
+                      />
+                    </div>
+                  ) : null}
+
+                  <div className="rise-in rise-in-3">
+                    <RoundLog actions={snapshot.actions} members={snapshot.members} />
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>
-          <div className="lg:col-span-5 lg:flex lg:min-h-0 lg:flex-col xl:col-span-4">
-            <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pe-1">
-              {isDealer ? (
-                <div className="rise-in rise-in-2">
-                  <DealerPanel
+          {!isDesktop && self && (canBet || isDealer) ? (
+            <ActionBar
+              snapshot={snapshot}
+              self={self}
+              runAction={runAction}
+              staleReason={staleReason}
+              showBetting={canBet}
+              dealerSlot={
+                isDealer ? (
+                  <DealerQuickBar
                     snapshot={snapshot}
                     pendingActions={pendingActions}
                     selfId={selfId}
                     runAction={runAction}
                     staleReason={staleReason}
                   />
-                </div>
-              ) : null}
-
-              <div className="rise-in rise-in-3">
-                <RoundLog actions={snapshot.actions} members={snapshot.members} />
-              </div>
-            </div>
-          </div>
-        </div>
+                ) : null
+              }
+            />
+          ) : null}
+        </>
       )}
       {sheetMember ? (
         <MemberSheet
@@ -332,6 +373,13 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
           onClose={() => setSeatUserId(null)}
         />
       ) : null}
+      <Sheet
+        open={roundLogOpen}
+        onClose={() => setRoundLogOpen(false)}
+        ariaLabel={d.roundLog.title}
+      >
+        <RoundLog actions={snapshot.actions} members={snapshot.members} scrollable={false} />
+      </Sheet>
     </main>
   )
 }

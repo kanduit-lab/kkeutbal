@@ -1,29 +1,50 @@
-import { Skeleton, SkeletonPanel } from '@/components/ui'
+import { FixedBody, FixedPage, Panel, Skeleton, SkeletonPanel } from '@/components/ui'
 import { getDict } from '@/lib/i18n/server'
 
 export default async function Loading() {
   const { d } = await getDict()
+
   return (
-    <main
-      id="main"
-      className="mx-auto w-full max-w-3xl space-y-6 px-4 pb-16 pt-8 lg:px-8"
-      role="status"
-      aria-live="polite"
-    >
-      <span className="sr-only">{d.loading.computingResult}</span>
-      <header className="space-y-2">
-        <Skeleton className="h-4 w-48" />
-        <Skeleton className="h-10 w-40" />
+    <FixedPage width="wide">
+      <div role="status" aria-live="polite">
+        <span className="sr-only">{d.loading.computingResult}</span>
+      </div>
+      <header className="mb-3 shrink-0 space-y-1.5">
+        <Skeleton className="h-4 w-56 max-w-full" />
+        <Skeleton className="h-9 w-40" />
       </header>
-      <section className="space-y-2">
-        <SkeletonPanel className="h-16" />
-        <SkeletonPanel className="h-16" />
-        <SkeletonPanel className="h-16" />
-      </section>
-      <section className="grid grid-cols-2 gap-2">
-        <SkeletonPanel className="h-20" />
-        <SkeletonPanel className="h-20" />
-      </section>
-    </main>
+      <FixedBody className="gap-3">
+        <div className="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((index) => (
+            <SkeletonPanel key={index} className="h-16" />
+          ))}
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+            {[0, 1, 2].map((index) => (
+              <Skeleton key={index} className="h-16 shrink-0" radius="xl" />
+            ))}
+          </Panel>
+          <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+            {[0, 1].map((index) => (
+              <Skeleton key={index} className="h-16 shrink-0" radius="xl" />
+            ))}
+          </Panel>
+          <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+            {[0, 1, 2].map((index) => (
+              <Skeleton key={index} className="h-16 shrink-0" radius="xl" />
+            ))}
+          </Panel>
+        </div>
+      </FixedBody>
+      <div className="shrink-0 space-y-2 pt-3">
+        <Skeleton className="h-12" radius="xl" />
+        <div className="grid grid-cols-2 gap-2">
+          <Skeleton className="h-12" radius="xl" />
+          <Skeleton className="h-12" radius="xl" />
+          <Skeleton className="col-span-2 h-12" radius="xl" />
+        </div>
+      </div>
+    </FixedPage>
   )
 }

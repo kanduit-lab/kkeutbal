@@ -27,14 +27,27 @@ export function PaneGroup({
   panes,
   columns = 'lg:grid-cols-2',
   ariaLabel,
+  activeKey: controlledKey,
+  onActiveKeyChange,
 }: {
   panes: readonly Pane[]
   /** 데스크톱 열 구성. 기본은 반반 */
   columns?: string
   ariaLabel: string
+  /**
+   * 모바일 탭을 부모가 제어할 때 쓴다. 사진 인식처럼 화면 밖 사건으로
+   * 다른 패널을 보여줘야 하는 경우가 있다. 생략하면 내부 상태로 동작한다.
+   */
+  activeKey?: string
+  onActiveKeyChange?: (key: string) => void
 }) {
   const isDesktop = useIsDesktop()
-  const [activeKey, setActiveKey] = useState(panes[0]?.key ?? '')
+  const [uncontrolledKey, setUncontrolledKey] = useState(panes[0]?.key ?? '')
+  const activeKey = controlledKey ?? uncontrolledKey
+  const setActiveKey = (key: string) => {
+    if (controlledKey === undefined) setUncontrolledKey(key)
+    onActiveKeyChange?.(key)
+  }
 
   if (isDesktop) {
     return (

@@ -55,52 +55,57 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
   const leaderNet = leader ? leader.balance - leader.buyInTotal : 0
 
   return (
-    <main id="main" className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-4 lg:px-8">
-      <header className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href={`/rooms/${snapshot.room.code}`}
-            className="inline-flex min-h-12 min-w-12 items-center justify-center text-xl text-muted transition-colors hover:text-text"
-            aria-label={d.monitor.backToRoom}
-            title={d.monitor.backToRoom}
-          >
-            ←
-          </Link>
-          <h1 className="font-brush text-2xl font-bold lg:text-4xl">{snapshot.room.name}</h1>
-          <Badge tone="accent">{d.games[snapshot.room.gameType]}</Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-2xl font-black tracking-[0.3em] text-muted lg:text-3xl">
-            {snapshot.room.code}
-          </span>
-          <Badge tone={snapshot.currentRound ? 'win' : 'muted'}>
-            {snapshot.currentRound
-              ? format(d.monitor.roundN, { seq: snapshot.currentRound.seq })
-              : d.common.waiting}
-          </Badge>
-          {fullscreenSupported ? (
-            <button
-              type="button"
-              onClick={toggleFullscreen}
-              aria-label={isFullscreen ? d.monitor.fullscreenExit : d.monitor.fullscreenEnter}
-              className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 text-xl text-muted transition-colors hover:text-text"
+    <main
+      id="main"
+      className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-4 lg:min-h-0 lg:overflow-hidden lg:px-8"
+    >
+      <div className="lg:shrink-0">
+        <header className="mb-2 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/rooms/${snapshot.room.code}`}
+              className="inline-flex min-h-12 min-w-12 items-center justify-center text-xl text-muted transition-colors hover:text-text"
+              aria-label={d.monitor.backToRoom}
+              title={d.monitor.backToRoom}
             >
-              ⛶
-            </button>
-          ) : null}
-        </div>
-      </header>
-      <RoomConnectionBar
-        syncFailed={syncFailed}
-        disconnected={(everConnected && !connected) || connectTimedOut}
-        onReconnect={() => {
-          reconnect()
-          void refetch()
-        }}
-      />
+              ←
+            </Link>
+            <h1 className="font-brush text-2xl font-bold lg:text-4xl">{snapshot.room.name}</h1>
+            <Badge tone="accent">{d.games[snapshot.room.gameType]}</Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-2xl font-black tracking-[0.3em] text-muted lg:text-3xl">
+              {snapshot.room.code}
+            </span>
+            <Badge tone={snapshot.currentRound ? 'win' : 'muted'}>
+              {snapshot.currentRound
+                ? format(d.monitor.roundN, { seq: snapshot.currentRound.seq })
+                : d.common.waiting}
+            </Badge>
+            {fullscreenSupported ? (
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? d.monitor.fullscreenExit : d.monitor.fullscreenEnter}
+                className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-lg border border-white/10 text-xl text-muted transition-colors hover:text-text"
+              >
+                ⛶
+              </button>
+            ) : null}
+          </div>
+        </header>
+        <RoomConnectionBar
+          syncFailed={syncFailed}
+          disconnected={(everConnected && !connected) || connectTimedOut}
+          onReconnect={() => {
+            reconnect()
+            void refetch()
+          }}
+        />
+      </div>
 
       {snapshot.lastResult && !snapshot.currentRound ? (
-        <p className="mb-1 text-center text-sm text-muted lg:text-lg">
+        <p className="mb-1 text-center text-sm text-muted lg:shrink-0 lg:text-lg">
           {format(d.monitor.lastRoundSummary, {
             seq: snapshot.lastResult.seq,
             name: winnerName ?? '?',
@@ -110,8 +115,8 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
         </p>
       ) : null}
 
-      <div className="flex flex-1 flex-col gap-4 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1 pt-6">
+      <div className="flex flex-1 flex-col gap-4 lg:min-h-0 lg:flex-row lg:items-start">
+        <div className="min-w-0 flex-1 pt-6 lg:flex lg:min-h-0 lg:items-center lg:justify-center lg:pt-0">
           <GameTable
             members={snapshot.members}
             online={online}
@@ -121,9 +126,10 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
             winnerId={snapshot.currentRound ? null : (snapshot.lastResult?.winnerId ?? null)}
             scale="board"
             gameType={snapshot.room.gameType}
+            fit
           />
         </div>
-        <aside className="w-full shrink-0 lg:w-80">
+        <aside className="w-full shrink-0 lg:flex lg:h-full lg:w-80 lg:flex-col lg:overflow-y-auto lg:overscroll-contain">
           {leader && snapshot.endedRounds > 0 ? (
             <div className="mb-4 flex items-center justify-between gap-2 rounded-2xl border border-win/30 bg-win/10 px-4 py-3">
               <span className="shrink-0 text-sm font-bold text-win">

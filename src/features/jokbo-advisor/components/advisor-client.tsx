@@ -1,11 +1,21 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { findCard } from '@/features/hwatu/cards'
 import type { CardId, GameType, HwatuCard } from '@/features/hwatu/types'
 import { findPokerCard } from '@/features/poker/cards'
 import type { PokerCard } from '@/features/poker/cards'
-import { Button, PageHeader, PageShell, Panel, Segmented, useToast } from '@/components/ui'
+import {
+  Button,
+  FixedPage,
+  PageHeader,
+  PaneGroup,
+  Panel,
+  ScrollPane,
+  Segmented,
+  useToast,
+} from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { format, useDict } from '@/lib/i18n/client'
 import { CardPicker } from './card-picker'
@@ -15,7 +25,7 @@ import { PokerRankingPanel } from './poker-ranking-panel'
 import { SeotdaRankingPanel } from './seotda-ranking-panel'
 import { VisionCapture } from './vision-capture'
 
-type AdvisorTab = 'seotda' | 'gostop' | 'poker'
+export type AdvisorTab = 'seotda' | 'gostop' | 'poker'
 
 const TAB_EMOJI: Record<AdvisorTab, string> = {
   seotda: '🎴',
@@ -27,17 +37,43 @@ const POKER_MAX_SELECT = 7
 
 const GOSTOP_MAX_SELECT = 30
 
-export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
-  const [tab, setTab] = useState<AdvisorTab>('seotda')
+export function AdvisorClient({
+  visionEnabled,
+  initialTab = 'seotda',
+}: {
+  visionEnabled: boolean
+  initialTab?: AdvisorTab
+}) {
+  const [tab, setTab] = useState<AdvisorTab>(initialTab)
   const [selected, setSelected] = useState<ReadonlySet<CardId>>(new Set())
   const [pokerSelected, setPokerSelected] = useState<ReadonlySet<string>>(new Set())
 
   const [vision, setVision] = useState<VisionSource | null>(null)
+  // 모바일 탭을 부모가 들고 있는 이유: 사진 인식이 끝나면 결과 패널로 데려가야 한다.
+  const [pane, setPane] = useState<'picker' | 'result'>('picker')
   const { toast } = useToast()
   const { d } = useDict()
 
   const hwatuGameType: GameType = tab === 'gostop' ? 'gostop' : 'seotda'
   const maxSelect = hwatuGameType === 'seotda' ? 2 : GOSTOP_MAX_SELECT
+
+  function switchTab(next: AdvisorTab) {
+    if (next !== 'poker' && tab !== next) {
+      setSelected(new Set())
+      setVision(null)
+    }
+    if (tab !== next) setPane('picker')
+    setTab(next)
+  }
+
+  // `?game=` 링크로 들어왔을 때 그 탭으로 연다. 방 화면 등에서 붙이는 진입 링크는
+  // 다른 작업 범위이고, 여기서는 받는 쪽만 담당한다 — docs/12-handoff.md 10번 참고.
+  useEffect(() => {
+    switchTab(initialTab)
+    // initialTab이 바뀔 때만 반응한다. switchTab은 매 렌더 새로 만들어지는 클로저라
+    // 의존성에 넣으면 매 렌더 실행돼버린다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTab])
 
   function toggle(id: CardId) {
     setVision(null)
@@ -58,19 +94,14 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
     })
   }
 
-  function switchTab(next: AdvisorTab) {
-    if (next !== 'poker' && tab !== next) {
-      setSelected(new Set())
-      setVision(null)
-    }
-    setTab(next)
-  }
-
   function applyRecognized(ids: readonly CardId[], confidence: number) {
     const applied = ids.slice(0, maxSelect)
     const previous = selected
     setSelected(new Set(applied))
     setVision({ confidence })
+    // 인식 결과를 확정했으면 판정을 바로 보여준다. 모바일에서 탭을 손으로
+    // 눌러야 결과가 보이면 사진을 왜 찍었는지 알 수 없다.
+    setPane('result')
     const message =
       applied.length < ids.length
         ? format(d.advisor.vision.truncated, { detected: ids.length, applied: applied.length })
@@ -109,13 +140,12 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
     [pokerSelected],
   )
 
+  const isPoker = tab === 'poker'
+
   return (
-    <PageShell
-      width="wide"
-      className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:pb-8 lg:pt-8"
-    >
+    <FixedPage width="wide" className="gap-4">
       <PageHeader
-        className="rise-in mb-0"
+        className="rise-in mb-0 shrink-0"
         title={d.home.advisor}
         backHref="/"
         backLabel={d.common.home}
@@ -133,43 +163,32 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
           ),
         }))}
         ariaLabel={d.home.advisor}
-        className="rise-in rise-in-1 max-w-xl grid-cols-3"
+        className="rise-in rise-in-1 max-w-xl shrink-0 grid-cols-3"
       />
-      <div className="grid gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-12">
-        <div className="lg:order-2 lg:col-span-5 lg:min-h-0 lg:overflow-y-auto">
-          <div className="rise-in rise-in-2 space-y-5">
-            {tab === 'seotda' ? <SeotdaResult cards={cards} vision={vision} /> : null}
-            {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
-            {tab === 'gostop' ? <GostopResult cards={cards} vision={vision} /> : null}
-            {tab === 'poker' ? <PokerResult cards={pokerCards} /> : null}
-            {tab === 'poker' ? <PokerRankingPanel cards={pokerCards} /> : null}
-            {tab !== 'poker' ? (
-              <VisionCapture
-                gameType={hwatuGameType}
-                enabled={visionEnabled}
-                onRecognized={applyRecognized}
-              />
-            ) : null}
-          </div>
-        </div>
-        <div className="rise-in rise-in-3 lg:order-1 lg:col-span-7 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
-          {tab === 'poker' ? (
-            <Panel className="space-y-3">
-              <PickerHeader
-                count={pokerSelected.size}
+      <PaneGroup
+        ariaLabel={d.advisor.paneNavLabel}
+        columns="lg:grid-cols-[7fr_5fr]"
+        activeKey={pane}
+        onActiveKeyChange={(key) => setPane(key === 'result' ? 'result' : 'picker')}
+        panes={[
+          {
+            key: 'picker',
+            label: d.advisor.pickerTab,
+            node: isPoker ? (
+              <PickerPane
+                selectedCount={pokerSelected.size}
                 max={POKER_MAX_SELECT}
                 onClear={pokerSelected.size > 0 ? () => setPokerSelected(new Set()) : undefined}
-              />
-              <PokerPicker
-                selected={pokerSelected}
-                maxSelect={POKER_MAX_SELECT}
-                onToggle={togglePoker}
-              />
-            </Panel>
-          ) : (
-            <Panel className="space-y-3">
-              <PickerHeader
-                count={selected.size}
+              >
+                <PokerPicker
+                  selected={pokerSelected}
+                  maxSelect={POKER_MAX_SELECT}
+                  onToggle={togglePoker}
+                />
+              </PickerPane>
+            ) : (
+              <PickerPane
+                selectedCount={selected.size}
                 max={maxSelect}
                 onClear={
                   selected.size > 0
@@ -179,41 +198,101 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
                       }
                     : undefined
                 }
+              >
+                <CardPicker
+                  gameType={hwatuGameType}
+                  selected={selected}
+                  maxSelect={maxSelect}
+                  onToggle={toggle}
+                />
+              </PickerPane>
+            ),
+          },
+          {
+            key: 'result',
+            label: d.advisor.resultTab,
+            node: (
+              <ResultPane
+                tab={tab}
+                cards={cards}
+                pokerCards={pokerCards}
+                vision={vision}
+                visionEnabled={visionEnabled}
+                hwatuGameType={hwatuGameType}
+                onRecognized={applyRecognized}
               />
-              <CardPicker
-                gameType={hwatuGameType}
-                selected={selected}
-                maxSelect={maxSelect}
-                onToggle={toggle}
-              />
-            </Panel>
-          )}
-        </div>
-      </div>
-    </PageShell>
+            ),
+          },
+        ]}
+      />
+    </FixedPage>
   )
 }
 
-function PickerHeader({
-  count,
+function PickerPane({
+  selectedCount,
   max,
   onClear,
+  children,
 }: {
-  count: number
+  selectedCount: number
   max: number
   onClear?: () => void
+  children: ReactNode
 }) {
   const { d } = useDict()
   return (
-    <div className="lacquer sticky top-0 z-10 -mx-5 -mt-5 flex items-center justify-between rounded-t-2xl px-5 py-3">
-      <h2 className="text-sm font-bold text-muted">
-        {format(d.advisor.cardSelectionCount, { n: count, max })}
-      </h2>
-      {onClear ? (
-        <Button size="sm" variant="ghost" onClick={onClear}>
-          {d.common.clearAll}
-        </Button>
+    <Panel className="rise-in rise-in-3 flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex shrink-0 items-center justify-between gap-2">
+        <h2 className="text-sm font-bold text-muted">
+          {format(d.advisor.cardSelectionCount, { n: selectedCount, max })}
+        </h2>
+        {onClear ? (
+          <Button size="sm" variant="ghost" onClick={onClear}>
+            {d.common.clearAll}
+          </Button>
+        ) : null}
+      </div>
+      <ScrollPane label={d.advisor.pickerScrollLabel}>{children}</ScrollPane>
+    </Panel>
+  )
+}
+
+function ResultPane({
+  tab,
+  cards,
+  pokerCards,
+  vision,
+  visionEnabled,
+  hwatuGameType,
+  onRecognized,
+}: {
+  tab: AdvisorTab
+  cards: readonly HwatuCard[]
+  pokerCards: readonly PokerCard[]
+  vision: VisionSource | null
+  visionEnabled: boolean
+  hwatuGameType: GameType
+  onRecognized: (ids: readonly CardId[], confidence: number) => void
+}) {
+  const { d } = useDict()
+  return (
+    <ScrollPane
+      label={d.advisor.resultScrollLabel}
+      className="rise-in rise-in-2 flex flex-col gap-4"
+    >
+      <div className="shrink-0 space-y-4">
+        {tab === 'seotda' ? <SeotdaResult cards={cards} vision={vision} /> : null}
+        {tab === 'gostop' ? <GostopResult cards={cards} vision={vision} /> : null}
+        {tab === 'poker' ? <PokerResult cards={pokerCards} /> : null}
+      </div>
+      {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
+      {tab === 'poker' ? <PokerRankingPanel cards={pokerCards} /> : null}
+      {tab !== 'poker' ? (
+        <div className="shrink-0">
+          <VisionCapture gameType={hwatuGameType} enabled={visionEnabled} onRecognized={onRecognized} />
+        </div>
       ) : null}
-    </div>
+    </ScrollPane>
   )
 }

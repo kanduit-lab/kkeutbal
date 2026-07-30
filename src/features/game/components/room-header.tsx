@@ -70,6 +70,15 @@ export function RoomHeader({
           🧾
         </ButtonLink>
         <ButtonLink
+          href={`/advisor?game=${snapshot.room.gameType}`}
+          variant="outline"
+          size="icon"
+          aria-label={d.room.advisorAria}
+          title={d.room.advisorAria}
+        >
+          🔮
+        </ButtonLink>
+        <ButtonLink
           href={`/rooms/${snapshot.room.code}/monitor`}
           variant="outline"
           size="icon"

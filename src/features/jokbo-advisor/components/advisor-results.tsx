@@ -6,11 +6,12 @@ import { evaluateSeotdaHand, describeSeotdaHand } from '@/features/seotda/engine
 import { GOSTOP_RULES_STANDARD } from '@/features/gostop/types'
 import { captureOf, hasChongtong, scoreGostop } from '@/features/gostop/scoring'
 import type { PokerCard } from '@/features/poker/cards'
-import { describePokerHand, evaluatePokerHand } from '@/features/poker/engine'
+import { describePokerHand, evaluatePokerHand, POKER_CATEGORY_LABEL } from '@/features/poker/engine'
 import type { SeotdaAdviceCode } from '@/features/seotda/advice'
 import type { ReactNode } from 'react'
 import { Badge, Panel, Stepper } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
+import { previewPokerHand, type PokerHandPreview } from '../poker-preview'
 import { POKER_CATEGORY_STATS, seotdaStats } from '../stats'
 
 export interface VisionSource {
@@ -232,6 +233,11 @@ export function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
     }
   }, [cards])
 
+  const preview = useMemo(
+    () => (cards.length >= 3 && cards.length < 5 ? previewPokerHand(cards) : null),
+    [cards],
+  )
+
   const stats = result ? POKER_CATEGORY_STATS[result.category] : null
 
   return (
@@ -251,14 +257,47 @@ export function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
             </span>
           </div>
         </>
+      ) : preview?.computed ? (
+        <PokerPreviewList preview={preview} />
       ) : (
         <p className="pt-9 text-sm text-muted">
-          {cards.length < 5
-            ? format(d.advisor.pokerMoreCards, { n: 5 - cards.length })
-            : d.advisor.invalidCombination}
+          {cards.length >= 5
+            ? d.advisor.invalidCombination
+            : preview && !preview.computed && preview.reason === 'tooManyCombinations'
+              ? d.advisor.pokerPreviewUnavailable
+              : format(d.advisor.pokerMoreCards, { n: 5 - cards.length })}
         </p>
       )}
     </ResultRegion>
+  )
+}
+
+function PokerPreviewList({
+  preview,
+}: {
+  preview: Extract<PokerHandPreview, { computed: true }>
+}) {
+  const { d } = useDict()
+  const completable = preview.categories.filter((entry) => entry.probability > 0)
+  return (
+    <div className="space-y-2 text-left">
+      <p className="text-center text-xs text-muted">
+        {format(d.advisor.pokerPreviewIntro, { n: preview.totalCombinations })}
+      </p>
+      <ul className="space-y-1">
+        {completable.map((entry) => (
+          <li
+            key={entry.category}
+            className="flex items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs"
+          >
+            <span className="font-bold">{POKER_CATEGORY_LABEL[entry.category]}</span>
+            <span className="tabular-nums text-muted">
+              {formatProbability(entry.probability * 100)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

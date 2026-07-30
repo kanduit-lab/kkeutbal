@@ -5,6 +5,8 @@ export interface PokerRankTier {
   readonly rank: number
   readonly label: string
   readonly category: PokerCategory
+  /** 한 줄 설명 조회 키 — 문구 자체는 `d.advisor.pokerRanking.description[descriptionKey]` */
+  readonly descriptionKey: PokerCategory
 }
 
 function buildRankTable(): readonly PokerRankTier[] {
@@ -13,6 +15,7 @@ function buildRankTable(): readonly PokerRankTier[] {
       rank: POKER_CATEGORY_PRIORITY[category],
       label: POKER_CATEGORY_LABEL[category],
       category,
+      descriptionKey: category,
     }))
     .sort((a, b) => b.rank - a.rank)
 }

@@ -1,12 +1,17 @@
 'use client'
 
 import { clsx } from 'clsx'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HwatuCard } from '@/features/hwatu/types'
 import { evaluateSeotdaHand } from '@/features/seotda/engine'
 import type { SeotdaCategory } from '@/features/seotda/types'
+import { Badge, Button, Panel, ScrollPane, Sheet, useIsDesktop } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
-import { SEOTDA_RANK_TABLE, type SeotdaRankDetail } from './seotda-rank-table'
+import { useRankContextWindow } from './rank-context'
+import { SEOTDA_RANK_TABLE, type SeotdaRankDetail, type SeotdaRankTier } from './seotda-rank-table'
+
+/** 한 줄 높이(px) — `min-h-14`(56) + `space-y-1.5`(6) */
+const ROW_H = 62
 
 function detailText(
   detail: SeotdaRankDetail,
@@ -25,8 +30,17 @@ function detailText(
 
 export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
   const { d } = useDict()
-  const [open, setOpen] = useState(false)
-  const activeRowRef = useRef<HTMLDivElement | null>(null)
+  const isDesktop = useIsDesktop()
+  const [expanded, setExpanded] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const fullListActiveRowRef = useRef<HTMLDivElement | null>(null)
+
+  const categoryLabel: Readonly<Record<SeotdaCategory, string>> = {
+    gwangttaeng: d.advisor.ranking.categoryGwangttaeng,
+    ttaeng: d.advisor.ranking.categoryTtaeng,
+    special: d.advisor.ranking.categorySpecial,
+    kkeut: d.advisor.ranking.categoryKkeut,
+  }
 
   const currentRank = useMemo(() => {
     if (cards.length !== 2) return null
@@ -37,86 +51,129 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
     }
   }, [cards])
 
+  const currentIndex = useMemo(
+    () =>
+      currentRank === null ? null : SEOTDA_RANK_TABLE.findIndex((tier) => tier.rank === currentRank),
+    [currentRank],
+  )
+  const currentTier = currentIndex === null || currentIndex < 0 ? null : SEOTDA_RANK_TABLE[currentIndex]
+
+  const showingFullList = isDesktop ? expanded : sheetOpen
+
   useEffect(() => {
-    if (currentRank === null) return
+    if (!currentTier || !showingFullList) return
     const reduceMotion =
       typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const frame = window.requestAnimationFrame(() => {
-      activeRowRef.current?.scrollIntoView({
-        block: 'nearest',
+      fullListActiveRowRef.current?.scrollIntoView({
+        block: 'center',
         behavior: reduceMotion ? 'auto' : 'smooth',
       })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [currentRank, open])
+  }, [currentTier, showingFullList])
 
-  const categoryLabel: Readonly<Record<SeotdaCategory, string>> = {
-    gwangttaeng: d.advisor.ranking.categoryGwangttaeng,
-    ttaeng: d.advisor.ranking.categoryTtaeng,
-    special: d.advisor.ranking.categorySpecial,
-    kkeut: d.advisor.ranking.categoryKkeut,
+  const { areaRef, rows, aboveCount, belowCount } = useRankContextWindow({
+    items: SEOTDA_RANK_TABLE,
+    currentIndex: currentTier ? currentIndex : null,
+    rowHeight: ROW_H,
+    minRows: 3,
+  })
+
+  function renderRow(tier: SeotdaRankTier, ref?: React.Ref<HTMLDivElement>) {
+    const isActive = tier.rank === currentRank
+    return (
+      <div
+        key={tier.rank}
+        ref={ref}
+        aria-current={isActive ? 'true' : undefined}
+        className={clsx(
+          'min-h-14 rounded-xl px-3 py-2',
+          isActive ? 'bg-accent/20 ring-1 ring-inset ring-accent/50' : 'bg-white/5',
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <Badge tone="muted">{categoryLabel[tier.category]}</Badge>
+          {isActive ? <Badge tone="accent">{d.advisor.ranking.current}</Badge> : null}
+        </div>
+        <div className="mt-0.5 flex items-baseline justify-between gap-2">
+          <span className={clsx('truncate text-sm font-bold', isActive && 'text-accent')}>
+            {tier.label}
+          </span>
+          <span className="shrink-0 text-xs text-muted/70">
+            {detailText(tier.detail, d, tier.category)}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  function renderFullList() {
+    return SEOTDA_RANK_TABLE.map((tier) =>
+      renderRow(tier, tier.rank === currentRank ? fullListActiveRowRef : undefined),
+    )
   }
 
   return (
-    <div>
-      <button
-        type="button"
-        className="flex min-h-12 w-full items-center justify-between rounded-xl bg-white/5 px-3 text-sm font-bold text-muted lg:hidden"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
-      >
-        {open ? d.advisor.ranking.hide : d.advisor.ranking.show}
-        <span aria-hidden="true">{open ? '▲' : '▼'}</span>
-      </button>
-      <div className={clsx(open ? 'mt-2 block' : 'hidden', 'lg:mt-0 lg:block')}>
-        <div className="rounded-xl bg-white/5 p-2">
-          <p className="hidden px-1 pb-1.5 text-sm font-bold text-muted lg:block">
-            {d.advisor.ranking.title}
+    <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="flex shrink-0 items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-muted">{d.advisor.ranking.title}</p>
+          <p className="truncate text-xs text-muted/80">
+            {currentTier
+              ? format(d.advisor.ranking.currentPosition, {
+                  label: currentTier.label,
+                  position: (currentIndex ?? 0) + 1,
+                  total: SEOTDA_RANK_TABLE.length,
+                })
+              : d.advisor.ranking.noSelectionHint}
           </p>
-          <div className="grid max-h-72 grid-cols-2 gap-x-2 gap-y-0.5 overflow-y-auto pr-1 sm:grid-cols-3 lg:max-h-none lg:grid-cols-2 lg:overflow-visible lg:pr-0 xl:grid-cols-3">
-            {SEOTDA_RANK_TABLE.map((tier, index) => {
-              const isActive = tier.rank === currentRank
-              const previous = SEOTDA_RANK_TABLE[index - 1]
-              const showHeader = index === 0 || previous?.category !== tier.category
-              return (
-                <Fragment key={tier.rank}>
-                  {showHeader ? (
-                    <p
-                      key={`${tier.category}-header`}
-                      className={clsx(
-                        'col-span-full px-1 pb-1 text-[11px] font-bold text-muted/70',
-                        index === 0 ? 'pt-0' : 'pt-3',
-                      )}
-                    >
-                      {categoryLabel[tier.category]}
-                    </p>
-                  ) : null}
-                  <div
-                    ref={isActive ? activeRowRef : undefined}
-                    aria-current={isActive ? 'true' : undefined}
-                    className={clsx(
-                      'flex min-h-8 flex-col justify-center rounded-lg px-2 py-1 text-xs',
-                      isActive ? 'bg-accent/25 font-bold text-accent' : 'text-text/80',
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <span>{tier.label}</span>
-                      {isActive ? (
-                        <span className="rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-bold text-white">
-                          {d.advisor.ranking.current}
-                        </span>
-                      ) : null}
-                    </div>
-                    <span className="text-[10px] font-normal text-muted/70">
-                      {detailText(tier.detail, d, tier.category)}
-                    </span>
-                  </div>
-                </Fragment>
-              )
-            })}
-          </div>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          onClick={() => (isDesktop ? setExpanded((current) => !current) : setSheetOpen(true))}
+        >
+          {isDesktop && expanded ? d.advisor.ranking.collapse : d.advisor.ranking.viewAll}
+        </Button>
       </div>
-    </div>
+
+      {isDesktop && expanded ? (
+        <ScrollPane label={d.advisor.ranking.fullListAria} className="space-y-1.5">
+          {renderFullList()}
+        </ScrollPane>
+      ) : (
+        <>
+          {aboveCount > 0 ? (
+            <p className="shrink-0 text-center text-xs text-muted/60">
+              {format(d.advisor.ranking.moreAbove, { n: aboveCount })}
+            </p>
+          ) : null}
+          <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
+            <div className="space-y-1.5">{rows.map((tier) => renderRow(tier))}</div>
+          </div>
+          {belowCount > 0 ? (
+            <p className="shrink-0 text-center text-xs text-muted/60">
+              {format(d.advisor.ranking.moreBelow, { n: belowCount })}
+            </p>
+          ) : null}
+        </>
+      )}
+
+      <Sheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        ariaLabel={d.advisor.ranking.fullListAria}
+      >
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-sm font-bold">{d.advisor.ranking.title}</p>
+          <Button size="sm" variant="ghost" onClick={() => setSheetOpen(false)}>
+            {d.common.close}
+          </Button>
+        </div>
+        <div className="space-y-1.5">{renderFullList()}</div>
+      </Sheet>
+    </Panel>
   )
 }

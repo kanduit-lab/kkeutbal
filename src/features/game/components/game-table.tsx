@@ -59,7 +59,7 @@ export function GameTable({
 
   gameType?: RoomGameType
 
-  /** 데스크톱에서 남은 높이에 맞춰 테이블을 줄인다 — 페이지 스크롤을 막기 위한 모드 */
+  /** 남은 높이에 맞춰 테이블을 줄인다(모바일 포함) — 뷰포트 스크롤을 막기 위한 모드 */
   fit?: boolean
 }) {
   const { d, locale } = useDict()
@@ -152,7 +152,7 @@ export function GameTable({
       className={clsx(
         'relative mx-auto mb-4 w-full max-w-3xl select-none overflow-hidden [container-type:size] [--felt-inset:7]',
         compact ? 'aspect-[5/7] sm:aspect-square' : 'aspect-[4/5] sm:aspect-[16/10]',
-        fit && 'lg:mb-0 lg:h-full lg:w-auto lg:max-w-full',
+        fit && 'mb-0 h-full w-auto max-w-full',
         board
           ? '[--seat-half-h:6.5rem] [--seat-half-w:7rem]'
           : compact

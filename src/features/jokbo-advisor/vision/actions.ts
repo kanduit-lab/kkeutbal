@@ -12,6 +12,13 @@ import { getActiveVisionSettings } from './settings'
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
+const boxSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().min(0).max(1),
+  h: z.number().min(0).max(1),
+})
+
 const visionSchema = z.object({
   cards: z
     .array(
@@ -19,6 +26,7 @@ const visionSchema = z.object({
         month: z.number().int().min(1).max(12),
         kind: z.enum(['gwang', 'yeol', 'tti', 'pi']),
         ssangpi: z.boolean().optional(),
+        box: boxSchema.optional(),
       }),
     )
     .max(12),
@@ -38,6 +46,15 @@ const geminiVisionJsonSchema = {
           month: { type: 'integer', minimum: 1, maximum: 12 },
           kind: { type: 'string', enum: ['gwang', 'yeol', 'tti', 'pi'] },
           ssangpi: { type: 'boolean' },
+          box: {
+            type: 'object',
+            properties: {
+              x: { type: 'number', minimum: 0, maximum: 1 },
+              y: { type: 'number', minimum: 0, maximum: 1 },
+              w: { type: 'number', minimum: 0, maximum: 1 },
+              h: { type: 'number', minimum: 0, maximum: 1 },
+            },
+          },
         },
         required: ['month', 'kind'],
       },
@@ -48,8 +65,21 @@ const geminiVisionJsonSchema = {
   required: ['cards', 'confidence'],
 } as const
 
+export interface RecognizedCardBox {
+  readonly x: number
+  readonly y: number
+  readonly w: number
+  readonly h: number
+}
+
+export interface RecognizedCard {
+  readonly cardId: CardId
+  readonly box?: RecognizedCardBox
+}
+
 export interface VisionRecognition {
   readonly cardIds: readonly CardId[]
+  readonly cards: readonly RecognizedCard[]
   readonly confidence: number
   readonly note: string | null
 }
@@ -103,10 +133,12 @@ export async function recognizeHand(
   const prompt = `이 사진에 보이는 화투 카드를 식별해라. ${gameHint}
 각 카드를 월(1~12)과 종류(gwang=광, yeol=열끗, tti=띠, pi=피)로 판정하고,
 피가 쌍피(11월 오동 쌍피, 12월 비 쌍피)면 ssangpi=true 로 표시해라.
+가능하면 각 카드의 위치를 사진 기준 정규화 좌표(box: {x,y,w,h}, 좌상단이 0,0이고 우하단이 1,1)로 함께 달아라.
+위치를 확신할 수 없으면 box 필드를 아예 생략해라. 좌표를 추측해서 만들어내지 마라.
 확신이 없는 카드는 포함하지 마라. 전체 확신도를 confidence(0~1)로 적어라.
 
 다음 JSON 형식으로만 응답해라. 다른 텍스트 금지:
-{"cards":[{"month":3,"kind":"gwang"}],"confidence":0.95,"note":"선택적 비고"}`
+{"cards":[{"month":3,"kind":"gwang","box":{"x":0.12,"y":0.2,"w":0.3,"h":0.5}}],"confidence":0.95,"note":"선택적 비고"}`
 
   try {
     const text =
@@ -128,9 +160,10 @@ export async function recognizeHand(
     const result = visionSchema.safeParse(raw)
     if (!result.success) return fail('errors.visionInvalidResult')
 
-    const cardIds = toCardIds(result.data.cards, parsed.data.gameType)
+    const matched = matchCards(result.data.cards, parsed.data.gameType)
     return ok({
-      cardIds,
+      cardIds: matched.map((card) => card.cardId),
+      cards: matched,
       confidence: result.data.confidence,
       note: result.data.note ?? null,
     })
@@ -189,12 +222,17 @@ async function recognizeWithGemini(
   return response.output_text ?? null
 }
 
-function toCardIds(
-  detected: ReadonlyArray<{ month: number; kind: string; ssangpi?: boolean }>,
+function matchCards(
+  detected: ReadonlyArray<{
+    month: number
+    kind: string
+    ssangpi?: boolean
+    box?: RecognizedCardBox
+  }>,
   gameType: GameType,
-): CardId[] {
+): RecognizedCard[] {
   const used = new Set<CardId>()
-  const ids: CardId[] = []
+  const matched: RecognizedCard[] = []
 
   for (const item of detected) {
     const candidates = cardsOfMonth(item.month as Month).filter((card) => {
@@ -208,9 +246,9 @@ function toCardIds(
     const free = candidates.find((card) => !used.has(card.id))
     if (free) {
       used.add(free.id)
-      ids.push(free.id)
+      matched.push({ cardId: free.id, box: item.box })
     }
   }
 
-  return ids
+  return matched
 }
