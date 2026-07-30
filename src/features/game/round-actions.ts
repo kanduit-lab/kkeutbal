@@ -5,37 +5,19 @@ import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
-import {
-  FAIRNESS_ALGORITHM_VERSION,
-  commitServerSeed,
-  generateFairnessSeed,
-} from '../fairness/protocol'
-import { FAIRNESS_PUBLIC_RECEIPT_VERSION } from '../fairness/receipt'
-import { encryptFairnessServerSeed } from '../fairness/seed-crypto'
-import {
-  fairDatabaseNow,
-  loadFairRoundParticipants,
-  revealPersistedFairRound,
-  resolvePersistedFairSeotdaShowdown,
-  type PersistedFairRound,
-} from '../fairness/fair-round-service'
+import type { PersistedFairRound } from '../fairness/fair-round-service'
 import { getRoundPot } from './queries'
 import { balanceInRoom, lockRoom, readPointValue, requireRole } from './action-helpers'
-import { readFairPlaySettings } from './fair-play-settings'
 import { winnerPayout } from './round-settlement'
 import { creditPotToWinner, finalizeRoundRecord, revealFairnessIfNeeded } from './round-finalize'
-import { SEOTDA_RULES_STANDARD } from '../seotda/types'
+import {
+  handleVoidRoundFairness,
+  resolveFairRoundWinner,
+  setUpFairRoundIfVerified,
+} from './round-fairness-ops'
 import type { RoundPenaltyView } from './types'
 
-const {
-  rooms,
-  roomMembers,
-  rounds,
-  roundParticipants,
-  chipLedger,
-  roundFairness,
-  roundFairnessParticipants,
-} = schema
+const { rooms, roomMembers, rounds, roundParticipants, chipLedger, roundFairness } = schema
 
 export async function startRound(
   roomId: string,
@@ -81,22 +63,7 @@ export async function startRound(
         .where(eq(rounds.roomId, roomId))
       const seq = (maxSeq?.max ?? 0) + 1
 
-      const fairPlay = readFairPlaySettings(room.gameType, room.rulePreset)
-      const verifiedSeotda = fairPlay.dealing === 'verified' && room.gameType === 'seotda'
       const roundId = crypto.randomUUID()
-      const fairSeed = verifiedSeotda ? generateFairnessSeed() : null
-      const [serverSeedCommitment, serverSeedCiphertext] = fairSeed
-        ? await Promise.all([
-            commitServerSeed(roundId, fairSeed),
-            Promise.resolve(encryptFairnessServerSeed(fairSeed)),
-          ])
-        : [null, null]
-      const fairNow = verifiedSeotda ? await fairDatabaseNow(tx) : null
-      const seedDeadline =
-        verifiedSeotda && fairNow
-          ? new Date(fairNow.getTime() + fairPlay.seedCollectionSeconds * 1_000)
-          : null
-
       const [round] = await tx
         .insert(rounds)
         .values({ id: roundId, roomId, seq })
@@ -108,23 +75,8 @@ export async function startRound(
           userId: participant.userId,
         })),
       )
-      if (serverSeedCommitment && serverSeedCiphertext && seedDeadline) {
-        await tx.insert(roundFairness).values({
-          roundId: round.id,
-          algorithmVersion: FAIRNESS_ALGORITHM_VERSION,
-          receiptVersion: FAIRNESS_PUBLIC_RECEIPT_VERSION,
-          serverSeedCiphertext,
-          serverSeedCommitment,
-          seedDeadline,
-        })
-        await tx.insert(roundFairnessParticipants).values(
-          participants.map((participant, dealOrder) => ({
-            roundId: round.id,
-            userId: participant.userId,
-            dealOrder,
-          })),
-        )
-      }
+      // 공정 딜(commit-reveal) 준비 — 검증 딜 방이 아니면 아무 것도 하지 않는다.
+      await setUpFairRoundIfVerified(tx, room, round.id, participants)
 
       if (room.status === 'waiting') {
         await tx.update(rooms).set({ status: 'playing' }).where(eq(rooms.id, roomId))
@@ -195,41 +147,10 @@ export async function endRound(
       const fairRound = fairRoundRow as PersistedFairRound | undefined
       let winnerId = requestedWinnerId
       if (fairRound) {
-        if (room.gameType !== 'seotda' || fairRound.phase !== 'sealed') {
-          return fail('errors.fairnessDealNotReady')
-        }
-        const fairParticipants = await loadFairRoundParticipants(tx, round.id)
-        const acceptedActions = await tx
-          .select({ userId: schema.betActions.userId, action: schema.betActions.action })
-          .from(schema.betActions)
-          .where(
-            and(eq(schema.betActions.roundId, round.id), eq(schema.betActions.status, 'accepted')),
-          )
-          .orderBy(desc(schema.betActions.seq))
-        const lastActionByUser = new Map<string, (typeof acceptedActions)[number]['action']>()
-        for (const action of acceptedActions) {
-          if (!lastActionByUser.has(action.userId))
-            lastActionByUser.set(action.userId, action.action)
-        }
-        const contenderIds = new Set(
-          fairParticipants
-            .filter((participant) => lastActionByUser.get(participant.userId) !== 'fold')
-            .map((participant) => participant.userId),
-        )
-        if (contenderIds.size === 0) return fail('errors.winnerNotEligible')
-        if (contenderIds.size === 1) {
-          winnerId = [...contenderIds][0]
-        } else {
-          const showdown = await resolvePersistedFairSeotdaShowdown(
-            fairRound,
-            fairParticipants,
-            SEOTDA_RULES_STANDARD,
-            contenderIds,
-          )
-          if (showdown.outcome.kind !== 'win') return fail('errors.fairnessReplayRequired')
-          winnerId = showdown.participants[showdown.outcome.winnerIndex]?.userId
-        }
-        if (!winnerId) throw new Error('Verified Seotda winner index is invalid')
+        // 검증 딜 방이면 fold 여부·쇼다운 재구성으로 승자를 판정한다 (round-fairness-ops.ts).
+        const resolution = await resolveFairRoundWinner(tx, room, round, fairRound, requestedWinnerId)
+        if (!resolution.ok) return fail(resolution.error)
+        winnerId = resolution.winnerId
       }
       if (!winnerId) return fail('errors.winnerNotEligible')
 
@@ -454,29 +375,8 @@ export async function voidRound(
         .set({ status: 'voided', result: { note: reason }, endedAt: new Date() })
         .where(eq(rounds.id, round.id))
 
-      const [fairRoundRow] = await tx
-        .select()
-        .from(roundFairness)
-        .where(eq(roundFairness.roundId, round.id))
-        .limit(1)
-      const fairRound = fairRoundRow as PersistedFairRound | undefined
-      if (fairRound?.phase === 'collecting_seeds') {
-        await tx
-          .update(roundFairness)
-          .set({ phase: 'aborted', abortedAt: await fairDatabaseNow(tx), abortReason: reason })
-          .where(
-            and(eq(roundFairness.roundId, round.id), eq(roundFairness.phase, 'collecting_seeds')),
-          )
-      } else if (fairRound?.phase === 'sealed') {
-        const fairParticipants = await loadFairRoundParticipants(tx, round.id)
-        await revealPersistedFairRound(
-          tx,
-          fairRound,
-          fairParticipants,
-          userId,
-          await fairDatabaseNow(tx),
-        )
-      }
+      // 공정 딜 상태 마감(abort 또는 append-only reveal) — round-fairness-ops.ts.
+      await handleVoidRoundFairness(tx, round.id, reason, userId)
 
       return ok({ roundId: round.id, seq: round.seq })
     })
