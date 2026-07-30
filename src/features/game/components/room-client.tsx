@@ -4,14 +4,11 @@ import { clsx } from 'clsx'
 import Link from 'next/link'
 import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { format, translateError, useDict } from '@/lib/i18n/client'
-import { sendRoomEvent } from '@/lib/realtime/client'
+import { useCallback, useMemo, useState } from 'react'
+import { format, useDict } from '@/lib/i18n/client'
 import { isMuted, setMuted } from '@/lib/sound'
 import type { MemberView, RoomSnapshot } from '../types'
 import { Button, Sheet, useIsDesktop, useToast } from '@/components/ui'
-import { AUTH_ERROR_KEYS, useRoomSync } from './use-room-sync'
-import { useRoomEventFeedback } from './use-room-event-feedback'
 import { RoomHeader } from './room-header'
 import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
@@ -24,8 +21,7 @@ import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
 import { RoundLog } from './round-log'
 import { FairnessPanel } from './fairness-panel'
-import { ACTION_RACE_TIMEOUT_MS } from './sync-timeouts'
-import type { BroadcastSpec, RunAction } from './shared'
+import { useRoomActions } from './use-room-actions'
 
 export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId: string }) {
   const router = useRouter()
@@ -36,148 +32,20 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
   const [roundLogOpen, setRoundLogOpen] = useState(false)
   const isDesktop = useIsDesktop()
 
-  const onEvent = useRoomEventFeedback(selfId)
-
+  // 실시간 동기화(useRoomSync)·뮤테이션 후 브로드캐스트(afterMutation)·서버 액션 실행 레이스
+  // (runAction)는 전부 이 훅 하나에 배선돼 있다 — 아래는 그 결과로 화면을 어떻게 배치할지만
+  // 다룬다. 자세한 배선은 use-room-actions.ts 참고.
   const {
     snapshot,
     online,
-    connected,
-    everConnected,
-    connectTimedOut,
     syncFailed,
-    authError,
+    showDisconnected,
+    staleReason,
     refetch,
     reconnect,
-    channelRef,
-  } = useRoomSync({ initial, selfId, onEvent })
-
-  const showDisconnected = (everConnected && !connected) || connectTimedOut
-  const roomId = initial.room.id
-  const roomCode = initial.room.code
-
-  const staleReason = syncFailed ? d.room.staleGate : null
-
-  useEffect(() => {
-    if (!authError) return
-    if (authError === AUTH_ERROR_KEYS.loginRequired) {
-      toast(d.room.sessionExpired, 'error')
-
-      router.push(`/login?next=${encodeURIComponent(`/rooms/${roomCode}`)}` as Route)
-      return
-    }
-    toast(translateError(d, authError), 'error')
-    router.push('/')
-  }, [authError, router, toast, d, roomCode])
-
-  const afterMutation = useCallback(
-    async (broadcast?: BroadcastSpec) => {
-      const result = await refetch()
-      const channel = channelRef.current
-      if (!channel) return
-
-      // sendRoomEvent retries internally and resolves to whether delivery is
-      // believed to have gone through. Don't block this action's own success
-      // path on that outcome (the actor's screen is already correct via the
-      // refetch above) — just warn if it ultimately failed, since other
-      // participants won't see this change until their next poll.
-      const sends: Promise<boolean>[] = []
-      if (broadcast) {
-        sends.push(sendRoomEvent(channel, roomId, selfId, broadcast.event, broadcast.payload))
-      }
-      if (result.success) {
-        sends.push(
-          sendRoomEvent(channel, roomId, selfId, 'state.snapshot', {
-            roomStatus: result.data.room.status,
-            currentRound: result.data.currentRound
-              ? {
-                  roundId: result.data.currentRound.id,
-                  seq: result.data.currentRound.seq,
-                  pot: result.data.currentRound.pot,
-                }
-              : null,
-            balances: result.data.members.map((member) => ({
-              userId: member.userId,
-              balance: Math.max(0, member.balance),
-            })),
-          }),
-        )
-      }
-      if (sends.length === 0) return
-
-      void Promise.all(sends).then((delivered) => {
-        if (delivered.some((ok) => !ok)) toast(d.room.broadcastDelayed, 'info')
-      })
-    },
-    [refetch, channelRef, roomId, selfId, toast, d],
-  )
-
-  const runAction: RunAction = useCallback(
-    async (run, onSuccess) => {
-      let actionSucceeded = false
-      try {
-        let timedOut = false
-        const pending = run()
-        const result = await Promise.race([
-          pending,
-          new Promise<{ success: false; error: string }>((resolve) =>
-            setTimeout(() => {
-              timedOut = true
-              resolve({
-                success: false,
-                error: d.room.serverSlow,
-              })
-            }, ACTION_RACE_TIMEOUT_MS),
-          ),
-        ])
-        if (!result.success) {
-          toast(translateError(d, result.error), 'error')
-          if (timedOut) {
-            void refetch()
-            pending.then(
-              (late) => {
-                if (late.success) void refetch()
-              },
-              () => undefined,
-            )
-          }
-          return false
-        }
-        actionSucceeded = true
-        const broadcast = onSuccess?.(result.data)
-        await afterMutation(broadcast ?? undefined)
-        return true
-      } catch (error) {
-        if (actionSucceeded) {
-          console.error('post-action sync failed:', error)
-          return true
-        }
-
-        console.error('runAction failed:', error)
-        toast(d.room.networkError, 'error')
-        void refetch()
-        return false
-      }
-    },
-    [afterMutation, refetch, toast, d],
-  )
-
-  const self = useMemo(
-    () => snapshot.members.find((member) => member.userId === selfId) ?? null,
-    [snapshot.members, selfId],
-  )
-
-  const wasMemberRef = useRef(false)
-  useEffect(() => {
-    if (self) {
-      wasMemberRef.current = true
-      return
-    }
-    if (wasMemberRef.current) {
-      wasMemberRef.current = false
-      toast(d.room.removedFromRoom, 'error')
-      router.push('/')
-    }
-  }, [self, toast, router, d])
+    runAction,
+    self,
+  } = useRoomActions({ initial, selfId, router, toast, d })
 
   const isHost = self?.role === 'host'
   const isDealer = isHost || self?.role === 'dealer'

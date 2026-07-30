@@ -90,7 +90,7 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
             placeholder={d.roomForm.namePlaceholder}
           />
         </Field>
-        <Field label={d.inputMode.label}>
+        <Field label={d.inputMode.label} group>
           <Segmented
             value={inputMode}
             onChange={setInputMode}
@@ -184,7 +184,7 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
           <p className="mt-1.5 text-xs text-muted">{d.settings.joinAsObserverHint}</p>
         </div>
         {supportsVerifiedFairDeal ? (
-          <Field label={d.fairness.settingsLabel}>
+          <Field label={d.fairness.settingsLabel} group>
             <Button
               type="button"
               selected={fairDealing === 'verified'}
