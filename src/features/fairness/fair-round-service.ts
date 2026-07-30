@@ -30,13 +30,26 @@ export type PersistedFairParticipant = Pick<
   'userId' | 'dealOrder' | 'clientSeedHash' | 'seedSubmittedAt' | 'seedTimedOutAt'
 >
 
+/**
+ * 공정 딜 상태 전이의 기준 시각. 서버 프로세스 시계가 아니라 DB 시계를 쓴다 — 시드 마감·봉인
+ * 시각이 여러 인스턴스에서 일관돼야 하고, 영수증에 남는 시각도 같은 기준이어야 한다.
+ *
+ * `to_char(... at time zone 'utc')`로 포맷을 못 박는 이유: drizzle의 raw `execute`는 컬럼 타입
+ * 정보가 없어 postgres-js가 값을 파싱하지 않고 **문자열 그대로** 돌려준다
+ * (`'2026-07-30 09:25:15.752893+00'`). 그래서 이 함수의 `instanceof Date` 검사는 항상 실패했고,
+ * 검증 딜 방은 판 시작 자체가 "판 시작에 실패했습니다"로 끝났다 — 기능 전체가 죽어 있었다.
+ * 드라이버 매핑이나 엔진별 관대한 날짜 파싱에 기대지 않고 ISO 8601 UTC로 고정해 직접 파싱한다.
+ */
 export async function fairDatabaseNow(tx: Tx): Promise<Date> {
-  const rows = await tx.execute(sql<{ now: Date }>`select statement_timestamp() as now`)
-  const value = (rows[0] as { now?: unknown } | undefined)?.now
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) {
+  const rows = await tx.execute(
+    sql`select to_char(statement_timestamp() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`,
+  )
+  const value = (rows as unknown as ReadonlyArray<{ now?: unknown }>)[0]?.now
+  const parsed = value instanceof Date ? value : typeof value === 'string' ? new Date(value) : null
+  if (!parsed || !Number.isFinite(parsed.getTime())) {
     throw new Error('Database clock is unavailable for fair round transition')
   }
-  return value
+  return parsed
 }
 
 export async function loadFairRoundParticipants(
