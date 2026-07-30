@@ -49,6 +49,12 @@
   - 참조: 1차는 `lib/auth.ts`·`auth/actions.ts`·`betting/actions.ts`·`game/actions.ts`·`round-actions.ts`·i18n 사전을 쪼갰다. 이 다섯은 책임 혼재 정도가 그보다 약해 뒤로 미뤘다
   - 선행 확인: 순수 리팩터라 기존 테스트가 통과 판정을 한다. 동작을 바꿔야 할 것이 보이면 별도 항목으로 분리
 
+- [ ] **`hasPlayedSession` 중복**: 같은 SQL 조각이 두 피처에 복사돼 있다
+  - 변경 범위: `src/features/game/my-rooms-queries.ts`, `src/features/ranking/shared.ts`
+  - 완료 기준: "이 사람이 실제로 세션을 뛰었는가" 판정이 한 곳에만 있다. 어느 피처가 이 규칙을 소유할지 정하고 다른 쪽이 그걸 참조한다
+  - 참조: 랭킹 집계와 홈 화면의 "지난 세션"이 같은 규칙을 쓴다 — 한쪽만 바뀌면 두 화면이 서로 다른 답을 낸다
+  - 미확정: game이 소유할지 ranking이 소유할지, 아니면 공용 모듈을 둘지
+
 ### Low — 회귀 가드
 
 - [ ] **인증 후 E2E 흐름 확장**: 2컨텍스트 동기화·재접속 복원·정산 흐름 자동화
