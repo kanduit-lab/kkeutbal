@@ -81,11 +81,13 @@ test.describe('realtime reconnect and recovery', () => {
       await host.evaluate(() => window.dispatchEvent(new Event('online')))
       await expect(host.getByText(twoMembers)).toBeVisible({ timeout: 15_000 })
 
-      // 끊김 배너(`RoomConnectionBar`)는 여기서 단정하지 않는다. 이 시나리오는 "한 번도 붙은 적
-      // 없는" 경우라 배너 조건이 `connectTimedOut` 하나뿐인데, 그 10초 타이머는 재구독 시도마다
-      // effect가 다시 걸리면서 초기화된다. 백오프 초반 간격이 1·2·5초라 타이머가 만료되기 전에
-      // 계속 리셋되고, 배너는 간격이 10초를 넘는 4~5번째 시도쯤에야 뜬다. 시간에 의존하는 단정을
-      // 넣으면 흔들리는 스펙이 되므로 뺐다 — 대신 그 지연 자체를 사용자에게 보고했다.
+      // 스냅샷으로 따라잡았더라도 **소켓은 여전히 죽어 있다.** 그러면 앱은 그 사실을 사용자에게
+      // 알려야 한다 — 조용히 맞는 화면을 보여주면 다음 변화를 놓치는 걸 아무도 모른다.
+      // 배너 조건인 연결 타임아웃(`CONNECT_TIMEOUT_MS`, 10초)은 방에 들어온 시점 기준으로 한 번만
+      // 돌기 때문에 시점이 예측 가능하다. 재구독 시도마다 초기화되던 때는 20~40초로 밀렸고, 그게
+      // 이 단정을 처음에 못 넣은 이유였다.
+      await expect(host.getByText(ko.room.disconnectedTitle)).toBeVisible({ timeout: 20_000 })
+      await expect(host.getByRole('button', { name: ko.room.reconnect })).toBeVisible()
     } finally {
       await close()
     }

@@ -134,16 +134,27 @@ export function useRoomSync({
     setEpoch((current) => current + 1)
   }, [setConnectedBoth])
 
+  // 연결 타임아웃은 **방에 들어온 시점 기준으로 한 번만** 돈다. 아래 채널 effect 안에 두면
+  // 재구독 시도마다(`epoch` 증가) 타이머가 새로 걸려 초기화되는데, 백오프 초반 간격이 1·2·5초라
+  // 10초를 넘기지 못하고 계속 리셋된다. 그래서 "한 번도 붙지 못한" 방에서 끊김 배너가 간격이
+  // 10초를 넘는 4~5번째 시도(대략 20~40초)에야 떴고, 그동안 사용자는 동기화가 멈춘 화면을 아무
+  // 표시 없이 봤다.
+  //
+  // 이 타이머의 역할은 "처음부터 못 붙는 경우" 하나다 — 붙으면 `SUBSCRIBED`가 상태를 내리고,
+  // 붙었다가 끊긴 경우는 `everConnected && !connected`가 배너를 띄운다.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!connectedRef.current) setConnectTimedOut(true)
+    }, CONNECT_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [roomId])
+
   useEffect(() => {
     let disposed = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     const self = snapshotRef.current.members.find((member) => member.userId === selfId)
     const channel = createRoomChannel(roomId, selfId)
     channelRef.current = channel
-
-    const connectTimer = setTimeout(() => {
-      if (!disposed && !connectedRef.current) setConnectTimedOut(true)
-    }, CONNECT_TIMEOUT_MS)
 
     onRoomEvent(channel, roomId, (event, envelope) => {
       // Reconnects can replay an event the client already reacted to. The
@@ -196,7 +207,6 @@ export function useRoomSync({
     channel.subscribe((status) => {
       if (disposed) return
       if (status === 'SUBSCRIBED') {
-        clearTimeout(connectTimer)
         setConnectTimedOut(false)
         retryAttemptRef.current = 0
         setConnectedBoth(true)
@@ -254,7 +264,6 @@ export function useRoomSync({
 
     return () => {
       disposed = true
-      clearTimeout(connectTimer)
       if (retryTimer) clearTimeout(retryTimer)
       if (refetchTimer.current) {
         clearTimeout(refetchTimer.current)
