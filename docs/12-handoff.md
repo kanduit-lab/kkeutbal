@@ -18,6 +18,11 @@
 
 ## 10. 방 화면에서 족보 판독으로 가는 진입점 없음
 
+> **해결 (2026-07-30)** — 방 헤더에 `/advisor?game={gameType}` 링크를 붙였고 어드바이저가
+> `?game=`을 zod로 받아 해당 탭으로 연다. **현재 판의 카드는 넘기지 않는다** — 공정 딜 방에서
+> 서버가 아는 카드를 채워주면 [`docs/10-virtual-credit-and-fair-play.md`](10-virtual-credit-and-fair-play.md)의
+> 신뢰 모델과 충돌하기 때문이다. 아래 미확정은 이 결정으로 닫혔다.
+
 두 화면이 코드 수준에서 완전히 분리돼 있다.
 
 - `/advisor` 링크는 저장소 전체에서 홈 화면 한 곳뿐이다(`src/app/(home)/page.tsx`). `src/features/game/` 어디에도 `/advisor` 참조가 없다.
@@ -108,6 +113,10 @@
 
 ## 7. 액션바 "첫 베팅 전" 오표시
 
+> **해결 (2026-07-30)** — `action-bar.tsx`에서 콜 필요액 0을 라운드 최고 베팅액(`lastBet`)
+> 기준으로 갈랐다. 0이면 `actionBar.beforeFirstBet`, 0이 아니면 내가 최고 베팅자라는 뜻이므로
+> `actionBar.waitingForCall`. 표시만 고쳤고 베팅 검증은 건드리지 않았다.
+
 이미 레이즈해서 칩이 줄어든 상태인데도 액션바에 "첫 베팅 전"이 뜬다.
 
 ### 근거
@@ -168,6 +177,13 @@ pot-limit(레이즈를 현재 판돈 이하로 제한), 방 생성 시 하우스
 
 ## 4. 방 화면 모바일 세로 길이
 
+> **해결 (2026-07-30)** — 모바일도 뷰포트 고정으로 바꿨다. 딜러 컨트롤은 하단 시트
+> (`dealer-tools-sheet.tsx`)로 빼고, 자주 쓰는 판 시작·종료·무효와 승인 대기 배지만
+> 액션바 위 컴팩트 줄(`dealer-quick-bar.tsx`)에 남겼다. `GameTable`의 `fit` 모드가
+> `--action-bar-h`를 뺀 남는 높이에 맞춰 줄어든다. 진행 기록은 테이블 위 아이콘으로 여는
+> 시트로 옮겼다. 아래 미확정은 "바텀시트로 뺀다"로 닫혔다 — 승인 큐·되돌리기 목록은 높이를
+> 예측할 수 없어 고정 영역에 담을 수 없다는 실측이 근거다. **실기기 확인은 남아 있다.**
+
 딜러 컨트롤의 판 종료·판 무효 버튼이 하단 고정 액션바에 가려 스크롤해야 보인다.
 데스크톱(`lg` 이상)은 2026-07-30에 뷰포트 고정으로 바꿨다 — `main`이 `lg:min-h-0 lg:flex-1
 lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남은 높이에 맞게 줄어들며,
@@ -197,6 +213,27 @@ lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남�
 
 ---
 
+## 12. 실시간 통신 안정성 — 코드 근거
+
+`docs/03-realtime-protocol.md`가 프로토콜 정본이고, 이 절은 현재 구현에서 확인된 빈 곳만 적는다.
+
+- **재구독이 `CLOSED`에서만 걸린다** — `use-room-sync.ts`의 `channel.subscribe` 콜백은
+  `CHANNEL_ERROR`·`TIMED_OUT`에서 `setConnectedBoth(false)`만 하고 백오프 타이머를 예약하지 않는다.
+  그 상태로 멈추면 `visibilitychange`·`online`이 올 때까지 끊긴 채 앉아 있는다.
+- **백오프에 지터가 없다** — `RETRY_DELAYS_MS`가 고정 배열이라 10인방이 같이 끊기면 같은 시각에
+  같이 재접속한다.
+- **`refreshRoom`에 상한이 없다** — `runAction`(`room-client.tsx`)은 15초 레이스를 걸지만
+  폴링·이벤트 유래 `refetch`는 무기한 대기한다. `src/lib/with-timeout.ts`가 이미 있다.
+- **broadcast 전송이 fire-and-forget** — `client.ts`의 `sendRoomEvent`는 `void channel.send(...)`,
+  `sendOneShotRoomEvent`는 빈 `catch`다. 소켓이 끊긴 상태면 이벤트가 조용히 사라지고 다른 참가자는
+  20초 폴링까지 기다린다.
+- **envelope `id`를 쓰지 않는다** — 재접속 시 같은 이벤트가 두 번 배달되면 소리·토스트가 두 번 난다.
+  진실은 스냅샷이라 상태는 안 깨지지만 피드백이 중복된다.
+- **모든 broadcast가 전체 스냅샷 refetch를 유발한다** — 이벤트당 `debouncedRefetch()`(250ms 디바운스,
+  이벤트 유래 최소 1초 간격). 10명이 빠르게 베팅하면 방 전체로 초당 수 회 왕복이 된다.
+
+---
+
 ## 11. 고정 뷰포트 레이아웃 규약
 
 2026-07-30부터 목록·조회 화면은 **문서 스크롤을 만들지 않는다**. 넘치는 내용은 페이지를
@@ -218,9 +255,8 @@ lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남�
 
 ### 적용 여부
 
-- 적용: `/`, `/admin`, `/ranking`, `/wallet`, 방 화면 데스크톱, `/advisor` 데스크톱
-- 미적용(의도): `/guide/*`, `/about` — 읽는 문서라서 문서 스크롤이 맞다
-- 미적용(남은 일): `TODO.md`의 "남은 문서 스크롤 화면" 항목 참조
+- 적용: `/`, `/admin`, `/ranking`, `/ranking/player/[id]`, `/wallet`, `/advisor`, `/rooms/new`, `/rooms/[code]`, `/rooms/[code]/result`, `/rooms/[code]/monitor`
+- 미적용(의도): `/guide/*`, `/about` — 읽는 문서라서 문서 스크롤이 맞다. 로그인·가입·설정·검증 영수증처럼 한 패널만 있는 화면은 `flex-1` 중앙 정렬로 충분하다
 
 ### 줄 높이를 바꿀 때
 
@@ -253,6 +289,12 @@ UI가 없다. `/settings`, `/profile` 같은 라우트가 `src/app` 하위에 �
 ---
 
 ## 2. 족보 판독 — 포커 설명과 부분 선택 미리보기
+
+> **해결 (2026-07-30)** — 포커 10단계에 카테고리별 설명을 붙였고(`poker-rank-table.ts`의
+> `descriptionKey`), 3~4장 선택 시 남은 덱 기준 확률을 `poker-preview.ts`(순수 함수 +
+> `poker-preview.test.ts` 6개)로 계산한다. 1~2장은 계산하지 않고, 상한
+> `POKER_PREVIEW_MAX_COMBINATIONS = 2000`을 넘으면 계산을 생략하고 그 사실을 화면에 밝힌다.
+> 아래 실측표가 그 상한의 근거다.
 
 ### 포커 족보 설명
 

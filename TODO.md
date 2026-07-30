@@ -21,24 +21,40 @@
   - 선행: 위 서버 턴 검증. 턴 순서가 강제되지 않으면 "한 바퀴 돌았다"를 판정할 수 없다
   - 미확정: 사용자가 말한 "다음 세션"이 판(round) 전환인지 새 상위 단위인지 확인 필요. 이 저장소에서 "세션"은 이미 방 하나를 뜻한다
 
-- [ ] **액션바 "첫 베팅 전" 오표시**: 이미 레이즈한 최고 베팅자에게도 첫 베팅 전이라고 뜬다
-  - 변경 범위: `src/features/game/components/action-bar.tsx`, `src/lib/i18n/dictionaries/`
-  - 완료 기준: 콜 필요액 0이 "아무도 베팅 안 함"과 "내가 최고 베팅자라 남을 기다리는 중" 두 경우로 갈린다. 후자에 맞는 문구가 뜬다
-  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 7번
-
 - [ ] **섯다 레이즈 배수·상한 규칙**: 따당·하프·풀이 입력 편의 프리셋일 뿐 서버가 강제하지 않는다
   - 변경 범위: `src/features/game/actions.ts`(`rulePreset`), `src/features/betting/round-bet-state.ts`, `src/features/betting/actions.ts`, `src/lib/i18n/dictionaries/`
   - 완료 기준: 방 생성 시 고른 레이즈 규칙이 서버에서 강제된다. 규칙 위반 시 전용 에러 문구가 뜬다
   - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 5번
   - 미확정: 어떤 규칙을 쓸지 사용자 확정 필요 — 따당 강제, pot-limit, 방별 하우스 룰 선택 중
 
+### High — 통신 안정성
+
+- [ ] **재구독 트리거 확대**: `CHANNEL_ERROR`·`TIMED_OUT`에서 재구독이 걸리지 않는다
+  - 변경 범위: `src/features/game/components/use-room-sync.ts`
+  - 완료 기준: `CLOSED` 외의 실패 상태에서도 백오프 재구독이 예약된다. 백오프에 지터가 들어가 10인방이 동시에 재접속하지 않는다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 12번
+
+- [ ] **스냅샷 refetch 타임아웃**: 폴링·이벤트 유래 `refreshRoom`이 무기한 대기한다
+  - 변경 범위: `src/features/game/components/use-room-sync.ts`
+  - 완료 기준: `refetch`가 `src/lib/with-timeout.ts`로 상한을 갖고, 타임아웃이 연결 실패와 같은 표면으로 드러난다. `runAction`의 15초 레이스와 값이 어긋나지 않는다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 12번
+
+- [ ] **broadcast 전송 실패 처리**: `channel.send`가 fire-and-forget이라 이벤트가 조용히 사라진다
+  - 변경 범위: `src/lib/realtime/client.ts`, `src/features/game/components/room-client.tsx`(`afterMutation`)
+  - 완료 기준: 전송 실패를 감지해 재시도하거나, 최소한 행동한 클라이언트가 "남들에게 안 갔을 수 있다"를 알 수 있다. Server Action은 성공했는데 남의 화면만 20초 늦는 구간이 없어진다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 12번. 수신자가 진실을 스냅샷으로 확인하는 원칙은 [`docs/03-realtime-protocol.md`](docs/03-realtime-protocol.md)
+
+- [ ] **이벤트 중복 배달 제거**: envelope `id`를 쓰지 않아 재접속 시 소리·토스트가 두 번 난다
+  - 변경 범위: `src/lib/realtime/client.ts` 또는 `use-room-event-feedback.ts`
+  - 완료 기준: 최근에 본 `id`를 기억해 같은 이벤트의 두 번째 배달은 피드백을 내지 않는다. 스냅샷 refetch는 그대로 둔다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 12번
+
 ### High — 모바일 방 화면
 
-- [ ] **모바일 방 화면 세로 길이 축소**: 딜러 패널이 하단 고정 액션바에 가려 스크롤해야 보인다
-  - 변경 범위: `src/features/game/components/room-client.tsx`, `game-table.tsx`, `dealer-panel.tsx`
-  - 완료 기준: 딜러 겸 방장 계정으로 2인방과 10인방 양쪽에서 판 종료·판 무효 버튼이 스크롤 없이 닿는다
-  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 4번. 데스크톱은 뷰포트 고정으로 끝났고 남은 것은 모바일뿐이다. `GameTable`의 세로 비율이 인원수와 무관하게 고정이라 2인방도 세로 공간을 다 쓴다
-  - 미확정: 테이블 비율을 인원수에 따라 조절할지, 딜러 패널을 바텀시트로 뺄지. 액션바 위 남는 높이가 승인 큐를 담지 못한다는 실측은 handoff 4번에 있다
+- [ ] **모바일 방 화면 실기기 확인**: 딜러 시트 구조를 실제 폰에서 검증한다
+  - 변경 범위: 검증 활동. 발견한 결함은 별도 구현 작업으로 분리
+  - 완료 기준: 딜러 겸 방장 계정으로 2인방과 10인방 양쪽에서 판 종료·판 무효가 스크롤 없이 닿는다. 세로 짧은 기기(iPhone SE급)에서 `GameTable`이 0 높이로 눌리지 않는다. 승인 대기 배지 숫자가 시트를 열지 않아도 보인다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 4번. 구현은 끝났고 남은 것은 실기기 확인뿐이다
 
 - [ ] **고스톱 판 사이 화면 채우기**: 판이 끝나고 다음 판이 깔리기 전 비딜러 화면이 빈다
   - 변경 범위: `src/features/game/components/room-client.tsx`(`showGostopWait`), `gostop-wait-panel.tsx`, `src/lib/i18n/dictionaries/`
@@ -63,12 +79,6 @@
 
 ### Medium — 흐름 연결
 
-- [ ] **방에서 족보 판독으로 가는 진입점**: 두 화면이 완전히 분리돼 있다
-  - 변경 범위: `src/features/game/components/room-header.tsx`, `src/app/advisor/page.tsx`, `src/lib/i18n/dictionaries/`
-  - 완료 기준: 방 화면에서 족보 판독으로 이동하고 방으로 돌아온다. 헤더 아이콘이 4개가 되는 모바일 레이아웃을 함께 확인
-  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 10번. `/advisor` 링크는 현재 홈 한 곳뿐이다
-  - 미확정: 현재 판의 카드를 미리 채워 넘길지. 공정 딜 신뢰 모델과 충돌하는지 점검 필요
-
 - [ ] **계정 설정 페이지**: 가입 후 표시 이름을 바꿀 방법이 없다
   - 변경 범위: 새 라우트 `src/app/settings/`, `src/features/auth/`(프로필 액션), `src/lib/i18n/dictionaries/`
   - 완료 기준: 본인이 `displayName`을 바꾸면 랭킹·방 표시에 반영된다. 게스트 계정은 `authentikSub`이 이름과 묶여 있어 제외하거나 별도 처리
@@ -76,17 +86,6 @@
   - 미확정: 아바타·전화번호까지 포함할지. 전화번호는 본인 인증 없이 바꾸면 계정 탈취 경로가 된다
 
 ### Medium — 화면 완성도
-
-- [ ] **족보 판독 포커 설명과 부분 선택 미리보기**: 포커 족보에 설명이 없고, 카드를 덜 골랐을 때 아무것도 안 보여준다
-  - 변경 범위: `src/features/jokbo-advisor/components/poker-rank-table.ts`, `poker-ranking-panel.tsx`, 부분 미리보기 헬퍼, `src/lib/i18n/dictionaries/`
-  - 완료 기준: 포커 족보 10단계에 섯다와 같은 수준의 설명이 붙는다. 3장 이상 골랐을 때 남은 덱 기준 족보 확률이 뜬다. 1~2장은 계산하지 않는다
-  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 2번. 계산량 실측표가 거기 있다
-
-- [ ] **남은 문서 스크롤 화면**: 고정 뷰포트 규약을 아직 안 쓴 화면들이 남아 있다
-  - 변경 범위: `src/app/rooms/new/page.tsx`, `src/app/rooms/[code]/result/page.tsx`, `src/app/ranking/player/[id]/page.tsx`, `src/features/game/components/monitor-client.tsx`, `src/features/jokbo-advisor/components/advisor-client.tsx`(모바일)
-  - 완료 기준: 각 화면이 `FixedPage`로 남은 높이만 쓰거나, 목록을 `usePagedRows`로 넘긴다. 문서 스크롤이 남는 화면은 읽는 문서(`/guide/*`, `/about`)뿐이다
-  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 11번에 구성 요소와 줄 높이 규칙이 있다
-  - 선행 확인: `/rooms/new`는 단계형 입력이라 고정 높이로 접으면 단계 분할이 필요한지 먼저 판단
 
 - [ ] **모바일 가로 모드 방 화면**: 세로 기준으로만 반응형이 짜여 있다
   - 변경 범위: `src/app/manifest.ts`(`orientation`), `src/features/game/components/game-table.tsx` 좌석 배치
