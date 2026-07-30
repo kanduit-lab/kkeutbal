@@ -5,14 +5,19 @@ import type { Route } from 'next'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { AuthError } from 'next-auth'
-import { and, eq, isNull, like, or } from 'drizzle-orm'
+import { eq, or } from 'drizzle-orm'
 import { z } from 'zod'
-import { RATE_LIMITED_CODE, signIn } from '@/lib/auth'
+import { signIn } from '@/lib/auth'
 import { clientAddressFromHeaders, consumeRateLimits } from '@/lib/rate-limit'
 import { displayNameSchema } from './schemas'
+import { safeInternalPath, isRateLimited } from './signin-redirects'
+import { lookupGuestNamesForToken } from './guest-name-lookup'
+import {
+  verifyInitialAdminSetupAccess,
+  verifyRegistrationCodeAccess,
+} from './registration-code-verification'
 import {
   consumeRegistrationAccess,
-  grantRegistrationAccess,
   hasRegistrationAccess,
   registrationAccessCodeId,
 } from '@/features/auth/registration-access'
@@ -21,14 +26,18 @@ import {
   InitialAdminSetupRequiredError,
   isFirstAccount,
 } from '@/features/auth/bootstrap'
-import {
-  consumeInitialAdminSetupAccess,
-  grantInitialAdminSetupAccess,
-  initialAdminSetupAccessId,
-  prepareInitialAdminSetup,
-} from '@/features/auth/initial-admin-setup'
-import { guestTokenHash } from '@/features/auth/guest-tokens'
-import { serverEnv } from '@/lib/env'
+import { consumeInitialAdminSetupAccess, initialAdminSetupAccessId } from '@/features/auth/initial-admin-setup'
+import { localSubFor } from './account-linkage'
+
+/**
+ * 회원가입·로그인 서버 액션 진입점. 실제 검증 로직 일부는 옆 파일로 나갔다 —
+ * `verifyRegistrationCode`/`verifyInitialAdminSetupCode`는 `registration-code-verification.ts`,
+ * `getGuestNamesForToken`은 `guest-name-lookup.ts` — 하지만 이 파일이 그 함수들을 직접
+ * export해야 한다. `'use server'` 파일은 다른 모듈의 값을 `export { x } from '...'`로
+ * 다시 내보낼 수 없다(모든 export가 클라이언트 호출 엔드포인트로 취급된다 — `schemas.ts`
+ * 주석 참고). 그래서 각 함수는 여기서 얇은 wrapper로 다시 선언하고, 실제 동작은 옆 파일에
+ * 위임한다.
+ */
 
 export type AuthErrorCode =
   | 'invalid_credentials'
@@ -203,7 +212,7 @@ export async function registerAndLogin(formData: FormData): Promise<void> {
     const passwordHash = await bcrypt.hash(password, 10)
     await createUserGrantingFirstAdmin(
       {
-        authentikSub: `local:${username}`,
+        authentikSub: localSubFor(username),
         username,
         passwordHash,
         phone,
@@ -231,71 +240,14 @@ export async function verifyInitialAdminSetupCode(
   _previousState: InitialAdminSetupState,
   formData: FormData,
 ): Promise<InitialAdminSetupState> {
-  if (!(await isFirstAccount())) return { status: 'error', error: 'unavailable' }
-
-  if (!(await prepareInitialAdminSetup())) return { status: 'error', error: 'unavailable' }
-
-  const code = String(formData.get('code') ?? '')
-  const address = clientAddressFromHeaders(new Headers(await headers()))
-  const rate = await consumeRateLimits([
-    {
-      scope: 'auth.initial_admin_setup.address',
-      identifier: address,
-      limit: 10,
-      windowMs: 15 * 60 * 1000,
-    },
-    {
-      scope: 'auth.initial_admin_setup.value_address',
-      identifier: `${code}\0${address}`,
-      limit: 5,
-      windowMs: 15 * 60 * 1000,
-    },
-  ])
-  if (!rate.allowed) return { status: 'error', error: 'invalid' }
-
-  return (await grantInitialAdminSetupAccess(code))
-    ? { status: 'success' }
-    : { status: 'error', error: 'invalid' }
+  return verifyInitialAdminSetupAccess(formData)
 }
 
 export async function verifyRegistrationCode(
   _previousState: RegistrationCodeState,
   formData: FormData,
 ): Promise<RegistrationCodeState> {
-  const code = String(formData.get('code') ?? '')
-  const address = clientAddressFromHeaders(new Headers(await headers()))
-  try {
-    const rate = await consumeRateLimits([
-      {
-        scope: 'auth.registration_code.address',
-        identifier: address,
-        limit: 15,
-        windowMs: 15 * 60 * 1000,
-      },
-      {
-        scope: 'auth.registration_code.value_address',
-        identifier: `${code}\0${address}`,
-        limit: 5,
-        windowMs: 15 * 60 * 1000,
-      },
-    ])
-    if (!rate.allowed) return { status: 'error', error: 'invalid' }
-  } catch (error) {
-    console.error('registration code rate limit check failed:', error)
-    return { status: 'error', error: 'unavailable' }
-  }
-
-  const result = await grantRegistrationAccess(code)
-  if (result === 'granted') return { status: 'success' }
-  return { status: 'error', error: result }
-}
-
-function isRateLimited(error: AuthError): boolean {
-  if ('code' in error && error.code === RATE_LIMITED_CODE) return true
-  const cause = (error as { cause?: { err?: unknown } }).cause?.err
-  return Boolean(
-    cause && typeof cause === 'object' && 'code' in cause && cause.code === RATE_LIMITED_CODE,
-  )
+  return verifyRegistrationCodeAccess(formData)
 }
 
 export async function loginWithPassword(formData: FormData): Promise<void> {
@@ -340,90 +292,10 @@ export async function loginWithGuestToken(formData: FormData): Promise<void> {
   }
 }
 
-function safeInternalPath(value: string): string {
-  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/'
-  try {
-    const parsed = new URL(value, 'https://kkeutbal.invalid')
-    if (parsed.origin !== 'https://kkeutbal.invalid') return '/'
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`
-  } catch {
-    return '/'
-  }
-}
-
-const guestNamesCodeSchema = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .regex(/^[A-Z2-9]{8}$/)
-
 export type GuestNamesResult =
   | { ok: true; names: readonly string[] }
   | { ok: false; error: 'guest_token_invalid'; names: readonly string[] }
 
-const GUEST_NAMES_INVALID: GuestNamesResult = {
-  ok: false,
-  error: 'guest_token_invalid',
-  names: [],
-}
-
 export async function getGuestNamesForToken(code: string): Promise<GuestNamesResult> {
-  const parsed = guestNamesCodeSchema.safeParse(code)
-  if (!parsed.success) return GUEST_NAMES_INVALID
-
-  try {
-    const address = clientAddressFromHeaders(new Headers(await headers()))
-    const rate = await consumeRateLimits([
-      {
-        scope: 'auth.guest_names.address',
-        identifier: address,
-        limit: 30,
-        windowMs: 15 * 60 * 1000,
-      },
-      {
-        scope: 'auth.guest_names.token_address',
-        identifier: `${parsed.data}\0${address}`,
-        limit: 10,
-        windowMs: 15 * 60 * 1000,
-      },
-    ])
-    if (!rate.allowed) return GUEST_NAMES_INVALID
-
-    const codeHash = guestTokenHash(parsed.data, serverEnv().AUTH_SECRET)
-    const { db, schema } = await import('@/lib/db')
-    const [token] = await db
-      .select({
-        id: schema.guestTokens.id,
-        code: schema.guestTokens.code,
-        expiresAt: schema.guestTokens.expiresAt,
-      })
-      .from(schema.guestTokens)
-      .where(
-        and(
-          or(eq(schema.guestTokens.codeHash, codeHash), eq(schema.guestTokens.code, parsed.data)),
-          isNull(schema.guestTokens.revokedAt),
-        ),
-      )
-      .limit(1)
-    if (!token) return GUEST_NAMES_INVALID
-    if (token.expiresAt && token.expiresAt.getTime() < Date.now()) return GUEST_NAMES_INVALID
-    if (token.code) {
-      await db
-        .update(schema.guestTokens)
-        .set({ code: null, codeHash })
-        .where(eq(schema.guestTokens.id, token.id))
-    }
-
-    const rows = await db
-      .select({ name: schema.users.displayName })
-      .from(schema.users)
-      .where(like(schema.users.authentikSub, `guest:${token.id}:%`))
-      .orderBy(schema.users.displayName)
-      .limit(20)
-    return { ok: true, names: rows.map((row) => row.name) }
-  } catch (error) {
-    console.error('getGuestNamesForToken failed:', error)
-
-    return GUEST_NAMES_INVALID
-  }
+  return lookupGuestNamesForToken(code)
 }
