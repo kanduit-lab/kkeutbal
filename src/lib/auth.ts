@@ -3,7 +3,7 @@ import type { NextAuthConfig } from 'next-auth'
 import Authentik from 'next-auth/providers/authentik'
 import Credentials from 'next-auth/providers/credentials'
 import bcrypt from 'bcryptjs'
-import { and, eq, isNull, or, sql } from 'drizzle-orm'
+import { and, eq, isNull, or } from 'drizzle-orm'
 import { z } from 'zod'
 import { authConfigBase } from './auth-config'
 import { serverEnv } from './env'
@@ -177,23 +177,29 @@ export async function hasAuthentik(): Promise<boolean> {
   return Boolean(await getActiveSsoSettings())
 }
 
-function mergeHints(profile: unknown): { username: string | null; phone: string | null } {
-  if (!profile || typeof profile !== 'object') return { username: null, phone: null }
-  const p = profile as { preferred_username?: unknown; phone_number?: unknown }
-  const username =
-    typeof p.preferred_username === 'string' ? p.preferred_username.trim().toLowerCase() : null
+/**
+ * 내부 계정 자동 연결에 쓸 수 있는 힌트만 뽑는다.
+ *
+ * **`preferred_username`은 쓰지 않는다.** IdP 안에서만 의미 있는 식별자이고 사용자가 스스로
+ * 바꿀 수 있는 경우가 많다 — 그 값으로 이 앱의 계정을 찾아 연결하면, 남의 아이디와 같은 값으로
+ * Authentik 계정을 만든 사람이 SSO 로그인 한 번으로 그 계정을 가져갈 수 있다.
+ *
+ * 전화번호는 IdP가 **검증했다고 명시한 경우에만**(`phone_number_verified === true`) 신뢰한다.
+ * 검증 플래그가 없으면 힌트가 없는 것으로 취급하고 별도 계정을 만든다(아래 fallback).
+ */
+function mergeHints(profile: unknown): { phone: string | null } {
+  if (!profile || typeof profile !== 'object') return { phone: null }
+  const p = profile as { phone_number?: unknown; phone_number_verified?: unknown }
+  if (p.phone_number_verified !== true) return { phone: null }
   const phoneDigits = typeof p.phone_number === 'string' ? p.phone_number.replace(/\D/g, '') : null
-  return {
-    username: username && /^[a-z0-9_]{3,20}$/.test(username) ? username : null,
-    phone: phoneDigits && phoneDigits.length >= 9 ? phoneDigits : null,
-  }
+  return { phone: phoneDigits && phoneDigits.length >= 9 ? phoneDigits : null }
 }
 
 async function resolveProviderUser(input: {
   sub: string
   displayName: string
   avatarUrl: string | null
-  hints: { username: string | null; phone: string | null }
+  hints: { phone: string | null }
 }): Promise<{ id: string }> {
   const { sub, displayName, avatarUrl, hints } = input
   const { db, schema } = await import('./db')
@@ -211,15 +217,19 @@ async function resolveProviderUser(input: {
     return bySub
   }
 
-  if (hints.username || hints.phone) {
-    const conditions = [
-      hints.username ? eq(schema.users.username, hints.username) : sql`false`,
-      hints.phone ? eq(schema.users.phone, hints.phone) : sql`false`,
-    ]
+  if (hints.phone) {
+    // 아직 어떤 Authentik 계정에도 연결되지 않은 계정만 후보다. 이 조건이 없으면 이미 다른
+    // sub에 연결된 계정까지 덮어써서 가로챌 수 있다. 후보가 둘 이상이면 연결하지 않는다.
     const matches = await db
       .select({ id: schema.users.id })
       .from(schema.users)
-      .where(and(or(...conditions), eq(schema.users.isManaged, false)))
+      .where(
+        and(
+          eq(schema.users.phone, hints.phone),
+          eq(schema.users.isManaged, false),
+          isNull(schema.users.authentikSub),
+        ),
+      )
       .limit(2)
 
     const [onlyMatch] = matches
@@ -227,9 +237,13 @@ async function resolveProviderUser(input: {
       const [linked] = await db
         .update(schema.users)
         .set({ authentikSub: sub, displayName, avatarUrl })
-        .where(eq(schema.users.id, onlyMatch.id))
+        .where(and(eq(schema.users.id, onlyMatch.id), isNull(schema.users.authentikSub)))
         .returning({ id: schema.users.id })
-      if (linked) return linked
+      if (linked) {
+        // 계정 소유권이 옮겨가는 사건이라 사후 추적이 가능해야 한다.
+        console.warn('sso account linked by verified phone:', { userId: linked.id })
+        return linked
+      }
     }
   }
 
@@ -279,7 +293,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
               hints:
                 account.provider === 'authentik'
                   ? mergeHints(profile)
-                  : { username: null, phone: null },
+                  : { phone: null },
             })
             token.uid = row.id
             token.name = displayName

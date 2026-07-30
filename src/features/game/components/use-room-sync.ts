@@ -7,16 +7,21 @@ import { createRoomChannel, onRoomEvent, resetRealtimeSocket } from '@/lib/realt
 import { nextReconnectDelayMs, shouldRetryConnect } from '@/lib/realtime/reconnect-backoff'
 import { SeenEventIds } from '@/lib/realtime/seen-events'
 import type { RoomEvent } from '@/lib/realtime/events'
+import { syncActionFor } from '@/lib/realtime/event-sync-policy'
+import { presenceRevealsUnknownMember } from '@/lib/realtime/presence-policy'
+import {
+  INITIAL_COALESCER_STATE,
+  noteCoalescedEvent,
+  noteCoalescedRefetchRan,
+  type CoalescerState,
+} from '@/lib/realtime/refetch-coalescer'
 import { getSupabaseBrowser } from '@/lib/supabase/client'
 import { withTimeout } from '@/lib/with-timeout'
 import { refreshRoom } from '../actions'
 import type { RoomSnapshot } from '../types'
 import type { ActionResult } from '@/lib/action-result'
 import { REFETCH_TIMEOUT_MS } from './sync-timeouts'
-
-const EVENT_DEBOUNCE_MS = 250
-
-const MIN_EVENT_INTERVAL_MS = 1_000
+import { applyStateSnapshotHint } from './state-snapshot-hint'
 
 const CONNECT_TIMEOUT_MS = 10_000
 
@@ -59,7 +64,7 @@ export function useRoomSync({
   const channelRef = useRef<RealtimeChannel | null>(null)
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const lastEventRefetchAt = useRef(0)
+  const coalescerStateRef = useRef<CoalescerState>(INITIAL_COALESCER_STATE)
 
   const refetchSeqRef = useRef(0)
   const failStreakRef = useRef(0)
@@ -115,12 +120,12 @@ export function useRoomSync({
 
   const debouncedRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current)
-    const sinceLast = Date.now() - lastEventRefetchAt.current
-    const delay = Math.max(EVENT_DEBOUNCE_MS, MIN_EVENT_INTERVAL_MS - sinceLast)
+    const { delayMs, state } = noteCoalescedEvent(coalescerStateRef.current, Date.now())
+    coalescerStateRef.current = state
     refetchTimer.current = setTimeout(() => {
-      lastEventRefetchAt.current = Date.now()
+      coalescerStateRef.current = noteCoalescedRefetchRan(Date.now())
       void refetch()
-    }, delay)
+    }, delayMs)
   }, [refetch])
 
   const reconnect = useCallback(() => {
@@ -142,18 +147,50 @@ export function useRoomSync({
 
     onRoomEvent(channel, roomId, (event, envelope) => {
       // Reconnects can replay an event the client already reacted to. The
-      // snapshot refetch below always runs (truth comes from there
+      // refetch decided below always runs (truth comes from there
       // regardless), but a duplicate delivery skips feedback (toast/sound)
       // so it doesn't fire twice for the same envelope id.
       const isFirstDelivery = seenEventIdsRef.current?.record(envelope.id) ?? true
       if (isFirstDelivery) onEventRef.current?.(event, snapshotRef.current)
-      debouncedRefetch()
+
+      // state.snapshot carries values `refreshRoom` already computed
+      // server-side for the sender (room-client.tsx's afterMutation) — safe
+      // to paint immediately instead of waiting on our own confirming
+      // refetch. Scope is deliberately narrow (see state-snapshot-hint.ts);
+      // the confirming refetch below still runs and is what reconciles
+      // everything else (actions log, fairness, membership).
+      if (event.name === 'state.snapshot') {
+        setSnapshot((prev) => applyStateSnapshotHint(prev, event.payload))
+      }
+
+      // event-sync-policy.ts decides the bucket: structural round
+      // transitions refetch immediately (rare, never bursty); bet/role-change
+      // events are feedback-only because the state.snapshot that always
+      // accompanies them (same afterMutation call) is what schedules the
+      // coalesced refetch; anything without that guarantee (one-shot sends
+      // from a screen with no subscribed channel) keeps scheduling its own.
+      switch (syncActionFor(event.name)) {
+        case 'immediate':
+          void refetch()
+          break
+        case 'coalesced':
+          debouncedRefetch()
+          break
+        case 'passive':
+          break
+      }
     })
 
     channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState()
-      setOnline(new Set(Object.keys(state)))
-      debouncedRefetch()
+      const presenceState = channel.presenceState()
+      const onlineIds = new Set(Object.keys(presenceState))
+      setOnline(onlineIds)
+
+      // Reconnect flicker among members we already know about (common on
+      // mobile networks) shouldn't cost a refetch — only a genuinely new
+      // presence id (a join whose row we haven't fetched yet) does.
+      const knownMemberIds = new Set(snapshotRef.current.members.map((member) => member.userId))
+      if (presenceRevealsUnknownMember(onlineIds, knownMemberIds)) debouncedRefetch()
     })
 
     channel.subscribe((status) => {

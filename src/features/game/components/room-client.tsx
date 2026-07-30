@@ -19,6 +19,7 @@ import { ActionBar } from './action-bar'
 import { DealerPanel } from './dealer-panel'
 import { DealerQuickBar } from './dealer-quick-bar'
 import { GostopWaitPanel } from './gostop-wait-panel'
+import { ObserverStatusPanel } from './observer-status-panel'
 import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
 import { RoundLog } from './round-log'
@@ -204,6 +205,9 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
   // 판이 없을 때도 띄운다. 고스톱 비딜러는 판과 판 사이에 화면이 비어서
   // 다음 동작 주체를 알 수 없었다 — 섯다·포커의 actionBar.noRound와 같은 역할.
   const showGostopWait = !isBettingGame && !isLobby && !isDealer
+  // 베팅 게임 관전자는 ActionBar도 DealerQuickBar도 안 뜬다 — 판이 도는 동안 화면에서
+  // 아무것도 알려주지 않던 조합이라 전용 상태 표면을 준다.
+  const showObserverStatus = isBettingGame && !isLobby && self?.role === 'observer'
 
   const seatMember = seatUserId
     ? (snapshot.members.find((member) => member.userId === seatUserId) ?? null)
@@ -292,7 +296,10 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
                 </p>
               ) : null}
 
-              <div className="rise-in rise-in-2 relative flex min-h-0 flex-1 items-center justify-center pt-6 lg:pt-3">
+              {/* 폰을 가로로 돌리면 남는 높이가 150px 수준이라 이 24px 여백이 테이블
+                  높이 예산에서 크게 잡아먹는다. 조건은 globals.css의 landscape-short
+                  블록과 같은 값이다(폰 가로만, 태블릿 가로 제외). */}
+              <div className="rise-in rise-in-2 relative flex min-h-0 flex-1 items-center justify-center pt-6 [@media(orientation:landscape)_and_(max-height:500px)]:pt-1 lg:pt-3">
                 <GameTable
                   members={snapshot.members}
                   online={online}
@@ -332,6 +339,11 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
               {showGostopWait ? (
                 <div className="rise-in rise-in-3 shrink-0 lg:mt-3">
                   <GostopWaitPanel hasRound={Boolean(snapshot.currentRound)} />
+                </div>
+              ) : null}
+              {showObserverStatus ? (
+                <div className="rise-in rise-in-3 shrink-0 lg:mt-3">
+                  <ObserverStatusPanel snapshot={snapshot} />
                 </div>
               ) : null}
             </div>

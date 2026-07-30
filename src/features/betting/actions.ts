@@ -15,7 +15,7 @@ import {
   requireRole,
   type Tx,
 } from '../game/action-helpers'
-import { autoSettleRoundIfComplete } from '../game/round-actions'
+import { autoSettleRoundIfComplete } from '../game/round-finalize'
 import type { BetActionView } from '../game/types'
 import { contributedBy, minimumRaiseAmount, neededToCall, roundBetState, totalContributed } from './round-bet-state'
 import { computeRoundCompletion } from './round-completion'

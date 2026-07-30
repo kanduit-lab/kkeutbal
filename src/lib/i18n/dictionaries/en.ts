@@ -544,6 +544,10 @@ export const en: Dictionary = {
     gostopWaitHint: 'When the round ends the dealer enters the result and balances update here',
     gostopWaitNextRoundTitle: 'Waiting for the dealer to start the next round',
     gostopWaitNextRoundHint: 'The round opens as soon as the dealer taps start',
+    observerStatusTitle: 'Spectating',
+    observerNoRoundHint: 'Play resumes when the dealer starts a round',
+    observerRoundSettling: 'Wrapping up the round',
+    orientationHint: 'Portrait mode is easier to use',
   },
   table: {
     balanceAria: 'Balance {n}',

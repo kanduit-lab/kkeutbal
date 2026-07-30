@@ -43,16 +43,19 @@ export default async function LoginPage({
     (card): card is NonNullable<typeof card> => card !== undefined,
   )
 
+  // 데스크톱 세로 여백은 720px 노트북 기준이다. mode=registration처럼 오른쪽 패널이 가장
+  // 높아지는 변형까지 1280x720에 들어가야 한다 — 그 변형이 e2e에서 문서 스크롤을 만들었다.
+  // xl(대형 화면)에서만 원래 여백으로 돌아간다.
   return (
     <main
       id="main"
-      className="relative mx-auto grid w-full max-w-6xl flex-1 items-center gap-10 px-6 py-10 lg:grid-cols-2 lg:gap-16"
+      className="relative mx-auto grid w-full max-w-6xl flex-1 items-center gap-3 px-6 py-3 lg:grid-cols-2 lg:gap-10 lg:py-5 xl:gap-16 xl:py-10"
     >
       <div className="flex justify-end lg:absolute lg:right-4 lg:top-4 lg:z-10">
         <LocaleSwitcher />
       </div>
       <section className="rise-in text-center lg:text-left">
-        <div className="mb-6 flex justify-center gap-3 lg:justify-start">
+        <div className="mb-6 hidden justify-center gap-3 lg:flex lg:justify-start">
           {showcase.map((card, index) => (
             <div
               key={card.id}
@@ -65,12 +68,12 @@ export default async function LoginPage({
             </div>
           ))}
         </div>
-        <h1 className="font-brush text-7xl font-black tracking-tight lg:text-8xl">
+        <h1 className="font-brush text-4xl font-black tracking-tight lg:text-8xl">
           {d.common.appName}
           <span className="text-accent">.</span>
         </h1>
-        <p className="mt-4 text-lg text-muted">{d.auth.tagline}</p>
-        <p className="mt-2">
+        <p className="mt-1 text-sm text-muted lg:mt-4 lg:text-lg">{d.auth.tagline}</p>
+        <p className="mt-1 lg:mt-2">
           <Link
             href="/about"
             className="inline-flex min-h-11 items-center px-2 text-sm text-muted underline underline-offset-4 hover:text-text"
@@ -80,7 +83,7 @@ export default async function LoginPage({
         </p>
       </section>
       <section className="rise-in rise-in-2 w-full max-w-sm justify-self-center lg:justify-self-start">
-        <div className="space-y-4">
+        <div className="space-y-3 lg:space-y-4">
           {errorMessage ? <Alert tone="error">{errorMessage}</Alert> : null}
           {roomCode ? (
             <Alert tone="info">{format(d.auth.continueToRoom, { code: roomCode })}</Alert>

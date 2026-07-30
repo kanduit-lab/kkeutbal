@@ -9,6 +9,9 @@ export default defineConfig({
     // test/dom/**은 아직 비어 있다 — jsdom·@testing-library/react가 설치된 뒤 쓸 자리다.
     environment: 'node',
     environmentMatchGlobs: [['test/dom/**', 'jsdom']],
+    // node 환경 테스트에는 영향 없다(setup.ts가 `typeof window`로 가드한다) — jsdom 테스트에만
+    // ResizeObserver 스텁을 깔아준다(자세한 이유는 test/dom/setup.ts 참고).
+    setupFiles: ['test/dom/setup.ts'],
     include: [
       'src/**/*.test.ts',
       'src/**/*.test.tsx',

@@ -29,7 +29,7 @@ export function LoginFormSwitcher({
 
   if (mode === 'guest') {
     return (
-      <Panel className="space-y-4">
+      <Panel className="space-y-3 lg:space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-bold">{d.auth.guestLoginTitle}</h2>
           <Button type="button" variant="ghost" size="sm" onClick={() => setMode('password')}>
@@ -47,7 +47,7 @@ export function LoginFormSwitcher({
   if (mode === 'registration') {
     if (firstAccount) {
       return (
-        <Panel className="space-y-4">
+        <Panel className="space-y-3 lg:space-y-4">
           <div>
             <h2 className="font-bold">{d.auth.initialAdminTitle}</h2>
             <p className="mt-2 text-sm leading-6 text-muted">
@@ -75,7 +75,7 @@ export function LoginFormSwitcher({
       )
     }
     return (
-      <Panel className="space-y-4">
+      <Panel className="space-y-3 lg:space-y-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="font-bold">{d.auth.registrationCodeTitle}</h2>
           <Button type="button" variant="ghost" size="sm" onClick={() => setMode('password')}>
@@ -88,7 +88,7 @@ export function LoginFormSwitcher({
   }
 
   return (
-    <Panel className="space-y-4">
+    <Panel className="space-y-3 lg:space-y-4">
       <p className="font-bold">{d.auth.passwordLoginTitle}</p>
       <form className="space-y-3" action={loginWithPassword}>
         <input type="hidden" name="next" value={redirectTo} />

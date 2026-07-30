@@ -26,8 +26,16 @@ password (항상 활성)
 
 관리자 콘솔의 SSO 설정에서 활성화 + Issuer URL + Client ID + Client secret 모두 저장
   → Authentik OIDC provider 활성 (hasAuthentik())
-  → 자동 연동: sub 일치 행이 없으면 preferred_username/phone_number 클레임으로
-    내부 계정을 찾아 authentik_sub 를 교체해 병합 (resolveProviderUser)
+  → 자동 연동 (2026-07-30 축소): sub 일치 행이 없을 때, IdP가 검증했다고 명시한
+    전화번호(phone_number_verified === true)가 아직 어느 sub에도 연결되지 않은 내부 계정
+    **하나와만** 일치하면 그 계정에 authentik_sub 를 연결한다 (resolveProviderUser).
+    그 외에는 별도 계정을 만든다.
+    · preferred_username 은 더 이상 쓰지 않는다 — IdP 안에서만 의미 있고 사용자가 스스로
+      바꿀 수 있는 값이라, 남의 아이디와 같은 값으로 Authentik 계정을 만들면 SSO 로그인
+      한 번으로 그 계정을 가져갈 수 있었다.
+    · 이미 다른 sub에 연결된 계정은 후보에서 제외한다 — 이전 조건에는 이 제약이 없어
+      연결된 계정까지 덮어쓸 수 있었다.
+    · 연결이 일어나면 console.warn 으로 남긴다 (소유권 이동이라 사후 추적이 필요하다).
 
 guest-token (항상 활성)
   → 관리자가 발급한 8자 토큰 + 이름 → sub = `guest:{tokenId}:{name}`

@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { consumeRateLimits } from '@/lib/rate-limit'
-import { displayNameSchema } from './actions'
+import { displayNameSchema } from './schemas'
 import { currentUserId } from './session'
 
 export type AccountAuthType = 'internal' | 'sso' | 'guest'

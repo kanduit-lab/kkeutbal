@@ -35,21 +35,33 @@
   - 완료 기준: `E2E_ENABLE_ROOM_LIFECYCLE=true` + 전용 계정 2개에서 시드 제출·봉인·손패·종료 후 deck 재계산이 통과
   - 참조: [`docs/10-virtual-credit-and-fair-play.md`](docs/10-virtual-credit-and-fair-play.md)
 
-### Medium — 화면 완성도
+### High — DB · 보안
 
-- [ ] **모바일 가로 모드 방 화면**: 세로 기준으로만 반응형이 짜여 있다
-  - 변경 범위: `src/app/manifest.ts`(`orientation`), `src/features/game/components/game-table.tsx` 좌석 배치
-  - 완료 기준: 방 화면이 가로에서 좌우로 퍼진 배치를 쓴다. 실기기 iOS·Android 양쪽에서 회전 동작 확인
-  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 6번. 위 방 화면 세로 길이 항목과 같은 화면이라 함께 설계
-  - 미확정: 가로를 강제할지, 어느 화면까지 대응할지, PWA manifest를 바꿀지 사용자 확정 필요
+- [ ] **게임 액션 rate limit**: 방·로컬 멤버 생성이 무제한이다
+  - 변경 범위: `src/features/game/actions.ts`(`createRoom`, `joinRoom`), `src/features/game/member-actions.ts`(`addLocalMember`), `src/features/budget/actions.ts`(`addBuyIn`)
+  - 완료 기준: 생성 경로가 사용자 단위 창 제한을 받는다. `addLocalMember`는 호출마다 `users` 행을 만들므로 특히 좁게 잡는다. **`placeBet`에는 붙이지 않는다** — 이미 방 단위 advisory lock으로 직렬화돼 있고, 한도를 잘못 잡으면 빠른 판에서 정상 베팅이 막힌다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 14번
+
+- [ ] **SSO 계정 연결 흐름**: 아이디 기반 자동 병합을 막은 뒤 대체 경로가 없다
+  - 변경 범위: 새 라우트 또는 `/account`, `src/lib/auth.ts`, `src/features/auth/`
+  - 완료 기준: 로그인한 상태에서 본인이 SSO 계정을 연결한다. 세션 주체가 확실하므로 IdP 클레임을 신뢰할 필요가 없다. 내부 계정으로 가입한 사람이 SSO로 들어와도 계정이 갈라지지 않는다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 13번
+  - 미확정: Authentik이 `phone_number_verified`를 실제로 발급하는지 — 발급하지 않으면 자동 연결은 사실상 꺼진 상태다
+
+### Medium — 정합성 정리
+
+- [ ] **배선되지 않은 크레딧 검증 모듈**: `credit-room.ts`·`wallet/ledger.ts`를 아무도 부르지 않는다
+  - 변경 범위: `src/features/game/credit-room.ts`, `src/features/wallet/ledger.ts`, 또는 이들을 부르도록 각 Server Action
+  - 완료 기준: 실제 경로가 이 모듈을 거치거나, SQL RPC 중심으로 확정하고 모듈·테스트를 지운다. "테스트로 보장된 검증"처럼 보이면서 프로덕션에 효과가 없는 상태가 사라진다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 15번. 정합성 자체는 `supabase/migrations/0009~0013`의 SQL 함수가 지킨다
+
+- [ ] **`undoLastBuyIn` 레거시 매칭 제거**: `refBuyInId IS NULL` 폴백이 감사 사슬을 어긋나게 할 수 있다
+  - 변경 범위: `src/features/budget/actions.ts`
+  - 완료 기준: 폴백 분기가 사라지고 되돌리기가 정확한 원장 행만 가리킨다. 칩 계산은 지금도 정확하다
+  - 참조: [`docs/12-handoff.md`](docs/12-handoff.md) 16번
+  - 선행 확인: 운영 DB에 `refBuyInId IS NULL`인 `buy_in` 원장 행이 남아 있는지
 
 ### Low — 회귀 가드
-
-- [ ] **역할별 렌더링 검증**: 같은 방을 보는 관전자·참가자·딜러·방장이 각각 무엇을 보는지 자동 확인
-  - 변경 범위: `test/dom/`(자리만 만들어 둠), `package.json` devDependencies
-  - 완료 기준: 게임 종류 × 역할 조합에서 판 진행 중 화면이 비지 않는 것을 검증
-  - 선행: `jsdom`(또는 `happy-dom`)과 `@testing-library/react` 설치가 필요하다. `vitest.config.ts`의 `environmentMatchGlobs`로 `test/dom/**`만 jsdom을 쓰는 경로 분기는 이미 넣었고 기존 node 환경 테스트는 영향 없다
-  - 참조: `test/unit/paged-pagination.test.ts`는 훅을 렌더링할 수 없어 계산 로직을 **복사해서** 검증한다 — 위 의존성이 들어오면 실제 훅 렌더링 테스트로 교체해야 한다
 
 - [ ] **인증 후 E2E 흐름 확장**: 2컨텍스트 동기화·재접속 복원·정산 흐름 자동화
   - 변경 범위: `e2e/`, 테스트용 가입코드·계정 fixture

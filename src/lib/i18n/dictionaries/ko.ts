@@ -538,6 +538,10 @@ export const ko = {
     gostopWaitHint: '판이 끝나면 딜러가 결과를 넣어요. 잔액은 바로 반영돼요',
     gostopWaitNextRoundTitle: '딜러가 다음 판을 시작하길 기다리는 중이에요',
     gostopWaitNextRoundHint: '딜러가 시작 버튼을 누르면 판이 열려요',
+    observerStatusTitle: '관전 중',
+    observerNoRoundHint: '딜러가 판을 깔면 다시 진행돼요',
+    observerRoundSettling: '판을 정리하는 중이에요',
+    orientationHint: '세로로 두면 더 편해요',
   },
   table: {
     balanceAria: '잔액 {n}',

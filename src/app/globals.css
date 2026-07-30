@@ -200,6 +200,58 @@ body {
   animation: winner-glow 1.2s ease-in-out 3;
 }
 
+/*
+ * 방 화면은 세로가 정본이다(manifest.ts의 orientation: 'portrait'). 하지만 그 선언은 설치된
+ * PWA에서만 강제되고, 일반 브라우저 탭에서 폰을 가로로 돌리면 그대로 가로가 된다. 이 블록은
+ * 그 경우에도 GameTable(src/features/game/components/game-table.tsx)이 세로 높이 부족으로
+ * 좌석이 겹치거나 펠트 밖으로 밀려나지 않게 하는 최소 대응이다 — 가로 전용 레이아웃을 새로
+ * 만드는 게 아니라 기존 좌석 배치가 버티게 하는 것이 목표다.
+ *
+ * max-height: 500px 근거 — 흔한 폰의 가로 높이(= 세로 모드 폭)를 전부 포함하면서 태블릿은
+ * 제외하도록 고른 값이다: iPhone SE/12·13 mini 375, iPhone 14~16 393~430, 흔한 안드로이드
+ * 360~412 모두 500 미만이고, iPad mini 744·iPad Air 820은 500을 넘어 이 블록이 적용되지
+ * 않는다. 태블릿 가로는 정상 사용 환경이므로 손대지 않는다(docs 6번 참고 이미지도 폰 기준).
+ *
+ * 전략 1 — 폭을 실제로 넓게 쓴다: `fit` 모드의 기본 동작(`h-full w-auto` + aspect-ratio)은
+ * height가 정해진 값이고 width가 auto라서, 브라우저가 `width = height × 비율`로 계산한다.
+ * 즉 세로 높이가 150px면 16:10 비율에서도 폭은 240px밖에 안 돼 가로 화면의 남는 폭을
+ * 전혀 못 쓴다. 그래서 여기서는 width도 정해진 값(100%, 상위 max-w-3xl이 여전히 상한)으로
+ * 바꿔 aspect-ratio가 더 이상 폭을 계산하지 못하게 한다 — 그 결과 펠트가 컨테이너 폭을
+ * 그대로 채우는 넓적한 타원이 되어 좌우로 퍼진 배치(docs 6번 참고 이미지)가 된다.
+ *
+ * 전략 2 — 세로 압박에 맞춰 좌석 반지름·크기를 줄인다: --seat-half-w(가로 반지름 여유값)는
+ * 그대로 둬 넓어진 폭을 좌석 간격으로 그대로 쓰게 하고, --seat-half-h만 줄여
+ * `seatY()`(game-table.tsx)의 `50cqh - felt-inset*1cqh - seat-half-h` 계산이 음수로 뒤집혀
+ * 좌석이 중앙으로 뭉치는 것을 막는다. 예시 기기 915×412(가로) 기준 GameTable 영역 실측 높이는
+ * 헤더·연결 상태바·팟 표시를 뺀 약 150~250px 구간이라, 그 절반(75~125px)에서 felt-inset 몫과
+ * 여유 반지름을 남기려면 seat-half-h가 기존 sm 값(5~5.5rem = 80~88px)보다 훨씬 작아야 한다.
+ * 2.25rem(36px)은 150px 높이에서도 계산식이 양수로 남는 값이다.
+ *
+ * seat-card의 scale(0.72)은 아바타·글자 실제 렌더 크기(Avatar는 JS로 고정된 px 값이라 미디어
+ * 쿼리로 직접 못 줄인다)를 좌석 간 간격에 맞춰 시각적으로만 줄인다. 위치 계산에 쓰는
+ * --seat-half-h보다 보수적으로 더 줄여 두어(0.72 ≈ 36px * 0.72 ≈ 26px 여유) 좌석끼리
+ * 겹치지 않게 하는 안전 마진이다. 0.72 아래로는 글자가 읽기 어려워진다는 것이 근거 없는
+ * 추정이라 실기기 확인이 필요하다(보고 참고).
+ */
+@media (orientation: landscape) and (max-height: 500px) {
+  .game-table-felt {
+    width: 100%;
+    --seat-half-h: 2.25rem;
+  }
+
+  .game-table-felt .seat-card {
+    transform: scale(0.72);
+  }
+
+  .game-table-felt .orientation-hint {
+    display: flex;
+  }
+}
+
+.orientation-hint {
+  display: none;
+}
+
 @keyframes overlay-in {
   from {
     opacity: 0;

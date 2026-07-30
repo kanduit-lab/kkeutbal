@@ -27,8 +27,6 @@ import { creditPotToWinner, finalizeRoundRecord, revealFairnessIfNeeded } from '
 import { SEOTDA_RULES_STANDARD } from '../seotda/types'
 import type { RoundPenaltyView } from './types'
 
-export { autoSettleRoundIfComplete } from './round-finalize'
-
 const {
   rooms,
   roomMembers,

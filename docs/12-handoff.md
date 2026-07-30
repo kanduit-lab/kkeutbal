@@ -152,6 +152,17 @@
 
 ## 6. 모바일 가로 모드 방 화면 — 아이디어 단계
 
+> **결정 (2026-07-30)** — 사용자가 **세로를 정본으로** 확정했다. 가로 전용 배치를 새로 만들지
+> 않고, `manifest.ts`에 `orientation: 'portrait'`를 선언하고(설치된 PWA에서만 OS가 잠근다 —
+> 일반 브라우저 탭에는 효과가 없다) 폰 가로에서 깨지지 않게만 대응했다.
+> `globals.css`의 `@media (orientation: landscape) and (max-height: 500px)` 블록이 펠트 폭을
+> `100%`로 고정해(`fit` 모드의 `h-full w-auto`+aspect-ratio가 폭을 높이에서 계산하는 탓에
+> 가로에서 폭이 240px밖에 안 나오던 문제) 좌우로 퍼지게 하고 좌석 반지름을 줄인다.
+> `max-height: 500px`은 폰 가로(360~430)를 포함하고 태블릿 가로(iPad mini 744↑)를 제외하려고
+> 고른 값이다 — 태블릿 가로는 정상 사용 환경이라 안내를 띄우지 않는다. 전체 차단 오버레이는
+> 만들지 않았다.
+
+
 사용자가 다른 섯다 앱 스크린샷을 근거로 가로 전용 레이아웃을 제안했다. 참고 이미지 특징은
 좌우로 퍼진 좌석 배치, 중앙에 가로로 넓은 판돈·최근 결과, 하단 리액션 버튼 바다. 참고
 이미지에는 카드가 노출되지 않으며, 이 앱도 손패를 남에게 보여주지 않으므로 카드 UI를 새로
@@ -238,6 +249,132 @@ lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남�
 
 ---
 
+## 17. 누적 비용 — 안전정수 트리거와 랭킹 집계
+
+둘 다 지금 결함은 아니고 **실측 없이는 고칠 근거가 없는** 용량 계획 항목이다.
+
+- `drizzle/migrations/0017_bored_brood.sql`의 `assert_user_chip_activity_number_safe()`는
+  `chip_ledger`·`buy_ins` INSERT마다 해당 사용자·해당 방의 전체 이력을 `SUM(abs(...))`로 다시
+  집계한다. 인덱스(`chip_ledger_user_idx`, `buy_ins_user_idx`)가 있어 풀스캔은 아니지만
+  누적 활동량에 비례해 매 베팅·바이인 비용이 는다. 캡·아카이빙 정책이 없다.
+- `src/features/ranking/queries.ts`의 `getCumulativeRanking`은 `/ranking` 방문마다
+  `settled`/`closed` 모든 방의 `chip_ledger`·`buy_ins`·`rounds`·`room_members`를 전량 집계한다.
+  캐시·기본 시간 범위 제한이 없다(`filter.since`는 옵션).
+
+### 미확정
+
+실사용 규모(MT·모임 단위)에서 임계치에 도달하는지. 도달한다면 사용자별 누적 카운터 컬럼,
+랭킹 스냅샷/머티리얼라이즈드 뷰가 후보다. [`docs/02-data-model.md`](02-data-model.md)의
+"방 보존 기간·아카이빙 정책 미정"과 같은 뿌리다.
+
+---
+
+## 16. `undoLastBuyIn`의 레거시 원장 매칭 휴리스틱
+
+`src/features/budget/actions.ts`가 되돌릴 원장 행을 찾을 때 `refBuyInId = lastBuyIn.id OR
+refBuyInId IS NULL`로 매칭한다. `refBuyInId`가 없는 레거시 행이 같은 사용자에게 같은 금액으로
+여럿 있으면, 정렬(`refBuyInId is not null desc, createdAt desc`)이 최근 것을 고르더라도 실제
+되돌리려는 바이인과 무관한 행을 `revertedOf`로 연결할 수 있다.
+
+칩 잔액은 `-lastBuyIn.amount`로 정확히 차감되므로 **자금은 안전하고 감사 사슬만 어긋난다.**
+대상 데이터는 `0009_perfect_molly_hayes.sql` 백필 범위뿐이다.
+
+### 미확정
+
+운영 DB에 `refBuyInId IS NULL`인 `buy_in` 원장 행이 실제로 남아 있는지. 없으면 폴백 분기를
+지우면 끝이고, 있으면 백필 후 지운다. DB 접속 없이는 확인 불가.
+
+---
+
+## 15. `credit-room.ts`·`wallet/ledger.ts`가 배선되지 않은 검증 로직
+
+`src/features/game/credit-room.ts`의 `createRoomCreditLockCommand`/`createRoomCreditSettlementCommand`와
+`src/features/wallet/ledger.ts`의 `adminAdjustmentEntries`/`validateCreditEntries`는 팟 보존·계정당
+1엔트리 같은 불변식 검사를 갖춘 순수 함수인데, **각자의 테스트 파일에서만 참조된다.**
+
+실제 경로(`features/game/actions.ts`, `features/budget/actions.ts`, `features/wallet/actions.ts`,
+`features/auth/admin-actions.ts`)는 전부 `tx.execute(sql\`select public.lock_room_credit_buy_in(...)\`)`
+형태로 Postgres RPC를 직접 부르고 이 모듈을 거치지 않는다. 정합성은
+`supabase/migrations/0009~0013`의 SQL 함수가 담당하므로 **자금 안전에는 문제가 없다.**
+
+문제는 함정이다 — "테스트로 보장된 검증 로직"처럼 보여서 나중에 여기만 고치면 프로덕션 동작은
+그대로다.
+
+### 미확정
+
+원래 의도한 구조(TS가 커맨드를 만들고 SQL은 posting만)를 되살릴지, SQL RPC 중심으로 확정하고
+이 모듈과 테스트를 지울지.
+
+---
+
+## 14. 게임플레이 Server Action에 rate limit 부재
+
+`consumeRateLimits`를 쓰는 곳은 `features/auth/actions.ts`, `profile-actions.ts`,
+`jokbo-advisor/vision/actions.ts`, `lib/auth.ts`뿐이다. `createRoom`·`joinRoom`·`addBuyIn`·
+`addLocalMember`·`placeBet`에는 없다.
+
+- `createRoom` 반복 호출은 `rooms`/`room_members`/`buy_ins`/`chip_ledger` 행을 무제한 만든다.
+- `addLocalMember`는 **호출마다 `users` 행**(`is_managed=true`)을 만든다 — 가장 값싼 남용 경로다.
+- `placeBet`은 방 단위 `pg_advisory_xact_lock`으로 직렬화되므로 행 증식 문제는 없다.
+
+### 판단
+
+생성 경로(방·로컬 멤버·입장)만 조인다. **`placeBet`에는 붙이지 않는다** — 이미 직렬화돼 있고,
+한도를 잘못 잡으면 빠른 판에서 정상 베팅이 막힌다. 잘못된 rate limit은 남용보다 게임을 더 크게
+망친다.
+
+---
+
+## 13. SSO 자동 병합 — 해결됨, 대체 흐름이 없다
+
+> **해결 (2026-07-30)** — 감사에서 계정 탈취 경로로 확인돼 즉시 막았다. `src/lib/auth.ts`가
+> `preferred_username`·`phone_number` **미검증 클레임**으로 내부 계정을 찾아 그 계정의
+> `authentikSub`를 덮어썼고, 조건에 `authentikSub IS NULL`이 없어 **이미 다른 sub에 연결된
+> 계정까지** 가져갈 수 있었다. 이제 `preferred_username`은 쓰지 않고, 전화번호는
+> `phone_number_verified === true`일 때만, 미연결 계정 하나와만 일치할 때 연결하며,
+> 연결 사실을 `console.warn`으로 남긴다. 정본 문서
+> [`docs/07-auth-and-security.md`](07-auth-and-security.md)도 함께 갱신했다.
+
+### 남은 일
+
+아이디 기반 자동 연결이 없어졌으므로, 내부 계정으로 가입한 사람이 SSO로 들어오면 전화번호가
+검증돼 있지 않은 한 **새 계정**이 생긴다. 제대로 하려면 "로그인한 상태에서 SSO 계정 연결하기"
+흐름이 필요하다 — 세션 주체가 확실한 상태에서 연결하므로 클레임을 신뢰할 필요가 없다.
+
+### 미확정
+
+Authentik이 `phone_number_verified`를 실제로 발급하는지. 발급하지 않으면 자동 연결은 사실상
+꺼진 상태이고, 위 "연결하기" 흐름이 유일한 경로가 된다.
+
+---
+
+## 확인했지만 문제 없던 것 (같은 곳을 다시 파지 않도록)
+
+2026-07-30 감사 기준.
+
+- **트랜잭션·잠금**: 방/판/베팅 액션 전부 `pg_advisory_xact_lock(hashtextextended(roomId, 42))`로
+  방 단위 직렬화 후 트랜잭션 안에서 잔액을 재조회한다. 두 딜러의 동시 승인, 수동 `endRound`와
+  자동 종료(`autoSettleRoundIfComplete`)의 경쟁 모두 같은 락으로 직렬화돼 이중 정산이 불가능하다.
+- **멱등성**: `bet_actions.id`는 클라이언트 UUID로 재삽입 시 기존 행을 반환. credit RPC는
+  `idempotency_key` UNIQUE + 조회-후-반환.
+- **원장 불변성**: `chip_ledger`·`credit_transactions`·`credit_entries`·`round_fairness_reveals`가
+  `BEFORE UPDATE OR DELETE` 트리거로 `kkeutbal_app`(bypassrls)의 실수까지 차단한다.
+- **권한**: 모든 액션이 `currentUserId()`(세션)로 주체를 얻는다 — 클라이언트가 보낸 id를 신뢰하는
+  경로는 발견되지 않았다. 관리자 액션은 전부 `isAdminUser` 재검증.
+- **공정 딜 시드**: `serverSeedCiphertext`는 생성·서버 내부 복호화 경로에만 있고 클라이언트
+  스냅샷·공개 영수증에 포함되지 않는다. `getMyVerifiedSeotdaHand`는 요청자 본인 카드만 반환.
+- **비밀값**: `process.env` 직접 읽기는 `layout.tsx`의 공개 값과 `env.ts` 자체뿐.
+- **RLS**: `supabase/migrations`의 grant·정책이 문서와 일치 — `anon`/`authenticated`는 권한 없음.
+
+### 재확인할 가치가 있는 설계 (버그는 아님)
+
+`/rooms/[code]/result`와 `refreshRoom`은 방 멤버십을 보지 않고 로그인 여부만 본다 —
+[`docs/07-auth-and-security.md`](07-auth-and-security.md)의 권한표에 "로그인 사용자 전광판 조회
+허용"으로 명시된 의도된 설계다. 다만 **방 UUID를 아는 로그인 사용자 누구나**(게스트 포함) 그 방의
+잔액·정산 내역을 볼 수 있다는 뜻이라, 배포 전에 이 범위가 맞는지 한 번 더 확인할 가치가 있다.
+
+---
+
 ## 12. 실시간 통신 안정성 — 코드 근거
 
 > **해결 (2026-07-30)** — 아래 여섯 항목 중 앞의 다섯 개를 고쳤다. 재구독은
@@ -249,8 +386,15 @@ lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남�
 > refetch는 그대로 돈다. **`broadcast.ack`를 켰다** — 없으면 조인된 채널에서 `send()`가 서버
 > 확인 없이 즉시 성공으로 떨어져 재시도가 무의미했다(정본은
 > [`docs/03-realtime-protocol.md`](03-realtime-protocol.md)에 함께 갱신).
-> 마지막 항목(모든 broadcast가 전체 스냅샷 refetch를 유발)은 **그대로 남아 있다** —
-> 디바운스·최소 간격이 이미 걸려 있어 당장의 결함은 아니지만 10인방 부하 실측이 필요하다.
+> 마지막 항목(모든 broadcast가 전체 스냅샷 refetch를 유발)도 처리했다 — refetch를 없앤 게
+> 아니라 트리거를 줄였다. `event-sync-policy.ts`가 이벤트를 immediate(`round.*`)/passive(`bet.*`,
+> `afterMutation`이 항상 `state.snapshot`을 동반 발신하므로 트리거를 넘긴다)/coalesced로 나누고,
+> `state-snapshot-hint.ts`가 서버가 계산해 보낸 팟·잔액만 낙관적으로 먼저 반영한다
+> (`room.status`는 절대 반영하지 않는다 — 공개 채널 payload로 리다이렉트를 트리거하면 안 된다).
+> presence는 모르는 id가 나타날 때만 refetch한다. **그 과정에서 starvation 버그를 찾았다**:
+> `Math.max(250, 1000 - sinceLast)` 계산은 refetch가 한 번도 안 돈 상태에서 이벤트가 250ms보다
+> 촘촘히 들어오면 타이머를 영원히 재무장해 refetch가 아예 안 돌았다 — 10인방 동시 베팅이 정확히
+> 그 경우다. 부하가 가장 심할 때 동기화가 멈추는 구조였다. 숫자는 하나도 바꾸지 않았다(실측 없음).
 
 `docs/03-realtime-protocol.md`가 프로토콜 정본이고, 이 절은 현재 구현에서 확인된 빈 곳만 적는다.
 
@@ -293,7 +437,12 @@ lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남�
 ### 적용 여부
 
 - 적용: `/`, `/admin`, `/ranking`, `/ranking/player/[id]`, `/wallet`, `/advisor`, `/rooms/new`, `/rooms/[code]`, `/rooms/[code]/result`, `/rooms/[code]/monitor`
-- 미적용(의도): `/guide/*`, `/about` — 읽는 문서라서 문서 스크롤이 맞다. 로그인·가입·설정·검증 영수증처럼 한 패널만 있는 화면은 `flex-1` 중앙 정렬로 충분하다
+- 미적용(의도): `/guide/*`, `/about` — 읽는 문서라서 문서 스크롤이 맞다
+- **"한 패널 화면은 예외"가 아니다** (2026-07-30 교정): 우선 불변식은 "문서 스크롤 없음"이고
+  `flex-1` 중앙 정렬은 그걸 지키는 한에서의 기본 선택지다. e2e(`e2e/fixed-viewport.spec.ts`)가
+  `/login`에서 이 예외를 근거로 스크롤을 허용하지 않고 실제로 실패시켰다 — Pixel 7에서 넘쳤다.
+  필드가 많아 고정 뷰포트에 안 들어가는 화면(5필드 가입 폼)은 `FixedPage`+`ScrollPane`으로
+  전환해 내부 스크롤로 흡수한다
 
 ### 줄 높이를 바꿀 때
 

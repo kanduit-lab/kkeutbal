@@ -9,6 +9,7 @@ import { and, eq, isNull, like, or } from 'drizzle-orm'
 import { z } from 'zod'
 import { RATE_LIMITED_CODE, signIn } from '@/lib/auth'
 import { clientAddressFromHeaders, consumeRateLimits } from '@/lib/rate-limit'
+import { displayNameSchema } from './schemas'
 import {
   consumeRegistrationAccess,
   grantRegistrationAccess,
@@ -50,10 +51,6 @@ export type RegistrationCodeState =
 
 export type InitialAdminSetupState =
   { status: 'idle' } | { status: 'error'; error: 'invalid' | 'unavailable' } | { status: 'success' }
-
-// 회원가입과 계정 설정(표시 이름 변경)이 같은 제약을 쓰도록 공유한다.
-// 여기서 바꾸면 두 경로 모두 즉시 갈라지지 않고 함께 바뀐다.
-export const displayNameSchema = z.string().trim().min(1).max(20)
 
 const registerSchema = z.object({
   username: z

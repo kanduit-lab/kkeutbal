@@ -58,7 +58,10 @@ test('소개에서 게임 가이드와 각 게임 규칙으로 이동할 수 있
 
 test('언어 변경과 404 복구 동선을 제공한다', async ({ page }) => {
   await page.goto('/login')
-  await page.getByRole('button', { name: 'EN' }).click()
+  // exact: true — Next.js Dev Tools 오버레이의 "Open Next.js Dev Tools" 버튼도
+  // 대소문자 무시 부분 일치로 "EN"이 걸린다(Op[en]). 개발 서버 실행 시에만 나타나
+  // --dry-run으로는 안 잡히고 실제 실행에서만 strict mode violation으로 드러난다.
+  await page.getByRole('button', { name: 'EN', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Kkeutbal' })).toBeVisible()
 
   await page.goto('/rooms-not-found')

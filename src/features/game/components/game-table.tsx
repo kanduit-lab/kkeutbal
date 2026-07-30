@@ -139,7 +139,7 @@ export function GameTable({
   return (
     <section
       className={clsx(
-        'relative mx-auto mb-4 w-full max-w-3xl select-none overflow-hidden [container-type:size] [--felt-inset:7]',
+        'game-table-felt relative mx-auto mb-4 w-full max-w-3xl select-none overflow-hidden [container-type:size] [--felt-inset:7]',
         compact ? 'aspect-[5/7] sm:aspect-square' : 'aspect-[4/5] sm:aspect-[16/10]',
         fit && 'mb-0 h-full w-auto max-w-full',
         board
@@ -149,6 +149,16 @@ export function GameTable({
             : 'max-[359px]:[--seat-half-h:4rem] max-[359px]:[--seat-half-w:3rem] [--seat-half-h:4.25rem] [--seat-half-w:3.5rem] sm:[--seat-half-h:5.5rem] sm:[--seat-half-w:5.5rem]',
       )}
     >
+      {/*
+        가로로 돌린 아주 작은 폰(globals.css의 landscape/max-height:500px 블록 참고)에서만
+        CSS로 보인다 — 차단 오버레이가 아니라 상단에 붙는 알약형 안내다. 태블릿 가로나
+        일반 데스크톱에서는 display:none이 기본값이라 절대 나타나지 않는다.
+      */}
+      <div className="orientation-hint pointer-events-none absolute inset-x-2 top-2 z-30 items-center justify-center">
+        <p className="rounded-full bg-black/70 px-3 py-1 text-center text-[11px] font-medium text-white/90 shadow-[0_2px_8px_rgb(0_0_0/0.4)]">
+          {d.room.orientationHint}
+        </p>
+      </div>
       <div className="absolute inset-[calc(var(--felt-inset)*1%)] rounded-[50%] border-8 border-[#5a3a1e] bg-[radial-gradient(ellipse_at_center,#1d6b45_0%,#145233_55%,#0e3d26_100%)] shadow-[inset_0_0_40px_rgb(0_0_0/0.55),0_6px_24px_rgb(0_0_0/0.45)]" />
       <div className="pointer-events-none absolute inset-[12%] rounded-[50%] border border-white/10" />
       <div className="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-end gap-3 text-center">
@@ -241,7 +251,7 @@ export function GameTable({
           <div
             aria-hidden
             className={clsx(
-              'relative flex flex-col items-center rounded-2xl border backdrop-blur-sm transition-all',
+              'seat-card relative flex flex-col items-center rounded-2xl border backdrop-blur-sm transition-all',
               'max-w-[calc(var(--seat-half-w)*2)]',
               board
                 ? 'min-w-36 px-4 pb-2.5 pt-2'
