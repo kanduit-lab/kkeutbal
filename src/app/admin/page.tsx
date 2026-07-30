@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth'
 import { isAdminUser } from '@/features/auth/roles'
 import { AdminDashboard } from '@/features/auth/components/admin-dashboard'
 import { LocaleSwitcher } from '@/components/locale-switcher'
-import { ButtonLink, PageHeader, PageShell, Panel } from '@/components/ui'
+import { ButtonLink, FixedPage, PageHeader, PageShell, Panel } from '@/components/ui'
 import { getDict } from '@/lib/i18n/server'
 
 export const dynamic = 'force-dynamic'
@@ -33,8 +33,9 @@ export default async function AdminPage() {
   }
 
   return (
-    <PageShell width="wide">
+    <FixedPage width="wide">
       <PageHeader
+        className="mb-3 shrink-0"
         title={d.adminDashboard.title}
         subtitle={d.adminDashboard.subtitle}
         backHref="/"
@@ -42,6 +43,6 @@ export default async function AdminPage() {
         actions={<LocaleSwitcher />}
       />
       <AdminDashboard selfId={session.user.id} />
-    </PageShell>
+    </FixedPage>
   )
 }

@@ -34,7 +34,7 @@ export default async function RoomSettingsPage({ params }: { params: Promise<{ c
     return (
       <main
         id="main"
-        className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center gap-4 px-6"
+        className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-6"
       >
         <Panel className="space-y-3 py-8 text-center">
           <p className="text-3xl">⚙️</p>

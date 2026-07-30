@@ -55,7 +55,7 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
   const leaderNet = leader ? leader.balance - leader.buyInTotal : 0
 
   return (
-    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-7xl flex-col px-4 py-4 lg:px-8">
+    <main id="main" className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-4 lg:px-8">
       <header className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link

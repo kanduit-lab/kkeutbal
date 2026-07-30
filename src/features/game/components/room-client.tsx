@@ -3,12 +3,12 @@
 import Link from 'next/link'
 import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import { sendRoomEvent } from '@/lib/realtime/client'
 import { isMuted, setMuted } from '@/lib/sound'
 import type { MemberView, RoomSnapshot } from '../types'
-import { useToast } from '@/components/ui'
+import { useIsDesktop, useToast } from '@/components/ui'
 import { AUTH_ERROR_KEYS, useRoomSync } from './use-room-sync'
 import { useRoomEventFeedback } from './use-room-event-feedback'
 import { RoomHeader } from './room-header'
@@ -23,26 +23,13 @@ import { RoundLog } from './round-log'
 import { FairnessPanel } from './fairness-panel'
 import type { BroadcastSpec, RunAction } from './shared'
 
-function useIsDesktop(query: string): boolean {
-  const subscribe = useCallback(
-    (onStoreChange: () => void) => {
-      const media = window.matchMedia(query)
-      media.addEventListener('change', onStoreChange)
-      return () => media.removeEventListener('change', onStoreChange)
-    },
-    [query],
-  )
-  const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query])
-  return useSyncExternalStore(subscribe, getSnapshot, () => false)
-}
-
 export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId: string }) {
   const router = useRouter()
   const { toast } = useToast()
   const { d } = useDict()
   const [seatUserId, setSeatUserId] = useState<string | null>(null)
   const [muted, setMutedState] = useState(() => isMuted())
-  const isDesktop = useIsDesktop('(min-width: 1024px)')
+  const isDesktop = useIsDesktop()
 
   const onEvent = useRoomEventFeedback(selfId)
 
@@ -210,20 +197,22 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
     <main
       id="main"
 
-      className="mx-auto w-full max-w-6xl px-4 pb-[calc(var(--action-bar-h,0px)+1.5rem)] pt-5 lg:px-8 lg:pb-12 lg:pt-8"
+      className="mx-auto flex w-full max-w-6xl flex-col px-4 pb-[calc(var(--action-bar-h,0px)+1.5rem)] pt-5 lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:px-8 lg:pb-6 lg:pt-6"
     >
-      <RoomHeader snapshot={snapshot} isHost={isHost} muted={muted} onToggleMute={toggleMute} />
-      <RoomConnectionBar
-        syncFailed={syncFailed}
-        disconnected={showDisconnected}
-        onReconnect={() => {
-          reconnect()
-          void refetch()
-        }}
-      />
+      <div className="lg:shrink-0">
+        <RoomHeader snapshot={snapshot} isHost={isHost} muted={muted} onToggleMute={toggleMute} />
+        <RoomConnectionBar
+          syncFailed={syncFailed}
+          disconnected={showDisconnected}
+          onReconnect={() => {
+            reconnect()
+            void refetch()
+          }}
+        />
+      </div>
 
       {isLobby ? (
-        <div className="rise-in rise-in-1 mx-auto max-w-xl">
+        <div className="rise-in rise-in-1 mx-auto w-full max-w-xl lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
           <LobbyPanel
             snapshot={snapshot}
             online={online}
@@ -234,9 +223,9 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
           />
         </div>
       ) : (
-        <div className="lg:grid lg:grid-cols-12 lg:gap-6">
-          <div className="lg:col-span-7 xl:col-span-8">
-            <div className="rise-in rise-in-1">
+        <div className="lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-12 lg:gap-6">
+          <div className="lg:col-span-7 lg:flex lg:min-h-0 lg:flex-col xl:col-span-8">
+            <div className="rise-in rise-in-1 lg:shrink-0">
               <FairnessPanel
                 snapshot={snapshot}
                 selfId={selfId}
@@ -245,7 +234,7 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
               />
             </div>
             {snapshot.lastResult && !snapshot.currentRound ? (
-              <p className="rise-in rise-in-1 mb-2 text-center text-xs text-muted lg:text-sm">
+              <p className="rise-in rise-in-1 mb-2 text-center text-xs text-muted lg:shrink-0 lg:text-sm">
                 {format(d.room.lastRoundSummary, {
                   seq: snapshot.lastResult.seq,
                   name:
@@ -269,7 +258,7 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
             {!snapshot.currentRound &&
             latestAuditableRound &&
             latestAuditableRound.roundId !== snapshot.lastResult?.roundId ? (
-              <p className="mb-2 text-center text-xs text-muted lg:text-sm">
+              <p className="mb-2 text-center text-xs text-muted lg:shrink-0 lg:text-sm">
                 <Link
                   href={
                     `/rooms/${snapshot.room.code}/fairness/${latestAuditableRound.seq}` as Route
@@ -281,7 +270,7 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
               </p>
             ) : null}
 
-            <div className="rise-in rise-in-2 pt-6">
+            <div className="rise-in rise-in-2 pt-6 lg:flex lg:min-h-0 lg:flex-1 lg:items-center lg:justify-center lg:pt-3">
               <GameTable
                 members={snapshot.members}
                 online={online}
@@ -292,10 +281,11 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
                 roundActive={Boolean(snapshot.currentRound)}
                 gameType={snapshot.room.gameType}
                 onSeatTap={(member) => setSeatUserId(member.userId)}
+                fit
               />
             </div>
             {canBet && self ? (
-              <div className={isDesktop ? 'rise-in rise-in-3' : undefined}>
+              <div className={isDesktop ? 'rise-in rise-in-3 lg:mt-3 lg:shrink-0' : undefined}>
                 <ActionBar
                   snapshot={snapshot}
                   self={self}
@@ -306,26 +296,28 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
               </div>
             ) : null}
             {showGostopWait ? (
-              <div className="rise-in rise-in-3">
+              <div className="rise-in rise-in-3 lg:mt-3 lg:shrink-0">
                 <GostopWaitPanel />
               </div>
             ) : null}
           </div>
-          <div className="lg:col-span-5 xl:col-span-4">
-            {isDealer ? (
-              <div className="rise-in rise-in-2">
-                <DealerPanel
-                  snapshot={snapshot}
-                  pendingActions={pendingActions}
-                  selfId={selfId}
-                  runAction={runAction}
-                  staleReason={staleReason}
-                />
-              </div>
-            ) : null}
+          <div className="lg:col-span-5 lg:flex lg:min-h-0 lg:flex-col xl:col-span-4">
+            <div className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pe-1">
+              {isDealer ? (
+                <div className="rise-in rise-in-2">
+                  <DealerPanel
+                    snapshot={snapshot}
+                    pendingActions={pendingActions}
+                    selfId={selfId}
+                    runAction={runAction}
+                    staleReason={staleReason}
+                  />
+                </div>
+              ) : null}
 
-            <div className="rise-in rise-in-3">
-              <RoundLog actions={snapshot.actions} members={snapshot.members} />
+              <div className="rise-in rise-in-3">
+                <RoundLog actions={snapshot.actions} members={snapshot.members} />
+              </div>
             </div>
           </div>
         </div>

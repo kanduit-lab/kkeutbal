@@ -1,11 +1,11 @@
-import Link from 'next/link'
 import type { Route } from 'next'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { getCumulativeRanking } from '@/features/ranking/queries'
+import { RankingBoard } from '@/features/ranking/components/ranking-board'
 import { LocaleSwitcher } from '@/components/locale-switcher'
-import { Badge, EmptyState, PageHeader, PageShell, Panel, SegmentedLinks } from '@/components/ui'
+import { EmptyState, FixedBody, FixedPage, PageHeader, SegmentedLinks } from '@/components/ui'
 import { getDict, format } from '@/lib/i18n/server'
 import type { Dictionary } from '@/lib/i18n/server'
 
@@ -52,64 +52,6 @@ function filterHref(game: GameFilter, period: PeriodFilter): Route {
   return query ? `/ranking?${query}` : '/ranking'
 }
 
-function rankMark(index: number): string {
-  return index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : String(index + 1)
-}
-
-interface RankingRow {
-  readonly userId: string
-  readonly displayName: string
-  readonly sessions: number
-  readonly wins: number
-  readonly net: number
-}
-
-function RankingEntry({
-  row,
-  index,
-  isMe,
-  d,
-}: {
-  row: RankingRow
-  index: number
-  isMe: boolean
-  d: Dictionary
-}) {
-  return (
-    <Link href={`/ranking/player/${row.userId}` as Route} className="block">
-      <Panel
-        className={`flex min-h-14 items-center justify-between py-3 transition-transform hover:-translate-y-0.5 ${
-          isMe ? 'ring-1 ring-gold/40' : ''
-        }`}
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="w-7 shrink-0 text-center text-lg font-black text-muted">
-            {rankMark(index)}
-          </span>
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 truncate font-bold">
-              {row.displayName}
-              {isMe ? <Badge tone="warn">{d.common.me}</Badge> : null}
-            </p>
-            <p className="text-xs text-muted">
-              {format(d.ranking.sessionsAndWins, { sessions: row.sessions, wins: row.wins })}
-            </p>
-          </div>
-        </div>
-        <p
-          className={`ml-3 shrink-0 text-xl font-black tabular-nums ${
-            row.net > 0 ? 'text-win' : row.net < 0 ? 'text-accent' : 'text-muted'
-          }`}
-        >
-          {row.net > 0 ? '+' : ''}
-          {row.net.toLocaleString()}
-          <span className="ml-1 text-xs font-bold text-muted">{d.ranking.netUnit}</span>
-        </p>
-      </Panel>
-    </Link>
-  )
-}
-
 export default async function RankingPage({
   searchParams,
 }: {
@@ -130,21 +72,22 @@ export default async function RankingPage({
   ])
 
   const myId = session.user.id
-  const visible = ranking.slice(0, TOP_LIMIT)
+  const visible = ranking.slice(0, TOP_LIMIT).map((row, index) => ({ ...row, rank: index + 1 }))
   const myIndex = ranking.findIndex((row) => row.userId === myId)
-  const myRowBelowCut = myIndex >= TOP_LIMIT ? ranking[myIndex] : undefined
+  const below = myIndex >= TOP_LIMIT ? ranking[myIndex] : undefined
+  const myRowBelowCut = below ? { ...below, rank: myIndex + 1 } : undefined
 
   return (
-    <PageShell width="content" className="space-y-6">
+    <FixedPage width="content">
       <PageHeader
-        className="mb-0"
+        className="mb-3 shrink-0"
         title={d.home.ranking}
         subtitle={d.ranking.subtitle}
         backHref="/"
         backLabel={d.common.home}
         actions={<LocaleSwitcher />}
       />
-      <div className="space-y-2">
+      <div className="mb-3 flex shrink-0 flex-wrap gap-2">
         <SegmentedLinks
           ariaLabel={d.ranking.filterNavAria}
           size="sm"
@@ -171,28 +114,15 @@ export default async function RankingPage({
           <EmptyState title={d.ranking.emptyTitle} hint={d.ranking.emptyHint} />
         )
       ) : (
-        <section className="space-y-2" aria-label={d.ranking.listAria}>
-          {visible.map((row, index) => (
-            <RankingEntry
-              key={row.userId}
-              row={row}
-              index={index}
-              isMe={row.userId === myId}
-              d={d}
-            />
-          ))}
+        <FixedBody className="gap-2">
+          <RankingBoard rows={visible} myId={myId} myRowBelowCut={myRowBelowCut} />
           {ranking.length > TOP_LIMIT ? (
-            <p className="pt-2 text-center text-xs text-muted">
+            <p className="shrink-0 text-center text-xs text-muted">
               {format(d.ranking.topNNote, { n: TOP_LIMIT })}
             </p>
           ) : null}
-        </section>
+        </FixedBody>
       )}
-      {myRowBelowCut ? (
-        <section aria-label={d.ranking.myPositionAria}>
-          <RankingEntry row={myRowBelowCut} index={myIndex} isMe d={d} />
-        </section>
-      ) : null}
-    </PageShell>
+    </FixedPage>
   )
 }

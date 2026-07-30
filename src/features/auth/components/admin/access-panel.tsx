@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ConfirmDialog, useToast } from '@/components/ui'
+import { ConfirmDialog, PaneGroup, useToast } from '@/components/ui'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import {
   createGuestToken,
@@ -60,43 +60,68 @@ export function AccessPanel({
 
   return (
     <>
-      <IssueSecretPanel
-        title={d.adminConsole.registrationCodes.issueTitle}
-        description={d.adminConsole.registrationCodes.issueDescription}
-        issueLabel={d.adminConsole.registrationCodes.issue}
-        latestLabel={d.adminConsole.registrationCodes.latest}
-        copiedMessage={d.adminConsole.registrationCodes.copied}
-        latestValue={latestCode}
-        isPending={isPending}
-        onIssue={issueCode}
-        onAcknowledge={() => setLatestCode(null)}
-      />
-      <RevocableList
-        heading={d.adminConsole.registrationCodes.listTitle}
-        items={registrationCodes}
-        emptyTitle={d.adminConsole.registrationCodes.empty}
-        emptyHint={d.adminConsole.registrationCodes.emptyHint}
-        disabled={isPending}
-        onRevoke={setRevokeCodeTarget}
-      />
-      <IssueSecretPanel
-        title={d.adminConsole.guestTokens.issueTitle}
-        description={d.adminConsole.guestTokens.issueDescription}
-        issueLabel={d.adminConsole.guestTokens.issue}
-        latestLabel={d.adminConsole.guestTokens.latest}
-        copiedMessage={d.adminConsole.guestTokens.copied}
-        latestValue={latestToken}
-        isPending={isPending}
-        onIssue={issueToken}
-        onAcknowledge={() => setLatestToken(null)}
-      />
-      <RevocableList
-        heading={d.adminConsole.guestTokens.listTitle}
-        items={tokens}
-        emptyTitle={d.adminConsole.guestTokens.empty}
-        emptyHint={d.adminConsole.guestTokens.emptyHint}
-        disabled={isPending}
-        onRevoke={setRevokeTokenTarget}
+      <PaneGroup
+        ariaLabel={d.adminDashboard.paneNavLabel}
+        panes={[
+          {
+            key: 'codes',
+            label: d.adminConsole.registrationCodes.paneLabel,
+            node: (
+              <div className="flex min-h-0 flex-1 flex-col gap-3">
+                <div className="shrink-0">
+                  <IssueSecretPanel
+                    title={d.adminConsole.registrationCodes.issueTitle}
+                    description={d.adminConsole.registrationCodes.issueDescription}
+                    issueLabel={d.adminConsole.registrationCodes.issue}
+                    latestLabel={d.adminConsole.registrationCodes.latest}
+                    copiedMessage={d.adminConsole.registrationCodes.copied}
+                    latestValue={latestCode}
+                    isPending={isPending}
+                    onIssue={issueCode}
+                    onAcknowledge={() => setLatestCode(null)}
+                  />
+                </div>
+                <RevocableList
+                  heading={d.adminConsole.registrationCodes.listTitle}
+                  items={registrationCodes}
+                  emptyTitle={d.adminConsole.registrationCodes.empty}
+                  emptyHint={d.adminConsole.registrationCodes.emptyHint}
+                  disabled={isPending}
+                  onRevoke={setRevokeCodeTarget}
+                />
+              </div>
+            ),
+          },
+          {
+            key: 'tokens',
+            label: d.adminConsole.guestTokens.paneLabel,
+            node: (
+              <div className="flex min-h-0 flex-1 flex-col gap-3">
+                <div className="shrink-0">
+                  <IssueSecretPanel
+                    title={d.adminConsole.guestTokens.issueTitle}
+                    description={d.adminConsole.guestTokens.issueDescription}
+                    issueLabel={d.adminConsole.guestTokens.issue}
+                    latestLabel={d.adminConsole.guestTokens.latest}
+                    copiedMessage={d.adminConsole.guestTokens.copied}
+                    latestValue={latestToken}
+                    isPending={isPending}
+                    onIssue={issueToken}
+                    onAcknowledge={() => setLatestToken(null)}
+                  />
+                </div>
+                <RevocableList
+                  heading={d.adminConsole.guestTokens.listTitle}
+                  items={tokens}
+                  emptyTitle={d.adminConsole.guestTokens.empty}
+                  emptyHint={d.adminConsole.guestTokens.emptyHint}
+                  disabled={isPending}
+                  onRevoke={setRevokeTokenTarget}
+                />
+              </div>
+            ),
+          },
+        ]}
       />
       <ConfirmDialog
         open={revokeCodeTarget !== null}

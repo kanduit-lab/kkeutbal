@@ -46,7 +46,7 @@ export default async function LoginPage({
   return (
     <main
       id="main"
-      className="relative mx-auto grid min-h-dvh w-full max-w-6xl items-center gap-10 px-6 py-10 lg:grid-cols-2 lg:gap-16"
+      className="relative mx-auto grid w-full max-w-6xl flex-1 items-center gap-10 px-6 py-10 lg:grid-cols-2 lg:gap-16"
     >
       <div className="flex justify-end lg:absolute lg:right-4 lg:top-4 lg:z-10">
         <LocaleSwitcher />

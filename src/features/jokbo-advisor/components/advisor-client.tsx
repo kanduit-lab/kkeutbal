@@ -112,7 +112,7 @@ export function AdvisorClient({ visionEnabled }: { visionEnabled: boolean }) {
   return (
     <PageShell
       width="wide"
-      className="flex flex-col gap-6 lg:h-dvh lg:overflow-hidden lg:pb-8 lg:pt-8"
+      className="flex flex-col gap-6 lg:min-h-0 lg:flex-1 lg:overflow-hidden lg:pb-8 lg:pt-8"
     >
       <PageHeader
         className="rise-in mb-0"

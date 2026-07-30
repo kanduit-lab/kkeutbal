@@ -106,7 +106,7 @@ function AuditError({
   backLabel: string
 }) {
   return (
-    <main id="main" className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-6">
+    <main id="main" className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6">
       <Panel className="space-y-4 text-center">
         <p className="text-sm text-muted">{message}</p>
         <Link

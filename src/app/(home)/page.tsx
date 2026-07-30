@@ -5,29 +5,19 @@ import { auth, signOut } from '@/lib/auth'
 import { isAdminUser } from '@/features/auth/roles'
 import { joinRoomAndGo } from '@/features/game/actions'
 import { getMyActiveRooms, getMyRecentSessions } from '@/features/game/queries'
-import { GAME_BADGE_TONE } from '@/features/game/labels'
+import { HomeLists } from '@/features/game/components/home-lists'
 import {
   Alert,
-  Badge,
   Button,
   ButtonLink,
-  EmptyState,
+  FixedBody,
+  FixedPage,
   Input,
-  PageShell,
   Panel,
   SubmitButton,
 } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { getDict, translateError } from '@/lib/i18n/server'
-import type { Locale } from '@/lib/i18n/config'
-
-function formatSessionDate(iso: string | null, locale: Locale): string | null {
-  if (!iso) return null
-  return new Date(iso).toLocaleDateString(locale === 'ko' ? 'ko-KR' : 'en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
-}
 
 function HeaderNavLink({ href, children }: { href: Route; children: React.ReactNode }) {
   return (
@@ -49,7 +39,7 @@ export default async function HomePage({
   if (!session?.user?.id) redirect('/login')
 
   const { error } = await searchParams
-  const [myRooms, recentSessions, isAdmin, { locale, d }] = await Promise.all([
+  const [myRooms, recentSessions, isAdmin, { d }] = await Promise.all([
     getMyActiveRooms(session.user.id),
     getMyRecentSessions(session.user.id),
     isAdminUser(session.user.id),
@@ -57,9 +47,9 @@ export default async function HomePage({
   ])
 
   return (
-    <PageShell width="wide">
-      <header className="rise-in mb-8 flex flex-wrap items-center gap-x-3 gap-y-2 lg:mb-12">
-        <h1 className="font-brush text-5xl font-black tracking-tight lg:text-6xl">
+    <FixedPage width="wide">
+      <header className="rise-in mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 lg:mb-5">
+        <h1 className="font-brush text-3xl font-black tracking-tight lg:text-5xl">
           {d.common.appName}
           <span className="text-accent">.</span>
         </h1>
@@ -68,6 +58,7 @@ export default async function HomePage({
           {isAdmin ? (
             <HeaderNavLink href={'/admin' as Route}>{d.common.admin}</HeaderNavLink>
           ) : null}
+          <HeaderNavLink href={'/about' as Route}>{d.home.aboutLink}</HeaderNavLink>
           <form
             action={async () => {
               'use server'
@@ -82,7 +73,7 @@ export default async function HomePage({
         </div>
       </header>
       {error ? (
-        <Alert tone="error" className="mb-6">
+        <Alert tone="error" className="mb-3 shrink-0">
           <span className="flex items-center justify-between gap-3">
             {translateError(d, error)}
             <Link
@@ -96,8 +87,8 @@ export default async function HomePage({
         </Alert>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-12">
-        <div className="space-y-6 lg:col-span-5">
+      <FixedBody className="gap-3 lg:grid lg:grid-cols-12 lg:gap-6">
+        <div className="shrink-0 space-y-3 lg:col-span-5 lg:space-y-6">
           <Panel className="rise-in rise-in-1 space-y-4">
             <h2 className="text-lg font-bold">{d.home.joinTitle}</h2>
             <form action={joinRoomAndGo} className="flex gap-2">
@@ -123,109 +114,31 @@ export default async function HomePage({
               {d.home.newRoom}
             </ButtonLink>
           </Panel>
-          <div className="grid grid-cols-3 gap-3">
-            <Link href="/advisor" className="rise-in rise-in-2 block">
-              <Panel className="flex h-full flex-col items-center justify-center px-2 py-5 text-center transition-transform hover:-translate-y-0.5">
-                <p aria-hidden className="text-3xl">
-                  🔮
-                </p>
-                <p className="font-brush mt-2 text-base font-bold sm:text-lg">{d.home.advisor}</p>
-              </Panel>
-            </Link>
-            <Link href="/ranking" className="rise-in rise-in-2 block">
-              <Panel className="flex h-full flex-col items-center justify-center px-2 py-5 text-center transition-transform hover:-translate-y-0.5">
-                <p aria-hidden className="text-3xl">
-                  🏆
-                </p>
-                <p className="font-brush mt-2 text-base font-bold sm:text-lg">{d.home.ranking}</p>
-              </Panel>
-            </Link>
-            <Link href={'/guide' as Route} className="rise-in rise-in-2 block">
-              <Panel className="flex h-full flex-col items-center justify-center px-2 py-5 text-center transition-transform hover:-translate-y-0.5">
-                <p aria-hidden className="text-3xl">
-                  📖
-                </p>
-                <p className="font-brush mt-2 text-base font-bold sm:text-lg">{d.home.guide}</p>
-              </Panel>
-            </Link>
+          <div className="grid grid-cols-3 gap-2 lg:gap-3">
+            {(
+              [
+                { href: '/advisor' as Route, emoji: '🔮', label: d.home.advisor },
+                { href: '/ranking' as Route, emoji: '🏆', label: d.home.ranking },
+                { href: '/guide' as Route, emoji: '📖', label: d.home.guide },
+              ] as const
+            ).map((item) => (
+              <Link key={item.href} href={item.href} className="rise-in rise-in-2 block">
+                <Panel className="flex h-full flex-col items-center justify-center px-2 py-3 text-center transition-transform hover:-translate-y-0.5 lg:py-5">
+                  <p aria-hidden className="text-2xl lg:text-3xl">
+                    {item.emoji}
+                  </p>
+                  <p className="font-brush mt-1 text-sm font-bold lg:mt-2 lg:text-lg">
+                    {item.label}
+                  </p>
+                </Panel>
+              </Link>
+            ))}
           </div>
         </div>
-        <section className="rise-in rise-in-3 space-y-3 lg:col-span-7">
-          <h2 className="px-1 text-lg font-bold">{d.home.activeRooms}</h2>
-          {myRooms.length === 0 ? (
-            <EmptyState title={d.home.emptyTitle} hint={d.home.emptyHint} />
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {myRooms.map((room) => (
-                <Link key={room.code} href={`/rooms/${room.code}`} className="block">
-                  <Panel className="flex h-full items-center justify-between py-4 transition-transform hover:-translate-y-0.5">
-                    <div className="min-w-0">
-                      <p className="truncate font-bold">{room.name}</p>
-                      <p className="mt-0.5 text-sm text-muted">
-                        <span className="font-mono tracking-widest">{room.code}</span> ·{' '}
-                        {d.home.memberCount.replace('{n}', String(room.memberCount))}
-                      </p>
-                    </div>
-                    <div className="ml-3 flex shrink-0 flex-col items-end gap-1.5">
-                      <Badge tone={GAME_BADGE_TONE[room.gameType]}>{d.games[room.gameType]}</Badge>
-                      <Badge tone={room.status === 'playing' ? 'win' : 'muted'}>
-                        {room.status === 'playing' ? d.common.playing : d.common.waiting}
-                      </Badge>
-                    </div>
-                  </Panel>
-                </Link>
-              ))}
-            </div>
-          )}
-          {recentSessions.length > 0 ? (
-            <div className="space-y-3 pt-4">
-              <h2 className="px-1 text-lg font-bold">{d.home.recentSessions}</h2>
-              <div className="grid gap-2">
-                {recentSessions.map((past) => (
-                  <Link key={past.id} href={`/rooms/${past.code}/result`} className="block">
-                    <Panel className="flex items-center justify-between gap-3 py-3 transition-transform hover:-translate-y-0.5">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <p className="truncate font-bold">{past.name}</p>
-                        <Badge tone={GAME_BADGE_TONE[past.gameType]}>
-                          {d.games[past.gameType]}
-                        </Badge>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-3">
-                        <span className="text-xs text-muted">
-                          {formatSessionDate(past.closedAt, locale)}
-                        </span>
-                        <span
-                          className={`font-black tabular-nums ${
-                            past.myNet > 0
-                              ? 'text-win'
-                              : past.myNet < 0
-                                ? 'text-accent'
-                                : 'text-muted'
-                          }`}
-                        >
-                          {past.myNet > 0 ? '+' : ''}
-                          {past.myNet.toLocaleString()}
-                          <span className="ml-1 text-xs font-bold text-muted">
-                            {d.home.netUnit}
-                          </span>
-                        </span>
-                      </div>
-                    </Panel>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
-      </div>
-      <footer className="mt-12 text-center">
-        <Link
-          href={'/about' as Route}
-          className="inline-flex min-h-11 items-center text-xs text-muted underline underline-offset-4 hover:text-text"
-        >
-          {d.home.aboutLink}
-        </Link>
-      </footer>
-    </PageShell>
+        <div className="rise-in rise-in-3 flex min-h-0 flex-col lg:col-span-7">
+          <HomeLists rooms={myRooms} sessions={recentSessions} />
+        </div>
+      </FixedBody>
+    </FixedPage>
   )
 }

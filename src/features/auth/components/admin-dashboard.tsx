@@ -1,13 +1,26 @@
 'use client'
 
-import { clsx } from 'clsx'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadAdminSection } from '../admin-dashboard-actions'
 import { ADMIN_SECTIONS, type AdminSection, type AdminSectionData } from '../admin-dashboard-types'
-import { AdminClient } from './admin-client'
+import { AccessPanel } from './admin/access-panel'
+import { MembersPanel } from './admin/members-panel'
+import { RoomsPanel } from './admin/rooms-panel'
+import { SectionNav } from './admin/section-nav'
+import { SsoSettingsPanel } from './admin/sso-settings-panel'
+import { VisionSettingsPanel } from './admin/vision-settings-panel'
 import { CreditAdmin } from '@/features/wallet/components/credit-admin'
 import { PromotionsAdmin } from '@/features/promotions/components/promotions-admin'
-import { Alert, Badge, Button, ButtonLink, Panel, Skeleton } from '@/components/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  ButtonLink,
+  PaneGroup,
+  Panel,
+  ScrollPane,
+  Skeleton,
+} from '@/components/ui'
 import { translateError, useDict } from '@/lib/i18n/client'
 
 interface SectionLoadState {
@@ -15,13 +28,6 @@ interface SectionLoadState {
   readonly loading: boolean
   readonly slow: boolean
   readonly error?: string
-}
-
-const SECTION_ICON: Record<AdminSection, string> = {
-  settings: '⚙️',
-  access: '🎫',
-  people: '👥',
-  operations: '📣',
 }
 
 export function SectionSkeleton({ label }: { label: string }) {
@@ -123,21 +129,39 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
     if (!states[activeSection]) void load(activeSection)
   }, [activeSection, load, states])
 
+  const loadedSections = ADMIN_SECTIONS.filter((section) => Boolean(states[section]?.data))
+
   function renderSection(data: AdminSectionData, reload: () => void) {
     switch (data.section) {
       case 'settings':
         return (
-          <AdminClient
-            section="settings"
-            ssoSettings={data.ssoSettings}
-            visionSettings={data.visionSettings}
-            onDataChanged={reload}
+          <PaneGroup
+            ariaLabel={d.adminDashboard.paneNavLabel}
+            panes={[
+              {
+                key: 'sso',
+                label: d.adminConsole.sso.paneLabel,
+                node: (
+                  <ScrollPane label={d.adminConsole.sso.title}>
+                    <SsoSettingsPanel settings={data.ssoSettings} onDataChanged={reload} />
+                  </ScrollPane>
+                ),
+              },
+              {
+                key: 'vision',
+                label: d.adminConsole.vision.paneLabel,
+                node: (
+                  <ScrollPane label={d.adminConsole.vision.title}>
+                    <VisionSettingsPanel settings={data.visionSettings} onDataChanged={reload} />
+                  </ScrollPane>
+                ),
+              },
+            ]}
           />
         )
       case 'access':
         return (
-          <AdminClient
-            section="access"
+          <AccessPanel
             tokens={data.tokens}
             registrationCodes={data.registrationCodes}
             onDataChanged={reload}
@@ -145,70 +169,72 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
         )
       case 'people':
         return (
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <AdminClient
-              section="people"
-              selfId={selfId}
-              users={data.users}
-              onDataChanged={reload}
-            />
-            <CreditAdmin users={data.users} onDataChanged={reload} />
-          </div>
+          <PaneGroup
+            ariaLabel={d.adminDashboard.paneNavLabel}
+            columns="lg:grid-cols-[minmax(0,1fr)_20rem]"
+            panes={[
+              {
+                key: 'members',
+                label: d.adminConsole.members.title,
+                node: (
+                  <MembersPanel selfId={selfId} users={data.users} onDataChanged={reload} />
+                ),
+              },
+              {
+                key: 'credits',
+                label: d.wallet.admin.paneLabel,
+                node: (
+                  <ScrollPane label={d.wallet.admin.title}>
+                    <CreditAdmin users={data.users} onDataChanged={reload} />
+                  </ScrollPane>
+                ),
+              },
+            ]}
+          />
         )
       case 'operations':
         return (
-          <div className="grid items-start gap-4 lg:grid-cols-2">
-            <AdminClient section="operations" rooms={data.rooms} onDataChanged={reload} />
-            <PromotionsAdmin promotions={data.promotions} onDataChanged={reload} />
-          </div>
+          <PaneGroup
+            ariaLabel={d.adminDashboard.paneNavLabel}
+            panes={[
+              {
+                key: 'rooms',
+                label: d.adminConsole.rooms.title,
+                node: <RoomsPanel rooms={data.rooms} onDataChanged={reload} />,
+              },
+              {
+                key: 'promotions',
+                label: d.promotionsAdmin.title,
+                node: (
+                  <ScrollPane label={d.promotionsAdmin.title}>
+                    <PromotionsAdmin promotions={data.promotions} onDataChanged={reload} />
+                  </ScrollPane>
+                ),
+              },
+            ]}
+          />
         )
     }
   }
 
   return (
-    <div className="space-y-6">
-      <nav
-        aria-label={d.adminDashboard.sectionNavLabel}
-        className="grid grid-cols-2 gap-3 lg:grid-cols-4"
+    <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
+      <SectionNav
+        activeSection={activeSection}
+        loadedSections={loadedSections}
+        onSelect={setActiveSection}
+      />
+      <section
+        aria-labelledby={`admin-${activeSection}-title`}
+        className="flex min-h-0 flex-1 flex-col"
       >
-        {ADMIN_SECTIONS.map((section) => {
-          const copy = d.adminDashboard.sections[section]
-          const active = activeSection === section
-          const loaded = Boolean(states[section]?.data)
-          return (
-            <Button
-              key={section}
-              type="button"
-              variant={active ? 'surface' : 'outline'}
-              pressed={active}
-              onClick={() => setActiveSection(section)}
-              className={clsx(
-                'min-h-24 flex-col items-start justify-start gap-0 rounded-2xl p-4 text-left',
-                active ? 'border-gold/50 bg-gold/15 text-text' : 'bg-bg-deep/35 text-muted',
-              )}
-            >
-              <span className="flex w-full items-center justify-between gap-2">
-                <span className="text-2xl" aria-hidden="true">
-                  {SECTION_ICON[section]}
-                </span>
-                {loaded ? <span className="size-2 rounded-full bg-win" /> : null}
-              </span>
-              <span className="mt-2 block font-bold text-text">{copy.label}</span>
-              <span className="mt-0.5 hidden text-sm font-medium sm:block">{copy.short}</span>
-            </Button>
-          )
-        })}
-      </nav>
-      <section aria-labelledby={`admin-${activeSection}-title`}>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-1">
-          <div className="min-w-0 flex-1 basis-56">
-            <h2 id={`admin-${activeSection}-title`} className="text-xl font-black">
-              {d.adminDashboard.sections[activeSection].label}
-            </h2>
-            <p className="mt-1 text-sm text-muted">
-              {d.adminDashboard.sections[activeSection].description}
-            </p>
-          </div>
+        <div className="mb-3 flex shrink-0 items-baseline gap-3">
+          <h2 id={`admin-${activeSection}-title`} className="shrink-0 text-lg font-black lg:text-xl">
+            {d.adminDashboard.sections[activeSection].label}
+          </h2>
+          <p className="hidden min-w-0 flex-1 truncate text-sm text-muted sm:block">
+            {d.adminDashboard.sections[activeSection].description}
+          </p>
           <Badge tone="muted">{d.adminDashboard.onDemand}</Badge>
         </div>
         {ADMIN_SECTIONS.map((section) => {
@@ -223,9 +249,9 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
 
           if (!state || (!state.data && state.loading)) {
             return (
-              <div key={section} className="space-y-3">
+              <div key={section} className="flex min-h-0 flex-1 flex-col gap-3">
                 {state?.slow ? (
-                  <Panel className="border border-gold/20 bg-gold/5 py-4">
+                  <Panel className="shrink-0 border border-gold/20 bg-gold/5 py-4">
                     <p className="font-bold">{d.adminDashboard.slowTitle}</p>
                     <p className="mt-1 text-sm text-muted">{d.adminDashboard.slowBody}</p>
                   </Panel>
@@ -266,16 +292,16 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
           }
 
           return (
-            <div key={section} className="space-y-3">
+            <div key={section} className="flex min-h-0 flex-1 flex-col gap-3">
               {state.error ? (
-                <Alert tone="error" className="flex items-center justify-between gap-3">
+                <Alert tone="error" className="flex shrink-0 items-center justify-between gap-3">
                   <span>{translateError(d, state.error)}</span>
                   <Button size="sm" onClick={() => void load(section, true)}>
                     {d.common.retry}
                   </Button>
                 </Alert>
               ) : state.loading ? (
-                <p role="status" className="px-1 text-sm text-muted">
+                <p role="status" className="shrink-0 px-1 text-sm text-muted">
                   {d.adminDashboard.refreshing}
                 </p>
               ) : null}

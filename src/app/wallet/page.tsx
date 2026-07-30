@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
-import { Alert, PageHeader, PageShell, Panel } from '@/components/ui'
+import { Alert, FixedPage, PageHeader, Panel } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { WalletSummary } from '@/features/wallet/components/wallet-summary'
 import { WalletRetryButton } from '@/features/wallet/components/wallet-retry-button'
@@ -15,8 +15,9 @@ export default async function WalletPage() {
 
   const result = await getMyCreditWallet()
   return (
-    <PageShell width="content">
+    <FixedPage width="content">
       <PageHeader
+        className="mb-3 shrink-0"
         title={d.wallet.title}
         subtitle={d.wallet.subtitle}
         backHref="/"
@@ -38,6 +39,6 @@ export default async function WalletPage() {
           <WalletRetryButton label={d.common.retry} />
         </Panel>
       )}
-    </PageShell>
+    </FixedPage>
   )
 }

@@ -82,6 +82,9 @@ body {
 
 body {
   margin: 0;
+  /* 배너·팝업이 붙어도 고정 페이지가 정확히 남은 높이만 쓰게 만드는 셸 */
+  display: flex;
+  flex-direction: column;
   font-family:
     var(--font-body-bundled, 'Pretendard'), 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui,
     sans-serif;
