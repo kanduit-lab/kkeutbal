@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { expectNoDocumentScroll, getLifecycleFixture, loginWithPassword } from './support'
+// 문구는 사전에서 읽는다 — 하드코딩하면 문장 손질 한 번에 스펙이 깨진다
+// (실제로 '각 계정에서 잠기며' → '각자 계정에서 잠기고'로 바뀌어 이 스펙이 낡아 있었다).
+import { ko } from '../src/lib/i18n/dictionaries/ko'
 
 const { username, password, secondUsername, secondPassword, canRun, skipReason } =
   getLifecycleFixture()
@@ -19,20 +22,20 @@ test.describe('authenticated room funding', () => {
     await expect(page).toHaveURL(/\/rooms\/new$/)
     await expectNoDocumentScroll(page)
 
-    const sessionFunding = page.getByRole('button', { name: '세션 칩', exact: true })
-    const accountFunding = page.getByRole('button', { name: '계정 크레딧', exact: true })
+    const sessionFunding = page.getByRole('button', { name: ko.roomForm.sessionFunding, exact: true })
+    const accountFunding = page.getByRole('button', { name: ko.roomForm.accountCreditFunding, exact: true })
     await expect(sessionFunding).toHaveAttribute('aria-pressed', 'true')
 
     await accountFunding.click()
     await expect(accountFunding).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByText('시작 칩과 추가 바이인이 각 계정에서 잠기며')).toBeVisible()
+    await expect(page.getByText(ko.roomForm.accountCreditFundingHint)).toBeVisible()
 
-    await page.getByRole('button', { name: '방 만들기', exact: true }).click()
+    await page.getByRole('button', { name: ko.newRoom.create, exact: true }).click()
     const confirmation = page.getByRole('dialog', { name: '계정 크레딧 방을 만들까요?' })
     await expect(confirmation).toBeVisible()
-    await expect(confirmation.getByRole('button', { name: '계정 크레딧 방 만들기' })).toBeVisible()
+    await expect(confirmation.getByRole('button', { name: ko.roomForm.accountCreditConfirmLabel })).toBeVisible()
 
-    await confirmation.getByRole('button', { name: '취소', exact: true }).click()
+    await confirmation.getByRole('button', { name: ko.common.cancel, exact: true }).click()
     await expect(confirmation).not.toBeVisible()
     await expect(page).toHaveURL(/\/rooms\/new$/)
   })
@@ -56,12 +59,12 @@ test.describe('authenticated room funding', () => {
 
       const roomName = `E2E lifecycle ${Date.now().toString(36)}`
       await host.getByRole('textbox', { name: '방 이름' }).fill(roomName)
-      await expect(host.getByRole('button', { name: '세션 칩', exact: true })).toHaveAttribute(
+      await expect(host.getByRole('button', { name: ko.roomForm.sessionFunding, exact: true })).toHaveAttribute(
         'aria-pressed',
         'true',
       )
 
-      await host.getByRole('button', { name: '방 만들기', exact: true }).click()
+      await host.getByRole('button', { name: ko.newRoom.create, exact: true }).click()
       await expect(host).toHaveURL(/\/rooms\/[A-Z0-9]{6}$/)
       const roomCode = new URL(host.url()).pathname.split('/').at(-1)
       expect(roomCode).toMatch(/^[A-Z0-9]{6}$/)
@@ -123,7 +126,7 @@ test.describe('authenticated room funding', () => {
       await host
         .getByRole('textbox', { name: '방 이름' })
         .fill(`E2E verified ${Date.now().toString(36)}`)
-      await host.getByRole('button', { name: '방 만들기', exact: true }).click()
+      await host.getByRole('button', { name: ko.newRoom.create, exact: true }).click()
       await expect(host).toHaveURL(/\/rooms\/[A-Z0-9]{6}$/)
       const roomCode = new URL(host.url()).pathname.split('/').at(-1)
       expect(roomCode).toMatch(/^[A-Z0-9]{6}$/)

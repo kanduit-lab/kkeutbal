@@ -1,3 +1,6 @@
+/** `auth.setup.ts`가 만든 세션을 인증 스펙들이 재사용하는 경로. gitignore 대상. */
+export const STORAGE_STATE_PATH = 'playwright/.auth/user.json'
+
 import { expect, type Page } from '@playwright/test'
 
 /**

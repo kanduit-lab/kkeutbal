@@ -1,5 +1,15 @@
 import { defineConfig, devices } from '@playwright/test'
 
+// Playwright는 `.env.local`을 스스로 읽지 않는다 — Next.js가 앱 프로세스에서 읽는 것이고
+// 테스트 프로세스는 셸 환경변수만 본다. 그래서 `E2E_TEST_USERNAME` 같은 값을 파일에 넣어도
+// 스펙에서는 undefined였고 인증 스펙이 조용히 전부 skip됐다. CI처럼 파일이 없는 환경도 있으니
+// 실패는 무시하고, 이미 셸에 있는 값은 덮어쓰지 않는다(`loadEnvFile`의 기본 동작).
+try {
+  process.loadEnvFile('.env.local')
+} catch {
+  // .env.local이 없으면 셸 환경변수만 쓴다
+}
+
 const externalBaseUrl = process.env.E2E_BASE_URL
 
 export default defineConfig({
@@ -14,13 +24,21 @@ export default defineConfig({
   },
   projects: [
     {
+      // 세션을 한 번 만들어 파일로 남긴다. 인증 스펙들이 그걸 재사용해서 로그인 횟수를
+      // 한 자리로 줄인다 — 화면마다 로그인하면 auth.password rate limit에 실제로 걸린다.
+      name: 'setup',
+      testMatch: /auth\.setup\.ts/,
+    },
+    {
       name: 'mobile-chromium',
+      dependencies: ['setup'],
       use: { ...devices['Pixel 7'] },
     },
     {
       // 1280x720 — Tailwind `lg`(min-width: 1024px, `useIsDesktop`의 DESKTOP_QUERY) 위라
       // PaneGroup 나란히 배치·DataTable 등 데스크톱 전용 분기가 실제로 걸린다.
       name: 'desktop-chromium',
+      dependencies: ['setup'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],

@@ -1,5 +1,5 @@
 import { test, type Page, type TestInfo } from '@playwright/test'
-import { getLifecycleFixture, loginWithPassword } from './support'
+import { STORAGE_STATE_PATH, getLifecycleFixture, loginWithPassword } from './support'
 
 /**
  * 스크린샷 수집 전용 스펙. 흐름이 끊기는지, 요소가 비는지는 다른 스펙이 단정(assert)하고,
@@ -52,6 +52,8 @@ const username = process.env.E2E_TEST_USERNAME
 const password = process.env.E2E_TEST_PASSWORD
 
 test.describe('스크린샷 수집 — 로그인 후 화면', () => {
+  // auth.setup.ts가 만든 세션을 재사용한다 — 화면마다 로그인하면 로그인 rate limit에 걸린다.
+  test.use({ storageState: STORAGE_STATE_PATH })
   test.skip(
     !username || !password,
     'Set E2E_TEST_USERNAME and E2E_TEST_PASSWORD for the dedicated E2E account.',
@@ -67,7 +69,7 @@ test.describe('스크린샷 수집 — 로그인 후 화면', () => {
 
   for (const [path, name] of AUTHENTICATED) {
     test(`로그인 후 — ${path}`, async ({ page }, testInfo) => {
-      await loginWithPassword(page, { username: username!, password: password! }, path)
+      await page.goto(path)
       await capture(page, testInfo, name)
     })
   }

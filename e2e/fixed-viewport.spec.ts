@@ -1,5 +1,5 @@
 import { test } from '@playwright/test'
-import { expectNoDocumentScroll, loginWithPassword } from './support'
+import { STORAGE_STATE_PATH, expectNoDocumentScroll } from './support'
 
 /**
  * 고정 뷰포트 레이아웃 회귀 가드 (docs/12-handoff.md 11번, TODO.md "데스크톱 뷰포트 E2E
@@ -48,6 +48,8 @@ const username = process.env.E2E_TEST_USERNAME
 const password = process.env.E2E_TEST_PASSWORD
 
 test.describe('인증 화면 — 문서 스크롤 회귀 가드', () => {
+  // auth.setup.ts가 만든 세션을 재사용한다 — 화면마다 로그인하면 로그인 rate limit에 걸린다.
+  test.use({ storageState: STORAGE_STATE_PATH })
   test.skip(
     !username || !password,
     'Set E2E_TEST_USERNAME and E2E_TEST_PASSWORD for the dedicated E2E account.',
@@ -60,7 +62,7 @@ test.describe('인증 화면 — 문서 스크롤 회귀 가드', () => {
 
   for (const path of AUTHENTICATED_ROUTES) {
     test(`로그인 후 ${path}은 문서 스크롤을 만들지 않는다`, async ({ page }) => {
-      await loginWithPassword(page, { username: username!, password: password! }, path)
+      await page.goto(path)
       await expectNoDocumentScroll(page)
     })
   }
