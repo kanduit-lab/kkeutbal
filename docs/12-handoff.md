@@ -180,6 +180,12 @@ Authentik 계정으로 흐름을 완주하면 피해자 계정에 공격자 sub�
 - `package.json`의 `pnpm@11.15.1`은 Node 22.13 이상을 요구한다. `.nvmrc`는 `22`로 고정돼 있다.
 - **e2e는 `.env.local`을 Playwright가 직접 읽는다**(`playwright.config.ts`의 `process.loadEnvFile`).
   Next가 읽어주는 것은 앱 프로세스뿐이라, 이걸 하지 않으면 계정 관련 스펙이 조용히 전부 skip된다.
+- **Server Action 통합 테스트(`test/integration/`)도 실제 DB에 쓴다.** `INTEGRATION_DB=true`일 때만
+  돌고 기본은 꺼져 있다. 액션이 각자 `db.transaction()`을 열기 때문에 테스트가 밖에서 트랜잭션을
+  열고 롤백하는 방식이 통하지 않고, `chip_ledger`가 append-only + `room_id` FK가 cascade라서
+  **원장 행이 생긴 방은 삭제 자체가 불가능하다.** 그래서 잔여 데이터가 남는다 — 방 이름 `[int]`
+  접두사로 식별 가능하게 하고, 정산하지 않아 누적 랭킹 집계(`settled`/`closed`만 본다)에는 들어가지
+  않게 해 뒀다.
 - **방 lifecycle 스펙은 실제 DB에 방을 만든다.** `E2E_ENABLE_ROOM_LIFECYCLE=true`와 서로 다른
   계정 두 개가 필요하고, 로그인은 계정당 한 번만 해서(`e2e/auth.setup.ts` + `storageState`)
   `auth.password` 한도를 쓰지 않는다. 전체 스위트 한 번이 방 생성·입장을 각각 6번 쓰므로
