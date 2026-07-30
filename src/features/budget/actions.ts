@@ -4,7 +4,7 @@ import { and, desc, eq, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
-import { consumeRateLimits } from '@/lib/rate-limit'
+import { consumeRateLimitsUnlessAdmin } from '@/lib/rate-limit'
 import { currentUserId } from '../auth/session'
 import { balanceInRoom, lockRoom, requireRole } from '../game/action-helpers'
 import { readFundingMode } from '../game/funding-mode'
@@ -32,7 +32,9 @@ export async function addBuyIn(
   // 한도는 호출자(딜러 대리 입력 포함) 기준. 정상 사용 최악 케이스: 딜러가 여러 참가자의
   // 칩을 한꺼번에 top-up하는 짧은 버스트(분당 10회)와, 긴 세션 동안 반복되는 재입금
   // 누적(시간당 60회 — 10인방 전원이 각각 여러 번 추가 바이인을 해도 여유가 있다).
-  const rate = await consumeRateLimits([
+  // 면제 판정은 대상자(`userId`)가 아니라 **호출자** 기준이다 — 대리 입력에서 대상자가
+  // 관리자라는 이유로 면제되면 안 된다.
+  const rate = await consumeRateLimitsUnlessAdmin(callerId, [
     {
       scope: 'game.add_buy_in.user.minute',
       identifier: callerId,

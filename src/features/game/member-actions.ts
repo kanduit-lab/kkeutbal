@@ -5,7 +5,7 @@ import { and, eq, isNull, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
-import { consumeRateLimits } from '@/lib/rate-limit'
+import { consumeRateLimitsUnlessAdmin } from '@/lib/rate-limit'
 import { currentUserId } from '../auth/session'
 import { lockRoom, readMaxMembers, requireRole, type Tx } from './action-helpers'
 import { readFundingMode } from './funding-mode'
@@ -218,7 +218,7 @@ export async function addLocalMember(
   // 최악 케이스: 방 정원 상한(10, action-helpers.ts readMaxMembers)만큼 로컬 멤버를
   // 한 번에 채우면서 중복 이름 오타로 몇 번 더 재시도하는 것(분당), 모임 저녁 동안 방을
   // 몇 개(게임 종류 전환 등) 새로 꾸리며 그때마다 다시 채우는 것(시간당).
-  const rate = await consumeRateLimits([
+  const rate = await consumeRateLimitsUnlessAdmin(userId, [
     {
       scope: 'game.add_local_member.user.minute',
       identifier: userId,
