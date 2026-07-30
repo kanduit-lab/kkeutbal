@@ -41,6 +41,15 @@
 
 ## 9. 판 자동 종료 없음 — 전원 콜, 전원 다이
 
+> **해결 (2026-07-30)** — 판정은 `src/features/betting/round-completion.ts`의 순수 함수
+> `computeRoundCompletion`이 하고(`active` / `showdown_ready` / `single_survivor`),
+> `placeBet`·`approveBet`가 베팅을 accept한 직후 같은 트랜잭션에서
+> `src/features/game/round-finalize.ts`의 `autoSettleRoundIfComplete`를 호출한다.
+> 1인 생존은 항상 자동 종료. 검증 딜 방은 시드 봉인 후 기존 쇼다운 경로로 완전 자동 판정,
+> 비검증 방의 2인 이상 쇼다운은 서버가 카드를 몰라 딜러 승자 확정 폼을 자동으로 연다.
+> 딜러의 수동 종료·판 무효 버튼은 탈출구로 남겼다. "다음 세션"은 판(round) 전환으로만
+> 구현하고 새 상위 단위는 만들지 않았다 — 이 저장소에서 "세션"은 이미 방 하나를 뜻한다.
+
 트리거가 다른 두 종료 조건을 함께 다룬다. (a) 다이 안 한 나머지 전원이 콜해서 베팅이 끝난
 경우, (b) 한 명 빼고 전원 다이한 경우. (b)는 승자가 마지막 생존자로 자명해서 카드 판정 없이
 정산까지 자동화할 여지가 있다.
@@ -78,6 +87,15 @@
 ---
 
 ## 8. 베팅 턴 검증 부재 — 재현 가능한 버그
+
+> **해결 (2026-07-30)** — 턴 계산을 `src/features/game/turn-order.ts`(순수 함수)로 빼서
+> 서버(`validateBetSemantics`, placeBet·approveBet 공용)와 좌석 강조(`game-table.tsx`),
+> 좌석 시트(`member-sheet.tsx`)가 같은 함수를 쓴다. 위반은 `errors.notYourTurn`.
+> 좌석 순서는 seatNo 오름차순이고 그 근거는 `startRound`가 `round_fairness_participants.dealOrder`
+> ("선" = index 0)를 같은 배열 인덱스로 채우는 것이다. **찾은 버그 둘**: 기존 `nextActorId`는
+> (a) 라운드 시작 직후 accepted 액션이 없으면 `null`을 반환해 첫 액션자가 정해지지 않았고,
+> (b) 마지막 행동자가 중도 퇴장하면 영구히 `null`을 반환해 교착이었다. 둘 다 "선"부터
+> 재탐색으로 고쳤다. 표시 전용일 때는 드러나지 않던 문제다.
 
 한 사람이 자기 차례가 아닌데도, 또는 남의 차례를 건너뛰고 연속으로 베팅할 수 있다.
 
@@ -155,6 +173,13 @@
 
 ## 5. 섯다 레이즈 배수·상한 규칙 미구현
 
+> **해결 (2026-07-30)** — `rooms.rulePreset` JSON에 `raiseRule`을 넣어 마이그레이션 없이
+> 저장한다. 값 3개: `free`(기본값 — 미지정·기존 방 전부 이 값으로 읽혀 하위 호환),
+> `ttadang`(누적 총액이 `lastBet === 0 ? baseBet : lastBet * 2`와 정확히 같아야 통과),
+> `pot_limit`(누적 총액이 팟을 넘을 수 없다). 판정은 `src/features/betting/raise-rule.ts`
+> 순수 함수, 강제는 `validateBetSemantics`, 선택 UI는 방 만들기 화면. 아래 미확정은 이
+> 세 값으로 닫혔다 — 방 설정 페이지(`updateRoomSettings`)에서 바꾸는 경로는 아직 없다.
+
 버그가 아니라 규칙 자체가 코드에도 문서에도 없다.
 
 ### 근거
@@ -215,6 +240,18 @@ lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남�
 
 ## 12. 실시간 통신 안정성 — 코드 근거
 
+> **해결 (2026-07-30)** — 아래 여섯 항목 중 앞의 다섯 개를 고쳤다. 재구독은
+> `CHANNEL_ERROR`·`TIMED_OUT`·`CLOSED` 전부에서 걸리고 백오프에 equal jitter가 들어갔다
+> (`src/lib/realtime/reconnect-backoff.ts`, 최대 10회 뒤에는 `visibilitychange`/`online`과
+> 수동 버튼이 회복 경로). `refetch`는 8초 상한(`sync-timeouts.ts`, action race 15초와 한 파일에
+> 두어 관계를 못 잃게 했다). 전송은 3회 재시도 후 실패를 `room.broadcastDelayed`로 알린다.
+> envelope `id`는 FIFO 200개 집합(`seen-events.ts`)으로 dedup하되 피드백만 건너뛰고 스냅샷
+> refetch는 그대로 돈다. **`broadcast.ack`를 켰다** — 없으면 조인된 채널에서 `send()`가 서버
+> 확인 없이 즉시 성공으로 떨어져 재시도가 무의미했다(정본은
+> [`docs/03-realtime-protocol.md`](03-realtime-protocol.md)에 함께 갱신).
+> 마지막 항목(모든 broadcast가 전체 스냅샷 refetch를 유발)은 **그대로 남아 있다** —
+> 디바운스·최소 간격이 이미 걸려 있어 당장의 결함은 아니지만 10인방 부하 실측이 필요하다.
+
 `docs/03-realtime-protocol.md`가 프로토콜 정본이고, 이 절은 현재 구현에서 확인된 빈 곳만 적는다.
 
 - **재구독이 `CLOSED`에서만 걸린다** — `use-room-sync.ts`의 `channel.subscribe` 콜백은
@@ -266,6 +303,13 @@ lg:overflow-hidden`이고, 좌측 컬럼의 `GameTable`이 `fit` 모드로 남�
 ---
 
 ## 3. 계정 설정 페이지 없음
+
+> **해결 (2026-07-30)** — `/account` 라우트와 `updateDisplayName` Server Action을 넣었다.
+> **표시 이름만** 바꾼다. 전화번호는 본인 인증 없이 열면 계정 탈취 경로가 되므로 제외했고,
+> 아바타도 범위 밖이다(아래 미확정은 이 결정으로 닫혔다). 게스트는 이름이 입장 토큰에 묶여
+> 있어 서버·화면 양쪽에서 차단하고 이유를 보여준다. 이름 규칙은 회원가입과 같은
+> `displayNameSchema` 하나를 공유한다. 이름 스냅샷 컬럼이 없어(전부 `userId` FK 조인)
+> 랭킹·과거 판 기록까지 다음 조회에 새 이름이 반영된다.
 
 `displayName`은 회원가입 또는 SSO·게스트 최초 로그인 시 한 번 정해지고 이후 본인이 바꿀
 UI가 없다. `/settings`, `/profile` 같은 라우트가 `src/app` 하위에 존재하지 않는다.

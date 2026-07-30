@@ -22,14 +22,18 @@
 // src/lib/realtime/client.ts — createRoomChannel
 supabase.channel(`room:${roomId}`, {
   config: {
-    broadcast: { self: false },
+    broadcast: { self: false, ack: true },
     presence: { key: userId },
   },
 })
 ```
 
 - `self: false` — 자기 액션은 Server Action 성공 뒤의 refetch로 이미 반영했으므로 되받지 않는다.
-- `ack` 옵션은 쓰지 않는다.
+- `ack: true` (2026-07-30 변경) — 없으면 조인된 채널에서 `send()`가 서버 확인 없이 즉시 `'ok'`를
+  돌려준다. 소켓이 살아 있는 것처럼 보이면서 패킷이 버려지는 모바일 구간을 잡으려면 실제 확인이
+  필요하다. 전송당 왕복이 한 번 늘지만 payload가 작고, 호출부는 `afterMutation`에서 로컬 refetch
+  뒤에 병렬로 기다리므로 조작 체감 지연은 없다. 재시도(`send-retry.ts`)가 중복 배달을 만들어도
+  같은 envelope `id`를 재사용하므로 `seen-events.ts`의 dedup이 흡수한다.
 - 채널 구독 자체에는 인가 검사가 없다. **payload를 신뢰하지 않는 것**과 **모든 쓰기를 Server
   Action이 권한 검사 후 수행하는 것**으로 방어한다 (아래 보안 경계).
 - 개인 채널은 만들지 않는다. 손패처럼 나만 볼 정보는 애초에 브로드캐스트하지 않고 서버 응답으로만
