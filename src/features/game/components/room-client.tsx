@@ -1,6 +1,5 @@
 'use client'
 
-import { clsx } from 'clsx'
 import Link from 'next/link'
 import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
@@ -87,10 +86,14 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
   return (
     <main
       id="main"
-      className={clsx(
-        'mx-auto flex w-full max-w-6xl flex-col px-4 pb-[calc(var(--action-bar-h,0px)+1.5rem)] pt-5 lg:px-8 lg:pb-6 lg:pt-6',
-        isLobby ? 'lg:min-h-0 lg:flex-1 lg:overflow-hidden' : 'min-h-0 flex-1 overflow-hidden',
-      )}
+      // `fixed-page`는 globals.css의 `body:has(> main.fixed-page)` 규칙을 켜는 표식이다. 이게
+      // 없으면 body 높이가 콘텐츠로 정해져 아래 `flex-1`이 아무것도 제한하지 못한다 — 방
+      // 화면이 그 상태였고 로비가 Pixel 7에서 88px, 데스크톱에서 193px 넘쳤다.
+      //
+      // 로비 제약이 `lg:`로만 걸려 있던 것도 같이 고쳤다. 모바일 로비는 아예 제약이 없어
+      // 초대 QR + 참가자 목록이 길어지는 만큼 문서가 늘어났다. 지금은 두 폭 모두 고정이고
+      // 넘치는 내용은 LobbyPanel 안의 스크롤 영역이 흡수한다.
+      className="fixed-page mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden px-4 pb-[calc(var(--action-bar-h,0px)+1.5rem)] pt-5 lg:px-8 lg:pb-6 lg:pt-6"
     >
       <div className="shrink-0">
         <RoomHeader snapshot={snapshot} isHost={isHost} muted={muted} onToggleMute={toggleMute} />
@@ -105,7 +108,7 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
       </div>
 
       {isLobby ? (
-        <div className="rise-in rise-in-1 mx-auto w-full max-w-xl lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain">
+        <div className="rise-in rise-in-1 mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col overflow-hidden">
           <LobbyPanel
             snapshot={snapshot}
             online={online}

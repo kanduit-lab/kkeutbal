@@ -57,9 +57,13 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
   return (
     <main
       id="main"
-      className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-4 lg:min-h-0 lg:overflow-hidden lg:px-8"
+      // 방 화면과 같은 이유로 `fixed-page`가 필요하다(globals.css의 `body:has(> main.fixed-page)`).
+      // 제약이 `lg:`로만 걸려 있어서 폰에서는 최근 판 목록이 길어지는 만큼 문서가 늘어났다 —
+      // e2e가 Pixel 7에서 963px(뷰포트 840)로 잡았다. 이제 두 폭 모두 고정이고, 넘치는 목록은
+      // aside 안에서 스크롤된다.
+      className="fixed-page mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden px-4 py-4 lg:px-8"
     >
-      <div className="lg:shrink-0">
+      <div className="shrink-0">
         <header className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
@@ -105,7 +109,7 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
       </div>
 
       {snapshot.lastResult && !snapshot.currentRound ? (
-        <p className="mb-1 text-center text-sm text-muted lg:shrink-0 lg:text-lg">
+        <p className="mb-1 shrink-0 text-center text-sm text-muted lg:text-lg">
           {format(d.monitor.lastRoundSummary, {
             seq: snapshot.lastResult.seq,
             name: winnerName ?? '?',
@@ -115,8 +119,10 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
         </p>
       ) : null}
 
-      <div className="flex flex-1 flex-col gap-4 lg:min-h-0 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1 pt-6 lg:flex lg:min-h-0 lg:items-center lg:justify-center lg:pt-0">
+      {/* 모바일은 위아래로 3:2 — 판이 주인공인 화면이라 테이블이 크게 남고, 최근 판 목록은
+          남은 높이 안에서 스크롤된다. 데스크톱은 기존대로 테이블 + 오른쪽 320px 사이드바다. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row lg:items-start">
+        <div className="min-h-0 min-w-0 flex-[3] pt-6 lg:flex lg:flex-1 lg:items-center lg:justify-center lg:pt-0">
           <GameTable
             members={snapshot.members}
             online={online}
@@ -129,7 +135,7 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
             fit
           />
         </div>
-        <aside className="w-full shrink-0 lg:flex lg:h-full lg:w-80 lg:flex-col lg:overflow-y-auto lg:overscroll-contain">
+        <aside className="min-h-0 w-full flex-[2] overflow-y-auto overscroll-contain lg:flex lg:h-full lg:w-80 lg:flex-none lg:flex-col">
           {leader && snapshot.endedRounds > 0 ? (
             <div className="mb-4 flex items-center justify-between gap-2 rounded-2xl border border-win/30 bg-win/10 px-4 py-3">
               <span className="shrink-0 text-sm font-bold text-win">
