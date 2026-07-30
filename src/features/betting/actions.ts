@@ -1,65 +1,32 @@
 'use server'
 
-import { and, asc, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
-import {
-  activeRoundParticipantIds,
-  balanceInRoom,
-  defaultBaseBet,
-  lockRoom,
-  readBaseBet,
-  readRaiseRule,
-  requireRole,
-  type Tx,
-} from '../game/action-helpers'
+import { lockRoom, requireRole } from '../game/action-helpers'
 import { autoSettleRoundIfComplete } from '../game/round-finalize'
 import type { BetActionView } from '../game/types'
-import { contributedBy, minimumRaiseAmount, neededToCall, roundBetState, totalContributed } from './round-bet-state'
-import { computeRoundCompletion } from './round-completion'
-import { raiseRuleViolation } from './raise-rule'
-import { isActorsTurn } from '../game/turn-order'
+import { toView, type RoundEndedFromBet } from './bet-view'
+import {
+  findActiveRoundForRoom,
+  findActiveTargetParticipant,
+  findBetActionById,
+  findBetLedgerRow,
+  findLaterAcceptedBet,
+  findNextBetSeq,
+  findPendingBetForUser,
+  findRoomById,
+  findRoundById,
+  findRoundParticipant,
+  hasEarlierPendingBet,
+  hasPendingBetInRound,
+  memberInfo,
+} from './bet-queries'
+import { validateBetSemantics } from './bet-semantics'
 
-export interface RoundEndedFromBet {
-  readonly seq: number
-  readonly pot: number
-  readonly winnerId: string
-}
-
-const { rooms, roomMembers, rounds, roundParticipants, betActions, chipLedger } = schema
-
-async function memberInfo(
-  tx: Tx,
-  roomId: string,
-  userId: string,
-): Promise<{ role: string; leftAt: Date | null } | null> {
-  const [member] = await tx
-    .select({
-      role: roomMembers.role,
-      leftAt: roomMembers.leftAt,
-    })
-    .from(roomMembers)
-    .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, userId)))
-    .limit(1)
-  return member ?? null
-}
-
-function toView(action: typeof betActions.$inferSelect): BetActionView {
-  return {
-    id: action.id,
-    roundId: action.roundId,
-    userId: action.userId,
-    enteredBy: action.enteredBy,
-    action: action.action,
-    amount: action.amount,
-    status: action.status,
-    reason: action.reason,
-    seq: action.seq,
-    createdAt: action.createdAt.toISOString(),
-  }
-}
+const { betActions, chipLedger } = schema
 
 const placeBetSchema = z.object({
   actionId: z.string().uuid(),
@@ -68,95 +35,6 @@ const placeBetSchema = z.object({
   amount: z.number().int().min(0).max(10_000_000),
   targetUserId: z.string().uuid().optional(),
 })
-
-type BetKind = z.infer<typeof placeBetSchema>['action']
-
-async function validateBetSemantics(
-  tx: Tx,
-  input: {
-    room: typeof rooms.$inferSelect
-    roundId: string
-    userId: string
-    action: BetKind
-    amount: number
-    beforeSeq?: number
-  },
-): Promise<string | null> {
-  const { room, roundId, userId, action, amount, beforeSeq } = input
-  const before = beforeSeq === undefined ? undefined : lt(betActions.seq, beforeSeq)
-
-  const [lastUserAction] = await tx
-    .select({ action: betActions.action })
-    .from(betActions)
-    .where(
-      and(
-        eq(betActions.roundId, roundId),
-        eq(betActions.userId, userId),
-        eq(betActions.status, 'accepted'),
-        before,
-      ),
-    )
-    .orderBy(desc(betActions.seq))
-    .limit(1)
-  if (lastUserAction?.action === 'fold') return 'errors.cannotBetAfterFold'
-  if (lastUserAction?.action === 'allin') return 'errors.cannotBetAfterAllIn'
-
-  const acceptedActions = await tx
-    .select({
-      userId: betActions.userId,
-      action: betActions.action,
-      amount: betActions.amount,
-      status: betActions.status,
-      seq: betActions.seq,
-    })
-    .from(betActions)
-    .where(and(eq(betActions.roundId, roundId), eq(betActions.status, 'accepted'), before))
-    .orderBy(asc(betActions.seq))
-
-  // 베팅 라운드가 이미 콜 완료(쇼다운 대기) 또는 1인 생존 상태면 더 이상 액션을 받지 않는다 —
-  // 정상적으로는 그 직후 자동 종료(`autoSettleRoundIfComplete`)가 판을 끝내지만, 공정 딜
-  // 봉인 대기처럼 자동 종료가 미뤄진 사이 낀 요청까지 막는 안전망이다.
-  const participantIds = await activeRoundParticipantIds(tx, room.id, roundId)
-  const completion = computeRoundCompletion(participantIds, acceptedActions)
-  if (completion.kind !== 'active') return 'errors.roundAwaitingWinner'
-
-  // 차례 강제 — docs/12-handoff.md 8번. UI 하이라이트와 같은 순수 함수(`turn-order.ts`)로 판정한다.
-  if (!isActorsTurn(participantIds, acceptedActions, userId)) return 'errors.notYourTurn'
-
-  const state = roundBetState(acceptedActions)
-  const callNeeded = neededToCall(state, userId)
-  const balance = await balanceInRoom(tx, room.id, userId)
-  if (action === 'check') return callNeeded === 0 ? null : 'errors.cannotCheckAfterBet'
-  if (action === 'fold') return null
-  if (balance < 1) return 'errors.insufficientBalance'
-
-  if (action === 'allin') {
-    return amount === balance ? null : 'errors.allInMustUseFullBalance'
-  }
-  if (amount > balance) return 'errors.insufficientBalance'
-
-  if (action === 'call') {
-    if (callNeeded === 0) return 'errors.noBetToCall'
-    return amount === Math.min(callNeeded, balance) ? null : 'errors.invalidCallAmount'
-  }
-
-  const baseBet = readBaseBet(room.rulePreset) ?? defaultBaseBet(room.startingChips)
-  const minRaise = minimumRaiseAmount(state, userId, baseBet)
-  if (amount < minRaise) return 'errors.raiseBelowMinimum'
-  if (amount === balance) return 'errors.allInMustUseAllInAction'
-
-  const raiseViolation = raiseRuleViolation({
-    rule: readRaiseRule(room.rulePreset),
-    amount,
-    contributionBefore: contributedBy(state, userId),
-    lastBet: state.currentToCall,
-    baseBet,
-    pot: totalContributed(state),
-  })
-  if (raiseViolation) return raiseViolation
-
-  return null
-}
 
 export async function placeBet(
   input: z.infer<typeof placeBetSchema>,
@@ -188,11 +66,7 @@ export async function placeBet(
       if (!target || target.leftAt) return fail('errors.targetNotMember')
       if (target.role === 'observer') return fail('errors.observerCannotBet')
 
-      const [existing] = await tx
-        .select()
-        .from(betActions)
-        .where(eq(betActions.id, actionId))
-        .limit(1)
+      const existing = await findBetActionById(tx, actionId)
       if (existing) {
         const enteredBy = isProxy ? callerId : null
         if (
@@ -207,39 +81,20 @@ export async function placeBet(
         return ok({ action: toView(existing) })
       }
 
-      const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
+      const room = await findRoomById(tx, roomId)
       if (!room) return fail('errors.roomNotFound')
 
       if (room.gameType === 'gostop') return fail('errors.gostopScoreOnly')
 
-      const [round] = await tx
-        .select()
-        .from(rounds)
-        .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
-        .orderBy(desc(rounds.seq))
-        .limit(1)
+      const round = await findActiveRoundForRoom(tx, roomId)
       if (!round) return fail('errors.noActiveRound')
 
-      const [participant] = await tx
-        .select({ userId: roundParticipants.userId })
-        .from(roundParticipants)
-        .where(and(eq(roundParticipants.roundId, round.id), eq(roundParticipants.userId, userId)))
-        .limit(1)
+      const participant = await findRoundParticipant(tx, round.id, userId)
       if (!participant) {
         return fail('errors.joinedAfterRoundStart')
       }
 
-      const [pending] = await tx
-        .select({ id: betActions.id })
-        .from(betActions)
-        .where(
-          and(
-            eq(betActions.roundId, round.id),
-            eq(betActions.userId, userId),
-            eq(betActions.status, 'pending'),
-          ),
-        )
-        .limit(1)
+      const pending = await findPendingBetForUser(tx, round.id, userId)
       if (pending) return fail('errors.pendingActionExists')
 
       const semanticError = await validateBetSemantics(tx, {
@@ -253,19 +108,11 @@ export async function placeBet(
 
       const autoAccept = room.inputMode === 'trust' || isDealer
       if (autoAccept && room.inputMode === 'approval') {
-        const [earlierPending] = await tx
-          .select({ id: betActions.id })
-          .from(betActions)
-          .where(and(eq(betActions.roundId, round.id), eq(betActions.status, 'pending')))
-          .limit(1)
+        const earlierPending = await hasPendingBetInRound(tx, round.id)
         if (earlierPending) return fail('errors.pendingBetsBeforeNewAction')
       }
 
-      const [seqRow] = await tx
-        .select({ max: sql<number>`coalesce(max(${betActions.seq}), 0)` })
-        .from(betActions)
-        .where(eq(betActions.roundId, round.id))
-      const seq = (seqRow?.max ?? 0) + 1
+      const seq = await findNextBetSeq(tx, round.id)
 
       const [inserted] = await tx
         .insert(betActions)
@@ -322,11 +169,7 @@ export async function approveBet(
 
   try {
     return await db.transaction(async (tx) => {
-      const [target] = await tx
-        .select()
-        .from(betActions)
-        .where(eq(betActions.id, parsed.data.actionId))
-        .limit(1)
+      const target = await findBetActionById(tx, parsed.data.actionId)
       if (!target) return fail('errors.actionNotFound')
 
       await lockRoom(tx, target.roomId)
@@ -335,56 +178,26 @@ export async function approveBet(
         return fail('errors.dealerOrHostOnlyApprove')
       }
 
-      const [fresh] = await tx
-        .select()
-        .from(betActions)
-        .where(eq(betActions.id, target.id))
-        .limit(1)
+      const fresh = await findBetActionById(tx, target.id)
       if (!fresh || fresh.status !== 'pending') return fail('errors.actionAlreadyProcessed')
 
-      const [round] = await tx
-        .select({ id: rounds.id, seq: rounds.seq, status: rounds.status })
-        .from(rounds)
-        .where(eq(rounds.id, fresh.roundId))
-        .limit(1)
+      const round = await findRoundById(tx, fresh.roundId)
       if (round?.status !== 'playing') return fail('errors.roundAlreadyEnded')
 
-      const [earlierPending] = await tx
-        .select({ id: betActions.id })
-        .from(betActions)
-        .where(
-          and(
-            eq(betActions.roundId, fresh.roundId),
-            eq(betActions.status, 'pending'),
-            lt(betActions.seq, fresh.seq),
-          ),
-        )
-        .limit(1)
+      const earlierPending = await hasEarlierPendingBet(tx, fresh.roundId, fresh.seq)
       if (earlierPending) return fail('errors.approvePendingInOrder')
 
-      const [activeTarget] = await tx
-        .select({ id: roomMembers.userId })
-        .from(roomMembers)
-        .innerJoin(
-          roundParticipants,
-          and(
-            eq(roundParticipants.roundId, fresh.roundId),
-            eq(roundParticipants.userId, roomMembers.userId),
-          ),
-        )
-        .where(
-          and(
-            eq(roomMembers.roomId, fresh.roomId),
-            eq(roomMembers.userId, fresh.userId),
-            isNull(roomMembers.leftAt),
-          ),
-        )
-        .limit(1)
+      const activeTarget = await findActiveTargetParticipant(
+        tx,
+        fresh.roomId,
+        fresh.roundId,
+        fresh.userId,
+      )
 
       const movesChips =
         fresh.action === 'call' || fresh.action === 'raise' || fresh.action === 'allin'
 
-      const [room] = await tx.select().from(rooms).where(eq(rooms.id, fresh.roomId)).limit(1)
+      const room = await findRoomById(tx, fresh.roomId)
       if (!room) return fail('errors.roomNotFound')
       const semanticError = activeTarget
         ? await validateBetSemantics(tx, {
@@ -453,11 +266,7 @@ export async function rejectBet(
 
   try {
     return await db.transaction(async (tx) => {
-      const [target] = await tx
-        .select()
-        .from(betActions)
-        .where(eq(betActions.id, parsed.data.actionId))
-        .limit(1)
+      const target = await findBetActionById(tx, parsed.data.actionId)
       if (!target) return fail('errors.actionNotFound')
 
       await lockRoom(tx, target.roomId)
@@ -497,11 +306,7 @@ export async function revertBet(
 
   try {
     return await db.transaction(async (tx) => {
-      const [target] = await tx
-        .select()
-        .from(betActions)
-        .where(eq(betActions.id, parsed.data.actionId))
-        .limit(1)
+      const target = await findBetActionById(tx, parsed.data.actionId)
       if (!target) return fail('errors.actionNotFound')
 
       await lockRoom(tx, target.roomId)
@@ -510,26 +315,12 @@ export async function revertBet(
         return fail('errors.dealerOrHostOnlyRevert')
       }
 
-      const [round] = await tx
-        .select({ status: rounds.status })
-        .from(rounds)
-        .where(eq(rounds.id, target.roundId))
-        .limit(1)
+      const round = await findRoundById(tx, target.roundId)
       if (round?.status !== 'playing') {
         return fail('errors.cannotRevertEndedRound')
       }
 
-      const [laterAccepted] = await tx
-        .select({ id: betActions.id })
-        .from(betActions)
-        .where(
-          and(
-            eq(betActions.roundId, target.roundId),
-            eq(betActions.status, 'accepted'),
-            gt(betActions.seq, target.seq),
-          ),
-        )
-        .limit(1)
+      const laterAccepted = await findLaterAcceptedBet(tx, target.roundId, target.seq)
       if (laterAccepted) return fail('errors.revertLatestFirst')
 
       const [updated] = await tx
@@ -539,11 +330,7 @@ export async function revertBet(
         .returning()
       if (!updated) return fail('errors.onlyAcceptedCanRevert')
 
-      const [ledgerRow] = await tx
-        .select()
-        .from(chipLedger)
-        .where(and(eq(chipLedger.refActionId, target.id), eq(chipLedger.reason, 'bet')))
-        .limit(1)
+      const ledgerRow = await findBetLedgerRow(tx, target.id)
       if (ledgerRow) {
         await tx.insert(chipLedger).values({
           roomId: target.roomId,
