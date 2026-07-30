@@ -51,6 +51,10 @@ export type RegistrationCodeState =
 export type InitialAdminSetupState =
   { status: 'idle' } | { status: 'error'; error: 'invalid' | 'unavailable' } | { status: 'success' }
 
+// 회원가입과 계정 설정(표시 이름 변경)이 같은 제약을 쓰도록 공유한다.
+// 여기서 바꾸면 두 경로 모두 즉시 갈라지지 않고 함께 바뀐다.
+export const displayNameSchema = z.string().trim().min(1).max(20)
+
 const registerSchema = z.object({
   username: z
     .string()
@@ -58,7 +62,7 @@ const registerSchema = z.object({
     .toLowerCase()
     .regex(/^[a-z0-9_]{3,20}$/),
   password: z.string().min(8).max(72),
-  name: z.string().trim().min(1).max(20),
+  name: displayNameSchema,
   phone: z
     .string()
     .transform((value) => value.replace(/\D/g, ''))

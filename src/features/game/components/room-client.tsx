@@ -23,6 +23,7 @@ import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
 import { RoundLog } from './round-log'
 import { FairnessPanel } from './fairness-panel'
+import { ACTION_RACE_TIMEOUT_MS } from './sync-timeouts'
 import type { BroadcastSpec, RunAction } from './shared'
 
 export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId: string }) {
@@ -72,27 +73,41 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
       const result = await refetch()
       const channel = channelRef.current
       if (!channel) return
+
+      // sendRoomEvent retries internally and resolves to whether delivery is
+      // believed to have gone through. Don't block this action's own success
+      // path on that outcome (the actor's screen is already correct via the
+      // refetch above) — just warn if it ultimately failed, since other
+      // participants won't see this change until their next poll.
+      const sends: Promise<boolean>[] = []
       if (broadcast) {
-        sendRoomEvent(channel, roomId, selfId, broadcast.event, broadcast.payload)
+        sends.push(sendRoomEvent(channel, roomId, selfId, broadcast.event, broadcast.payload))
       }
       if (result.success) {
-        sendRoomEvent(channel, roomId, selfId, 'state.snapshot', {
-          roomStatus: result.data.room.status,
-          currentRound: result.data.currentRound
-            ? {
-                roundId: result.data.currentRound.id,
-                seq: result.data.currentRound.seq,
-                pot: result.data.currentRound.pot,
-              }
-            : null,
-          balances: result.data.members.map((member) => ({
-            userId: member.userId,
-            balance: Math.max(0, member.balance),
-          })),
-        })
+        sends.push(
+          sendRoomEvent(channel, roomId, selfId, 'state.snapshot', {
+            roomStatus: result.data.room.status,
+            currentRound: result.data.currentRound
+              ? {
+                  roundId: result.data.currentRound.id,
+                  seq: result.data.currentRound.seq,
+                  pot: result.data.currentRound.pot,
+                }
+              : null,
+            balances: result.data.members.map((member) => ({
+              userId: member.userId,
+              balance: Math.max(0, member.balance),
+            })),
+          }),
+        )
       }
+      if (sends.length === 0) return
+
+      void Promise.all(sends).then((delivered) => {
+        if (delivered.some((ok) => !ok)) toast(d.room.broadcastDelayed, 'info')
+      })
     },
-    [refetch, channelRef, roomId, selfId],
+    [refetch, channelRef, roomId, selfId, toast, d],
   )
 
   const runAction: RunAction = useCallback(
@@ -110,7 +125,7 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
                 success: false,
                 error: d.room.serverSlow,
               })
-            }, 15_000),
+            }, ACTION_RACE_TIMEOUT_MS),
           ),
         ])
         if (!result.success) {
@@ -186,8 +201,9 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
 
   const isBettingGame = snapshot.room.gameType !== 'gostop'
   const canBet = Boolean(self && self.role !== 'observer') && isBettingGame && !isLobby
-  const showGostopWait =
-    !isBettingGame && !isLobby && Boolean(snapshot.currentRound) && !isDealer
+  // 판이 없을 때도 띄운다. 고스톱 비딜러는 판과 판 사이에 화면이 비어서
+  // 다음 동작 주체를 알 수 없었다 — 섯다·포커의 actionBar.noRound와 같은 역할.
+  const showGostopWait = !isBettingGame && !isLobby && !isDealer
 
   const seatMember = seatUserId
     ? (snapshot.members.find((member) => member.userId === seatUserId) ?? null)
@@ -315,7 +331,7 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
               ) : null}
               {showGostopWait ? (
                 <div className="rise-in rise-in-3 shrink-0 lg:mt-3">
-                  <GostopWaitPanel />
+                  <GostopWaitPanel hasRound={Boolean(snapshot.currentRound)} />
                 </div>
               ) : null}
             </div>

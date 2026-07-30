@@ -23,7 +23,7 @@ function HeaderNavLink({ href, children }: { href: Route; children: React.ReactN
   return (
     <Link
       href={href}
-      className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-muted transition hover:text-text"
+      className="inline-flex min-h-11 items-center rounded-xl px-2 text-xs font-semibold text-muted transition hover:text-text sm:px-3 sm:text-sm"
     >
       {children}
     </Link>
@@ -53,8 +53,11 @@ export default async function HomePage({
           {d.common.appName}
           <span className="text-accent">.</span>
         </h1>
-        <div className="ms-auto flex items-center gap-1">
+        {/* 링크가 5개라 좁은 폭에서 한 줄에 안 들어간다. 줄바꿈을 허용해야
+            고정 페이지의 overflow-hidden에 로그아웃·로케일이 잘려 나가지 않는다. */}
+        <div className="ms-auto flex flex-wrap items-center justify-end gap-1">
           <HeaderNavLink href={'/wallet' as Route}>{d.common.myCredits}</HeaderNavLink>
+          <HeaderNavLink href={'/account' as Route}>{d.account.navLabel}</HeaderNavLink>
           {isAdmin ? (
             <HeaderNavLink href={'/admin' as Route}>{d.common.admin}</HeaderNavLink>
           ) : null}

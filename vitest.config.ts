@@ -3,8 +3,18 @@ import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
   test: {
+    // 기본은 node — 순수 함수 엔진 테스트(섯다·고스톱·포커 등)는 DOM이 필요 없고 node가 더 빠르다.
+    // 컴포넌트 렌더링이 필요한 테스트만 test/dom/** 아래에 두면 jsdom으로 갈아탄다
+    // (environmentMatchGlobs는 파일별로 분기하므로 기존 node 테스트는 영향받지 않는다).
+    // test/dom/**은 아직 비어 있다 — jsdom·@testing-library/react가 설치된 뒤 쓸 자리다.
     environment: 'node',
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    environmentMatchGlobs: [['test/dom/**', 'jsdom']],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.test.tsx',
+      'test/**/*.test.ts',
+      'test/**/*.test.tsx',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],

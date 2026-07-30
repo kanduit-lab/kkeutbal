@@ -37,3 +37,13 @@ export function neededToCall(state: RoundBetState, userId: string): number {
 export function minimumRaiseAmount(state: RoundBetState, userId: string, baseBet: number): number {
   return state.currentToCall === 0 ? baseBet : neededToCall(state, userId) + 1
 }
+
+/**
+ * 이번 라운드에 현재까지 걸린 팟 총액 — accepted 액션들의 기여액 합. `chipLedger`를 다시 읽지
+ * 않고 이미 로드한 액션 목록에서 순수하게 구한다(레이즈 규칙 판정용, `raise-rule.ts`).
+ */
+export function totalContributed(state: RoundBetState): number {
+  let total = 0
+  for (const amount of state.contributionByUser.values()) total += amount
+  return total
+}

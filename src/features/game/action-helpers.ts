@@ -1,8 +1,9 @@
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
+import { isRaiseRule, type RaiseRule } from '../betting/raise-rule'
 import { toSafeChipInteger } from './chip-integers'
 
-const { roomMembers, chipLedger, buyIns } = schema
+const { roomMembers, chipLedger, buyIns, roundParticipants } = schema
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
@@ -88,4 +89,41 @@ function readRuleNumber(rulePreset: unknown, key: string): number | null {
 
 export function defaultBaseBet(startingChips: number): number {
   return toSafeChipInteger(Math.max(1, Math.round(startingChips / 100)), 'Default base bet')
+}
+
+export function readRaiseRule(rulePreset: unknown): RaiseRule {
+  if (rulePreset && typeof rulePreset === 'object' && 'raiseRule' in rulePreset) {
+    const value = (rulePreset as Record<string, unknown>).raiseRule
+    if (isRaiseRule(value)) return value
+  }
+  return 'free'
+}
+
+/**
+ * 이번 라운드에서 턴·자동 종료 판정에 쓸 수 있는 참가자 id 목록 — seatNo 오름차순, 관전자·
+ * 중도 퇴장자 제외. `round_participants`(라운드 시작 시점 스냅샷)와 `room_members`(현재 상태)를
+ * 함께 봐야 하므로 두 조건을 여기서 한 번에 강제한다 — 호출부가 각자 따로 필터링하면 어긋날
+ * 위험이 있다(예: 퇴장자를 안 걸러서 턴이 영원히 그 자리에 멈추는 교착).
+ */
+export async function activeRoundParticipantIds(
+  tx: Tx,
+  roomId: string,
+  roundId: string,
+): Promise<readonly string[]> {
+  const rows = await tx
+    .select({ userId: roomMembers.userId })
+    .from(roundParticipants)
+    .innerJoin(
+      roomMembers,
+      and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, roundParticipants.userId)),
+    )
+    .where(
+      and(
+        eq(roundParticipants.roundId, roundId),
+        isNull(roomMembers.leftAt),
+        ne(roomMembers.role, 'observer'),
+      ),
+    )
+    .orderBy(asc(roomMembers.seatNo))
+  return rows.map((row) => row.userId)
 }

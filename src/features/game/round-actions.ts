@@ -23,8 +23,11 @@ import { getRoundPot } from './queries'
 import { balanceInRoom, lockRoom, readPointValue, requireRole } from './action-helpers'
 import { readFairPlaySettings } from './fair-play-settings'
 import { winnerPayout } from './round-settlement'
+import { creditPotToWinner, finalizeRoundRecord, revealFairnessIfNeeded } from './round-finalize'
 import { SEOTDA_RULES_STANDARD } from '../seotda/types'
 import type { RoundPenaltyView } from './types'
+
+export { autoSettleRoundIfComplete } from './round-finalize'
 
 const {
   rooms,
@@ -328,14 +331,8 @@ export async function endRound(
           })
         }
         pot = payout
-      } else if (pot > 0) {
-        await tx.insert(chipLedger).values({
-          roomId,
-          roundId: round.id,
-          userId: winnerId,
-          delta: pot,
-          reason: 'pot_win',
-        })
+      } else {
+        await creditPotToWinner(tx, room, round, winnerId, pot)
       }
 
       const result =
@@ -347,27 +344,8 @@ export async function endRound(
             }
           : null
 
-      await tx
-        .update(rounds)
-        .set({
-          status: 'ended',
-          pot,
-          winnerId,
-          result,
-          endedAt: new Date(),
-        })
-        .where(eq(rounds.id, round.id))
-
-      if (fairRound) {
-        const fairParticipants = await loadFairRoundParticipants(tx, round.id)
-        await revealPersistedFairRound(
-          tx,
-          fairRound,
-          fairParticipants,
-          userId,
-          await fairDatabaseNow(tx),
-        )
-      }
+      await finalizeRoundRecord(tx, round, winnerId, pot, result)
+      await revealFairnessIfNeeded(tx, fairRound, userId)
 
       return ok({ seq: round.seq, pot, winnerId })
     })

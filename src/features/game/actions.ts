@@ -35,6 +35,7 @@ const createRoomSchema = z.object({
   pointValue: z.number().int().min(1).max(100_000).optional(),
   baseBet: z.number().int().min(1).max(1_000_000).optional(),
   fundingMode: fundingModeSchema.default('session'),
+  raiseRule: z.enum(['free', 'ttadang', 'pot_limit']).default('free'),
   fairPlay: fairPlaySettingsSchema.optional(),
 })
 
@@ -46,7 +47,8 @@ export async function createRoom(
 
   const parsed = createRoomSchema.safeParse(input)
   if (!parsed.success) return fail('errors.invalidInput')
-  const { name, gameType, inputMode, startingChips, pointValue, baseBet, fundingMode } = parsed.data
+  const { name, gameType, inputMode, startingChips, pointValue, baseBet, fundingMode, raiseRule } =
+    parsed.data
   let fairPlay: ReturnType<typeof parseFairPlaySettings> | undefined
   try {
     fairPlay = parsed.data.fairPlay
@@ -58,6 +60,9 @@ export async function createRoom(
   const rulePreset = {
     fundingMode,
     ...(gameType === 'gostop' ? { pointValue: pointValue ?? 10 } : baseBet ? { baseBet } : {}),
+    // 고스톱은 베팅이 없으니 레이즈 규칙도 의미가 없다 — free로 저장돼도 readRaiseRule
+    // 기본값과 같아 무해하지만, 저장하지 않아 blob을 깔끔하게 유지한다.
+    ...(gameType !== 'gostop' ? { raiseRule } : {}),
     ...(fairPlay ? { fair_play: fairPlay } : {}),
   }
 

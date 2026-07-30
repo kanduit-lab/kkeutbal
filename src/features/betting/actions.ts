@@ -1,20 +1,32 @@
 'use server'
 
-import { and, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
 import {
+  activeRoundParticipantIds,
   balanceInRoom,
   defaultBaseBet,
   lockRoom,
   readBaseBet,
+  readRaiseRule,
   requireRole,
   type Tx,
 } from '../game/action-helpers'
+import { autoSettleRoundIfComplete } from '../game/round-actions'
 import type { BetActionView } from '../game/types'
-import { minimumRaiseAmount, neededToCall, roundBetState } from './round-bet-state'
+import { contributedBy, minimumRaiseAmount, neededToCall, roundBetState, totalContributed } from './round-bet-state'
+import { computeRoundCompletion } from './round-completion'
+import { raiseRuleViolation } from './raise-rule'
+import { isActorsTurn } from '../game/turn-order'
+
+export interface RoundEndedFromBet {
+  readonly seq: number
+  readonly pot: number
+  readonly winnerId: string
+}
 
 const { rooms, roomMembers, rounds, roundParticipants, betActions, chipLedger } = schema
 
@@ -95,9 +107,21 @@ async function validateBetSemantics(
       action: betActions.action,
       amount: betActions.amount,
       status: betActions.status,
+      seq: betActions.seq,
     })
     .from(betActions)
     .where(and(eq(betActions.roundId, roundId), eq(betActions.status, 'accepted'), before))
+    .orderBy(asc(betActions.seq))
+
+  // 베팅 라운드가 이미 콜 완료(쇼다운 대기) 또는 1인 생존 상태면 더 이상 액션을 받지 않는다 —
+  // 정상적으로는 그 직후 자동 종료(`autoSettleRoundIfComplete`)가 판을 끝내지만, 공정 딜
+  // 봉인 대기처럼 자동 종료가 미뤄진 사이 낀 요청까지 막는 안전망이다.
+  const participantIds = await activeRoundParticipantIds(tx, room.id, roundId)
+  const completion = computeRoundCompletion(participantIds, acceptedActions)
+  if (completion.kind !== 'active') return 'errors.roundAwaitingWinner'
+
+  // 차례 강제 — docs/12-handoff.md 8번. UI 하이라이트와 같은 순수 함수(`turn-order.ts`)로 판정한다.
+  if (!isActorsTurn(participantIds, acceptedActions, userId)) return 'errors.notYourTurn'
 
   const state = roundBetState(acceptedActions)
   const callNeeded = neededToCall(state, userId)
@@ -120,12 +144,23 @@ async function validateBetSemantics(
   const minRaise = minimumRaiseAmount(state, userId, baseBet)
   if (amount < minRaise) return 'errors.raiseBelowMinimum'
   if (amount === balance) return 'errors.allInMustUseAllInAction'
+
+  const raiseViolation = raiseRuleViolation({
+    rule: readRaiseRule(room.rulePreset),
+    amount,
+    contributionBefore: contributedBy(state, userId),
+    lastBet: state.currentToCall,
+    baseBet,
+    pot: totalContributed(state),
+  })
+  if (raiseViolation) return raiseViolation
+
   return null
 }
 
 export async function placeBet(
   input: z.infer<typeof placeBetSchema>,
-): Promise<ActionResult<{ action: BetActionView }>> {
+): Promise<ActionResult<{ action: BetActionView; roundEnded?: RoundEndedFromBet }>> {
   const callerId = await currentUserId()
   if (!callerId) return fail('errors.loginRequired')
 
@@ -260,7 +295,13 @@ export async function placeBet(
         })
       }
 
-      return ok({ action: toView(inserted) })
+      // 이 액션이 accept됐으니 판이 자동 종료 조건(1인 생존·콜 완료)에 들었는지 바로 확인한다 —
+      // 딜러가 "🏁 종료"를 누를 때까지 기다리지 않는다(docs/12-handoff.md 9번).
+      const roundEnded = autoAccept
+        ? ((await autoSettleRoundIfComplete(tx, room, round, callerId)) ?? undefined)
+        : undefined
+
+      return ok({ action: toView(inserted), roundEnded })
     })
   } catch (error) {
     console.error('placeBet failed:', error)
@@ -272,7 +313,7 @@ const approveSchema = z.object({ actionId: z.string().uuid() })
 
 export async function approveBet(
   input: z.infer<typeof approveSchema>,
-): Promise<ActionResult<{ action: BetActionView }>> {
+): Promise<ActionResult<{ action: BetActionView; roundEnded?: RoundEndedFromBet }>> {
   const callerId = await currentUserId()
   if (!callerId) return fail('errors.loginRequired')
 
@@ -302,7 +343,7 @@ export async function approveBet(
       if (!fresh || fresh.status !== 'pending') return fail('errors.actionAlreadyProcessed')
 
       const [round] = await tx
-        .select({ status: rounds.status })
+        .select({ id: rounds.id, seq: rounds.seq, status: rounds.status })
         .from(rounds)
         .where(eq(rounds.id, fresh.roundId))
         .limit(1)
@@ -382,7 +423,13 @@ export async function approveBet(
         })
       }
 
-      return ok({ action: toView(updated) })
+      // 이 승인으로 판이 자동 종료 조건에 들었는지 확인한다 — placeBet과 동일한 이유
+      // (docs/12-handoff.md 9번). 승인 대기 큐의 다른 항목이 남아 있으면 내부적으로 미룬다.
+      const roundEnded =
+        (await autoSettleRoundIfComplete(tx, room, { id: round.id, seq: round.seq }, callerId)) ??
+        undefined
+
+      return ok({ action: toView(updated), roundEnded })
     })
   } catch (error) {
     console.error('approveBet failed:', error)

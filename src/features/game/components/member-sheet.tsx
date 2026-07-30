@@ -6,12 +6,15 @@ import { undoLastBuyIn } from '@/features/budget/actions'
 import { neededToCall, roundBetState } from '@/features/betting/round-bet-state'
 import { format, useDict } from '@/lib/i18n/client'
 import { leaveRoom, removeMember, transferHost } from '../member-actions'
+import { nextActorId } from '../turn-order'
 import type { MemberView, RoomSnapshot } from '../types'
 import { Avatar, Badge, Button, ConfirmDialog, Sheet, StatTile, useToast } from '@/components/ui'
-import type { RunAction } from './shared'
-import { ProxyBetSection } from './member-sheet-proxy-bet'
+import { formatChips, lastAcceptedByUser, type RunAction } from './shared'
+import { proxyBlockReason, selfBlockReason } from './member-sheet-gating'
+import { ProxyBetSection, ProxyBlockedNotice } from './member-sheet-proxy-bet'
 import { BuyInSection } from './member-sheet-buy-in'
 import { RoleSection } from './member-sheet-role'
+import { SelfBetNotice } from './member-sheet-self-notice'
 
 export function MemberSheet({
   open,
@@ -30,7 +33,7 @@ export function MemberSheet({
 }) {
   const router = useRouter()
   const { toast } = useToast()
-  const { d } = useDict()
+  const { d, locale } = useDict()
   const [isPending, startTransition] = useTransition()
   const startingChips = snapshot.room.startingChips
   const [transferOpen, setTransferOpen] = useState(false)
@@ -51,11 +54,51 @@ export function MemberSheet({
   const isBettingGame = snapshot.room.gameType !== 'gostop'
   const labels = d.bet[snapshot.room.gameType === 'poker' ? 'poker' : 'seotda']
   const round = snapshot.currentRound
+  const hasRound = Boolean(round)
   const net = member.balance - member.buyInTotal
 
   const betting = useMemo(() => roundBetState(snapshot.actions), [snapshot.actions])
   const lastBet = betting.currentToCall
   const memberCallNeeded = neededToCall(betting, member.userId)
+
+  // 좌석 탭 = "이 사람에게 지금 뭘 할 수 있나"가 핵심 질문. 대신 베팅(canProxy)이 막혀
+  // 있으면 숨기지 않고 왜 막혔는지 보여준다 (ui-permission-gating: hide 대신 이유 노출).
+  const proxyReason = isSelf
+    ? null
+    : proxyBlockReason({ isBettingGame, isDealer, targetRole: member.role, hasRound })
+  const canProxy = !isSelf && proxyReason === null
+
+  const selfReason = isSelf
+    ? selfBlockReason({ isBettingGame, selfRole: member.role, hasRound })
+    : null
+
+  const showRemove = isDealer && !isSelf && member.role !== 'host'
+
+  const lastAcceptedMap = useMemo(() => lastAcceptedByUser(snapshot.actions), [snapshot.actions])
+  const memberLastAction = lastAcceptedMap.get(member.userId) ?? null
+
+  // 차례는 좌석 순서 순수 함수 한 곳에서만 계산한다 — 서버(`betting/actions.ts`)와
+  // 좌석 강조(`game-table.tsx`)가 쓰는 바로 그 함수다. 대리 베팅을 눌러도 차례가
+  // 아니면 서버가 거절하므로, 누를 수 있는지를 여기서 미리 알려준다.
+  const participantIds = useMemo(
+    () => snapshot.members.filter((m) => m.role !== 'observer').map((m) => m.userId),
+    [snapshot.members],
+  )
+  const isMembersTurn =
+    isBettingGame && hasRound && nextActorId(participantIds, snapshot.actions) === member.userId
+
+  const statusLabel = !isBettingGame
+    ? null
+    : member.role === 'observer'
+      ? d.memberSheet.statusObserving
+      : isMembersTurn
+        ? d.memberSheet.statusTheirTurn
+        : memberLastAction
+          ? `${labels[memberLastAction.action]}${
+              memberLastAction.amount > 0 ? ` ${formatChips(memberLastAction.amount, locale)}` : ''
+            }`
+          : d.memberSheet.statusNoAction
+  const subtitle = [formatChips(member.balance, locale), statusLabel].filter(Boolean).join(' · ')
 
   const run = (task: () => Promise<boolean>, closeAfter = true) => {
     if (isPending) return
@@ -64,12 +107,6 @@ export function MemberSheet({
       if (success && closeAfter) onClose()
     })
   }
-
-  const canProxy = isDealer && isBettingGame && member.role !== 'observer' && Boolean(round)
-  const showRemove = isDealer && !isSelf && member.role !== 'host'
-
-  const hasActionSection =
-    canProxy || isDealer || (isHost && !isSelf && member.role !== 'host') || showRemove || isSelf
 
   return (
     <>
@@ -96,24 +133,13 @@ export function MemberSheet({
               ) : null}
               {isSelf ? <Badge tone="muted">{d.common.me}</Badge> : null}
             </p>
+            <p className="truncate text-sm text-muted">{subtitle}</p>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          <StatTile label={d.memberSheet.statBalance} valueClass="gilt text-lg">
-            {member.balance.toLocaleString()}
-          </StatTile>
-          <StatTile
-            label={d.memberSheet.statNet}
-            valueClass={net >= 0 ? 'text-win text-lg' : 'text-accent text-lg'}
-          >
-            {`${net >= 0 ? '+' : ''}${net.toLocaleString()}`}
-          </StatTile>
-          <StatTile label={d.memberSheet.statBuyIn}>{member.buyInTotal.toLocaleString()}</StatTile>
-        </div>
-        {!hasActionSection ? (
-          <p className="text-xs text-muted">{d.memberSheet.viewOnlyHint}</p>
-        ) : null}
-        {canProxy ? (
+
+        {isSelf ? (
+          <SelfBetNotice reason={selfReason} showDealerHint={isDealer} onGoToActionBar={onClose} />
+        ) : canProxy ? (
           <ProxyBetSection
             roomId={snapshot.room.id}
             memberId={member.userId}
@@ -126,7 +152,10 @@ export function MemberSheet({
             run={run}
             runAction={runAction}
           />
-        ) : null}
+        ) : (
+          proxyReason !== null && <ProxyBlockedNotice reason={proxyReason} />
+        )}
+
         {isDealer ? (
           <BuyInSection
             roomId={snapshot.room.id}
@@ -173,6 +202,19 @@ export function MemberSheet({
             🚪 {d.memberSheet.leave}
           </Button>
         ) : null}
+
+        <div className="grid grid-cols-3 gap-2">
+          <StatTile label={d.memberSheet.statBalance} valueClass="gilt text-lg">
+            {member.balance.toLocaleString()}
+          </StatTile>
+          <StatTile
+            label={d.memberSheet.statNet}
+            valueClass={net >= 0 ? 'text-win text-lg' : 'text-accent text-lg'}
+          >
+            {`${net >= 0 ? '+' : ''}${net.toLocaleString()}`}
+          </StatTile>
+          <StatTile label={d.memberSheet.statBuyIn}>{member.buyInTotal.toLocaleString()}</StatTile>
+        </div>
 
         <Button variant="ghost" className="w-full" onClick={onClose}>
           {d.common.close}

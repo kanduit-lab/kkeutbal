@@ -74,20 +74,34 @@ export function PendingApprovalQueue({
                   run({ id: action.id, kind: 'approve' }, () =>
                     runAction(
                       () => approveBet({ actionId: action.id }),
-                      (data) =>
-                        data.action.status === 'accepted'
+                      (data) => {
+                        if (data.action.status !== 'accepted') {
+                          return {
+                            event: 'bet.rejected',
+                            payload: {
+                              actionId: action.id,
+                              rejectedBy: selfId,
+                              reason: data.action.reason ?? 'errors.approveBetFailed',
+                            },
+                          }
+                        }
+                        // 이 승인으로 판이 자동 종료됐으면(docs/12-handoff.md 9번) round.ended가
+                        // bet.approved보다 중요한 신호다 — action-bar.tsx의 placeBet 쪽과 같은 이유.
+                        return data.roundEnded
                           ? {
+                              event: 'round.ended',
+                              payload: {
+                                roundId: data.action.roundId,
+                                seq: data.roundEnded.seq,
+                                winnerId: data.roundEnded.winnerId,
+                                pot: data.roundEnded.pot,
+                              },
+                            }
+                          : {
                               event: 'bet.approved',
                               payload: { actionId: action.id, approvedBy: selfId },
                             }
-                          : {
-                              event: 'bet.rejected',
-                              payload: {
-                                actionId: action.id,
-                                rejectedBy: selfId,
-                                reason: data.action.reason ?? 'errors.approveBetFailed',
-                              },
-                            },
+                      },
                     ),
                   )
                 }

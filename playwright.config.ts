@@ -17,6 +17,12 @@ export default defineConfig({
       name: 'mobile-chromium',
       use: { ...devices['Pixel 7'] },
     },
+    {
+      // 1280x720 — Tailwind `lg`(min-width: 1024px, `useIsDesktop`의 DESKTOP_QUERY) 위라
+      // PaneGroup 나란히 배치·DataTable 등 데스크톱 전용 분기가 실제로 걸린다.
+      name: 'desktop-chromium',
+      use: { ...devices['Desktop Chrome'] },
+    },
   ],
   webServer: externalBaseUrl
     ? undefined

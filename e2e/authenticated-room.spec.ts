@@ -1,28 +1,10 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { expectNoDocumentScroll, getLifecycleFixture, loginWithPassword } from './support'
 
-const username = process.env.E2E_TEST_USERNAME
-const password = process.env.E2E_TEST_PASSWORD
-const secondUsername = process.env.E2E_SECOND_TEST_USERNAME
-const secondPassword = process.env.E2E_SECOND_TEST_PASSWORD
-
-const lifecycleEnabled = process.env.E2E_ENABLE_ROOM_LIFECYCLE === 'true'
-const hasLifecycleCredentials = Boolean(username && password && secondUsername && secondPassword)
-const hasDistinctLifecycleAccounts = username !== secondUsername
-const canRunLifecycle = lifecycleEnabled && hasLifecycleCredentials && hasDistinctLifecycleAccounts
-
-const lifecycleSkipReason = !lifecycleEnabled
-  ? 'Set E2E_ENABLE_ROOM_LIFECYCLE=true to allow the mutating room lifecycle test.'
-  : !hasLifecycleCredentials
-    ? 'Set E2E_TEST_USERNAME/PASSWORD and E2E_SECOND_TEST_USERNAME/PASSWORD for two dedicated E2E accounts.'
-    : 'E2E lifecycle test requires two distinct account usernames.'
-
-async function loginWithPassword(page: Page, credentials: { username: string; password: string }) {
-  await page.goto('/login?next=%2Frooms%2Fnew')
-  await page.locator('input[name="username"]').fill(credentials.username)
-  await page.locator('input[name="password"]').fill(credentials.password)
-  await page.getByRole('button', { name: '로그인', exact: true }).click()
-  await expect(page).toHaveURL(/\/rooms\/new$/)
-}
+const { username, password, secondUsername, secondPassword, canRun, skipReason } =
+  getLifecycleFixture()
+const canRunLifecycle = canRun
+const lifecycleSkipReason = skipReason
 
 test.describe('authenticated room funding', () => {
   test.skip(
@@ -34,6 +16,8 @@ test.describe('authenticated room funding', () => {
     page,
   }) => {
     await loginWithPassword(page, { username: username!, password: password! })
+    await expect(page).toHaveURL(/\/rooms\/new$/)
+    await expectNoDocumentScroll(page)
 
     const sessionFunding = page.getByRole('button', { name: '세션 칩', exact: true })
     const accountFunding = page.getByRole('button', { name: '계정 크레딧', exact: true })
@@ -66,7 +50,9 @@ test.describe('authenticated room funding', () => {
 
     try {
       await loginWithPassword(host, { username: username!, password: password! })
+      await expect(host).toHaveURL(/\/rooms\/new$/)
       await loginWithPassword(guest, { username: secondUsername!, password: secondPassword! })
+      await expect(guest).toHaveURL(/\/rooms\/new$/)
 
       const roomName = `E2E lifecycle ${Date.now().toString(36)}`
       await host.getByRole('textbox', { name: '방 이름' }).fill(roomName)
@@ -79,9 +65,17 @@ test.describe('authenticated room funding', () => {
       await expect(host).toHaveURL(/\/rooms\/[A-Z0-9]{6}$/)
       const roomCode = new URL(host.url()).pathname.split('/').at(-1)
       expect(roomCode).toMatch(/^[A-Z0-9]{6}$/)
+      // 고정 뷰포트 회귀 가드 (docs/12-handoff.md 11번): /rooms/[code]는 문서 스크롤을 만들면 안 된다.
+      await expectNoDocumentScroll(host)
 
       await guest.goto(`/rooms/${roomCode}`)
       await expect(guest.getByText('참가자 2명')).toBeVisible()
+      await expectNoDocumentScroll(guest)
+
+      // 모니터 화면도 같은 규약을 따른다 — 별도 방을 만들지 않고 이 방에 얹어서 확인한다.
+      await host.goto(`/rooms/${roomCode}/monitor`)
+      await expectNoDocumentScroll(host)
+      await host.goto(`/rooms/${roomCode}`)
 
       await host.getByRole('button', { name: /판 시작/ }).click()
       await expect(host.getByText('1판 진행 중')).toBeVisible()
@@ -99,9 +93,11 @@ test.describe('authenticated room funding', () => {
       await expect(settleDialog).toBeVisible()
       await settleDialog.getByRole('button', { name: '정산', exact: true }).click()
       await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}/result$`))
+      await expectNoDocumentScroll(host)
 
       await guest.goto(`/rooms/${roomCode}`)
       await expect(guest).toHaveURL(new RegExp(`/rooms/${roomCode}/result$`))
+      await expectNoDocumentScroll(guest)
     } finally {
       await Promise.all([hostContext.close(), guestContext.close()])
     }
@@ -120,7 +116,9 @@ test.describe('authenticated room funding', () => {
 
     try {
       await loginWithPassword(host, { username: username!, password: password! })
+      await expect(host).toHaveURL(/\/rooms\/new$/)
       await loginWithPassword(guest, { username: secondUsername!, password: secondPassword! })
+      await expect(guest).toHaveURL(/\/rooms\/new$/)
 
       await host
         .getByRole('textbox', { name: '방 이름' })

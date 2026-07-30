@@ -4,17 +4,19 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { createRoomChannel, onRoomEvent, resetRealtimeSocket } from '@/lib/realtime/client'
+import { nextReconnectDelayMs, shouldRetryConnect } from '@/lib/realtime/reconnect-backoff'
+import { SeenEventIds } from '@/lib/realtime/seen-events'
 import type { RoomEvent } from '@/lib/realtime/events'
 import { getSupabaseBrowser } from '@/lib/supabase/client'
+import { withTimeout } from '@/lib/with-timeout'
 import { refreshRoom } from '../actions'
 import type { RoomSnapshot } from '../types'
 import type { ActionResult } from '@/lib/action-result'
+import { REFETCH_TIMEOUT_MS } from './sync-timeouts'
 
 const EVENT_DEBOUNCE_MS = 250
 
 const MIN_EVENT_INTERVAL_MS = 1_000
-
-const RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000, 20_000, 30_000] as const
 
 const CONNECT_TIMEOUT_MS = 10_000
 
@@ -63,6 +65,8 @@ export function useRoomSync({
   const failStreakRef = useRef(0)
 
   const retryAttemptRef = useRef(0)
+  const seenEventIdsRef = useRef<SeenEventIds | null>(null)
+  if (!seenEventIdsRef.current) seenEventIdsRef.current = new SeenEventIds()
 
   const connectedRef = useRef(false)
   const snapshotRef = useRef(snapshot)
@@ -81,7 +85,7 @@ export function useRoomSync({
     const seq = ++refetchSeqRef.current
     let result: ActionResult<RoomSnapshot>
     try {
-      result = await refreshRoom(roomId)
+      result = await withTimeout(refreshRoom(roomId), REFETCH_TIMEOUT_MS, 'refreshRoom')
     } catch (error) {
       console.error('refreshRoom failed:', error)
       result = { success: false, error: 'errors.syncFailed' }
@@ -136,8 +140,13 @@ export function useRoomSync({
       if (!disposed && !connectedRef.current) setConnectTimedOut(true)
     }, CONNECT_TIMEOUT_MS)
 
-    onRoomEvent(channel, roomId, (event) => {
-      onEventRef.current?.(event, snapshotRef.current)
+    onRoomEvent(channel, roomId, (event, envelope) => {
+      // Reconnects can replay an event the client already reacted to. The
+      // snapshot refetch below always runs (truth comes from there
+      // regardless), but a duplicate delivery skips feedback (toast/sound)
+      // so it doesn't fire twice for the same envelope id.
+      const isFirstDelivery = seenEventIdsRef.current?.record(envelope.id) ?? true
+      if (isFirstDelivery) onEventRef.current?.(event, snapshotRef.current)
       debouncedRefetch()
     })
 
@@ -164,14 +173,22 @@ export function useRoomSync({
       }
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         setConnectedBoth(false)
-      }
-      if (status === 'CLOSED') {
-        const delay = RETRY_DELAYS_MS[Math.min(retryAttemptRef.current, RETRY_DELAYS_MS.length - 1)]
-        retryAttemptRef.current += 1
-        if (retryTimer) clearTimeout(retryTimer)
-        retryTimer = setTimeout(() => {
-          if (!disposed) setEpoch((current) => current + 1)
-        }, delay)
+        // Previously only 'CLOSED' rescheduled a resubscribe, so a channel
+        // stuck flapping between CHANNEL_ERROR/TIMED_OUT sat disconnected
+        // until visibilitychange/online happened to fire. All three failure
+        // statuses now share the same jittered backoff, capped so a
+        // still-visible, still-online tab doesn't retry forever against a
+        // channel that keeps failing — past the cap, recovery falls to the
+        // visibilitychange/online handlers below (which reconnect()
+        // immediately, uncounted) or the manual "다시 연결" button.
+        if (shouldRetryConnect(retryAttemptRef.current)) {
+          const delay = nextReconnectDelayMs(retryAttemptRef.current)
+          retryAttemptRef.current += 1
+          if (retryTimer) clearTimeout(retryTimer)
+          retryTimer = setTimeout(() => {
+            if (!disposed) setEpoch((current) => current + 1)
+          }, delay)
+        }
       }
     })
 

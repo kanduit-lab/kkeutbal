@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BetActionKind, BetActionView, MemberView, RoomGameType } from '../types'
 import { Avatar, Badge } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
+import { nextActorId as computeNextActorId } from '../turn-order'
 import { betLabelsFor, formatChips, lastAcceptedByUser } from './shared'
 import { ChipStack, chipBreakdown } from './game-table-chips'
 
@@ -106,28 +107,16 @@ export function GameTable({
     return map
   }, [actions])
 
+  // 턴 순서 계산은 `../turn-order`(순수 함수, 서버 `betting/actions.ts`와 공유)로 뺐다 — 관전자를
+  // 미리 걸러 좌석 순서 배열로 넘긴다. 상세 근거·제외 규칙은 그 파일의 주석 참고.
+  const participantIds = useMemo(
+    () => members.filter((m) => m.role !== 'observer').map((m) => m.userId),
+    [members],
+  )
   const nextActorId = useMemo(() => {
     if (!roundActive) return null
-    let anchor: BetActionView | null = null
-    for (const action of actions) {
-      if (action.status === 'accepted' && (anchor === null || action.seq > anchor.seq)) {
-        anchor = action
-      }
-    }
-    if (!anchor) return null
-    const anchorAction = anchor
-    const anchorIdx = members.findIndex((m) => m.userId === anchorAction.userId)
-    if (anchorIdx < 0) return null
-    const n = members.length
-    for (let offset = 1; offset < n; offset += 1) {
-      const candidate = members[(anchorIdx + offset) % n]!
-      if (candidate.role === 'observer') continue
-      const candidateLast = lastAccepted.get(candidate.userId)
-      if (candidateLast?.action === 'fold' || candidateLast?.action === 'allin') continue
-      return candidate.userId
-    }
-    return null
-  }, [roundActive, actions, members, lastAccepted])
+    return computeNextActorId(participantIds, actions)
+  }, [roundActive, participantIds, actions])
 
   useEffect(() => {
     const accepted = actions.filter((a) => a.status === 'accepted')

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { useDict } from '@/lib/i18n/client'
+import { computeRoundCompletion } from '@/features/betting/round-completion'
 import { closeRoom } from '../actions'
 import { endRound, startRound, voidRound } from '../round-actions'
 import type { RoomSnapshot } from '../types'
@@ -135,7 +136,7 @@ export function useDealerPanelControls({
   const beginEndRound = () => {
     if (!round) return
     if (verifiedFairness) {
-      finishVerifiedRound()
+      finishVerifiedRoundRef.current()
       return
     }
     setWinnerId(foldWinWinner?.userId ?? null)
@@ -145,6 +146,54 @@ export function useDealerPanelControls({
   }
 
   const cancelPickWinner = () => setMode('idle')
+
+  // 판 자동 종료(docs/12-handoff.md 9번) — 콜이 다 맞아 쇼다운 단계가 되면 딜러가 "🏁 종료"를
+  // 누르지 않아도 되게 한다. 1인 생존 케이스는 서버(`autoSettleRoundIfComplete`)가 완전
+  // 자동으로 끝내므로 여기서는 손댈 게 없다(그 시점엔 이미 `round`가 null이 된다). 2인 이상
+  // 남아 콜만 맞춰진 쇼다운 단계는 카드 판정이 필요해서 서버가 승자를 못 정하므로:
+  // - 검증 딜(공정 딜)이 봉인까지 끝났으면 카드로 자동 판정 가능 — 딜러가 수동으로 누르던
+  //   `finishVerifiedRound()`를 그대로 자동 호출한다(새 판정 로직 아님, 기존 버튼 핸들러 재사용).
+  // - 아니면 승자 확정 폼(`pickWinner`)을 자동으로 연다 — 카드는 딜러가 직접 봐야 한다.
+  // 라운드당 한 번만 시도한다(ref) — 안 그러면 딜러가 폼을 취소해도 재렌더마다 다시 열린다.
+  const autoTriggeredForRound = useRef<string | null>(null)
+  // 핸들러를 deps에 직접 넣으면 매 렌더마다 새 클로저라 effect가 매번 다시 돈다.
+  // use-room-sync.ts의 onEventRef와 같은 방식으로 최신 참조만 들고 있는다.
+  const finishVerifiedRoundRef = useRef(finishVerifiedRound)
+  finishVerifiedRoundRef.current = finishVerifiedRound
+  useEffect(() => {
+    if (!round) {
+      autoTriggeredForRound.current = null
+      return
+    }
+    if (mode !== 'idle' || isPending) return
+    if (autoTriggeredForRound.current === round.id) return
+
+    const participantIds = players.map((member) => member.userId)
+    const completion = computeRoundCompletion(participantIds, snapshot.actions)
+    if (completion.kind !== 'showdown_ready') return
+
+    if (verifiedFairness) {
+      if (!verifiedDealReady) return
+      autoTriggeredForRound.current = round.id
+      finishVerifiedRoundRef.current()
+      return
+    }
+
+    autoTriggeredForRound.current = round.id
+    setWinnerId(foldWinWinner?.userId ?? null)
+    setNote('')
+    setGostop((current) => ({ ...initialGostopScore, base: current.base }))
+    setMode('pickWinner')
+  }, [
+    round,
+    mode,
+    isPending,
+    players,
+    snapshot.actions,
+    verifiedFairness,
+    verifiedDealReady,
+    foldWinWinner,
+  ])
 
   const confirmWinnerNow = () => {
     if (!round || !winnerId || !eligibleWinnerIds.has(winnerId)) return

@@ -12,6 +12,7 @@ import {
 import { playChip, playFold } from '@/lib/sound'
 import { refreshRoom } from '../actions'
 import type { BetActionKind, MemberView, RoomSnapshot } from '../types'
+import { nextActorId } from '../turn-order'
 import { Button, Stepper, useToast } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import {
@@ -95,6 +96,24 @@ export function ActionBar({
       ),
     [snapshot.actions, self.userId],
   )
+
+  // 서버가 실제로 강제하는 턴 검증과 같은 순수 함수(`../turn-order`)로 클라이언트에서도 미리
+  // 막는다 — 서버 왕복 없이 바로 "왜 안 되는지"를 보여주기 위함이다. 최종 방어선은 서버
+  // (`betting/actions.ts`의 `errors.notYourTurn`)이지 이 UI가 아니다.
+  const participantIds = useMemo(
+    () => snapshot.members.filter((m) => m.role !== 'observer').map((m) => m.userId),
+    [snapshot.members],
+  )
+  const currentActorId = useMemo(
+    () => (round ? nextActorId(participantIds, snapshot.actions) : null),
+    [round, participantIds, snapshot.actions],
+  )
+  // currentActorId가 null이면(한 바퀴 완료·참가자 없음 등) 판단을 서버에 맡기고 UI는 막지 않는다.
+  const isMyTurn = currentActorId === null || currentActorId === self.userId
+  const currentActorName = currentActorId
+    ? (snapshot.members.find((m) => m.userId === currentActorId)?.displayName ?? null)
+    : null
+
   const gateReason =
     myLastAccepted?.action === 'fold'
       ? d.actionBar.foldedGate
@@ -102,7 +121,9 @@ export function ActionBar({
         ? d.actionBar.allinGate
         : hasPendingAction
           ? d.actionBar.pendingGate
-          : (staleReason ?? null)
+          : !isMyTurn
+            ? format(d.actionBar.notYourTurn, { name: currentActorName ?? '' })
+            : (staleReason ?? null)
 
   const betting = useMemo(() => roundBetState(snapshot.actions), [snapshot.actions])
   const contribution = contributedBy(betting, self.userId)
@@ -152,16 +173,32 @@ export function ActionBar({
               settled.current = result
               return result
             }),
-          (data) => ({
-            event: 'bet.placed',
-            payload: {
-              actionId: data.action.id,
-              roundId: data.action.roundId,
-              action: data.action.action,
-              amount: data.action.amount,
-              seq: data.action.seq,
-            },
-          }),
+          (data) =>
+            // 이 베팅으로 판이 자동 종료됐으면(1인 생존·콜 완료 — docs/12-handoff.md 9번) 다른
+            // 참가자에게는 개별 bet.placed보다 round.ended가 더 중요한 신호다. 한 액션에 한
+            // 이벤트만 보낼 수 있어(runAction 계약) 자동 종료 쪽을 우선한다 — bet.placed로 알릴
+            // 내용(이 베팅 자체)은 곧이어 오는 state.snapshot과 round.ended 수신 시의 refetch로
+            // 이미 반영된다.
+            data.roundEnded
+              ? {
+                  event: 'round.ended',
+                  payload: {
+                    roundId: data.action.roundId,
+                    seq: data.roundEnded.seq,
+                    winnerId: data.roundEnded.winnerId,
+                    pot: data.roundEnded.pot,
+                  },
+                }
+              : {
+                  event: 'bet.placed',
+                  payload: {
+                    actionId: data.action.id,
+                    roundId: data.action.roundId,
+                    action: data.action.action,
+                    amount: data.action.amount,
+                    seq: data.action.seq,
+                  },
+                },
         )
       } catch (error) {
         console.error('placeBet request failed:', error)

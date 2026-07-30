@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react'
 import { createRoom } from '@/features/game/actions'
 import type { FundingMode, RoomGameType } from '@/features/game/types'
 import { GAME_LABELS } from '@/features/game/labels'
+import type { RaiseRule } from '@/features/betting/raise-rule'
 import { translateError, useDict } from '@/lib/i18n/client'
 import {
   Button,
@@ -37,6 +38,7 @@ export default function NewRoomPage() {
   const [pointValue, setPointValue] = useState(10)
   const [baseBet, setBaseBet] = useState(1)
   const [fundingMode, setFundingMode] = useState<FundingMode>('session')
+  const [raiseRule, setRaiseRule] = useState<RaiseRule>('free')
   const [accountCreditConfirmOpen, setAccountCreditConfirmOpen] = useState(false)
 
   function create() {
@@ -50,6 +52,7 @@ export default function NewRoomPage() {
         pointValue: gameType === 'gostop' ? pointValue : undefined,
         baseBet: gameType === 'gostop' ? undefined : baseBet,
         fundingMode,
+        raiseRule: gameType === 'gostop' ? undefined : raiseRule,
       })
       if (result.success) {
         setAccountCreditConfirmOpen(false)
@@ -184,6 +187,43 @@ export default function NewRoomPage() {
                   <p className="mt-1.5 text-xs text-muted">{d.roomForm.baseBetHint}</p>
                 </Field>
               )}
+
+              {gameType !== 'gostop' ? (
+                <div className="lg:col-span-2">
+                  <Field label={d.roomForm.raiseRuleLabel}>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        type="button"
+                        selected={raiseRule === 'free'}
+                        onClick={() => setRaiseRule('free')}
+                      >
+                        {d.roomForm.raiseRuleFree}
+                      </Button>
+                      <Button
+                        type="button"
+                        selected={raiseRule === 'ttadang'}
+                        onClick={() => setRaiseRule('ttadang')}
+                      >
+                        {d.roomForm.raiseRuleTtadang}
+                      </Button>
+                      <Button
+                        type="button"
+                        selected={raiseRule === 'pot_limit'}
+                        onClick={() => setRaiseRule('pot_limit')}
+                      >
+                        {d.roomForm.raiseRulePotLimit}
+                      </Button>
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted">
+                      {raiseRule === 'free'
+                        ? d.roomForm.raiseRuleFreeHint
+                        : raiseRule === 'ttadang'
+                          ? d.roomForm.raiseRuleTtadangHint
+                          : d.roomForm.raiseRulePotLimitHint}
+                    </p>
+                  </Field>
+                </div>
+              ) : null}
 
               <div className="lg:col-span-2">
                 <Field label={d.inputMode.label}>

@@ -6,7 +6,34 @@ import { format, useDict } from '@/lib/i18n/client'
 import type { BetActionKind } from '../types'
 import { Button, Stepper } from '@/components/ui'
 import type { RunAction } from './shared'
+import type { ProxyBlockReason } from './member-sheet-gating'
 import { Section } from './member-sheet-parts'
+
+/**
+ * canProxy가 false인 이유를 그대로 보여준다 — 숨기지 않고 왜 안 되는지 + 다음 행동을 안내.
+ * noRound는 이 함수가 호출되는 시점에 항상 isDealer가 참인 경우에만 나오므로
+ * (member-sheet-gating.ts의 proxyBlockReason 우선순위 참고) 딜러 안내를 항상 곁들인다.
+ */
+export function ProxyBlockedNotice({ reason }: { reason: ProxyBlockReason }) {
+  const { d } = useDict()
+  const message =
+    reason === 'gostop'
+      ? d.memberSheet.gostopNoBetting
+      : reason === 'notDealer'
+        ? d.memberSheet.proxyDealerOnly
+        : reason === 'observerTarget'
+          ? d.memberSheet.observerNoBetting
+          : d.memberSheet.proxyNoRound
+
+  return (
+    <Section icon="🃏" title={d.memberSheet.proxyTitle}>
+      <p className="text-sm text-muted">{message}</p>
+      {reason === 'noRound' ? (
+        <p className="text-xs text-muted">{d.memberSheet.noRoundDealerHint}</p>
+      ) : null}
+    </Section>
+  )
+}
 
 export function ProxyBetSection({
   roomId,
