@@ -53,9 +53,15 @@ export default async function HomePage({
           {d.common.appName}
           <span className="text-accent">.</span>
         </h1>
-        {/* 링크가 5개라 좁은 폭에서 한 줄에 안 들어간다. 줄바꿈을 허용해야
-            고정 페이지의 overflow-hidden에 로그아웃·로케일이 잘려 나가지 않는다. */}
-        <div className="ms-auto flex flex-wrap items-center justify-end gap-1">
+        {/* 로케일은 로고와 같은 줄 오른쪽 끝. 자기 혼자 한 줄을 차지하던 자리를
+            없애야 아래 본문이 그만큼 올라온다. */}
+        <div className="ms-auto flex items-center">
+          <LocaleSwitcher />
+        </div>
+        {/* 링크가 5개라 좁은 폭에서 한 줄에 안 들어간다. w-full로 줄을 통째로 넘겨야
+            고정 페이지의 overflow-hidden에 로그아웃이 잘려 나가지 않는다.
+            한 줄에 다 들어가는 lg부터는 로케일 옆에 이어 붙인다. */}
+        <div className="flex w-full flex-wrap items-center justify-end gap-1 lg:w-auto">
           <HeaderNavLink href={'/wallet' as Route}>{d.common.myCredits}</HeaderNavLink>
           <HeaderNavLink href={'/account' as Route}>{d.account.navLabel}</HeaderNavLink>
           {isAdmin ? (
@@ -72,7 +78,6 @@ export default async function HomePage({
               {d.common.logout}
             </Button>
           </form>
-          <LocaleSwitcher />
         </div>
       </header>
       {error ? (
