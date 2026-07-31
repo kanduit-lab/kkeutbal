@@ -20,15 +20,25 @@ import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
 import { RoundLog } from './round-log'
 import { FairnessPanel } from './fairness-panel'
+import { AdvisorBoard } from '@/features/jokbo-advisor/components/advisor-board'
 import { useRoomActions } from './use-room-actions'
 
-export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId: string }) {
+export function RoomClient({
+  initial,
+  selfId,
+  visionEnabled,
+}: {
+  initial: RoomSnapshot
+  selfId: string
+  visionEnabled: boolean
+}) {
   const router = useRouter()
   const { toast } = useToast()
   const { d } = useDict()
   const [seatUserId, setSeatUserId] = useState<string | null>(null)
   const [muted, setMutedState] = useState(() => isMuted())
   const [roundLogOpen, setRoundLogOpen] = useState(false)
+  const [advisorOpen, setAdvisorOpen] = useState(false)
   const isDesktop = useIsDesktop()
 
   // 실시간 동기화(useRoomSync)·뮤테이션 후 브로드캐스트(afterMutation)·서버 액션 실행 레이스
@@ -96,7 +106,13 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
       className="fixed-page mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col overflow-hidden px-4 pb-[calc(var(--action-bar-h,0px)+1.5rem)] pt-5 lg:px-8 lg:pb-6 lg:pt-6"
     >
       <div className="shrink-0">
-        <RoomHeader snapshot={snapshot} isHost={isHost} muted={muted} onToggleMute={toggleMute} />
+        <RoomHeader
+          snapshot={snapshot}
+          isHost={isHost}
+          muted={muted}
+          onToggleMute={toggleMute}
+          onOpenAdvisor={() => setAdvisorOpen(true)}
+        />
         <RoomConnectionBar
           syncFailed={syncFailed}
           disconnected={showDisconnected}
@@ -278,6 +294,16 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
         ariaLabel={d.roundLog.title}
       >
         <RoundLog actions={snapshot.actions} members={snapshot.members} scrollable={false} />
+      </Sheet>
+      {/* 판독기는 시트 높이를 직접 정해야 한다. `PaneGroup`이 `min-h-0 flex-1`이라
+          높이가 열려 있으면 픽커가 접히지 않고 시트를 세로로 밀어낸다. */}
+      <Sheet
+        open={advisorOpen}
+        onClose={() => setAdvisorOpen(false)}
+        ariaLabel={d.room.advisorAria}
+        className="flex h-[88dvh] flex-col overflow-hidden sm:h-[82dvh] sm:max-w-4xl"
+      >
+        <AdvisorBoard visionEnabled={visionEnabled} initialTab={snapshot.room.gameType} />
       </Sheet>
     </main>
   )

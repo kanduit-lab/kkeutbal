@@ -10,11 +10,13 @@ export function RoomHeader({
   isHost,
   muted,
   onToggleMute,
+  onOpenAdvisor,
 }: {
   snapshot: RoomSnapshot
   isHost: boolean
   muted: boolean
   onToggleMute: () => void
+  onOpenAdvisor: () => void
 }) {
   const { d } = useDict()
   return (
@@ -69,15 +71,18 @@ export function RoomHeader({
         >
           🧾
         </ButtonLink>
-        <ButtonLink
-          href={`/advisor?game=${snapshot.room.gameType}`}
+        {/* 방을 떠나지 않고 연다. 판독하러 `/advisor`로 나가면 실시간 채널이 끊기고
+            돌아왔을 때 스냅샷을 다시 받아야 한다. */}
+        <Button
+          type="button"
           variant="outline"
           size="icon"
+          onClick={onOpenAdvisor}
           aria-label={d.room.advisorAria}
           title={d.room.advisorAria}
         >
           🔮
-        </ButtonLink>
+        </Button>
         <ButtonLink
           href={`/rooms/${snapshot.room.code}/monitor`}
           variant="outline"
