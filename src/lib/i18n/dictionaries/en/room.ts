@@ -54,6 +54,8 @@ export const table: Dictionary['table'] = {
   winner: 'Winner',
   waiting: 'Waiting',
   potLabel: 'pot',
+  myBet: 'My bet',
+  net: 'Net',
 } as const
 
 export const actionBar: Dictionary['actionBar'] = {

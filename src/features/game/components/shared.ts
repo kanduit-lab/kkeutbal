@@ -61,6 +61,15 @@ function formatChipsEn(n: number): string {
   return `${formatted}${useMillion ? 'M' : 'k'}`
 }
 
+/** 액션 종류별 뱃지 색. 좌석 카드(`game-table`)와 내 좌석 패널(`my-seat-panel`)이 같이 쓴다. */
+export const ACTION_BADGE: Record<BetActionKind, string> = {
+  check: 'bg-white/15 text-text',
+  call: 'bg-win/25 text-win',
+  raise: 'bg-warn/25 text-warn',
+  fold: 'bg-white/10 text-muted',
+  allin: 'bg-accent/30 text-accent',
+}
+
 export function lastAcceptedByUser(actions: readonly BetActionView[]): Map<string, BetActionView> {
   const byUser = new Map<string, BetActionView>()
   for (const action of actions) {

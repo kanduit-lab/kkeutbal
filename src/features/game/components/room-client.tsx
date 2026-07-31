@@ -7,7 +7,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { format, useDict } from '@/lib/i18n/client'
 import { isMuted, setMuted } from '@/lib/sound'
 import type { MemberView, RoomSnapshot } from '../types'
-import { Button, Sheet, useIsDesktop, useToast } from '@/components/ui'
+import { Sheet, useIsDesktop, useToast } from '@/components/ui'
 import { RoomHeader } from './room-header'
 import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
@@ -18,6 +18,7 @@ import { GostopWaitPanel } from './gostop-wait-panel'
 import { ObserverStatusPanel } from './observer-status-panel'
 import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
+import { MySeatPanel } from './my-seat-panel'
 import { RoundLog } from './round-log'
 import { FairnessPanel } from './fairness-panel'
 import { AdvisorBoard } from '@/features/jokbo-advisor/components/advisor-board'
@@ -112,6 +113,8 @@ export function RoomClient({
           muted={muted}
           onToggleMute={toggleMute}
           onOpenAdvisor={() => setAdvisorOpen(true)}
+          // 데스크톱은 판 기록이 우측 컬럼에 항상 보여서 여는 버튼이 필요 없다.
+          onOpenRoundLog={!isDesktop ? () => setRoundLogOpen(true) : undefined}
         />
         <RoomConnectionBar
           syncFailed={syncFailed}
@@ -198,20 +201,20 @@ export function RoomClient({
                   gameType={snapshot.room.gameType}
                   onSeatTap={(member) => setSeatUserId(member.userId)}
                   fit
+                  excludeSelfSeat={!isDesktop}
                 />
-                {!isDesktop ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="absolute right-1 top-1 z-20"
-                    aria-label={d.roundLog.openAria}
-                    onClick={() => setRoundLogOpen(true)}
-                  >
-                    📋
-                  </Button>
-                ) : null}
               </div>
+              {/* 펠트에서 뺀 내 좌석. GameTable의 excludeSelfSeat와 같은 조건이라야
+                  내가 어느 쪽에도 안 보이는 상태가 생기지 않는다. */}
+              {!isDesktop && self ? (
+                <div className="rise-in rise-in-3 mt-2 shrink-0">
+                  <MySeatPanel
+                    self={self}
+                    snapshot={snapshot}
+                    isOnline={online.has(self.userId)}
+                  />
+                </div>
+              ) : null}
               {isDesktop && canBet && self ? (
                 <div className="rise-in rise-in-3 lg:mt-3 lg:shrink-0">
                   <ActionBar

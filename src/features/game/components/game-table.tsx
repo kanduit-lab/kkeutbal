@@ -2,20 +2,12 @@
 
 import { clsx } from 'clsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BetActionKind, BetActionView, MemberView, RoomGameType } from '../types'
+import type { BetActionView, MemberView, RoomGameType } from '../types'
 import { Avatar, Badge } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { nextActorId as computeNextActorId } from '../turn-order'
-import { betLabelsFor, formatChips, lastAcceptedByUser } from './shared'
+import { ACTION_BADGE, betLabelsFor, formatChips, lastAcceptedByUser } from './shared'
 import { ChipStack, chipBreakdown } from './game-table-chips'
-
-const ACTION_BADGE: Record<BetActionKind, string> = {
-  check: 'bg-white/15 text-text',
-  call: 'bg-win/25 text-win',
-  raise: 'bg-warn/25 text-warn',
-  fold: 'bg-white/10 text-muted',
-  allin: 'bg-accent/30 text-accent',
-}
 
 interface Flight {
   key: number
@@ -25,12 +17,28 @@ interface Flight {
 // Seat radius is measured from the felt oval's rim, not the outer container
 // box: both this offset and the oval's `inset-[...]` below derive from the
 // single --felt-inset constant so they can't drift apart again.
-function seatX(dx: number): string {
-  return `calc(50cqw + (50cqw - var(--felt-inset) * 1cqw - var(--seat-half-w)) * ${dx.toFixed(4)})`
+//
+// var() fallback이 없으면 좌석 변수 유틸리티가 CSS에 없을 때(개발 중 HMR이 새 클래스를
+// 놓친 탭) left/top 전체가 무효가 되고, absolute 요소는 static 위치 — 섹션 좌상단 모서리 —
+// 로 떨어져 전 좌석이 한 점에 겹쳐 화면 밖으로 잘린다. 기본값으로 대신 계산되면 간격은
+// 어긋나도 배치 자체는 유지된다.
+//
+// hug: 내 좌석을 뺀 모바일 배치에서는 felt-inset 몫까지 좌석을 바깥으로 밀어 카드가
+// 섹션 가장자리에 딱 붙게 한다(dx=±1이면 카드 바깥 모서리 = 섹션 모서리). 폰은 가로가
+// 좁아 테두리 안쪽으로 들여놓는 몫이 그대로 이름 폭 손해였다. 세로(seatY)는 그대로 둔다 —
+// 위쪽 좌석이 섹션 밖 헤더와 겹치는 것을 felt-inset이 막아주고 있다.
+function seatRadiusX(hug: boolean): string {
+  return hug
+    ? `(50cqw - var(--seat-half-w, 3.5rem))`
+    : `(50cqw - var(--felt-inset, 7) * 1cqw - var(--seat-half-w, 3.5rem))`
+}
+
+function seatX(dx: number, hug = false): string {
+  return `calc(50cqw + ${seatRadiusX(hug)} * ${dx.toFixed(4)})`
 }
 
 function seatY(dy: number): string {
-  return `calc(50cqh + (50cqh - var(--felt-inset) * 1cqh - var(--seat-half-h)) * ${dy.toFixed(4)})`
+  return `calc(50cqh + (50cqh - var(--felt-inset, 7) * 1cqh - var(--seat-half-h, 3.75rem)) * ${dy.toFixed(4)})`
 }
 
 export function GameTable({
@@ -45,6 +53,7 @@ export function GameTable({
   scale = 'default',
   gameType = 'seotda',
   fit = false,
+  excludeSelfSeat = false,
 }: {
   members: readonly MemberView[]
   online: ReadonlySet<string>
@@ -62,6 +71,13 @@ export function GameTable({
 
   /** 남은 높이에 맞춰 테이블을 줄인다(모바일 포함) — 뷰포트 스크롤을 막기 위한 모드 */
   fit?: boolean
+
+  /**
+   * 내 좌석을 펠트에서 빼고 상대만 배치한다. 폰에서 좌석 카드 폭이 펠트 반지름보다
+   * 커져 서로 겹치던 문제를 배치 단계에서 없애기 위한 모드 — 내 정보는 `MySeatPanel`이
+   * 펠트 밖에서 더 넓게 보여준다.
+   */
+  excludeSelfSeat?: boolean
 }) {
   const { d, locale } = useDict()
   const [flights, setFlights] = useState<readonly Flight[]>([])
@@ -70,10 +86,18 @@ export function GameTable({
 
   const board = scale === 'board'
 
-  const compact = members.length >= 7
-  const avatarSize = board ? 64 : compact ? 36 : 44
+  // 내 좌석을 뺐으면 실제로 펠트에 놓이는 수를 기준으로 밀집 여부를 판단한다.
+  const seatCount = excludeSelfSeat ? Math.max(0, members.length - 1) : members.length
+  const compact = seatCount >= 7
+  // 좌석이 2개 이하일 때만 카드를 넓힌다. 폰의 펠트는 납작해서(가로:세로 ≈ 1.8:1) 세로
+  // 여유가 거의 없고, 좌우 끝에 마주 놓인 두 좌석 사이는 팟 표시가 차지한다 — 그래서 폭
+  // 상한은 팟까지의 거리에서 나온다. 3개가 되면 위쪽 좌석이 양옆 좌석과 세로로 40px 남짓
+  // 밖에 안 떨어져서, 조금만 넓혀도 서로 겹친다.
+  const roomy = !board && seatCount <= 2
+  // 펠트 좌석 아바타는 내 좌석 패널(34px)과 같은 크기 — 상대만 커 보일 이유가 없다.
+  const avatarSize = board ? 64 : compact ? 30 : 34
   const labels = betLabelsFor(gameType, d)
-  const badgeTextClass = board ? 'text-lg' : 'text-xs sm:text-sm'
+  const badgeTextClass = board ? 'text-lg' : 'text-[11px] sm:text-xs'
 
   const roleLabels: Record<MemberView['role'], string | null> = {
     host: d.roles.host,
@@ -83,6 +107,20 @@ export function GameTable({
   }
 
   const seats = useMemo(() => {
+    // 내 좌석을 뺀 모드에서는 상대를 아래쪽(내 패널 자리)을 피해 위쪽 호에 편다.
+    // 3명 이하면 반원(왼쪽~위~오른쪽), 그 이상은 270° 호로 넓혀 간격을 유지한다.
+    if (excludeSelfSeat) {
+      const others = members.filter((member) => member.userId !== selfId)
+      const count = others.length
+      const arc = count <= 3 ? Math.PI : Math.PI * 1.5
+      const start = -Math.PI / 2 - arc / 2
+      return others.map((member, i) => {
+        const angle = count === 1 ? -Math.PI / 2 : start + (i / (count - 1)) * arc
+        const radius = count >= 7 && i % 2 === 0 ? 0.94 : 1
+        return { member, dx: radius * Math.cos(angle), dy: radius * Math.sin(angle) }
+      })
+    }
+
     const selfIdx = Math.max(
       0,
       members.findIndex((m) => m.userId === selfId),
@@ -95,7 +133,7 @@ export function GameTable({
       const radius = dense && i % 2 === 0 ? 0.94 : 1
       return { member, dx: radius * Math.cos(angle), dy: radius * Math.sin(angle) }
     })
-  }, [members, selfId])
+  }, [members, selfId, excludeSelfSeat])
 
   const lastAccepted = useMemo(() => lastAcceptedByUser(actions), [actions])
 
@@ -143,10 +181,16 @@ export function GameTable({
         compact ? 'aspect-[5/7] sm:aspect-square' : 'aspect-[4/5] sm:aspect-[16/10]',
         fit && 'mb-0 h-full w-auto max-w-full',
         board
-          ? '[--seat-half-h:6.5rem] [--seat-half-w:7rem]'
+          ? '[--seat-half-h:6rem] [--seat-half-w:7rem]'
           : compact
             ? '[--seat-half-h:3.125rem] [--seat-half-w:2.5rem] sm:[--seat-half-h:5rem] sm:[--seat-half-w:5rem]'
-            : 'max-[359px]:[--seat-half-h:4rem] max-[359px]:[--seat-half-w:3rem] [--seat-half-h:4.25rem] [--seat-half-w:3.5rem] sm:[--seat-half-h:5.5rem] sm:[--seat-half-w:5.5rem]',
+            : roomy
+              ? // 폭 하한 3.25rem(박스 104px)은 가장 넓은 내용 줄(칩 13 + "1,000" + "+0" +
+                // 좌우 패딩 ≈ 103px)이 줄바꿈 없이 들어가는 최소값이고, 15cqw 상한은 박스가
+                // 펠트를 덮지 않게 팟 블록(반폭 ≈ 13cqw)과의 거리에서 나온다 — hug 배치에서
+                // 박스 안쪽 모서리가 2×폭 = 30cqw < 50 - 13 = 37cqw.
+                '[--seat-half-h:3rem] [--seat-half-w:clamp(3.25rem,15cqw,6rem)] sm:[--seat-half-h:4rem] sm:[--seat-half-w:clamp(3.5rem,15cqw,7rem)]'
+              : 'max-[359px]:[--seat-half-h:3.5rem] max-[359px]:[--seat-half-w:3rem] [--seat-half-h:3.75rem] [--seat-half-w:3.5rem] sm:[--seat-half-h:4.75rem] sm:[--seat-half-w:5.5rem]',
       )}
     >
       {/*
@@ -213,10 +257,10 @@ export function GameTable({
               {
                 width: 20,
                 height: 20,
-                left: seatX(seat.dx),
+                left: seatX(seat.dx, excludeSelfSeat),
                 top: seatY(seat.dy),
-                '--fly-x': `calc((50cqw - var(--felt-inset) * 1cqw - var(--seat-half-w)) * ${(-seat.dx * 0.9).toFixed(4)})`,
-                '--fly-y': `calc((50cqh - var(--felt-inset) * 1cqh - var(--seat-half-h)) * ${(-seat.dy * 0.9).toFixed(4)})`,
+                '--fly-x': `calc(${seatRadiusX(excludeSelfSeat)} * ${(-seat.dx * 0.9).toFixed(4)})`,
+                '--fly-y': `calc((50cqh - var(--felt-inset, 7) * 1cqh - var(--seat-half-h, 3.75rem)) * ${(-seat.dy * 0.9).toFixed(4)})`,
               } as React.CSSProperties
             }
           />
@@ -246,116 +290,141 @@ export function GameTable({
           .join(' · ')
 
         const interactive = Boolean(onSeatTap)
-        const seatPosition = { left: seatX(dx), top: seatY(dy) }
+        const seatPosition = { left: seatX(dx, excludeSelfSeat), top: seatY(dy) }
+        const avatarEl = (
+          <div className="relative">
+            <Avatar name={member.displayName} url={member.avatarUrl} size={avatarSize} />
+            <span
+              className={clsx(
+                'absolute -right-0.5 bottom-0 rounded-full border-2 border-black',
+                board ? 'size-4' : 'size-3',
+                isOnline ? 'bg-win shadow-[0_0_6px_var(--color-win)]' : 'bg-white/25',
+              )}
+              title={isOnline ? d.common.online : d.common.offline}
+            />
+          </div>
+        )
         const seatBody = (
-          <div
-            aria-hidden
-            className={clsx(
-              'seat-card relative flex flex-col items-center rounded-2xl border backdrop-blur-sm transition-all',
-              'max-w-[calc(var(--seat-half-w)*2)]',
-              board
-                ? 'min-w-36 px-4 pb-2.5 pt-2'
-                : compact
-                  ? 'min-w-16 px-1.5 pb-1.5 pt-1 sm:min-w-20 sm:px-2'
-                  : 'min-w-24 px-2.5 pb-2 pt-1.5 max-[359px]:min-w-20 max-[359px]:px-2 sm:min-w-32 sm:px-3',
-              folded ? 'border-white/5 bg-black/50 opacity-50' : 'border-gold/20 bg-black/60',
-              isSelf && 'border-gold/60',
-              isWinner && 'winner-glow border-win',
-              isNext && 'ring-2 ring-gold shadow-[0_0_14px_rgb(229_185_84/0.35)]',
-              onSeatTap && 'active:scale-95',
-            )}
-          >
-            {waiting && !isNext ? (
-              <span className="pointer-events-none absolute -inset-1 rounded-[1.25rem] ring-2 ring-white/15 motion-safe:animate-pulse" />
+          <div aria-hidden className={clsx('flex flex-col items-center', folded && 'opacity-50')}>
+            {!board ? (
+              // 이름은 박스 밖, 아바타 옆에 작게 둔다 — 박스 안에 있으면 이름 길이가 박스
+              // 폭·높이 예산을 잡아먹는다. 배경이 펠트라 그림자 없이는 안 읽힌다.
+              // 이 줄 전체가 박스 위 모서리에 12px(-mb-3) 걸친다 — 박스의 pt-3가 그 몫이다.
+              <div className="z-10 -mb-3 flex max-w-[calc(var(--seat-half-w)*2)] items-center justify-center gap-1">
+                <div className="shrink-0">{avatarEl}</div>
+                <span className="min-w-0 truncate text-[11px] font-bold leading-tight drop-shadow-[0_1px_2px_rgb(0_0_0/0.8)] sm:text-xs">
+                  {member.displayName}
+                </span>
+                {roleLabel ? <Badge tone="accent">{roleLabel}</Badge> : null}
+              </div>
             ) : null}
-            {isNext ? (
-              <span className="pointer-events-none absolute -inset-1.5 rounded-[1.35rem] ring-2 ring-gold/60 motion-safe:animate-pulse" />
-            ) : null}
-            <div className={clsx('mb-1', board ? '-mt-8' : compact ? '-mt-5' : '-mt-6')}>
-              <div className="relative">
-                <Avatar name={member.displayName} url={member.avatarUrl} size={avatarSize} />
+            <div
+              className={clsx(
+                'seat-card relative flex flex-col items-center rounded-2xl border backdrop-blur-sm transition-all',
+                'max-w-[calc(var(--seat-half-w)*2)]',
+                board
+                  ? 'min-w-36 px-4 pb-2 pt-1.5'
+                  : compact
+                    ? 'min-w-16 px-1.5 pb-1 pt-3 sm:min-w-20 sm:px-2'
+                    : roomy
+                      ? // 좌우 여백을 줄여 늘어난 폭이 그대로 내용 자리로 가게 한다. 폭을
+                        // 2×half-w로 고정하는 이유: 내용이 좁으면 카드가 max-w보다 작아지는데,
+                        // 좌석 중심은 half-w 기준이라 그 차이의 절반만큼 가장자리에서 뜬다 —
+                        // hug 배치의 "모서리 밀착"은 폭이 정확히 2×half-w일 때만 성립한다.
+                        'w-[calc(var(--seat-half-w)*2)] px-1.5 pb-1 pt-3 sm:px-2'
+                      : 'min-w-24 px-2 pb-1 pt-3 max-[359px]:min-w-20 max-[359px]:px-1.5 sm:min-w-32 sm:px-3',
+                folded ? 'border-white/5 bg-black/50' : 'border-gold/20 bg-black/60',
+                isSelf && 'border-gold/60',
+                isWinner && 'winner-glow border-win',
+                isNext && 'ring-2 ring-gold shadow-[0_0_14px_rgb(229_185_84/0.35)]',
+                onSeatTap && 'active:scale-95',
+              )}
+            >
+              {waiting && !isNext ? (
+                <span className="pointer-events-none absolute -inset-1 rounded-[1.25rem] ring-2 ring-white/15 motion-safe:animate-pulse" />
+              ) : null}
+              {isNext ? (
+                <span className="pointer-events-none absolute -inset-1.5 rounded-[1.35rem] ring-2 ring-gold/60 motion-safe:animate-pulse" />
+              ) : null}
+              {board ? (
+                <>
+                  {/* 아바타는 카드 위로 걸치게 올린다 — 카드 자체 높이를 그만큼 아낀다. */}
+                  <div className="-mt-9 mb-1">{avatarEl}</div>
+                  <div className="flex w-full items-center justify-center gap-1">
+                    <span className="min-w-0 truncate text-xl font-bold leading-tight sm:text-2xl">
+                      {member.displayName}
+                    </span>
+                    {roleLabel ? <Badge tone="accent">{roleLabel}</Badge> : null}
+                  </div>
+                </>
+              ) : null}
+              {/* 잔액과 손익은 한 줄에 둔다 — 좌석 카드는 세로가 아쉽고 가로가 남는다.
+                  flex-wrap은 긴 잔액(예: 1,000)과 손익이 같이 안 들어갈 때 손익을 truncate로
+                  뭉개는(`+·`) 대신 아랫줄로 내리는 안전장치다. */}
+              <div className="mt-0.5 flex max-w-full flex-wrap items-baseline justify-center gap-x-1.5">
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <ChipStack amount={member.balance} size={board ? 18 : 13} />
+                  <span
+                    className={clsx(
+                      'font-black tabular-nums leading-none',
+                      board ? 'text-2xl sm:text-3xl' : 'text-base sm:text-lg',
+                      member.balance <= 0 ? 'text-accent' : 'gilt',
+                    )}
+                  >
+                    {formatChips(member.balance, locale)}
+                  </span>
+                </span>
+                {!compact ? (
+                  <span
+                    className={clsx(
+                      'tabular-nums leading-none',
+                      board ? 'text-base' : 'text-[11px]',
+                      net >= 0 ? 'text-win/80' : 'text-accent/90',
+                    )}
+                  >
+                    {net >= 0 ? '+' : ''}
+                    {formatChips(net, locale)}
+                  </span>
+                ) : null}
+              </div>
+              {last ? (
                 <span
                   className={clsx(
-                    'absolute -right-0.5 bottom-0 rounded-full border-2 border-black',
-                    board ? 'size-4' : 'size-3',
-                    isOnline ? 'bg-win shadow-[0_0_6px_var(--color-win)]' : 'bg-white/25',
+                    'mt-0.5 rounded-md px-2 py-0.5 font-black leading-tight',
+                    badgeTextClass,
+                    ACTION_BADGE[last.action],
                   )}
-                  title={isOnline ? d.common.online : d.common.offline}
-                />
-              </div>
+                >
+                  {labels[last.action]}
+                  {last.amount > 0 ? ` ${formatChips(last.amount, locale)}` : ''}
+                </span>
+              ) : null}
+              {pending ? (
+                <span
+                  className={clsx(
+                    'mt-0.5 rounded-md bg-warn/15 px-2 py-0.5 font-black leading-tight text-warn ring-1 ring-warn/40 motion-safe:animate-pulse',
+                    badgeTextClass,
+                  )}
+                >
+                  {labels[pending.action]}
+                  {pending.amount > 0 ? ` ${formatChips(pending.amount, locale)}` : ''}
+                  {` · ${d.table.waiting}`}
+                </span>
+              ) : null}
+              {waiting ? (
+                <span
+                  className={clsx(
+                    'mt-0.5 rounded-md bg-white/10 px-2 py-0.5 font-bold leading-tight text-muted',
+                    badgeTextClass,
+                  )}
+                >
+                  {d.table.waiting}
+                </span>
+              ) : null}
+              {isWinner ? (
+                <span className={clsx('mt-0.5', board ? 'text-2xl' : 'text-base')}>🏆</span>
+              ) : null}
             </div>
-            <div className="flex w-full items-center justify-center gap-1">
-              <span
-                className={clsx(
-                  'min-w-0 truncate font-bold leading-tight',
-                  board ? 'text-xl sm:text-2xl' : 'text-sm sm:text-base',
-                )}
-              >
-                {member.displayName}
-              </span>
-              {roleLabel ? <Badge tone="accent">{roleLabel}</Badge> : null}
-            </div>
-            <div className="mt-1 flex items-center gap-2">
-              <ChipStack amount={member.balance} size={board ? 18 : 15} />
-              <span
-                className={clsx(
-                  'font-black tabular-nums leading-none',
-                  board ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl',
-                  member.balance <= 0 ? 'text-accent' : 'gilt',
-                )}
-              >
-                {formatChips(member.balance, locale)}
-              </span>
-            </div>
-            {!compact ? (
-              <span
-                className={clsx(
-                  'tabular-nums leading-tight',
-                  board ? 'text-base' : 'text-xs',
-                  net >= 0 ? 'text-win/80' : 'text-accent/90',
-                )}
-              >
-                {net >= 0 ? '+' : ''}
-                {formatChips(net, locale)}
-              </span>
-            ) : null}
-            {last ? (
-              <span
-                className={clsx(
-                  'mt-1 rounded-md px-2 py-0.5 font-black leading-tight',
-                  badgeTextClass,
-                  ACTION_BADGE[last.action],
-                )}
-              >
-                {labels[last.action]}
-                {last.amount > 0 ? ` ${formatChips(last.amount, locale)}` : ''}
-              </span>
-            ) : null}
-            {pending ? (
-              <span
-                className={clsx(
-                  'mt-1 rounded-md bg-warn/15 px-2 py-0.5 font-black leading-tight text-warn ring-1 ring-warn/40 motion-safe:animate-pulse',
-                  badgeTextClass,
-                )}
-              >
-                {labels[pending.action]}
-                {pending.amount > 0 ? ` ${formatChips(pending.amount, locale)}` : ''}
-                {` · ${d.table.waiting}`}
-              </span>
-            ) : null}
-            {waiting ? (
-              <span
-                className={clsx(
-                  'mt-1 rounded-md bg-white/10 px-2 py-0.5 font-bold leading-tight text-muted',
-                  badgeTextClass,
-                )}
-              >
-                {d.table.waiting}
-              </span>
-            ) : null}
-            {isWinner ? (
-              <span className={clsx('mt-0.5', board ? 'text-2xl' : 'text-base')}>🏆</span>
-            ) : null}
           </div>
         )
         return interactive ? (

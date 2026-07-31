@@ -49,6 +49,8 @@ export const table = {
   winner: '승리',
   waiting: '대기',
   potLabel: 'pot',
+  myBet: '내 베팅',
+  net: '손익',
 } as const
 
 export const actionBar = {

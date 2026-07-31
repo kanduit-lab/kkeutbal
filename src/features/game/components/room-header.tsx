@@ -11,12 +11,15 @@ export function RoomHeader({
   muted,
   onToggleMute,
   onOpenAdvisor,
+  onOpenRoundLog,
 }: {
   snapshot: RoomSnapshot
   isHost: boolean
   muted: boolean
   onToggleMute: () => void
   onOpenAdvisor: () => void
+  /** 판 기록 시트를 여는 버튼 — 기록이 항상 보이는 화면(데스크톱)에서는 넘기지 않는다 */
+  onOpenRoundLog?: () => void
 }) {
   const { d } = useDict()
   return (
@@ -92,6 +95,18 @@ export function RoomHeader({
         >
           📺
         </ButtonLink>
+        {onOpenRoundLog ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onOpenRoundLog}
+            aria-label={d.roundLog.openAria}
+            title={d.roundLog.openAria}
+          >
+            📋
+          </Button>
+        ) : null}
         {isHost ? (
           <ButtonLink
             href={`/rooms/${snapshot.room.code}/settings`}
