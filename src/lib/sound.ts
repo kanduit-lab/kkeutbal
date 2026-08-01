@@ -1,6 +1,11 @@
 'use client'
 
+import type { BetActionKind } from '@/features/game/types'
+
 const MUTE_KEY = 'kkeutbal:muted'
+
+// 자기 액션은 살짝 크게 — 개별 gain 최대치가 0.25대라 1.25배도 클리핑(1.0) 여유가 넉넉하다
+const SELF_GAIN = 1.25
 
 let ctx: AudioContext | null = null
 
@@ -68,6 +73,122 @@ function clack(ac: AudioContext, start = 0, gain = 0.25) {
   src.start(ac.currentTime + start)
 }
 
+function sweep(
+  ac: AudioContext,
+  {
+    from,
+    to,
+    start = 0,
+    duration = 0.3,
+    type = 'sawtooth',
+    gain = 0.1,
+  }: {
+    from: number
+    to: number
+    start?: number
+    duration?: number
+    type?: OscillatorType
+    gain?: number
+  },
+) {
+  const osc = ac.createOscillator()
+  const amp = ac.createGain()
+  osc.type = type
+  const t0 = ac.currentTime + start
+  osc.frequency.setValueAtTime(from, t0)
+  osc.frequency.exponentialRampToValueAtTime(to, t0 + duration)
+  amp.gain.setValueAtTime(0, t0)
+  amp.gain.linearRampToValueAtTime(gain, t0 + 0.02)
+  amp.gain.exponentialRampToValueAtTime(0.0001, t0 + duration)
+  osc.connect(amp).connect(ac.destination)
+  osc.start(t0)
+  osc.stop(t0 + duration + 0.02)
+}
+
+function checkSound(ac: AudioContext, g: number) {
+  clack(ac, 0, 0.1 * g)
+  clack(ac, 0.07, 0.08 * g)
+}
+
+function callSound(ac: AudioContext, g: number) {
+  clack(ac, 0, 0.22 * g)
+  tone(ac, { freq: 659.25, start: 0.02, duration: 0.09, gain: 0.09 * g })
+}
+
+function raiseSound(ac: AudioContext, g: number) {
+  clack(ac, 0, 0.24 * g)
+  clack(ac, 0.05, 0.18 * g)
+  tone(ac, { freq: 587.33, start: 0.02, duration: 0.1, type: 'triangle', gain: 0.1 * g })
+  tone(ac, { freq: 880, start: 0.11, duration: 0.14, type: 'triangle', gain: 0.11 * g })
+}
+
+function foldSound(ac: AudioContext, g: number) {
+  tone(ac, { freq: 220, duration: 0.16, type: 'sawtooth', gain: 0.06 * g })
+  tone(ac, { freq: 165, start: 0.08, duration: 0.18, type: 'sawtooth', gain: 0.05 * g })
+}
+
+function allinSound(ac: AudioContext, g: number) {
+  // 스윕 0.32s + 0.30s 지점 악센트 0.16s = 약 460ms, 500ms 상한 안쪽
+  sweep(ac, { from: 220, to: 1320, duration: 0.32, gain: 0.1 * g })
+  clack(ac, 0.1, 0.2 * g)
+  clack(ac, 0.16, 0.22 * g)
+  clack(ac, 0.22, 0.24 * g)
+  clack(ac, 0.28, 0.26 * g)
+  tone(ac, { freq: 1174.66, start: 0.3, duration: 0.16, type: 'triangle', gain: 0.12 * g })
+}
+
+const ACTION_SOUNDS: Record<BetActionKind, (ac: AudioContext, g: number) => void> = {
+  check: checkSound,
+  call: callSound,
+  raise: raiseSound,
+  fold: foldSound,
+  allin: allinSound,
+}
+
+export function playCheck(): void {
+  if (isMuted()) return
+  const ac = audioContext()
+  if (!ac) return
+  checkSound(ac, 1)
+}
+
+export function playCall(): void {
+  if (isMuted()) return
+  const ac = audioContext()
+  if (!ac) return
+  callSound(ac, 1)
+}
+
+export function playRaise(): void {
+  if (isMuted()) return
+  const ac = audioContext()
+  if (!ac) return
+  raiseSound(ac, 1)
+}
+
+export function playAllin(): void {
+  if (isMuted()) return
+  const ac = audioContext()
+  if (!ac) return
+  allinSound(ac, 1)
+}
+
+export function playTurnAlert(): void {
+  if (isMuted()) return
+  const ac = audioContext()
+  if (!ac) return
+  // playWin(0.14~0.16)보다 확실히 낮게 — 반복 알림이라 귀에 부담 없어야 한다
+  tone(ac, { freq: 659.25, duration: 0.12, type: 'triangle', gain: 0.07 })
+  tone(ac, { freq: 880, start: 0.13, duration: 0.16, type: 'triangle', gain: 0.08 })
+}
+
+export function playForAction(action: BetActionKind, options?: { isSelf?: boolean }): void {
+  if (isMuted()) return
+  const ac = audioContext()
+  if (!ac) return
+  ACTION_SOUNDS[action](ac, options?.isSelf ? SELF_GAIN : 1)
+}
+
 export function playChip(): void {
   if (isMuted()) return
   const ac = audioContext()
@@ -100,6 +221,5 @@ export function playFold(): void {
   if (isMuted()) return
   const ac = audioContext()
   if (!ac) return
-  tone(ac, { freq: 220, duration: 0.16, type: 'sawtooth', gain: 0.06 })
-  tone(ac, { freq: 165, start: 0.08, duration: 0.18, type: 'sawtooth', gain: 0.05 })
+  foldSound(ac, 1)
 }
