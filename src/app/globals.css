@@ -372,6 +372,121 @@ body {
   animation: greeting-in 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 
+/*
+ * 세로 모바일 베팅 화면(가운데 원형 팟 + 위쪽 지하철 노선형 턴 표시)의 모션 묶음이다.
+ *
+ * 색은 전부 @theme 토큰에서 끌어온다. box-shadow 알파가 필요한 곳은 --color-gold를 그대로 쓴
+ * color-mix로 만든다 — winner-glow처럼 rgb(229 185 84 / …) 리터럴을 새로 박으면 토큰이 바뀔 때
+ * 여기만 옛 금색으로 남는다.
+ *
+ * 이동 거리·방향은 호출자가 커스텀 프로퍼티로 넘긴다(--toss-x/--toss-y, --rail-from,
+ * --pulse-color). 전부 var()에 기본값을 달아 두어 프로퍼티 없이 클래스만 붙여도 깨지지 않는다.
+ */
+
+@keyframes pot-bump {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 칩이 떨어질 때 팟 숫자가 튀는 반응. transform만 건드려 레이아웃을 밀지 않는다. */
+.pot-bump {
+  animation: pot-bump 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes pot-ring-pulse {
+  from {
+    box-shadow: 0 0 0 0 var(--pulse-glow);
+  }
+  to {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+/*
+ * 팟을 감싼 링에서 한 번 퍼져 나가는 글로우. 액션별로 색을 바꿀 수 있게 --pulse-color를 읽고
+ * 기본값은 금색 토큰이다(예: 레이즈는 --pulse-color: var(--color-accent)).
+ *
+ * fill-mode를 일부러 안 준다 — forwards/both를 주면 끝 상태인 투명 box-shadow가 남아서 링이
+ * 원래 갖고 있던 그림자를 계속 덮어쓴다. winner-glow도 같은 이유로 fill 없이 쓴다.
+ */
+.pot-ring-pulse {
+  --pulse-glow: color-mix(in srgb, var(--pulse-color, var(--color-gold)) 55%, transparent);
+  animation: pot-ring-pulse 0.6s ease-out;
+}
+
+@keyframes chip-toss {
+  0% {
+    transform: translate(var(--toss-x, 0px), var(--toss-y, 0px)) scale(0.7);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  55% {
+    transform: translate(calc(var(--toss-x, 0px) * 0.45), calc(var(--toss-y, 0px) * 0.45 - 18px))
+      scale(0.92);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+/*
+ * chip-fly의 반대 방향이다. chip-fly가 제자리에서 --fly-x/--fly-y로 날아가 사라진다면, 이쪽은
+ * --toss-x/--toss-y만큼 떨어진 지점에서 출발해 제자리(= 팟 위치)로 들어와 멈춘다.
+ * 55% 지점에서 Y를 18px 더 띄워 직선이 아니라 살짝 포물선으로 날아가게 한다.
+ */
+.chip-toss {
+  animation: chip-toss 0.62s ease-out both;
+}
+
+@keyframes rail-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--rail-from, -8px));
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/*
+ * 턴 표시 노선의 세그먼트가 가로로 밀려 들어오는 모션. --rail-from 부호만 바꾸면 같은 클래스로
+ * 왼쪽(직전 액션, 음수)과 오른쪽(다음 차례, 양수) 양쪽을 다 쓴다.
+ */
+.rail-enter {
+  animation: rail-enter 0.26s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@keyframes turn-glow {
+  from {
+    opacity: 0.7;
+    box-shadow: 0 0 0 0 transparent;
+  }
+  to {
+    opacity: 1;
+    box-shadow: 0 0 10px 2px var(--turn-glow-color);
+  }
+}
+
+/*
+ * "지금 이 사람 차례" 마커의 상시 호흡. 계속 켜져 있는 모션이라 깜빡임으로 읽히면 안 된다 —
+ * alternate로 왕복시켜 끊기는 구간을 없애고, 1.8s ease-in-out으로 충분히 느리게 둔다.
+ */
+.turn-glow {
+  --turn-glow-color: color-mix(in srgb, var(--color-gold) 45%, transparent);
+  animation: turn-glow 1.8s ease-in-out infinite alternate;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rise-in,
   .rise-in-1,
@@ -388,7 +503,27 @@ body {
   .toast-in,
   .overlay-out,
   .panel-pop-out,
-  .sheet-slide-out {
+  .sheet-slide-out,
+  .pot-bump,
+  .pot-ring-pulse,
+  .chip-toss,
+  .rail-enter,
+  .turn-glow {
     animation: none;
+  }
+
+  /*
+   * 베팅 화면 모션(팟으로 날아드는 칩, 밀려 들어오는 턴 노선)은 화면 한가운데서 반복되는
+   * 움직임이라 모션 민감성을 그대로 건드린다. 그래서 위에서 animation을 끈다.
+   *
+   * 다만 애니메이션만 끄면 끝이 아니다. chip-toss와 rail-enter는 첫 키프레임이 opacity: 0에
+   * 어긋난 transform이고 both/fill로 걸려 있어서, 끄는 것만으로는 요소가 안 보이거나 엉뚱한
+   * 자리에 남을 수 있다. 최종 상태(보이는 상태)를 명시해 "모션만 없고 내용은 그대로"를 만든다.
+   * pot-bump·pot-ring-pulse·turn-glow는 기본값 자체가 정지 상태라 추가 선언이 필요 없다.
+   */
+  .chip-toss,
+  .rail-enter {
+    opacity: 1;
+    transform: none;
   }
 }

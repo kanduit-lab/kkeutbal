@@ -7,10 +7,16 @@ import { useCallback, useMemo, useState } from 'react'
 import { format, useDict } from '@/lib/i18n/client'
 import { isMuted, setMuted } from '@/lib/sound'
 import type { MemberView, RoomSnapshot } from '../types'
-import { Button, Sheet, useIsDesktop, useToast } from '@/components/ui'
+import { Button, useIsDesktop, useToast } from '@/components/ui'
 import { RoomHeader } from './room-header'
 import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
+import { TurnRailBar } from './turn-rail-bar'
+import { PotCore } from './pot-core'
+import { SelfBar } from './self-bar'
+import { BetHistorySheet } from './bet-history-sheet'
+import { turnRail } from '../turn-rail'
+import { useBetPulse } from './use-bet-pulse'
 import { ActionBar } from './action-bar'
 import { DealerPanel } from './dealer-panel'
 import { DealerQuickBar } from './dealer-quick-bar'
@@ -18,6 +24,7 @@ import { GostopWaitPanel } from './gostop-wait-panel'
 import { ObserverStatusPanel } from './observer-status-panel'
 import { LobbyPanel } from './lobby-panel'
 import { MemberSheet } from './member-sheet'
+import { MemberListSheet } from './member-list-sheet'
 import { RoundLog } from './round-log'
 import { FairnessPanel } from './fairness-panel'
 import { useRoomActions } from './use-room-actions'
@@ -29,6 +36,7 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
   const [seatUserId, setSeatUserId] = useState<string | null>(null)
   const [muted, setMutedState] = useState(() => isMuted())
   const [roundLogOpen, setRoundLogOpen] = useState(false)
+  const [memberListOpen, setMemberListOpen] = useState(false)
   const isDesktop = useIsDesktop()
 
   // 실시간 동기화(useRoomSync)·뮤테이션 후 브로드캐스트(afterMutation)·서버 액션 실행 레이스
@@ -56,6 +64,33 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
     () => snapshot.recentRounds.find((round) => round.hasFairnessAudit) ?? null,
     [snapshot.recentRounds],
   )
+
+  // 세로 모바일 화면의 정보 축. 좌석 링을 걷어낸 자리를 이 세 값이 대신한다 —
+  // 노선도(누가 무엇을 했고 다음은 누구인가) · 팟 연출 · 내 숫자.
+  const participantIds = useMemo(
+    () => snapshot.members.filter((member) => member.role !== 'observer').map((m) => m.userId),
+    [snapshot.members],
+  )
+  const rail = useMemo(
+    () =>
+      turnRail(participantIds, snapshot.actions, { roundActive: Boolean(snapshot.currentRound) }),
+    [participantIds, snapshot.actions, snapshot.currentRound],
+  )
+  const myBet = useMemo(
+    () =>
+      snapshot.actions.reduce(
+        (sum, action) =>
+          action.userId === selfId && action.status === 'accepted' ? sum + action.amount : sum,
+        0,
+      ),
+    [snapshot.actions, selfId],
+  )
+  const pulse = useBetPulse({
+    actions: snapshot.actions,
+    selfId,
+    roundId: snapshot.currentRound?.id ?? null,
+    currentActorId: rail.currentId,
+  })
 
   const toggleMute = useCallback(() => {
     setMutedState((current) => {
@@ -167,35 +202,79 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
                 </p>
               ) : null}
 
-              {/* 폰을 가로로 돌리면 남는 높이가 150px 수준이라 이 24px 여백이 테이블
-                  높이 예산에서 크게 잡아먹는다. 조건은 globals.css의 landscape-short
-                  블록과 같은 값이다(폰 가로만, 태블릿 가로 제외). */}
-              <div className="rise-in rise-in-2 relative flex min-h-0 flex-1 items-center justify-center pt-6 [@media(orientation:landscape)_and_(max-height:500px)]:pt-1 lg:pt-3">
-                <GameTable
-                  members={snapshot.members}
-                  online={online}
-                  selfId={selfId}
-                  pot={snapshot.currentRound?.pot ?? 0}
-                  actions={snapshot.actions}
-                  winnerId={snapshot.currentRound ? null : (snapshot.lastResult?.winnerId ?? null)}
-                  roundActive={Boolean(snapshot.currentRound)}
-                  gameType={snapshot.room.gameType}
-                  onSeatTap={(member) => setSeatUserId(member.userId)}
-                  fit
-                />
-                {!isDesktop ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="absolute right-1 top-1 z-20"
-                    aria-label={d.roundLog.openAria}
-                    onClick={() => setRoundLogOpen(true)}
-                  >
-                    📋
-                  </Button>
-                ) : null}
-              </div>
+              {/*
+                세로 모바일과 데스크톱이 서로 다른 것을 그린다.
+
+                폰에서는 좌석 링(GameTable)을 걷어냈다 — 참가자 전원을 팟 둘레에 깔면
+                한 명당 폭이 60px 남짓이라 이름도 액션도 못 읽고, 정작 판돈은 가운데에서
+                작아진다. 대신 팟만 원형으로 온전히 두고, 판단에 필요한 순서 정보는
+                위쪽 노선도 한 줄이, 내 숫자는 아래 SelfBar가 맡는다. 나머지 참가자
+                기록은 노선도의 기록 버튼 → BetHistorySheet 로 뺐다.
+
+                데스크톱은 폭이 남으므로 기존 펠트 테이블을 그대로 쓴다. 가로로 돌린
+                폰의 pt 예외는 globals.css의 landscape-short 블록과 같은 조건이다.
+              */}
+              {isDesktop ? (
+                <div className="rise-in rise-in-2 relative flex min-h-0 flex-1 items-center justify-center pt-6 [@media(orientation:landscape)_and_(max-height:500px)]:pt-1 lg:pt-3">
+                  <GameTable
+                    members={snapshot.members}
+                    online={online}
+                    selfId={selfId}
+                    pot={snapshot.currentRound?.pot ?? 0}
+                    actions={snapshot.actions}
+                    winnerId={
+                      snapshot.currentRound ? null : (snapshot.lastResult?.winnerId ?? null)
+                    }
+                    roundActive={Boolean(snapshot.currentRound)}
+                    gameType={snapshot.room.gameType}
+                    onSeatTap={(member) => setSeatUserId(member.userId)}
+                    fit
+                  />
+                </div>
+              ) : (
+                <>
+                  <TurnRailBar
+                    rail={rail}
+                    members={snapshot.members}
+                    selfId={selfId}
+                    gameType={snapshot.room.gameType}
+                    historyCount={snapshot.actions.length}
+                    onOpenHistory={() => setRoundLogOpen(true)}
+                    className="rise-in rise-in-2 shrink-0"
+                  />
+                  <div className="rise-in rise-in-2 flex min-h-0 flex-1 items-center justify-center py-3 [@media(orientation:landscape)_and_(max-height:500px)]:py-1">
+                    <PotCore
+                      pot={snapshot.currentRound?.pot ?? 0}
+                      pulse={pulse}
+                      roundActive={Boolean(snapshot.currentRound)}
+                      className="h-full"
+                    />
+                  </div>
+                  {self ? (
+                    <div className="rise-in rise-in-3 flex shrink-0 items-center gap-2">
+                      <SelfBar
+                        self={self}
+                        myBet={myBet}
+                        online={online.has(selfId)}
+                        className="min-w-0 flex-1"
+                      />
+                      {/* 좌석 링이 없어진 뒤 MemberSheet(바이인·대리 베팅·역할)로 가는
+                          유일한 입구다 — 없으면 판 도중 딜러가 대리 입력을 못 한다. */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0"
+                        aria-label={d.room.membersAria}
+                        title={d.room.membersTitle}
+                        onClick={() => setMemberListOpen(true)}
+                      >
+                        👥
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              )}
               {isDesktop && canBet && self ? (
                 <div className="rise-in rise-in-3 lg:mt-3 lg:shrink-0">
                   <ActionBar
@@ -234,7 +313,13 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
                   ) : null}
 
                   <div className="rise-in rise-in-3">
-                    <RoundLog actions={snapshot.actions} members={snapshot.members} />
+                    {/* gameType 을 안 넘기면 기본값 'seotda' 라벨이 박혀 포커 방에서 '폴드'가
+                        '다이'로 보였다 — 모바일 시트도 같은 값을 받는다. */}
+                    <RoundLog
+                      actions={snapshot.actions}
+                      members={snapshot.members}
+                      gameType={snapshot.room.gameType}
+                    />
                   </div>
                 </div>
               </div>
@@ -272,13 +357,31 @@ export function RoomClient({ initial, selfId }: { initial: RoomSnapshot; selfId:
           onClose={() => setSeatUserId(null)}
         />
       ) : null}
-      <Sheet
+      <MemberListSheet
+        open={memberListOpen}
+        onClose={() => setMemberListOpen(false)}
+        members={snapshot.members}
+        online={online}
+        selfId={selfId}
+        actions={snapshot.actions}
+        gameType={snapshot.room.gameType}
+        onSelect={(userId) => {
+          // 목록을 닫고 상세 시트를 연다 — 시트 두 장이 겹치면 포커스 트랩이 서로를 물어
+          // 뒤쪽 시트에서 ESC·바깥 클릭이 먹지 않는다.
+          setMemberListOpen(false)
+          setSeatUserId(userId)
+        }}
+      />
+      <BetHistorySheet
         open={roundLogOpen}
         onClose={() => setRoundLogOpen(false)}
-        ariaLabel={d.roundLog.title}
-      >
-        <RoundLog actions={snapshot.actions} members={snapshot.members} scrollable={false} />
-      </Sheet>
+        actions={snapshot.actions}
+        members={snapshot.members}
+        gameType={snapshot.room.gameType}
+        selfId={selfId}
+        roundSeq={snapshot.currentRound?.seq}
+        fullHistoryHref={`/rooms/${snapshot.room.code}/history`}
+      />
     </main>
   )
 }
