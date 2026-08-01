@@ -8,6 +8,7 @@ import { Button, Stepper } from '@/components/ui'
 import type { RunAction } from './shared'
 import type { ProxyBlockReason } from './member-sheet-gating'
 import { Section } from './member-sheet-parts'
+import { GRID_BUTTON_CLASS, STACK_AMOUNT_CLASS, STACK_BUTTON_CLASS } from './button-recipes'
 
 /**
  * canProxy가 false인 이유를 그대로 보여준다 — 숨기지 않고 왜 안 되는지 + 다음 행동을 안내.
@@ -121,9 +122,11 @@ export function ProxyBetSection({
           : ''
       }`}
     >
+      {/* 4열 대리 베팅 행 — 네 버튼의 높이·패딩·글자 크기가 같아야 하므로 가로 패딩을 공유한다 */}
       <div className="grid grid-cols-4 gap-2">
         <Button
           variant="outline"
+          className={GRID_BUTTON_CLASS}
           loading={firingSlot === 'check'}
           disabled={isPending || callNeeded !== 0}
           disabledReason={callNeeded !== 0 ? d.memberSheet.checkBlocked : undefined}
@@ -133,7 +136,7 @@ export function ProxyBetSection({
         </Button>
         <Button
           variant="win"
-          className="flex-col gap-0"
+          className={STACK_BUTTON_CLASS}
           loading={firingSlot === 'call'}
           disabled={isPending || callNeeded === 0 || callAmount < 1}
           disabledReason={
@@ -145,14 +148,13 @@ export function ProxyBetSection({
           }
           onClick={() => proxyBet(callIsAllIn ? 'allin' : 'call', callAmount, 'call')}
         >
-          <span>{callIsAllIn ? labels.allin : labels.call}</span>
+          {callIsAllIn ? labels.allin : labels.call}
           {callAmount > 0 ? (
-            <span className="tabular-nums text-[11px] leading-tight opacity-90">
-              {callAmount.toLocaleString()}
-            </span>
+            <span className={STACK_AMOUNT_CLASS}>{callAmount.toLocaleString()}</span>
           ) : null}
         </Button>
         <Button
+          className={GRID_BUTTON_CLASS}
           selected={raiseOpen}
           aria-expanded={raiseOpen}
           disabled={isPending || memberBalance < 1}
@@ -168,6 +170,7 @@ export function ProxyBetSection({
         </Button>
         <Button
           variant="danger"
+          className={GRID_BUTTON_CLASS}
           loading={firingSlot === 'fold'}
           disabled={isPending}
           onClick={() => proxyBet('fold', 0, 'fold')}

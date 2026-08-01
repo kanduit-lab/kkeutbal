@@ -6,6 +6,7 @@ import { Button, Stepper, useToast } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { betLabelsFor, formatChips, type RunAction } from './shared'
 import { useActionBarControls } from './use-action-bar-controls'
+import { GRID_BUTTON_CLASS, STACK_AMOUNT_CLASS, STACK_BUTTON_CLASS } from './button-recipes'
 
 export function ActionBar({
   snapshot,
@@ -123,18 +124,18 @@ export function ActionBar({
                   <span>{d.actionBar.raiseAmount}</span>
                   <span>{format(d.actionBar.minRaise, { n: formatChips(minRaise, locale) })}</span>
                 </div>
+                {/* 프리셋 그리드 간격은 member-sheet-buy-in의 같은 패턴과 gap-2로 맞춘다 */}
                 <div
                   className={
-                    presets.length > 4 ? 'grid grid-cols-5 gap-1.5' : 'grid grid-cols-4 gap-1.5'
+                    presets.length > 4 ? 'grid grid-cols-5 gap-2' : 'grid grid-cols-4 gap-2'
                   }
                 >
                   {presets.map((preset) => (
                     <Button
                       key={preset.label}
                       type="button"
-                      size="sm"
                       selected={raiseAmount === preset.amount}
-                      className="flex-col gap-0"
+                      className={STACK_BUTTON_CLASS}
                       disabled={preset.amount > balance}
                       disabledReason={
                         preset.amount > balance ? d.actionBar.insufficientBalance : undefined
@@ -142,7 +143,7 @@ export function ActionBar({
                       onClick={() => setRaiseAmount(preset.amount)}
                     >
                       {preset.label}
-                      <span className="tabular-nums text-[11px] leading-tight opacity-80">
+                      <span className={STACK_AMOUNT_CLASS}>
                         {formatChips(preset.amount, locale)}
                       </span>
                     </Button>
@@ -164,7 +165,6 @@ export function ActionBar({
                     type="button"
                     variant="primary"
                     size="lg"
-                    className="px-6"
                     loading={firingSlot === 'raise'}
                     loadingLabel={d.ui.processing}
                     disabled={isPending || raiseAmount < minRaise || raiseAmount > balance}
@@ -187,13 +187,18 @@ export function ActionBar({
               </div>
             ) : null}
 
+            {/*
+              콜·레이즈·다이 3열. 셋 다 사이즈 계약의 lg(min-h-14·text-lg)를 그대로 쓰고 가로
+              패딩만 GRID_BUTTON_CLASS로 동일하게 좁힌다 — 높이·패딩·글자 크기가 셋 다 같아야
+              한다. whitespace-nowrap과 text-lg는 Button의 base/lg가 이미 주므로 다시 쓰지 않는다.
+            */}
             <div className="grid grid-cols-3 gap-2">
               {canCheck ? (
                 <Button
                   type="button"
                   variant="win"
                   size="lg"
-                  className="whitespace-nowrap px-1 text-lg"
+                  className={GRID_BUTTON_CLASS}
                   loading={firingSlot === 'call'}
                   loadingLabel={d.ui.processing}
                   disabled={disabled}
@@ -207,26 +212,22 @@ export function ActionBar({
                   type="button"
                   variant="win"
                   size="lg"
-                  className="flex-col gap-0 whitespace-nowrap px-1"
+                  className={STACK_BUTTON_CLASS}
                   loading={firingSlot === 'call'}
                   loadingLabel={d.ui.processing}
                   disabled={disabled || callAmount < 1}
                   disabledReason={reason ?? (callAmount < 1 ? d.actionBar.noBalance : undefined)}
                   onClick={() => fire(callIsAllin ? 'allin' : 'call', callAmount, 'call')}
                 >
-                  <span className="text-lg leading-tight">
-                    {callIsAllin ? labels.allin : labels.call}
-                  </span>
-                  <span className="tabular-nums text-xs leading-tight opacity-90">
-                    {formatChips(callAmount, locale)}
-                  </span>
+                  {callIsAllin ? labels.allin : labels.call}
+                  <span className={STACK_AMOUNT_CLASS}>{formatChips(callAmount, locale)}</span>
                 </Button>
               )}
               <Button
                 type="button"
                 variant="primary"
                 size="lg"
-                className="whitespace-nowrap px-1 text-lg"
+                className={GRID_BUTTON_CLASS}
                 disabled={disabled || balance < 1}
                 disabledReason={
                   reason ?? (balance < 1 ? d.actionBar.insufficientBalance : undefined)
@@ -245,7 +246,7 @@ export function ActionBar({
                 type="button"
                 variant="danger"
                 size="lg"
-                className="whitespace-nowrap px-1 text-lg"
+                className={GRID_BUTTON_CLASS}
                 loading={firingSlot === 'fold'}
                 loadingLabel={d.ui.processing}
                 disabled={disabled}

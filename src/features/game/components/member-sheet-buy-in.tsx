@@ -6,6 +6,7 @@ import { format, useDict } from '@/lib/i18n/client'
 import { Button, Stepper } from '@/components/ui'
 import type { RunAction } from './shared'
 import { Section } from './member-sheet-parts'
+import { STACK_AMOUNT_CLASS, STACK_BUTTON_CLASS } from './button-recipes'
 
 export function BuyInSection({
   roomId,
@@ -47,15 +48,12 @@ export function BuyInSection({
         {buyInPresets.map((preset) => (
           <Button
             key={preset.label}
-            size="sm"
             selected={buyInAmount === preset.amount}
-            className="flex-col gap-0"
+            className={STACK_BUTTON_CLASS}
             onClick={() => setBuyInAmount(preset.amount)}
           >
             {preset.label}
-            <span className="tabular-nums text-[11px] leading-tight opacity-80">
-              +{preset.amount.toLocaleString()}
-            </span>
+            <span className={STACK_AMOUNT_CLASS}>+{preset.amount.toLocaleString()}</span>
           </Button>
         ))}
       </div>

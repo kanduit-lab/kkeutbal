@@ -7,6 +7,7 @@ import type { MemberRole } from '../types'
 import { Button } from '@/components/ui'
 import type { RunAction } from './shared'
 import { Section } from './member-sheet-parts'
+import { STACK_BUTTON_CLASS } from './button-recipes'
 
 const ROLE_OPTIONS = [
   { role: 'dealer', emoji: '🎩' },
@@ -43,7 +44,7 @@ export function RoleSection({
             <Button
               key={option.role}
               selected={selected}
-              className="min-h-16 flex-col gap-0.5"
+              className={STACK_BUTTON_CLASS}
               loading={firingRole === option.role}
               disabled={isPending}
               onClick={() => {
