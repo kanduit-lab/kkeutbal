@@ -5,6 +5,7 @@ import { findRoomByCode, getRoomSnapshot } from '@/features/game/queries'
 import { normalizeRoomCode } from '@/features/game/room-code'
 import { RoomClient } from '@/features/game/components/room-client'
 import { RoomEntryError } from '@/features/game/components/room-entry-error'
+import { getVisionSettings } from '@/features/jokbo-advisor/vision/settings'
 import { getDict, format } from '@/lib/i18n/server'
 
 export default async function RoomPage({ params }: { params: Promise<{ code: string }> }) {
@@ -61,5 +62,12 @@ export default async function RoomPage({ params }: { params: Promise<{ code: str
     )
   }
 
-  return <RoomClient initial={snapshot} selfId={userId} />
+  const visionSettings = await getVisionSettings()
+  const visionEnabled =
+    visionSettings.enabled &&
+    (visionSettings.provider === 'anthropic'
+      ? visionSettings.hasAnthropicApiKey
+      : visionSettings.hasGeminiApiKey)
+
+  return <RoomClient initial={snapshot} selfId={userId} visionEnabled={visionEnabled} />
 }

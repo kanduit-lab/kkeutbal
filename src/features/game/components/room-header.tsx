@@ -10,11 +10,13 @@ export function RoomHeader({
   isHost,
   muted,
   onToggleMute,
+  onOpenAdvisor,
 }: {
   snapshot: RoomSnapshot
   isHost: boolean
   muted: boolean
   onToggleMute: () => void
+  onOpenAdvisor: () => void
 }) {
   const { d } = useDict()
   return (
@@ -69,15 +71,18 @@ export function RoomHeader({
         >
           🧾
         </ButtonLink>
-        <ButtonLink
-          href={`/advisor?game=${snapshot.room.gameType}`}
+        {/* 방을 떠나지 않고 연다. 판독하러 `/advisor`로 나가면 실시간 채널이 끊기고
+            돌아왔을 때 스냅샷을 다시 받아야 한다. */}
+        <Button
+          type="button"
           variant="outline"
           size="icon"
+          onClick={onOpenAdvisor}
           aria-label={d.room.advisorAria}
           title={d.room.advisorAria}
         >
           🔮
-        </ButtonLink>
+        </Button>
         <ButtonLink
           href={`/rooms/${snapshot.room.code}/monitor`}
           variant="outline"
@@ -87,6 +92,9 @@ export function RoomHeader({
         >
           📺
         </ButtonLink>
+        {/* 판 기록 버튼은 여기 없다. 세로 모바일은 노선도(TurnRailBar)가 액션 수 뱃지까지
+            달린 📋 를 갖고 있어 헤더에 또 두면 같은 화면에 같은 아이콘이 둘이 된다.
+            데스크톱은 우측 컬럼에 기록이 항상 펼쳐져 있어 여는 버튼 자체가 필요 없다. */}
         {isHost ? (
           <ButtonLink
             href={`/rooms/${snapshot.room.code}/settings`}
