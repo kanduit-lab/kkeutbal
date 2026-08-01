@@ -67,6 +67,7 @@ export function GameTable({
   const [flights, setFlights] = useState<readonly Flight[]>([])
   const flightKey = useRef(0)
   const lastActionId = useRef<string | null>(null)
+  const flightTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
   const board = scale === 'board'
 
@@ -118,6 +119,10 @@ export function GameTable({
     return computeNextActorId(participantIds, actions)
   }, [roundActive, participantIds, actions])
 
+  // 정리 타이머는 effect cleanup 이 아니라 언마운트에서만 걷는다. cleanup 에 걸어 두면
+  // 700ms 안에 `actions` 가 한 번이라도 바뀌는 순간(팟·잔액 갱신, 20초 폴링, 다른 사람의
+  // 액션) React 가 타이머를 취소하는데, 재실행된 effect 는 `latest.id` 가 그대로라 early
+  // return 해서 새 타이머를 안 건다 — 날아간 칩이 화면에 영구히 박혀 있었다.
   useEffect(() => {
     const accepted = actions.filter((a) => a.status === 'accepted')
     const latest = accepted[accepted.length - 1]
@@ -130,8 +135,16 @@ export function GameTable({
     const timer = setTimeout(() => {
       setFlights((current) => current.filter((f) => f.key !== flight.key))
     }, 700)
-    return () => clearTimeout(timer)
+    flightTimers.current.push(timer)
   }, [actions])
+
+  useEffect(
+    () => () => {
+      for (const timer of flightTimers.current) clearTimeout(timer)
+      flightTimers.current = []
+    },
+    [],
+  )
 
   const potChips = chipBreakdown(pot, 7)
   const potText = formatChips(pot, locale)
