@@ -16,6 +16,9 @@ export const room = {
   settingsAria: '방 설정',
   settingsTitle: '방 옵션',
   advisorAria: '족보 판독',
+  membersAria: '참가자 목록 보기',
+  membersTitle: '참가자',
+  membersEmpty: '참가자가 없어요',
   toastBetApproved: '베팅 승인됨',
   toastBetRejected: '베팅 거절됨: {reason}',
   toastBetReverted: '베팅 되돌려짐: {reason}',
@@ -49,6 +52,47 @@ export const table = {
   winner: '승리',
   waiting: '대기',
   potLabel: 'pot',
+  potSubLabel: '누적 베팅',
+} as const
+
+/**
+ * 세로 모바일 베팅 화면의 순서 표시줄("노선도"). 좌석을 원형으로 깔 자리가 없어서
+ * 이전 액션 → 지금 차례 → 다음 차례만 한 줄로 보여준다.
+ */
+export const rail = {
+  previous: '이전',
+  current: '지금',
+  next: '다음',
+  none: '없음',
+  waiting: '대기',
+  yourTurn: '내 차례',
+  pending: '승인 대기',
+  roundIdle: '판 대기 중',
+  idleHint: '딜러가 판을 깔면 순서가 표시돼요',
+  allDone: '더 행동할 사람이 없어요',
+  ariaSummary: '이전 {prev}, 지금 {current}, 다음 {next}',
+} as const
+
+export const betHistory = {
+  title: '전체 베팅 기록',
+  openAria: '전체 베팅 기록 보기',
+  pageTitle: '베팅 기록',
+  currentRound: '이번 판',
+  empty: '아직 기록이 없어요',
+  emptyHint: '판이 시작되고 베팅이 들어오면 여기에 쌓여요',
+  roundHeading: '{seq}판',
+  roundPot: '팟 {pot}',
+  roundWinner: '{name} 승리',
+  roundVoided: '무효',
+  viewAll: '전체 기록 보기',
+  backToRoom: '방으로 돌아가기',
+  actionCount: '{n}건',
+  filterAll: '전체',
+  filterAria: '액션 종류로 거르기',
+  summaryActions: '액션',
+  runningPot: '팟 {n}',
+  truncatedNotice: '최근 {n}판만 보여요',
+  loadFailed: '기록을 불러오지 못했어요',
 } as const
 
 export const actionBar = {
@@ -178,8 +222,7 @@ export const dealer = {
   voidReasonExposed: '패 노출',
   voidConfirm: '무효화',
   settleConfirmTitle: '세션을 정산할까요?',
-  settleConfirmBody:
-    '정산하면 이 방에서는 더 이상 판을 진행할 수 없어요. 결과 화면으로 넘어가요.',
+  settleConfirmBody: '정산하면 이 방에서는 더 이상 판을 진행할 수 없어요. 결과 화면으로 넘어가요.',
   settleConfirmLabel: '정산',
   pendingCount: '승인 대기 {n}건',
   approve: '승인',

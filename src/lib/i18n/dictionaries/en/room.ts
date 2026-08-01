@@ -21,6 +21,9 @@ export const room: Dictionary['room'] = {
   settingsAria: 'Room settings',
   settingsTitle: 'Room options',
   advisorAria: 'Jokbo advisor',
+  membersAria: 'View participants',
+  membersTitle: 'Participants',
+  membersEmpty: 'No participants',
   toastBetApproved: 'Bet approved',
   toastBetRejected: 'Bet rejected: {reason}',
   toastBetReverted: 'Bet reverted: {reason}',
@@ -54,6 +57,43 @@ export const table: Dictionary['table'] = {
   winner: 'Winner',
   waiting: 'Waiting',
   potLabel: 'pot',
+  potSubLabel: 'total bets',
+} as const
+
+export const rail: Dictionary['rail'] = {
+  previous: 'Prev',
+  current: 'Now',
+  next: 'Next',
+  none: 'None',
+  waiting: 'Waiting',
+  yourTurn: 'Your turn',
+  pending: 'Pending',
+  roundIdle: 'Waiting for a round',
+  idleHint: 'Turn order appears once the dealer deals',
+  allDone: 'No one left to act',
+  ariaSummary: 'Previous {prev}, now {current}, next {next}',
+} as const
+
+export const betHistory: Dictionary['betHistory'] = {
+  title: 'All bets',
+  openAria: 'View all bets',
+  pageTitle: 'Bet history',
+  currentRound: 'This round',
+  empty: 'No bets yet',
+  emptyHint: 'Bets pile up here once a round starts',
+  roundHeading: 'Round {seq}',
+  roundPot: 'Pot {pot}',
+  roundWinner: '{name} won',
+  roundVoided: 'Voided',
+  viewAll: 'View full history',
+  backToRoom: 'Back to room',
+  actionCount: '{n} actions',
+  filterAll: 'All',
+  filterAria: 'Filter by action type',
+  summaryActions: 'Actions',
+  runningPot: 'Pot {n}',
+  truncatedNotice: 'Showing the most recent {n} rounds',
+  loadFailed: 'Could not load the history',
 } as const
 
 export const actionBar: Dictionary['actionBar'] = {

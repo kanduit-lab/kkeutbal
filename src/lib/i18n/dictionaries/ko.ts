@@ -7,6 +7,8 @@ import { home } from './ko/home'
 import {
   room,
   table,
+  rail,
+  betHistory,
   actionBar,
   memberSheet,
   lobby,
@@ -41,6 +43,8 @@ export const ko = {
   home,
   room,
   table,
+  rail,
+  betHistory,
   actionBar,
   memberSheet,
   lobby,

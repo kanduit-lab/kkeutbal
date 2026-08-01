@@ -8,6 +8,8 @@ import { home } from './en/home'
 import {
   room,
   table,
+  rail,
+  betHistory,
   actionBar,
   memberSheet,
   lobby,
@@ -42,6 +44,8 @@ export const en: Dictionary = {
   home,
   room,
   table,
+  rail,
+  betHistory,
   actionBar,
   memberSheet,
   lobby,

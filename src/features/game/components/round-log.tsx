@@ -14,6 +14,7 @@ export function RoundLog({
   scale = 'default',
   gameType = 'seotda',
   scrollable = true,
+  showTitle = true,
 }: {
   actions: readonly BetActionView[]
   members: readonly MemberView[]
@@ -24,6 +25,9 @@ export function RoundLog({
 
   /** false면 자체 max-height/스크롤을 두지 않는다 — 부모(모바일 시트)가 스크롤을 맡을 때 */
   scrollable?: boolean
+
+  /** false면 자체 제목을 숨긴다 — 부모가 이미 제목을 달았을 때(BetHistorySheet) 중복을 막는다 */
+  showTitle?: boolean
 }) {
   const { d } = useDict()
   const board = scale === 'board'
@@ -45,9 +49,11 @@ export function RoundLog({
 
   return (
     <section className="mb-4 space-y-1.5">
-      <h2 className={clsx('px-1 font-bold text-muted', board ? 'text-lg' : 'text-sm')}>
-        {d.roundLog.title}
-      </h2>
+      {showTitle ? (
+        <h2 className={clsx('px-1 font-bold text-muted', board ? 'text-lg' : 'text-sm')}>
+          {d.roundLog.title}
+        </h2>
+      ) : null}
       {actions.length === 0 ? (
         <EmptyState title={d.roundLog.empty} />
       ) : (
