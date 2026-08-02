@@ -6,6 +6,7 @@ import { format, useDict } from '@/lib/i18n/client'
 import type { Dictionary, Locale } from '@/lib/i18n/client'
 import type { RailAction, TurnRail } from '../turn-rail'
 import type { BetActionKind, MemberView, RoomGameType } from '../types'
+import { MATCH_RAIL_HEIGHT_CLASS } from './button-recipes'
 import { betLabelsFor, formatChips } from './shared'
 
 /**
@@ -433,10 +434,13 @@ export function TurnRailBar({
         )}
       </div>
       <div className="relative shrink-0">
+        {/* 높이를 노선도 본체(h-18, 72px)에 맞춘다 — 48px면 카드 안에서 위아래 12px씩
+            떠서 두 요소가 같은 카드에 속해 보이지 않는다. */}
         <Button
           type="button"
           variant="outline"
           size="icon"
+          className={MATCH_RAIL_HEIGHT_CLASS}
           aria-label={d.betHistory.openAria}
           onClick={onOpenHistory}
         >

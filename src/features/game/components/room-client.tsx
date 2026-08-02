@@ -1,5 +1,6 @@
 'use client'
 
+import { clsx } from 'clsx'
 import Link from 'next/link'
 import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
@@ -28,6 +29,7 @@ import { MemberListSheet } from './member-list-sheet'
 import { RoundLog } from './round-log'
 import { FairnessPanel } from './fairness-panel'
 import { AdvisorBoard } from '@/features/jokbo-advisor/components/advisor-board'
+import { MATCH_SELF_BAR_HEIGHT_CLASS } from './button-recipes'
 import { useRoomActions } from './use-room-actions'
 
 export function RoomClient({
@@ -182,7 +184,7 @@ export function RoomClient({
                 />
               </div>
               {snapshot.lastResult && !snapshot.currentRound ? (
-                <p className="rise-in rise-in-1 mb-2 shrink-0 text-center text-xs text-muted lg:text-sm">
+                <p className="rise-in rise-in-1 mb-3 shrink-0 text-center text-xs text-muted lg:text-sm">
                   {format(d.room.lastRoundSummary, {
                     seq: snapshot.lastResult.seq,
                     name:
@@ -206,7 +208,9 @@ export function RoomClient({
               {!snapshot.currentRound &&
               latestAuditableRound &&
               latestAuditableRound.roundId !== snapshot.lastResult?.roundId ? (
-                <p className="mb-2 shrink-0 text-center text-xs text-muted lg:text-sm">
+                // 세로 화면 한 열의 세로 간격은 전부 12px(mb-3 / py-3)로 맞춘다 —
+                // 8·12·16px이 섞여 있으면 블록마다 리듬이 달라져 화면이 흔들려 보인다.
+                <p className="mb-3 shrink-0 text-center text-xs text-muted lg:text-sm">
                   <Link
                     href={
                       `/rooms/${snapshot.room.code}/fairness/${latestAuditableRound.seq}` as Route
@@ -275,12 +279,14 @@ export function RoomClient({
                         className="min-w-0 flex-1"
                       />
                       {/* 좌석 링이 없어진 뒤 MemberSheet(바이인·대리 베팅·역할)로 가는
-                          유일한 입구다 — 없으면 판 도중 딜러가 대리 입력을 못 한다. */}
+                          유일한 입구다 — 없으면 판 도중 딜러가 대리 입력을 못 한다.
+                          높이는 옆 SelfBar(64px)에 맞춘다 — 48px로 두면 위아래 8px씩 떠서
+                          한 줄이 두 덩이로 갈려 보인다. */}
                       <Button
                         type="button"
                         variant="outline"
                         size="icon"
-                        className="shrink-0"
+                        className={clsx('shrink-0', MATCH_SELF_BAR_HEIGHT_CLASS)}
                         aria-label={d.room.membersAria}
                         title={d.room.membersTitle}
                         onClick={() => setMemberListOpen(true)}

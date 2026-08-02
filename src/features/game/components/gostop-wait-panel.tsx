@@ -23,7 +23,7 @@ export function GostopWaitPanel({ hasRound = true }: { hasRound?: boolean } = {}
   const hint = hasRound ? d.room.gostopWaitHint : d.room.gostopWaitNextRoundHint
 
   return (
-    <Alert tone="info" title={title} className="mt-4">
+    <Alert tone="info" title={title} className="rounded-2xl! px-3!">
       {hint}
     </Alert>
   )

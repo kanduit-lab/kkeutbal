@@ -155,7 +155,10 @@ export function FairnessPanel({
   }
 
   return (
-    <Panel className="mb-4 space-y-3 border border-accent/30 bg-accent/5">
+    // 여백을 `Panel` 기본 p-5(20px) 대신 노선도·SelfBar와 같은 12px로 줄인다 — 세로 화면
+    // 한 열에서 이 패널만 안쪽으로 8px 더 들어가 글줄 시작점이 어긋나 보였다.
+    // `!` 없이는 Tailwind 생성 순서상 p-5 가 이겨서 조용히 무시된다(button-recipes.ts 참고).
+    <Panel className="mb-3 space-y-3 border border-accent/30 bg-accent/5 px-3! py-3!">
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-sm font-bold text-accent">🔐 {d.fairness.title}</h2>
         <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs font-bold text-muted">

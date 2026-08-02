@@ -85,7 +85,9 @@ export function ActionBar({
         className={
           inline
             ? 'space-y-3 p-5'
-            : 'mx-auto w-full max-w-lg space-y-2.5 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3'
+            : // `px-4`는 방 화면 `main`의 좌우 여백과 같은 값이다. px-3 이던 시절에는 하단
+              // 고정 바만 4px 넓게 퍼져서, 바로 위 SelfBar 와 세로 모서리가 어긋나 보였다.
+              'mx-auto w-full max-w-lg space-y-2.5 px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3'
         }
       >
         {dealerSlot ? (

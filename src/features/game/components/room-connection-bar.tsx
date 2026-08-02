@@ -17,7 +17,9 @@ export function RoomConnectionBar({
   return (
     <div role="status" aria-live="polite" className={visible ? 'mb-3' : undefined}>
       {visible ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gold/30 bg-gold/10 px-4 py-2.5">
+        // 안쪽 여백·모서리를 노선도·SelfBar와 같은 값(px-3 / rounded-2xl)으로 맞춘다.
+        // px-4 + rounded-xl 이면 이 경고만 본문보다 4px 안쪽에서 시작해 한 열이 어긋난다.
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-gold/30 bg-gold/10 px-3 py-2.5">
           <div className="min-w-0">
             <p className="text-sm font-bold text-warn">
               {syncFailed ? d.room.syncFailedTitle : d.room.disconnectedTitle}

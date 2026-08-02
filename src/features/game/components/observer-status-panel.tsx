@@ -35,7 +35,7 @@ export function ObserverStatusPanel({ snapshot }: { snapshot: RoomSnapshot }) {
       : d.room.observerRoundSettling
 
   return (
-    <Panel className="flex items-center justify-between gap-3 py-3">
+    <Panel className="flex items-center justify-between gap-3 px-3! py-3!">
       <p className="font-bold">{d.room.observerStatusTitle}</p>
       <p className="min-w-0 text-end text-sm text-muted">{hint}</p>
     </Panel>

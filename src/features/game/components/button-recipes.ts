@@ -36,3 +36,18 @@ export const STACK_BUTTON_CLASS = 'flex-col gap-0.5! px-2! leading-tight'
 
 /** 2줄 버튼의 둘째 줄(금액) — 12px 는 임의값 대신 `text-micro` 토큰을 쓴다. */
 export const STACK_AMOUNT_CLASS = 'text-micro leading-tight tabular-nums opacity-80'
+
+/**
+ * 옆에 붙은 카드와 키를 맞추는 아이콘 버튼.
+ *
+ * `size="icon"`은 `size-12`(48×48 고정)이라, 64px짜리 `SelfBar`나 72px짜리 노선도 옆에
+ * 세우면 위아래로 8~12px씩 빈다. 세로 화면 한 열에 64·48·56이 번갈아 쌓이던 게
+ * "크기가 들쭉날쭉하다"의 실체였다. 폭(48)은 터치 타깃으로 유지하고 높이만 이웃에 맞춘다.
+ *
+ * `!`가 필요한 이유는 이 파일 상단 주석 참고 — `size-12`의 height 를 이기려면 `h-*`만으로는
+ * 부족하다.
+ */
+export const MATCH_SELF_BAR_HEIGHT_CLASS = 'h-16!'
+
+/** 노선도(`h-18`, 72px) 옆에 세우는 아이콘 버튼. */
+export const MATCH_RAIL_HEIGHT_CLASS = 'h-18!'
