@@ -6,6 +6,7 @@ import {
   DATA_TABLE_HEADER_H,
   DATA_TABLE_ROW_H,
   EmptyState,
+  listPanelMinHeight,
   Pager,
   Panel,
   usePagedRows,
@@ -30,11 +31,9 @@ export interface RoundHistoryListRow {
 export function RoundHistoryList({ rounds }: { rounds: readonly RoundHistoryListRow[] }) {
   const { d } = useDict()
   const isDesktop = useIsDesktop()
-  const paged = usePagedRows({
-    items: rounds,
-    rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
-    reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
-  })
+  const rowHeight = isDesktop ? DATA_TABLE_ROW_H : ROW_H
+  const reserve = isDesktop ? DATA_TABLE_HEADER_H : 0
+  const paged = usePagedRows({ items: rounds, rowHeight, reserve })
   const listAria = format(d.result.roundHistoryCount, { n: rounds.length })
 
   function headText(round: RoundHistoryListRow): string {
@@ -72,7 +71,10 @@ export function RoundHistoryList({ rounds }: { rounds: readonly RoundHistoryList
   }
 
   return (
-    <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+    <Panel
+      className="flex min-h-0 flex-1 flex-col gap-2"
+      style={{ minHeight: listPanelMinHeight(rowHeight, reserve) }}
+    >
       <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
         <div className="hidden lg:block">
           <DataTable

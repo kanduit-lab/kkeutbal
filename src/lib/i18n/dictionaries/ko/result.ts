@@ -25,12 +25,18 @@ export const result = {
   colResult: '결과',
   colPot: '팟',
   toRoom: '방으로',
+  paneNavAria: '결과 화면 전환',
+  paneStandings: '순위',
+  paneSettlement: '정산',
+  paneRounds: '판 기록',
   share: '결과 공유',
   shareTitle: '{name} 결과',
   shareHeader: '🏆 {name} 결과',
   shareSettlement: '💸 정산',
+  copy: '결과 복사',
   copied: '복사됨',
   copyFailed: '복사가 안 돼요',
+  shareFailed: '공유가 안 돼요',
 } as const
 
 export const ranking = {

@@ -4,6 +4,7 @@ import {
   DataTable,
   DATA_TABLE_HEADER_H,
   DATA_TABLE_ROW_H,
+  listPanelMinHeight,
   Pager,
   Panel,
   usePagedRows,
@@ -38,11 +39,9 @@ function signedNet(net: number): string {
 export function RoomStandingsList({ rows }: { rows: readonly RoomStandingRow[] }) {
   const { d } = useDict()
   const isDesktop = useIsDesktop()
-  const paged = usePagedRows({
-    items: rows,
-    rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
-    reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
-  })
+  const rowHeight = isDesktop ? DATA_TABLE_ROW_H : ROW_H
+  const reserve = isDesktop ? DATA_TABLE_HEADER_H : 0
+  const paged = usePagedRows({ items: rows, rowHeight, reserve })
 
   function statLine(row: RoomStandingRow): string {
     return format(d.result.statLine, {
@@ -52,17 +51,24 @@ export function RoomStandingsList({ rows }: { rows: readonly RoomStandingRow[] }
     })
   }
 
+  /**
+   * 이름과 요약을 두 줄로 나눈다. 한 줄로 이으면 세 패널이 폭을 나눠 갖는 데스크톱에서
+   * "동생 0승 · ⋯"처럼 요약이 통째로 잘려 아무 정보도 남지 않는다.
+   */
   function nameCell(row: RoomStandingRow) {
     return (
-      <span className="truncate">
-        <span className="font-bold">{row.displayName}</span>{' '}
-        <span className="text-xs text-muted">{statLine(row)}</span>
+      <span className="flex min-w-0 flex-col justify-center leading-tight">
+        <span className="truncate font-bold">{row.displayName}</span>
+        <span className="truncate text-xs text-muted">{statLine(row)}</span>
       </span>
     )
   }
 
   return (
-    <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+    <Panel
+      className="flex min-h-0 flex-1 flex-col gap-2"
+      style={{ minHeight: listPanelMinHeight(rowHeight, reserve) }}
+    >
       <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
         <div className="hidden lg:block">
           <DataTable
@@ -76,11 +82,11 @@ export function RoomStandingsList({ rows }: { rows: readonly RoomStandingRow[] }
                 cellClassName: 'text-lg font-black text-muted',
                 cell: (row: RoomStandingRow) => rankMark(row.rank),
               },
-              { key: 'player', header: d.ranking.colPlayer, cell: nameCell },
+              { key: 'player', header: d.ranking.colPlayer, noTruncate: true, cell: nameCell },
               {
                 key: 'net',
                 header: format(d.ranking.colNet, { unit: d.ranking.netUnit }),
-                width: '9rem',
+                width: '6rem',
                 align: 'end',
                 cell: (row: RoomStandingRow) => (
                   <span className={`text-lg font-black tabular-nums ${netClass(row.net)}`}>

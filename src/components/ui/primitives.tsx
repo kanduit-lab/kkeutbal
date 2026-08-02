@@ -7,13 +7,20 @@ export function Panel({
   className,
   children,
   as: Tag = 'section',
+  style,
 }: {
   className?: string
 
   children?: ReactNode
   as?: 'section' | 'div' | 'article'
+  /** 계산으로만 나오는 값(줄 높이에서 뽑은 `minHeight` 등)에만 쓴다. 나머지는 className으로 */
+  style?: React.CSSProperties
 }) {
-  return <Tag className={clsx('lacquer rounded-2xl p-5', className)}>{children}</Tag>
+  return (
+    <Tag className={clsx('lacquer rounded-2xl p-5', className)} style={style}>
+      {children}
+    </Tag>
+  )
 }
 
 export function PanelHeader({

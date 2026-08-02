@@ -30,12 +30,18 @@ export const result: Dictionary['result'] = {
   colResult: 'Result',
   colPot: 'Pot',
   toRoom: 'To room',
+  paneNavAria: 'Switch result view',
+  paneStandings: 'Standings',
+  paneSettlement: 'Settlement',
+  paneRounds: 'Rounds',
   share: 'Share results',
   shareTitle: '{name} results',
   shareHeader: '🏆 {name} results',
   shareSettlement: '💸 Settlement',
+  copy: 'Copy results',
   copied: 'Copied',
   copyFailed: 'Could not copy',
+  shareFailed: 'Could not share',
 } as const
 
 export const ranking: Dictionary['ranking'] = {

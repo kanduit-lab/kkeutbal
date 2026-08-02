@@ -6,6 +6,7 @@ import {
   DATA_TABLE_HEADER_H,
   DATA_TABLE_ROW_H,
   EmptyState,
+  listPanelMinHeight,
   Pager,
   Panel,
   usePagedRows,
@@ -38,11 +39,9 @@ export function SettlementTransferList({
 }) {
   const { d } = useDict()
   const isDesktop = useIsDesktop()
-  const paged = usePagedRows({
-    items: transfers,
-    rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
-    reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
-  })
+  const rowHeight = isDesktop ? DATA_TABLE_ROW_H : ROW_H
+  const reserve = isDesktop ? DATA_TABLE_HEADER_H : 0
+  const paged = usePagedRows({ items: transfers, rowHeight, reserve })
 
   const settled = imbalancedAmount === undefined
 
@@ -57,7 +56,10 @@ export function SettlementTransferList({
   }
 
   return (
-    <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+    <Panel
+      className="flex min-h-0 flex-1 flex-col gap-2"
+      style={{ minHeight: listPanelMinHeight(rowHeight, reserve) }}
+    >
       <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
         {!settled ? (
           <Alert tone="error">

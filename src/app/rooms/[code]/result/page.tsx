@@ -13,7 +13,15 @@ import {
 } from '@/features/ranking/components/settlement-transfer-list'
 import { RoundHistoryList } from '@/features/ranking/components/round-history-list'
 import { RoomEntryError } from '@/features/game/components/room-entry-error'
-import { ButtonLink, EmptyState, FixedBody, FixedPage, PageHeader, Panel } from '@/components/ui'
+import {
+  ButtonLink,
+  FixedBody,
+  FixedPage,
+  PageHeader,
+  PaneGroup,
+  Panel,
+  type Pane,
+} from '@/components/ui'
 import type { Metadata } from 'next'
 
 export async function generateMetadata({
@@ -130,6 +138,34 @@ export default async function RoomResultPage({ params }: { params: Promise<{ cod
     (mostRaises && mostRaises.raises > 0) ||
     (mostFolds && mostFolds.folds > 0)
 
+  // 참가자가 없으면 순위·정산은 그릴 것이 없다 — 판 기록 하나만 남기고 폭을 다 준다.
+  const panes: Pane[] = [
+    ...(standings.length > 0
+      ? [
+          {
+            key: 'standings',
+            label: d.result.paneStandings,
+            node: <RoomStandingsList rows={standingsWithRank} />,
+          },
+          {
+            key: 'settlement',
+            label: d.result.paneSettlement,
+            node: (
+              <SettlementTransferList
+                transfers={transferRows}
+                imbalancedAmount={netTotal !== 0 ? netTotal : undefined}
+              />
+            ),
+          },
+        ]
+      : []),
+    {
+      key: 'rounds',
+      label: d.result.paneRounds,
+      node: <RoundHistoryList rounds={roundRows} />,
+    },
+  ]
+
   return (
     <FixedPage width="wide">
       <PageHeader
@@ -172,20 +208,19 @@ export default async function RoomResultPage({ params }: { params: Promise<{ cod
             ) : null}
           </section>
         ) : null}
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-          {standings.length === 0 ? (
-            <EmptyState title={d.result.noRecords} />
-          ) : (
-            <>
-              <RoomStandingsList rows={standingsWithRank} />
-              <SettlementTransferList
-                transfers={transferRows}
-                imbalancedAmount={netTotal !== 0 ? netTotal : undefined}
-              />
-            </>
-          )}
-          <RoundHistoryList rounds={roundRows} />
-        </div>
+        {/*
+          세 목록은 세로로 쌓지 않는다. 예전에는 전부 `flex-1`이라 줄 수와 상관없이 높이를
+          똑같이 3등분했고, 그래서 "주고받을 게 없어요" 한 줄짜리 빈 정산 패널이 4명짜리
+          순위표와 같은 높이를 먹었다. 순위표 몫은 한 줄도 못 담는 53px까지 눌려
+          `overflow-hidden`에 글자가 가로로 잘린 줄이 그대로 보였다(표 81px).
+          `PaneGroup`은 홈·관리자 화면과 같은 규약이다 — 데스크톱은 나란히, 모바일은 탭.
+          어느 쪽이든 목록 하나가 남은 높이를 통째로 쓰므로 잘릴 일이 없다.
+        */}
+        <PaneGroup
+          ariaLabel={d.result.paneNavAria}
+          columns={panes.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-1'}
+          panes={panes}
+        />
       </FixedBody>
       <div className="shrink-0 space-y-2 pt-3">
         {standings.length > 0 ? (
