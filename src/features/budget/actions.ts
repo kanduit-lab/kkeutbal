@@ -1,6 +1,6 @@
 'use server'
 
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, desc, eq, isNull, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
@@ -9,7 +9,7 @@ import { currentUserId } from '../auth/session'
 import { balanceInRoom, lockRoom, requireRole } from '../game/action-helpers'
 import { readFundingMode } from '../game/funding-mode'
 
-const { rooms, roomMembers, buyIns, chipLedger } = schema
+const { rooms, roomMembers, buyIns, chipLedger, roomCreditLocks } = schema
 
 const addBuyInSchema = z.object({
   // 재전송 흡수용 요청 id. 클라이언트가 초안(대상·금액)마다 하나씩 만들고 확정되면 버린다.
@@ -215,6 +215,33 @@ export async function undoLastBuyIn(
         return fail('errors.buyInAlreadySpent')
       }
 
+      const fundingMode = readFundingMode(room.rulePreset)
+      if (fundingMode === 'account_credit' && balance - lastBuyIn.amount !== 0) {
+        // 취소하면 이 바이인의 전역 잠금이 풀린다. 그런데 칩이 남는데 이 방에 다른 활성
+        // 잠금이 없으면, `settle_room_credits`가 active lock을 기준으로 세션 잔액을
+        // 조인하는 탓에 그 사람은 정산의 양쪽에서 통째로 빠지고 보존식 검사가 예외를
+        // 던진다 — 방장도 관리자도 방을 닫을 수 없고 **다른 참가자의 크레딧까지 영구히
+        // 잠긴다**. 잔액만 보는 위 검사는 이 상황을 통과시킨다(1000 취소 시 1500 >= 1000).
+        //
+        // 사용자별 `칩 == 잠금액`을 요구하지는 않는다는 점이 중요하다 — 판이 오가면 이긴
+        // 쪽은 칩 > 잠금이 정상이고, 잠금이 하나라도 남으면 정산 조인에 계속 들어온다.
+        // 권위 있는 같은 검사는 `release_room_credit_buy_in`에 있다(0018). 여기 검사는
+        // 거절 이유를 사용자에게 보여주기 위한 앞단이다.
+        const [otherLock] = await tx
+          .select({ id: roomCreditLocks.id })
+          .from(roomCreditLocks)
+          .where(
+            and(
+              eq(roomCreditLocks.roomId, roomId),
+              eq(roomCreditLocks.userId, targetUserId),
+              isNull(roomCreditLocks.releasedTransactionId),
+              ne(roomCreditLocks.buyInId, lastBuyIn.id),
+            ),
+          )
+          .limit(1)
+        if (!otherLock) return fail('errors.buyInAlreadySpent')
+      }
+
       // 레거시 폴백(`refBuyInId = lastBuyIn.id OR refBuyInId IS NULL`)은 제거했다 — 같은
       // 사용자·같은 금액의 refBuyInId-null 원장 행이 여러 개 있으면 정렬 보정이 있어도
       // 실제 되돌리려는 바이인과 무관한 행을 revertedOf로 연결할 수 있었다(레거시 백필
@@ -256,7 +283,7 @@ export async function undoLastBuyIn(
         revertedOf: originalLedger.id,
       })
 
-      if (readFundingMode(room.rulePreset) === 'account_credit') {
+      if (fundingMode === 'account_credit') {
         await tx.execute(sql`
           select public.release_room_credit_buy_in(
             ${roomId}::uuid,

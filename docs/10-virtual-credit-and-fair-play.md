@@ -5,8 +5,8 @@
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
 | Status | in-progress |
-| Source of truth | credit·fair round 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0013`, verified 섯다 실행은 `src/features/fairness/`·`src/features/game/round-fairness-ops.ts` |
-| Last reviewed | 2026-07-30 |
+| Source of truth | credit·fair round 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0013`·`0018`, verified 섯다 실행은 `src/features/fairness/`·`src/features/game/round-fairness-ops.ts` |
+| Last reviewed | 2026-08-02 |
 
 ## 목적과 경계
 
@@ -146,6 +146,34 @@ erDiagram
 거래를 `reverses_transaction_id`로 가리킨다. `closeRoom`은 `settle_room_credits(...)`로 남은 모든
 active lock을 최종 세션 스택에 맞춰 풀고 방을 settled로 바꾼다.
 
+#### 바이인 재전송 흡수
+
+`addBuyIn`은 클라이언트가 만든 `requestId`(uuid)를 받아 **그대로 `buy_ins.id`로 쓴다**.
+`chip_ledger.ref_buy_in_id`, `room_credit_locks.buy_in_id`, `lock_room_credit_buy_in`의
+idempotency key(`room-credit-lock:v1:{buy_in_id}`)가 모두 이 id 하나에 매달려 있으므로
+`buy_ins_pkey` 충돌 한 번이 세션 원장 행·지갑 잠금·크레딧 거래의 중복을 동시에 막는다.
+별도 컬럼이나 테이블을 두지 않는 이유이고, credit 거래가 아예 없는 `session` 재원 방까지
+같은 키 하나로 덮이는 이유이기도 하다.
+
+키 충돌이 났을 때는 `admin_adjust_credit`과 같은 **의미 비교**를 한다 — 방·대상·금액·기록자가
+모두 같고 되돌리기 행이 아닐 때만 기존 바이인을 그대로 성공으로 돌려주고, 하나라도 다르면
+거절한다. 화면(`member-sheet-buy-in.tsx`)은 대상·금액 초안마다 요청 id를 하나 만들고 **확정된
+뒤에는 반드시 버린다**. 안 버리면 딜러가 일부러 한 번 더 준 같은 금액의 지급이 서버에서 기존
+바이인으로 흡수돼 칩은 그대로인데 화면만 성공이라고 말한다.
+
+#### 취소가 방을 잠그지 못하게 하는 불변식
+
+`release_room_credit_buy_in`은 lock을 푼 뒤 **이 방에 세션 칩이 남았는데 활성 lock이 하나도
+없는 사용자가 생기지 않는지**를 검사하고, 생기면 예외로 취소 전체를 되돌린다(`0018`).
+`settle_room_credits`가 active lock을 기준으로 세션 잔액을 조인하기 때문에 그런 사용자는
+정산의 양쪽에서 통째로 빠지고, 보존식 검사가 예외를 던져 방장도 관리자도 방을 닫을 수 없게
+된다 — 이때 다른 참가자의 크레딧이 영구히 잠긴다.
+
+사용자별 `칩 == 잠금액`을 요구하지는 **않는다**. 판이 오가면 이긴 쪽은 칩 > 잠금이 정상이고,
+정산은 lock 보유자 전체의 합계만 맞으면 된다. 깨지는 경우는 오직 "lock을 전부 잃은 사람에게
+칩이 남는" 경우다. `undoLastBuyIn`도 같은 조건을 앞단에서 확인해 거절 이유를 사용자에게
+보여주지만, 권위 있는 검사는 RPC 쪽이다.
+
 ### `round_fairness` — 커밋-리빌 상태 헤더 (`[TX]`)
 
 | Column | Type | Constraint | 설명 |
@@ -182,7 +210,8 @@ DB check constraint가 각 phase의 필수/금지 필드를 강제한다. 서버
 
 전역 잔액을 바꾸는 앱 경로는 목적별 `SECURITY DEFINER` RPC만 호출한다. 관리자 조정은
 `admin_adjust_credit(...)`, 방 재원은 `lock_room_credit_buy_in(...)`,
-`release_room_credit_buy_in(...)`, `settle_room_credits(...)`가 담당하며 모두 내부
+`release_room_credit_buy_in(...)`, `settle_room_credits(...)`가 담당하고, 정산이 막힌 방의
+관리자 전용 복구는 `admin_repair_room_credit_settlement(...)`가 담당하며 모두 내부
 `post_credit_transaction(...)` primitive를 호출한다. 앱 롤은 primitive를 직접 실행할 수 없다.
 세션 원장 INSERT와 RPC 호출은 같은 `db.transaction`에 있어 잔액 부족·권한·보존식 검증이 실패하면
 세션 행도 함께 rollback 된다.
@@ -203,13 +232,14 @@ DB check constraint가 각 phase의 필수/금지 필드를 강제한다. 서버
 - 브라우저는 Supabase 테이블 API로 이 테이블을 읽거나 쓸 수 없다. 현재 앱 경계와 같다.
 - `kkeutbal_app`에는 credit 테이블의 직접 INSERT·UPDATE·DELETE 권한을 주지 않는다. 조회와
   `ensure_credit_account`, `admin_adjust_credit`, `lock_room_credit_buy_in`,
-  `release_room_credit_buy_in`, `settle_room_credits`만 허용하고 `post_credit_transaction` 실행 권한은
-  주지 않는다.
+  `release_room_credit_buy_in`, `settle_room_credits`, `admin_repair_room_credit_settlement`만
+  허용하고 `post_credit_transaction` 실행 권한은 주지 않는다.
 - `credit_entries`와 `credit_transactions`에는 `BEFORE UPDATE OR DELETE` 거부 트리거를 둔다.
 - `credit_accounts` 직접 UPDATE에는 거부 트리거를 두고, posting 함수가 설정하는 트랜잭션 로컬
   플래그가 있을 때만 통과시킨다.
 - `room_credit_locks`는 전용 RPC만 null→값 release 전이를 수행한다. lock RPC는 room/user/buy-in/
-  amount와 역할을 확인하고, release RPC는 원 buy-in과 reversal buy-in·원 lock 거래를 모두 대조한다.
+  amount와 역할을 확인하고, release RPC는 원 buy-in과 reversal buy-in·원 lock 거래를 모두 대조한
+  뒤 "칩이 남았는데 활성 lock이 없는 사용자"가 생기지 않는지 확인한다.
   settlement RPC는 모든 active lock 합계와 room `chip_ledger` 합계를 대조한다. 한 정산 거래가
   여러 lock을 함께 release하므로 이 열은 unique가 아니다.
 - 관리자 지급·회수·정정은 관리자 Server Action만 호출할 수 있고 `reason`·`initiated_by`를
@@ -307,6 +337,38 @@ Broadcast payload에 절대 넣지 않는다. 제출자 식별자는 버튼 복�
 불일치가 나면 알림·조사 티켓만 만들며 원장을 자동 변경하지 않는다. 원장 보존 기간은 계정이
 삭제돼도 유지하고, 개인정보 표시명은 snapshot과 별도로 마스킹한다.
 
+### 정산이 막힌 방 복구
+
+`0018` 이전의 바이인 취소가 만들 수 있었던 상태 — 세션 칩은 남았는데 활성 lock이 없는
+사용자가 있는 방 — 는 `settle_room_credits`가 'room credit settlement does not conserve locked
+credits'로 거절해 `closeRoom`도 관리자 강제 정산도 실패한다. 대상 방은 아래 읽기 전용 검사로
+찾는다.
+
+```sql
+with balances as (
+  select room_id, user_id, coalesce(sum(delta), 0)::bigint as chips
+  from public.chip_ledger group by room_id, user_id
+)
+select r.code, b.user_id, b.chips
+from balances b
+join public.rooms r on r.id = b.room_id
+where b.chips <> 0
+  and exists (select 1 from public.room_credit_locks l where l.room_id = b.room_id)
+  and not exists (
+    select 1 from public.room_credit_locks l
+    where l.room_id = b.room_id and l.user_id = b.user_id and l.released_transaction_id is null
+  );
+```
+
+복구는 관리자 전용 `admin_repair_room_credit_settlement(room_id, admin_user_id, reason)`이
+한다. 이 함수는 `users.is_admin`을 DB에서 재검증하고 사유를 필수로 받으며, lock 보유자와 칩
+보유자의 **합집합**으로 한 번 정산한다 — lock을 잃은 사람은 남은 칩만큼 available을 돌려받고
+그 몫은 아직 잠긴 사람의 locked에서 나온다. 합계가 맞지 않으면(진짜 크레딧 유실·생성) 거절한다.
+정상 경로와 같은 idempotency key(`room-credit-settlement:v1:{room}`)를 쓰므로 한 방은 어느
+경로로든 한 번만 정산되고, 복구 뒤 `closeRoom`이 부르는 `settle_room_credits`는 기존 거래를
+그대로 반환한다. 방 상태는 이 함수가 바꾸지 않는다 — 닫기는 계속 앱이 한다. 남는 근거는
+`credit_transactions.snapshot`의 `room-credit-settlement-repair/v1`(사유·대상·금액)이다.
+
 ## 위협 모델과 한계
 
 이 설계는 서버가 이미 커밋한 시드를 몰래 교체하거나 사후 셔플을 바꾸는 행위를 검출한다.
@@ -334,6 +396,14 @@ Broadcast payload에 절대 넣지 않는다. 제출자 식별자는 버튼 복�
 전제로 하며, 이관이 필요해지면 별도 승인된 설계 변경으로 다룬다.
 
 ## Change History
+
+- 2026-08-02: 바이인 수명주기의 구멍 두 개를 막았다(`0018`). (1) `addBuyIn`에 요청 id가 없어
+  재전송 한 번이 `buy_ins`·`chip_ledger`·`room_credit_locks`를 한 벌 더 만들었다 — 이제 요청
+  id가 `buy_ins.id`가 되어 세 곳의 중복이 PK 하나로 함께 막힌다. (2) 바이인 취소가 대상의
+  현재 방 잔액만 보고 통과해, 판이 오간 뒤 취소하면 칩만 남고 lock이 사라진 사용자가 생겼다.
+  그 방은 `settle_room_credits`의 보존식 검사에 걸려 영영 닫히지 않고 **다른 참가자의 크레딧이
+  영구히 잠겼다** — 이제 `release_room_credit_buy_in`이 그 취소를 거절하고, 이미 굳은 방은
+  관리자 전용 `admin_repair_room_credit_settlement`으로 한 번 정산해 푼다.
 
 - 2026-07-30: 전용 2계정 e2e가 검증 딜 전 구간(시드 제출 → 봉인 → 본인 손패 → 종료 후 덱 재계산
   감사)을 실제로 돌기 시작했고, 그 첫 실행이 **검증 딜이 아예 시작되지 않던 결함**을 찾았다.
