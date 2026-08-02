@@ -6,42 +6,28 @@
 
 ## Priority
 
-### High
+### 적용 대기 — 코드는 병합됐고 DB 반영만 남았다
 
-- [ ] **`/monitor`·`/result`가 방 코드만 알면 열린다**: 참가자 확인 없이 전원의 잔액·바이인·정산표를 그린다
-  - 배경: 형제 라우트인 `/history`·`/settings`는 `getMemberRole`로 막는데 이 둘만 빠져 있다. 방 코드는 31글자 6자리(약 29.7비트)이고 이 두 경로에는 rate limit이 없어서, 코드를 훑어 남의 방 돈을 읽는 비용이 사실상 네트워크 속도뿐이다
-  - 변경 범위: `src/app/rooms/[code]/monitor/page.tsx`, `src/app/rooms/[code]/result/page.tsx`
-  - 완료 기준: 두 화면 모두 참가자가 아니면 거부한다. 전광판을 비참가자에게 열어둘 이유가 있다면 그 결정을 `docs/07-auth-and-security.md`에 적고 노출 범위를 줄인다
-  - 참조: `refreshRoom`의 같은 구멍은 막았다(참가자 확인 추가)
+두 마이그레이션 모두 **파일만 작성돼 있고 적용되지 않았다**. 앱 코드는 적용 전 DB에서도
+그대로 동작한다(호출하는 RPC 시그니처가 안 바뀌었고, 새 복구 RPC는 아직 호출부가 없다) —
+다만 DB 쪽 권위 검사가 없는 동안은 TS 앞단 검사만 남는다.
 
-- [ ] **짧은 올인이 판을 잠근다**: 잔액이 콜 금액보다 적은 참가자가 올인하면 판이 끝나지 않는다
-  - 배경: `bet-amount-rule.ts`는 `amount === balance`인 올인을 허용하는데, `round-completion.ts`는 모든 참가자의 기여액이 `currentToCall`과 같아야 종료로 본다. 그 참가자는 `turn-order.ts`에서 차례에서도 빠지므로 아무도 행동할 수 없고, 딜러가 판 종료나 판 무효를 눌러야만 빠져나온다
-  - 변경 범위: `src/features/betting/round-completion.ts`, `src/features/betting/bet-amount-rule.ts`, `src/features/game/round-finalize.ts`
-  - 완료 기준: 짧은 올인이 있어도 판이 스스로 종료 단계에 도달한다. 사이드팟을 만들지 않기로 한다면 짧은 올인 자체를 막고 그 이유를 남긴다
-  - 참조: 사이드팟 개념이 코드에 없어서, 지금은 500칩만 낸 사람이 5000칩 팟을 통째로 가져간다
+- [ ] **`supabase/migrations/0018_buy_in_idempotency.sql` 적용**: 바이인 멱등키와 취소 보존식의 DB 쪽 권위
+  - 배경: `addBuyIn`이 `requestId`를 `buy_ins.id`로 넣어 PK 충돌 한 번이 `buy_ins`·`chip_ledger`·`room_credit_locks` 세 벌 중복을 동시에 막는다. 이 마이그레이션은 `release_room_credit_buy_in`에 "칩은 남았는데 활성 lock이 없는 사용자가 생기면 거부" 불변식을 넣고, 이미 잠긴 방을 위한 관리자 전용 `admin_repair_room_credit_settlement`를 추가한다
+  - 완료 기준: 적용 후 `test/integration/`에 바이인 재전송·취소 거부 케이스를 붙여 통과시킨다 (지금은 적용 전이라 실패하므로 추가하지 않았다)
+  - 참조: 현재 프로덕션에 정산이 막힌 방은 0건으로 확인했다
+
+- [ ] **`supabase/migrations/0019_drizzle_ledger_sync_0020.sql` 적용**: 새 환경에서 `drizzle-kit migrate`가 실패하는 지뢰 제거
+  - 배경: `0020_lying_leader`(`users.is_managed`)는 supabase 쪽 `add_users_is_managed`로 반영됐지만 `drizzle.__drizzle_migrations`에는 기록되지 않았다. 디스크 journal은 21개(idx 0~20), DB 원장은 20행이다
+  - 완료 기준: 적용 후 `select count(*) from drizzle.__drizzle_migrations`가 21이고, `pnpm db:migrate`가 "No migrations to apply"로 끝난다
+  - 참조: hash는 기존 20행 전부와 파일 sha256을 대조해 20/20 일치를 확인했다. 절차는 `docs/08-database-migrations.md`의 "원장 동기화"
 
 ### Medium
 
-- [ ] **`drizzle` 마이그레이션 원장에 `0020_lying_leader`가 빠져 있다**: 새 환경에서 `drizzle-kit migrate`가 실패한다
-  - 배경: `0020`의 내용(`users.is_managed`)은 supabase 쪽 `add_users_is_managed`로 이미 반영됐는데 `drizzle.__drizzle_migrations`에는 기록되지 않았다. 이 저장소는 그동안 `drizzle_migration_ledger_*_sync` 항목으로 원장을 맞춰 왔는데 이번 것만 누락됐다
-  - 변경 범위: supabase 마이그레이션 1건(원장 동기화 전용)
-  - 완료 기준: 빈 DB가 아닌 현재 DB에 `drizzle-kit migrate`를 돌려도 `column "is_managed" already exists`로 죽지 않는다
-  - 참조: 디스크 `drizzle/migrations/meta/_journal.json`은 21개(idx 0~20), DB 원장은 20개
-
-- [ ] **바이인에 요청 id가 없다**: 재전송 한 번이 그대로 두 번째 바이인이 된다
-  - 배경: `adminAdjustCredits`는 `requestId`로 중복을 흡수하는데 `addBuyIn`(`src/features/budget/actions.ts`)에는 그런 키가 없다. 모바일에서 응답이 끊겨 다시 보내면 `buy_ins`·`chip_ledger`·`room_credit_locks`가 한 벌 더 생기고, `account_credit` 방에서는 지갑이 실제로 두 번 잠긴다
-  - 변경 범위: `src/features/budget/actions.ts`, `src/features/game/components/member-sheet-buy-in.tsx`, 대응 supabase RPC
-  - 완료 기준: 같은 요청을 두 번 보내도 바이인이 한 번만 확정된다
-
-- [ ] **`account_credit` 방에서 바이인 취소가 방을 잠글 수 있다**: 정산이 영영 안 되고 남의 크레딧이 묶인다
-  - 배경: `undoLastBuyIn`은 대상의 현재 방 잔액만 보고, 취소 뒤 그 사람의 잔여 칩과 잠금액이 여전히 맞는지는 아무도 안 본다. 판이 오간 뒤 취소하면 칩은 남았는데 잠금이 사라진 상태가 되고, `settle_room_credits`가 보존식 위반으로 예외를 던져 방장도 관리자도 방을 닫을 수 없다
-  - 변경 범위: `src/features/budget/actions.ts`, `supabase/migrations/`(release RPC에 사용자별 보존식 검사 추가), 이미 잠긴 방을 위한 복구 경로
-  - 완료 기준: 취소 뒤에도 사용자별 `잔여 칩 == 잠금액`이 유지되거나, 깨질 취소는 거부된다
-
-- [ ] **`bet.reverted` 뒤 다른 참가자 화면의 팟이 최대 20초 낡는다**: 그 팟으로 레이즈 프리셋이 계산된다
-  - 배경: `event-sync-policy.ts`가 이 이벤트를 `passive`로 두고 재조회를 걸지 않는 근거는 "`afterMutation`이 항상 `state.snapshot`도 함께 보낸다"인데, `use-room-actions.ts`는 그 전송을 `result.success` 조건 아래 둔다. 행동한 사람의 재조회가 8초 타임아웃으로 실패하면 힌트만 날아가고 아무도 다시 읽지 않는다
-  - 변경 범위: `src/features/game/components/use-room-actions.ts` 또는 `src/lib/realtime/event-sync-policy.ts`
-  - 완료 기준: 되돌리기 뒤 다른 참가자 화면이 폴링을 기다리지 않고 수렴한다
+- [ ] **기존 게스트 계정 2개가 어느 기기로도 로그인되지 않는다**: 게스트 sub 계산식이 바뀌면서 생긴 고아 행
+  - 배경: 계정 탈취를 막느라 sub를 `guest:{tokenId}:HMAC(기기비밀값 ∥ tokenId ∥ 이름)`으로 바꿨다. 되살리는 마이그레이션은 일부러 두지 않았다 — 복구 경로가 곧 공격 경로이기 때문
+  - 현재 상태: 조회 결과 게스트 계정 2개, 진행 중인 방에 있는 게스트 0명, 방장 0명, 칩 기록이 있는 계정 1개. 이미 발급된 세션 JWT는 3일 만료까지는 동작한다
+  - 완료 기준: 그 2개 행을 지울지, 이름을 바꿔 보존할지 정하고 실행한다. 칩 기록이 있는 1개는 지우면 그 방 정산 이력이 어그러지는지 먼저 확인한다
 
 ### 운영
 
