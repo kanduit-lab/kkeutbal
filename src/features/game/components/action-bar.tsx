@@ -54,6 +54,7 @@ export function ActionBar({
     canCheck,
     callAmount,
     callIsAllin,
+    cannotCoverCallReason,
     disabled,
     reason,
     fire,
@@ -217,8 +218,12 @@ export function ActionBar({
                   className={STACK_BUTTON_CLASS}
                   loading={firingSlot === 'call'}
                   loadingLabel={d.ui.processing}
-                  disabled={disabled || callAmount < 1}
-                  disabledReason={reason ?? (callAmount < 1 ? d.actionBar.noBalance : undefined)}
+                  disabled={disabled || callAmount < 1 || cannotCoverCallReason !== null}
+                  disabledReason={
+                    reason ??
+                    cannotCoverCallReason ??
+                    (callAmount < 1 ? d.actionBar.noBalance : undefined)
+                  }
                   onClick={() => fire(callIsAllin ? 'allin' : 'call', callAmount, 'call')}
                 >
                   {callIsAllin ? labels.allin : labels.call}

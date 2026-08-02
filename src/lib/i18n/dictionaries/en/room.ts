@@ -117,6 +117,7 @@ export const actionBar: Dictionary['actionBar'] = {
   notYourTurn: "It's {name}'s turn",
   insufficientBalance: 'Not enough chips',
   noBalance: 'No chips left',
+  cannotCoverCall: 'Your chips do not cover the current bet. Take a buy-in or fold',
   alreadyApplied: 'Already applied',
   networkRetry: 'Network error. Try again',
 } as const

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import type { Dictionary } from '@/lib/i18n/client'
 import { placeBet } from '@/features/betting/actions'
 import {
+  canCoverCall,
   contributedBy,
   minimumRaiseAmount,
   neededToCall,
@@ -135,8 +136,14 @@ export function useActionBarControls({
   const base = snapshot.room.baseBet
   const canCheck = needed === 0
 
-  const callAmount = Math.min(needed, balance)
-  const callIsAllin = needed > 0 && balance <= needed
+  // 잔액이 콜 금액에 못 미치면 부분 콜을 만들지 않는다. 서버 규칙(`bet-amount-rule.ts`)이
+  // 짧은 콜·짧은 올인을 거부하므로, 예전처럼 `Math.min(needed, balance)`를 그대로 쏘면
+  // 반드시 거절 토스트로 돌아온다 — 누르기 전에 사유를 보여주고 막는 편이 맞다.
+  // 판정은 서버 규칙과 같은 순수 함수를 쓴다.
+  const canCall = canCoverCall(betting, self.userId, balance)
+  const callAmount = canCall ? needed : balance
+  const callIsAllin = needed > 0 && balance === needed
+  const cannotCoverCallReason = canCall ? null : d.actionBar.cannotCoverCall
   const minRaise = minimumRaiseAmount(betting, self.userId, base)
 
   const minRaiseRounded = base > 0 ? Math.ceil(minRaise / base) * base : minRaise
@@ -269,6 +276,7 @@ export function useActionBarControls({
     canCheck,
     callAmount,
     callIsAllin,
+    cannotCoverCallReason,
     disabled,
     reason,
     fire,

@@ -116,6 +116,7 @@ export const actionBar = {
   notYourTurn: '{name}님 차례예요',
   insufficientBalance: '잔액 부족',
   noBalance: '잔액 없음',
+  cannotCoverCall: '남은 칩이 지금 걸린 베팅에 못 미쳐요. 바이인을 받거나 다이하세요',
   alreadyApplied: '이미 반영됐어요',
   networkRetry: '네트워크 오류예요. 다시 시도하세요',
 } as const
