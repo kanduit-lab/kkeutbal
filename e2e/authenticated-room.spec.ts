@@ -1,7 +1,9 @@
-import { expect, test, type Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
+import { expect, test } from './fixtures'
 import {
   expectNoDocumentScroll,
   getLifecycleFixture,
+  gotoRoom,
   openTwoAccountPages,
   STORAGE_STATE_PATH,
 } from './support'
@@ -142,7 +144,7 @@ test.describe('authenticated room funding', () => {
       // 고정 뷰포트 회귀 가드 (docs/12-handoff.md 11번): /rooms/[code]는 문서 스크롤을 만들면 안 된다.
       await expectNoDocumentScroll(host)
 
-      await guest.goto(`/rooms/${roomCode}`)
+      await gotoRoom(guest, roomCode)
       await expect(guest.getByText('참가자 2명')).toBeVisible()
       await expectNoDocumentScroll(guest)
       // 호스트 화면도 두 명으로 갱신되어야 판이 두 명 기준으로 시작된다(Broadcast → refetch).
@@ -151,7 +153,7 @@ test.describe('authenticated room funding', () => {
       // 모니터 화면도 같은 규약을 따른다 — 별도 방을 만들지 않고 이 방에 얹어서 확인한다.
       await host.goto(`/rooms/${roomCode}/monitor`)
       await expectNoDocumentScroll(host)
-      await host.goto(`/rooms/${roomCode}`)
+      await gotoRoom(host, roomCode)
 
       await clickDealerAction(host, ko.dealer.startRound)
       await expect(host.getByText('1판 진행 중')).toBeVisible()
@@ -176,7 +178,7 @@ test.describe('authenticated room funding', () => {
       await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}/result$`))
       await expectNoDocumentScroll(host)
 
-      await guest.goto(`/rooms/${roomCode}`)
+      await gotoRoom(guest, roomCode)
       await expect(guest).toHaveURL(new RegExp(`/rooms/${roomCode}/result$`))
       await expectNoDocumentScroll(guest)
     } finally {
@@ -212,7 +214,7 @@ test.describe('authenticated room funding', () => {
       await host.getByRole('button', { name: '저장', exact: true }).click()
       await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}$`))
 
-      await guest.goto(`/rooms/${roomCode}`)
+      await gotoRoom(guest, roomCode)
       await expect(guest.getByText('참가자 2명')).toBeVisible()
       // 호스트 쪽도 두 명으로 갱신될 때까지 기다린다. 이건 Broadcast → refetch 왕복에 대한
       // 단정을 겸한다. 기다리지 않고 판을 시작하면 검증 딜이 참가자 한 명 기준으로 도는지를
@@ -276,7 +278,7 @@ test.describe('authenticated room funding', () => {
       await expect(host).toHaveURL(new RegExp(`/rooms/${roomCode}/fairness/\\d+$`))
       await expect(host.getByText(ko.fairness.auditVerified)).toBeVisible()
 
-      await host.goto(`/rooms/${roomCode}`)
+      await gotoRoom(host, roomCode)
       await expectDealerIdle(host)
       await clickDealerAction(host, ko.dealer.settleSession)
       await host

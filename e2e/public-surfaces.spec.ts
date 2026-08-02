@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './fixtures'
 
 test('로그인 화면이 모바일에서 핵심 인증 경로를 제공한다', async ({ page }) => {
   await page.goto('/login')

@@ -1,5 +1,10 @@
-import { expect, test } from '@playwright/test'
-import { expectNoDocumentScroll, getLifecycleFixture, openTwoAccountPages } from './support'
+import { expect, test } from './fixtures'
+import {
+  expectNoDocumentScroll,
+  getLifecycleFixture,
+  gotoRoom,
+  openTwoAccountPages,
+} from './support'
 // 문구는 사전에서 읽는다 — authenticated-room.spec.ts와 같은 이유다. {n} 치환이 들어간
 // 템플릿(참가자 수)은 `format`으로 직접 값을 채워 비교한다.
 import { ko } from '../src/lib/i18n/dictionaries/ko'
@@ -67,7 +72,7 @@ test.describe('realtime reconnect and recovery', () => {
       // 부재 증명이 "정말 소켓이 없는 상태"였음을 보장한다.
       expect(cutSocketUrls.length, 'realtime 소켓이 라우트를 거쳐 끊겨야 한다').toBeGreaterThan(0)
 
-      await guest.goto(`/rooms/${roomCode}`)
+      await gotoRoom(guest, roomCode)
       await expect(guest.getByText(twoMembers)).toBeVisible()
 
       // 부재 증명: 호스트는 이 변화를 Broadcast로 받을 길이 없다. bare `not.toBeVisible()`은 대상이

@@ -28,6 +28,11 @@ export async function openTwoAccountPages(browser: Browser) {
   const guest = await guestContext.newPage()
   await host.goto('/rooms/new')
   await expect(host).toHaveURL(/\/rooms\/new$/)
+  // 공지 팝업은 루트 레이아웃에 있어 어느 화면에서든 뜬다. 저장된 세션으로 바로 들어오는
+  // 이 경로는 로그인 폼을 거치지 않으므로 여기서 따로 치워야 한다 — 안 치우면 "방 만들기"
+  // 클릭이 오버레이에 막혀 방을 만드는 스펙이 전부 타임아웃으로 죽는다.
+  // guest 쪽은 아직 about:blank 이므로 각자 이동한 뒤 `gotoRoom`이 치운다.
+  await dismissPromotionPopup(host)
   return {
     host,
     guest,
@@ -90,9 +95,51 @@ export async function loginWithPassword(
   next = '/rooms/new',
 ) {
   await page.goto(`/login?next=${encodeURIComponent(next)}`)
+  await dismissPromotionPopup(page)
   await page.locator('input[name="username"]').fill(credentials.username)
   await page.locator('input[name="password"]').fill(credentials.password)
   await page.getByRole('button', { name: '로그인', exact: true }).click()
+}
+
+/**
+ * 공지 팝업(`PromotionHost`)을 닫는다.
+ *
+ * 팝업은 `role="dialog" aria-modal` 오버레이라 `fixed inset-0`으로 화면 전체를 덮는다.
+ * 관리자가 살아 있는 팝업을 하나 등록해 두면 로그인 버튼 클릭이 그 오버레이에 가로막혀
+ * `auth.setup.ts`가 통째로 실패하고, 그러면 `storageState`가 안 만들어져서 인증이 필요한
+ * 스펙이 전부 ENOENT로 죽는다. 실제로 그렇게 죽었다 — 콘텐츠 하나로 테스트 전체가
+ * 무너지지 않게 로그인 경로에서 먼저 치운다.
+ *
+ * 팝업이 없는 게 정상이므로 없으면 조용히 지나간다.
+ */
+export async function dismissPromotionPopup(page: Page) {
+  // "N시간 동안 보지 않기"를 누른다. "닫기"는 컴포넌트 상태만 바꿔서 새로고침이나 다음
+  // 이동에 팝업이 그대로 다시 뜬다 — 소켓을 끊고 reload 하는 스펙이 정확히 그걸로 깨졌다.
+  // 이 버튼은 localStorage 에 숨김 기록을 남기므로 같은 컨텍스트에서 다시 안 뜬다.
+  const popup = page.getByRole('dialog')
+  const dismiss = popup.getByRole('button', { name: /동안 보지 않기$/ })
+  // 팝업은 hydration 뒤 localStorage 의 숨김 기록을 읽고 나서야 그려진다. 이동 직후
+  // 한 번만 보면 아직 없어서 그냥 지나가고, 그 다음 클릭이 뒤늦게 뜬 오버레이에 막힌다.
+  // 잠깐 기다렸다가 없으면 없는 대로 넘어간다.
+  try {
+    await dismiss.first().waitFor({ state: 'visible', timeout: 3_000 })
+  } catch {
+    return
+  }
+  await dismiss.first().click()
+  await dismiss.first().waitFor({ state: 'hidden' })
+}
+
+/**
+ * 방으로 이동하고 공지 팝업을 치운다 — 팝업이 떠 있으면 방 안 버튼이 전부 안 눌린다.
+ *
+ * `roomCode`가 undefined 로 오면 `/rooms/undefined`로 가서 엉뚱한 화면을 검사하게 되므로
+ * 여기서 바로 실패시킨다. 호출부가 URL에서 코드를 뽑아 쓰기 때문에 실제로 생길 수 있다.
+ */
+export async function gotoRoom(page: Page, roomCode: string | undefined) {
+  expect(roomCode, '방 코드를 URL에서 뽑지 못했다').toBeTruthy()
+  await page.goto(`/rooms/${roomCode}`)
+  await dismissPromotionPopup(page)
 }
 
 export interface LifecycleFixture {

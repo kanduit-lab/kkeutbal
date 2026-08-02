@@ -1,4 +1,4 @@
-import { test } from '@playwright/test'
+import { test } from './fixtures'
 import { STORAGE_STATE_PATH, expectNoDocumentScroll } from './support'
 
 /**

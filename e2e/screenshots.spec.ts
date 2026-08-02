@@ -1,5 +1,11 @@
-import { test, type Page, type TestInfo } from '@playwright/test'
-import { STORAGE_STATE_PATH, getLifecycleFixture, openTwoAccountPages } from './support'
+import type { Page, TestInfo } from '@playwright/test'
+import { test } from './fixtures'
+import {
+  STORAGE_STATE_PATH,
+  getLifecycleFixture,
+  gotoRoom,
+  openTwoAccountPages,
+} from './support'
 
 /**
  * 스크린샷 수집 전용 스펙. 흐름이 끊기는지, 요소가 비는지는 다른 스펙이 단정(assert)하고,
@@ -94,7 +100,7 @@ test.describe('스크린샷 수집 — 방 화면', () => {
 
       await capture(host, testInfo, 'room-host-waiting')
 
-      await guest.goto(`/rooms/${roomCode}`)
+      await gotoRoom(guest, roomCode)
       await capture(guest, testInfo, 'room-guest-waiting')
 
       await host.goto(`/rooms/${roomCode}/monitor`)
