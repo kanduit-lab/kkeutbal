@@ -175,19 +175,17 @@ export function useRoomSync({
       }
 
       // event-sync-policy.ts decides the bucket: structural round
-      // transitions refetch immediately (rare, never bursty); bet/role-change
-      // events are feedback-only because the state.snapshot that always
-      // accompanies them (same afterMutation call) is what schedules the
-      // coalesced refetch; anything without that guarantee (one-shot sends
-      // from a screen with no subscribed channel) keeps scheduling its own.
+      // transitions refetch immediately (rare, never bursty), everything else
+      // schedules its own debounced refetch. No event is allowed to skip the
+      // refetch on the grounds that an accompanying state.snapshot will do it
+      // — that send is conditional on the sender's own refetch succeeding
+      // (see the policy comment), so it can silently not happen.
       switch (syncActionFor(event.name)) {
         case 'immediate':
           void refetch()
           break
         case 'coalesced':
           debouncedRefetch()
-          break
-        case 'passive':
           break
       }
     })

@@ -10,37 +10,52 @@ import type { EventName } from './events'
  *   bypassing coalescing adds no extra load, and it closes a real staleness
  *   gap (previously a new round's data waited out the same up-to-1s debounce
  *   as everything else before appearing).
- * - `'passive'` — every current sender of this event is `room-client.tsx`'s
- *   `afterMutation`, which always also broadcasts `state.snapshot` in the
- *   same call once the actor's own mutation succeeds (see that function).
- *   So this event only drives feedback (toast/sound in
- *   `use-room-event-feedback.ts`) — the accompanying `state.snapshot` is
- *   what schedules the coalesced refetch, and letting both schedule one
- *   independently just doubles debounce-timer churn for no benefit.
- * - `'coalesced'` — no guaranteed accompanying `state.snapshot` (sent via
- *   `sendOneShotRoomEvent` from a screen with no subscribed channel — the
- *   settings page, the leave-room flow), so it must schedule its own
- *   debounced refetch, same as before this policy existed. `state.snapshot`
- *   itself is also `'coalesced'` — it drives the confirming refetch that
- *   reconciles everything its own payload doesn't cover (actions log,
+ * - `'coalesced'` — everything else: schedule a debounced refetch
+ *   (`refetch-coalescer.ts`). This is the floor, not a special case —
+ *   **no event may assume some other event will refetch on its behalf.**
+ *   `state.snapshot` is `'coalesced'` too: it drives the confirming refetch
+ *   that reconciles everything its own payload doesn't cover (actions log,
  *   fairness phase, recent rounds); see `state-snapshot-hint.ts` for what it
- *   *does* let the caller paint immediately, ahead of that refetch.
+ *   *does* let the receiver paint immediately, ahead of that refetch.
+ *
+ * There used to be a third bucket, `'passive'` (feedback only, no refetch),
+ * holding the events `use-room-actions.ts`'s `afterMutation` sends —
+ * `bet.placed`/`approved`/`rejected`/`reverted`, `member.role_changed`. Its
+ * stated justification was that `afterMutation` always also broadcasts
+ * `state.snapshot` in the same call, so letting both schedule a refetch only
+ * doubled debounce-timer churn. **That invariant was false.**
+ * `afterMutation` guards the `state.snapshot` send with `if (result.success)`
+ * where `result` is the *actor's own* refetch, itself capped at
+ * `REFETCH_TIMEOUT_MS` (8s, `sync-timeouts.ts`). On a flaky link the mutation
+ * commits, the actor's refetch times out, and only the bare event goes out —
+ * so every other client played its toast and refetched nothing, holding a
+ * stale pot until the 20s visibility-gated poll (and sizing the action bar's
+ * 팟/하프 raise presets off that pot, `shared.ts`).
+ *
+ * Making that send unconditional was not an option: the `state.snapshot`
+ * payload is built entirely from the failed refetch's data, so there is
+ * nothing truthful to put in it, and broadcasting the actor's pre-mutation
+ * numbers would be worse than silence — receivers paint the pot straight off
+ * that hint (`state-snapshot-hint.ts`). So the bucket is gone instead. The
+ * duplication it worried about is what the coalescer already exists for: an
+ * event and its accompanying `state.snapshot` land in the same burst and
+ * share one refetch, bounded by `MIN_EVENT_INTERVAL_MS`.
  *
  * `Record<EventName, ...>` makes this exhaustive — adding a new event to
  * `eventPayloads` without adding it here fails the build instead of silently
  * defaulting to some guessed behavior.
  */
-export type SyncAction = 'immediate' | 'passive' | 'coalesced'
+export type SyncAction = 'immediate' | 'coalesced'
 
 export const SYNC_ACTION_BY_EVENT: Readonly<Record<EventName, SyncAction>> = {
   'round.started': 'immediate',
   'round.ended': 'immediate',
   'round.voided': 'immediate',
-  'bet.placed': 'passive',
-  'bet.approved': 'passive',
-  'bet.rejected': 'passive',
-  'bet.reverted': 'passive',
-  'member.role_changed': 'passive',
+  'bet.placed': 'coalesced',
+  'bet.approved': 'coalesced',
+  'bet.rejected': 'coalesced',
+  'bet.reverted': 'coalesced',
+  'member.role_changed': 'coalesced',
   'state.snapshot': 'coalesced',
   'member.left': 'coalesced',
   'room.settings_changed': 'coalesced',

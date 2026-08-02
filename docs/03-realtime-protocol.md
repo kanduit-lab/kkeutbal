@@ -6,7 +6,7 @@
 | Audience | engineering / reviewers |
 | Status | active |
 | Source of truth | 구현 프로토콜은 `src/lib/realtime/events.ts`·`client.ts`, 이 문서는 채널·이벤트·동기화 규약 |
-| Last reviewed | 2026-07-30 |
+| Last reviewed | 2026-08-02 |
 
 ## Context
 
@@ -77,7 +77,7 @@ type Envelope = {
 | `member.role_changed` | `member-sheet-role.tsx`, `member-sheet.tsx` | refetch만 |
 | `member.left` | `member-sheet.tsx` — 채널 해제 직전이므로 `sendOneShotRoomEvent` 사용 | refetch만 |
 | `room.settings_changed` | `room-settings-client.tsx` — 구독 채널 없는 화면이라 `sendOneShotRoomEvent` 사용 | refetch만 (payload 빈 객체) |
-| `state.snapshot` | `use-room-actions.ts`의 `afterMutation` (모든 성공적 mutation 뒤) | 힌트 반영 + refetch |
+| `state.snapshot` | `use-room-actions.ts`의 `afterMutation` — mutation 성공 **그리고 발신자 자신의 refetch 성공** 시에만 (payload가 그 refetch 결과로 만들어지므로) | 힌트 반영 + refetch |
 | `member.joined` | 스키마만 존재, 어디서도 send 안 함 | — |
 | `state.request` | 스키마만 존재, 어디서도 send 안 함 | — |
 | `chips.updated` | 스키마만 존재, 어디서도 send 안 함 | — |
@@ -134,10 +134,16 @@ payload 내용을 UI에 직접 반영하는 것은 토스트 문구를 가진 �
   ├─(2) 성공 시 refetch(refreshRoom) 로 자기 화면 갱신
   │
   └─(3) 성공 시 channel.send(event)  ← 행동한 본인이 직접 브로드캐스트
-          + 뒤이어 state.snapshot 도 함께 send (afterMutation, room-client.tsx)
+          + (2)의 refetch도 성공했으면 state.snapshot 도 함께 send
+            (afterMutation, use-room-actions.ts)
               │
               └─(4) 다른 참가자 수신 → 250ms 디바운스 refetch로 자기 화면 갱신
 ```
+
+(3)의 `state.snapshot`은 **동반 전송이 보장되지 않는다.** payload를 (2)의 refetch 결과로
+채우기 때문에, 그 refetch가 8초 타임아웃(`REFETCH_TIMEOUT_MS`)으로 실패하면 보낼 진실이 없어
+생략된다 — 커밋은 됐는데 힌트만 안 나가는 구간이다. 따라서 **수신 측 어떤 이벤트도 "뒤따라올
+`state.snapshot`이 대신 refetch해 준다"에 기대면 안 된다** (아래 이벤트별 재조회 정책).
 
 실패한 Server Action은 아무것도 브로드캐스트하지 않는다 — 실패는 호출자 화면에 토스트로만
 보인다 (`runAction`, `room-client.tsx`).
@@ -154,7 +160,8 @@ supabase-js는 미구독 채널의 `send`를 REST로 보내므로 웹소켓 구�
 
 | 트리거 | 지연 |
 |--------|------|
-| 임의 Broadcast 이벤트 수신 | 250ms 트레일링 디바운스 + 최소 1초 간격 (`debouncedRefetch`) |
+| `round.started`/`round.ended`/`round.voided` 수신 | 즉시 (디바운스 우회) |
+| 그 외 Broadcast 이벤트 수신 | 250ms 트레일링 디바운스 + 최소 1초 간격 (`debouncedRefetch`) |
 | Presence `sync` (참가자 입장/이탈 감지) | 250ms 트레일링 디바운스 + 최소 1초 간격 |
 | 채널 `SUBSCRIBED` 전이 (최초 구독·재연결) | 즉시 |
 | `visibilitychange`로 탭 복귀 + 20초 폴링 인터벌 | 즉시 / 20초 주기 |
@@ -166,6 +173,28 @@ supabase-js는 미구독 채널의 `send`를 REST로 보내므로 웹소켓 구�
 `refreshRoom` 결과 `room.status`가 `settled`/`closed`면 결과 페이지로 라우팅한다. 별도의
 "재연결 후 로컬 큐 재전송" 로직은 없다 — 클라이언트는 액션을 큐잉하지 않는다. Server Action 자체가
 요청/응답이므로 실패하면 그 자리에서 사용자에게 보이고, 성공은 이미 Postgres에 반영된 뒤다.
+
+### 이벤트별 재조회 정책
+
+버킷은 `src/lib/realtime/event-sync-policy.ts`가 `Record<EventName, SyncAction>`으로 소유한다
+(이벤트를 추가하면 정책을 안 넣는 순간 타입 에러 — 기본값 추측이 없다).
+
+| 버킷 | 이벤트 | 수신 측 동작 |
+|------|--------|--------------|
+| `immediate` | `round.started`, `round.ended`, `round.voided` | 즉시 refetch. 판 전이는 판당 한 번뿐이라 폭주하지 않고, 새 판 데이터가 최대 1초 디바운스를 기다리던 공백을 없앤다 |
+| `coalesced` | 나머지 전부 | 디바운스 refetch. `state.snapshot`도 여기 속한다 — 힌트로 즉시 칠하는 값(잔액·팟, `state-snapshot-hint.ts`) 외의 나머지(액션 로그·페어니스 단계·참가자)를 확정하는 것이 이 refetch다 |
+
+**불변식: 어떤 이벤트도 다른 이벤트의 동반 전송에 기대지 않는다.** 2026-08-02 이전에는 세 번째
+버킷 `passive`가 있었다 — `afterMutation`이 보내는 `bet.placed`/`approved`/`rejected`/
+`reverted`·`member.role_changed`는 "항상 `state.snapshot`이 함께 오니까" 피드백(토스트·소리)만
+하고 재조회를 안 걸었다. 그 전제가 틀렸다: 위 발신 모델대로 `state.snapshot`은 발신자 자신의
+refetch가 성공해야만 나간다. 회선이 나쁘면 되돌리기는 커밋됐는데 `bet.reverted`만 날아가고,
+다른 참가자 화면은 20초 폴링까지 낡은 팟을 들고 있었다(그 팟으로 액션바의 팟·하프 레이즈
+프리셋이 계산된다 — `shared.ts`의 `raisePresets`). 전송을 무조건으로 바꾸는 선택지는 없다.
+payload 자체가 실패한 refetch 결과로 만들어지므로 실을 진실이 없고, 뮤테이션 이전 값을 보내면
+수신 측이 그 팟을 그대로 칠해서 침묵보다 나쁘다. 그래서 버킷을 없애고 전부 `coalesced`로 뒀다.
+중복 걱정은 coalescer가 이미 흡수한다 — 이벤트와 동반 `state.snapshot`은 같은 버스트에 들어와
+refetch 한 번을 공유하고, 상한은 `MIN_EVENT_INTERVAL_MS`다.
 
 ### 멱등성
 
