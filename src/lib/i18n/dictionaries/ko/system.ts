@@ -2,6 +2,11 @@ export const ui = {
   processing: '처리 중…',
   decrease: '줄이기',
   increase: '늘리기',
+  editValue: '직접 입력',
+  editValueHint: '{min} ~ {max} 사이로 입력하세요',
+  editValueInvalid: '{min} ~ {max} 사이의 숫자를 입력하세요',
+  apply: '적용',
+  cancel: '취소',
 } as const
 
 export const loading = {

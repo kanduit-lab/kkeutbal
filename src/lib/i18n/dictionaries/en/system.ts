@@ -7,6 +7,11 @@ export const ui: Dictionary['ui'] = {
   processing: 'Processing…',
   decrease: 'Decrease',
   increase: 'Increase',
+  editValue: 'Enter a value',
+  editValueHint: 'Enter a number between {min} and {max}',
+  editValueInvalid: 'Enter a number between {min} and {max}',
+  apply: 'Apply',
+  cancel: 'Cancel',
 } as const
 
 export const loading: Dictionary['loading'] = {

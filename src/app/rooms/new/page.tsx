@@ -5,6 +5,15 @@ import { useState, useTransition } from 'react'
 import { createRoom } from '@/features/game/actions'
 import type { FundingMode, RoomGameType } from '@/features/game/types'
 import { GAME_LABELS } from '@/features/game/labels'
+import {
+  BASE_BET_PRESETS,
+  BASE_BET_STEP,
+  CHIP_PRESETS,
+  CHIP_STEP,
+  DEFAULT_BASE_BET,
+  DEFAULT_STARTING_CHIPS,
+  POINT_VALUE_STEP,
+} from '@/features/game/room-form-defaults'
 import type { RaiseRule } from '@/features/betting/raise-rule'
 import { translateError, useDict } from '@/lib/i18n/client'
 import {
@@ -22,7 +31,6 @@ import {
 } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 
-const CHIP_PRESETS = [50, 100, 200, 500] as const
 const GAME_TYPES: readonly RoomGameType[] = ['seotda', 'gostop', 'poker']
 
 export default function NewRoomPage() {
@@ -34,9 +42,9 @@ export default function NewRoomPage() {
   const [name, setName] = useState('')
   const [gameType, setGameType] = useState<RoomGameType>('seotda')
   const [inputMode, setInputMode] = useState<'trust' | 'approval'>('trust')
-  const [startingChips, setStartingChips] = useState(100)
+  const [startingChips, setStartingChips] = useState<number>(DEFAULT_STARTING_CHIPS)
   const [pointValue, setPointValue] = useState(10)
-  const [baseBet, setBaseBet] = useState(1)
+  const [baseBet, setBaseBet] = useState<number>(DEFAULT_BASE_BET)
   const [fundingMode, setFundingMode] = useState<FundingMode>('session')
   const [raiseRule, setRaiseRule] = useState<RaiseRule>('free')
   const [accountCreditConfirmOpen, setAccountCreditConfirmOpen] = useState(false)
@@ -121,7 +129,7 @@ export default function NewRoomPage() {
                       selected={startingChips === preset}
                       onClick={() => setStartingChips(preset)}
                     >
-                      {preset}
+                      {preset.toLocaleString()}
                     </Button>
                   ))}
                 </div>
@@ -130,7 +138,7 @@ export default function NewRoomPage() {
                   onChange={setStartingChips}
                   min={1}
                   max={1_000_000}
-                  step={10}
+                  step={CHIP_STEP}
                   ariaLabel={d.roomForm.startingChipsAria}
                   decreaseLabel={d.ui.decrease}
                   increaseLabel={d.ui.increase}
@@ -161,12 +169,13 @@ export default function NewRoomPage() {
                 </p>
               </Field>
               {gameType === 'gostop' ? (
-                <Field label={d.roomForm.pointValueLabel}>
+                <Field label={d.roomForm.pointValueLabel} group>
                   <Stepper
                     value={pointValue}
                     onChange={setPointValue}
                     min={1}
                     max={100_000}
+                    step={POINT_VALUE_STEP}
                     ariaLabel={d.roomForm.pointValueAria}
                     decreaseLabel={d.ui.decrease}
                     increaseLabel={d.ui.increase}
@@ -174,15 +183,30 @@ export default function NewRoomPage() {
                   <p className="mt-1.5 text-xs text-muted">{d.roomForm.pointValueHint}</p>
                 </Field>
               ) : (
-                <Field label={d.roomForm.baseBetLabel}>
+                <Field label={d.roomForm.baseBetLabel} group>
+                  <div className="grid grid-cols-4 gap-2">
+                    {BASE_BET_PRESETS.map((preset) => (
+                      <Button
+                        key={preset}
+                        type="button"
+                        size="sm"
+                        selected={baseBet === preset}
+                        onClick={() => setBaseBet(preset)}
+                      >
+                        {preset.toLocaleString()}
+                      </Button>
+                    ))}
+                  </div>
                   <Stepper
                     value={baseBet}
                     onChange={setBaseBet}
                     min={1}
                     max={100_000}
+                    step={BASE_BET_STEP}
                     ariaLabel={d.roomForm.baseBetAria}
                     decreaseLabel={d.ui.decrease}
                     increaseLabel={d.ui.increase}
+                    className="mt-2"
                   />
                   <p className="mt-1.5 text-xs text-muted">{d.roomForm.baseBetHint}</p>
                 </Field>

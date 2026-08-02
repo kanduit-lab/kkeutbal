@@ -6,6 +6,12 @@ import { useState, useTransition } from 'react'
 import { sendOneShotRoomEvent } from '@/lib/realtime/client'
 import { translateError, useDict } from '@/lib/i18n/client'
 import { updateRoomSettings } from '../actions'
+import {
+  BASE_BET_PRESETS,
+  BASE_BET_STEP,
+  CHIP_STEP,
+  POINT_VALUE_STEP,
+} from '../room-form-defaults'
 import type { RoomView } from '../types'
 import { Button, Field, Input, Panel, Segmented, Stepper, useToast } from '@/components/ui'
 
@@ -106,12 +112,13 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
           </p>
         </Field>
         {isGostop ? (
-          <Field label={d.roomForm.pointValueLabel}>
+          <Field label={d.roomForm.pointValueLabel} group>
             <Stepper
               value={pointValue}
               onChange={setPointValue}
               min={1}
               max={100_000}
+              step={POINT_VALUE_STEP}
               ariaLabel={d.roomForm.pointValueAria}
               decreaseLabel={d.ui.decrease}
               increaseLabel={d.ui.increase}
@@ -119,21 +126,36 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
             <p className="mt-1.5 text-xs text-muted">{d.roomForm.pointValueHint}</p>
           </Field>
         ) : (
-          <Field label={d.roomForm.baseBetLabel}>
+          <Field label={d.roomForm.baseBetLabel} group>
+            <div className="grid grid-cols-4 gap-2">
+              {BASE_BET_PRESETS.map((preset) => (
+                <Button
+                  key={preset}
+                  type="button"
+                  size="sm"
+                  selected={baseBet === preset}
+                  onClick={() => setBaseBet(preset)}
+                >
+                  {preset.toLocaleString()}
+                </Button>
+              ))}
+            </div>
             <Stepper
               value={baseBet}
               onChange={setBaseBet}
               min={1}
               max={100_000}
+              step={BASE_BET_STEP}
               ariaLabel={d.roomForm.baseBetAria}
               decreaseLabel={d.ui.decrease}
               increaseLabel={d.ui.increase}
+              className="mt-2"
             />
             <p className="mt-1.5 text-xs text-muted">{d.roomForm.baseBetHint}</p>
           </Field>
         )}
 
-        <Field label={d.roomForm.startingChipsLabel}>
+        <Field label={d.roomForm.startingChipsLabel} group>
           {canEditStartingChips ? (
             <>
               <Stepper
@@ -141,7 +163,7 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
                 onChange={setStartingChips}
                 min={1}
                 max={1_000_000}
-                step={10}
+                step={CHIP_STEP}
                 ariaLabel={d.roomForm.startingChipsAria}
                 decreaseLabel={d.ui.decrease}
                 increaseLabel={d.ui.increase}
@@ -157,7 +179,7 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
             </>
           )}
         </Field>
-        <Field label={d.settings.maxMembersLabel}>
+        <Field label={d.settings.maxMembersLabel} group>
           <Stepper
             value={maxMembers}
             onChange={setMaxMembers}
