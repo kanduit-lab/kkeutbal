@@ -130,7 +130,11 @@ export default async function PlayerStatsPage({ params }: { params: Promise<{ id
           <h2 className="shrink-0 px-1 text-sm font-bold text-muted">
             {d.ranking.recentSessionsTitle}
           </h2>
-          <PlayerRecentSessionsList sessions={recentSessions} />
+          {/* 정산표는 그 방 참가자만 열 수 있다 — 남의 프로필에서는 링크를 걸지 않는다. */}
+          <PlayerRecentSessionsList
+            sessions={recentSessions}
+            linkToResult={session.user.id === id}
+          />
         </div>
       </FixedBody>
     </FixedPage>
