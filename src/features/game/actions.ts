@@ -7,7 +7,7 @@ import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
 import { generateRoomCode, normalizeRoomCode } from './room-code'
-import { getRoomSnapshot } from './queries'
+import { getMemberRole, getRoomSnapshot } from './queries'
 import {
   isUniqueViolation,
   lockRoom,
@@ -192,8 +192,15 @@ export async function joinRoomAndGo(formData: FormData): Promise<void> {
 }
 
 export async function refreshRoom(roomId: string): Promise<ActionResult<RoomSnapshot>> {
-  if (!(await currentUserId())) return fail('errors.loginRequired')
+  const userId = await currentUserId()
+  if (!userId) return fail('errors.loginRequired')
   if (!z.string().uuid().safeParse(roomId).success) return fail('errors.invalidRoom')
+
+  // 스냅샷에는 참가자 전원의 잔액·바이인 총액과 이번 판의 베팅 전체가 들어 있다.
+  // 예전에는 로그인만 확인해서, 방 uuid만 알면 누구든(방에서 내보내진 사람 포함) 그
+  // 방의 돈을 계속 들여다볼 수 있었다 — uuid는 클라이언트 페이로드와 공개 realtime
+  // 채널 이름(`room:{uuid}`)에 그대로 실려 나가므로 비밀이 아니다.
+  if (!(await getMemberRole(roomId, userId))) return fail('errors.notMember')
 
   try {
     const snapshot = await getRoomSnapshot(roomId)

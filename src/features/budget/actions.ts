@@ -67,8 +67,17 @@ export async function addBuyIn(
         .limit(1)
       if (!caller) return fail('errors.notMember')
 
+      // 바이인은 방 안에서 칩을 새로 발행하는 유일한 경로다. 딜러·방장만 할 수 있다.
+      //
+      // 예전 조건은 `userId !== callerId && !isDealer`라서 **대리 지급일 때만** 역할을 봤다.
+      // 즉 평범한 참가자가 `targetUserId` 없이 자기 자신에게 바이인을 요청하면 그대로
+      // 통과했다. UI는 이 버튼을 딜러에게만 보여주므로 화면으로는 닿을 수 없었지만,
+      // Server Action을 직접 부르면 한 번에 1000만 칩까지 스스로 찍어낼 수 있었다.
+      // session 재원 방에는 이걸 막아줄 뒷단이 아무것도 없다.
       const isDealer = caller.role === 'host' || caller.role === 'dealer'
-      if (userId !== callerId && !isDealer) return fail('errors.proxyBuyInDealerOnly')
+      if (!isDealer) {
+        return fail(userId !== callerId ? 'errors.proxyBuyInDealerOnly' : 'errors.buyInDealerOnly')
+      }
 
       const [target] = await tx
         .select({ userId: roomMembers.userId, role: roomMembers.role })

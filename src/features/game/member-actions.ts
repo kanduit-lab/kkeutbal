@@ -52,12 +52,21 @@ export async function transferHost(
       }
 
       const [target] = await tx
-        .select({ role: roomMembers.role, leftAt: roomMembers.leftAt })
+        .select({
+          role: roomMembers.role,
+          leftAt: roomMembers.leftAt,
+          isManaged: users.isManaged,
+        })
         .from(roomMembers)
+        .innerJoin(users, eq(users.id, roomMembers.userId))
         .where(and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, targetUserId)))
         .limit(1)
       if (!target || target.leftAt) return fail('errors.targetNotMember')
       if (target.role === 'observer') return fail('errors.observerCannotBecomeHost')
+      // 대리 참가자(로컬 멤버)는 로그인할 수 있는 계정이 아니다 — 방장 자리를 넘기면
+      // 방장 전용 액션(정산·설정·방장 위임·역할 변경)에 아무도 닿을 수 없게 되고,
+      // 관리자 강제 정산 말고는 방을 되살릴 방법이 없다.
+      if (target.isManaged) return fail('errors.managedCannotBecomeHost')
 
       await tx
         .update(roomMembers)
