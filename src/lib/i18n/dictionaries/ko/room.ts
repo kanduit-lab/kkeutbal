@@ -59,8 +59,6 @@ export const table = {
   waiting: '대기',
   potLabel: 'pot',
   potSubLabel: '누적 베팅',
-  myBet: '내 베팅',
-  net: '손익',
 } as const
 
 /**

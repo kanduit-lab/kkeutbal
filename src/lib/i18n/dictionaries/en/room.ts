@@ -64,8 +64,6 @@ export const table: Dictionary['table'] = {
   waiting: 'Waiting',
   potLabel: 'pot',
   potSubLabel: 'total bets',
-  myBet: 'My bet',
-  net: 'Net',
 } as const
 
 export const rail: Dictionary['rail'] = {
