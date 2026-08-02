@@ -6,7 +6,7 @@
 | Audience | operators / maintainers |
 | Status | active |
 | Source of truth | this document (DB 적용 순서·검증·복구) |
-| Last reviewed | 2026-07-28 |
+| Last reviewed | 2026-08-02 |
 
 ## Purpose
 
@@ -42,9 +42,14 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    pnpm db:migrate
    ```
 
-   live DB는 2026-07-28 기준 `0000`~`0020` 이력이 동기화되어 있다. 마지막 두 개는
+   live DB의 DDL은 2026-08-02 기준 `0000`~`0020`이 전부 반영돼 있다. 마지막 두 개는
    `0019`(최초 관리자 설정 가드), `0020`(`users.is_managed` — 대리 기록용 로컬 플레이어)다.
    같은 커밋에서 재실행하면 새 마이그레이션만 적용된다.
+
+   단, `0020`은 supabase `add_users_is_managed`로 먼저 들어가서 원장에 기록되지 않았다.
+   원장을 먼저 맞추지 않고 `pnpm db:migrate`를 돌리면 `column "is_managed" of relation
+   "users" already exists`로 죽는다. 아래 3단계의 `0019_drizzle_ledger_sync_0020.sql`을
+   **먼저** 적용한 뒤 이 단계를 실행한다.
 
 3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`,
    `0009_virtual_credits_security.sql`, `0010_credit_posting_hardening.sql`,
@@ -58,6 +63,12 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    관리자 강제 정산할 때 DB에서 관리자 권한을 재검증한다. 0014는 Drizzle 0016의 공정 딜 상태
    테이블을 server-only로 잠그고, 0015는 종료 뒤 full reveal 행의 수정·삭제를 막는다. 0016은
    Vision 설정 테이블의 브라우저 역할 접근을 회수한다.
+
+   `supabase/migrations/0019_drizzle_ledger_sync_0020.sql`은 DDL이 아니라 **원장 동기화 전용**
+   파일이라 순서 규칙이 다르다. Drizzle `0020`의 결과가 이미 있는 DB에서 `drizzle.__drizzle_migrations`에
+   빠진 행 하나를 채우므로 2단계 `pnpm db:migrate`보다 **먼저** 실행해야 한다. 재실행해도 중복 삽입되지
+   않고, `users.is_managed`가 없는 DB에서는 아무것도 넣지 않는다. 이런 원장 동기화가 필요한 이유는
+   아래 Ledger Sync 절을 본다.
 
 4. 아래 Verification을 수행한 뒤 앱을 다시 연다.
 5. 관리자 계정으로 `/admin`에 한 번 로그인해 `0011` 이전 게스트 토큰 원문을
@@ -74,6 +85,26 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 `supabase/migrations/0001`~`0006`은 이미 적용된 과거 변화 기록이다. 제거된 옛 테이블을
 참조하므로 최신 Drizzle 스키마 위에 전부 재생하지 않는다.
+
+### 원장 동기화 (Ledger Sync)
+
+이 저장소는 급한 DDL을 Drizzle이 아니라 Supabase 경로로 먼저 넣은 적이 있다. 그러면 컬럼은
+생겼는데 `drizzle.__drizzle_migrations`에는 행이 없어서, 그 DB에 `pnpm db:migrate`를 돌리면
+같은 DDL을 다시 실행하고 `already exists`로 죽는다. Drizzle이 만드는 SQL에는 `IF NOT EXISTS`가
+없기 때문이다. 이때만 **원장에 행 하나만 채우는** 전용 마이그레이션을 쓴다.
+
+- 선례: `drizzle_migration_ledger_baseline`, `..._0012_sync`, `..._game_indexes_0013_sync`,
+  `..._credit_safety_0014_sync`, `..._credit_indexes_0015_sync`,
+  `drizzle_session_chip_integer_boundary_0017`, `0019_drizzle_ledger_sync_0020.sql`.
+- `hash` = 해당 `drizzle/migrations/{tag}.sql` **원문의 sha256**.
+  `.gitattributes`가 `eol=lf`를 고정하므로 체크아웃 환경이 달라도 값이 같다.
+- `created_at` = `drizzle/migrations/meta/_journal.json`에서 같은 tag 항목의 `when`.
+  Drizzle은 원장 마지막 행의 `created_at`만 보고 적용 여부를 정하므로 이 값이 실제 키다.
+- 반드시 재실행 안전하게 쓴다. `__drizzle_migrations`에는 `hash` unique 제약이 없어
+  `on conflict`가 듣지 않으므로 `where not exists`로 막는다.
+- 대상 DDL이 실제로 적용된 DB에서만 삽입한다. 원장만 앞서 나가면 그 컬럼은 영영 생기지 않는다.
+
+원장과 디스크 journal이 맞는지 확인하는 명령은 아래 Verification에 있다.
 
 ## Verification
 
@@ -112,6 +143,24 @@ where p.pronamespace = 'public'::regnamespace
     'post_credit_transaction'
   )
 order by p.proname;
+
+-- 원장 행 수와 마지막 created_at. 디스크 `_journal.json`의 entries 개수·마지막 `when`과
+-- 같아야 한다. 0019_drizzle_ledger_sync_0020.sql 적용 뒤 기대값은
+-- 21, 1785159109562(= 0020_lying_leader)다.
+select count(*) as ledger_rows, max(created_at) as last_created_at
+from drizzle.__drizzle_migrations;
+```
+
+원장 행 수가 journal entries 개수보다 적으면 그 차이만큼 `pnpm db:migrate`가 이미 반영된 DDL을
+다시 실행한다. 위 Ledger Sync 절을 따라 원장을 먼저 맞춘다. 로컬에서 기대값을 뽑는 명령은 아래와 같다.
+
+```powershell
+# hash: 각 마이그레이션 파일 원문의 sha256
+Get-FileHash -Algorithm SHA256 drizzle/migrations/*.sql | Format-Table Hash, Path
+
+# created_at: 같은 tag의 journal `when`
+Get-Content drizzle/migrations/meta/_journal.json | ConvertFrom-Json |
+  Select-Object -ExpandProperty entries | Select-Object idx, tag, when
 ```
 
 추가로 `rate_limit_buckets`, `round_participants`, `credit_accounts`, `credit_transactions`,
@@ -134,8 +183,10 @@ order by p.proname;
 ## Failure Modes
 
 - `permission denied`: 앱 롤 URL로 DDL을 실행했다. 관리자 연결 문자열로 다시 실행한다.
-- `relation already exists`: Drizzle 이력과 실제 스키마가 어긋났다. SQL을 건너뛰지 말고
-  `drizzle.__drizzle_migrations`와 대상 객체를 대조한다.
+- `relation already exists` 또는 `column ... already exists`: Drizzle 이력과 실제 스키마가
+  어긋났다. SQL을 건너뛰지 말고 `drizzle.__drizzle_migrations`와 대상 객체를 대조한다.
+  객체가 이미 맞게 존재하면 위 Ledger Sync 절차로 빠진 원장 행만 채운다. 마이그레이션 파일에
+  `IF NOT EXISTS`를 덧대거나 원장을 손으로 UPDATE 하지 않는다.
 - bigint 전환이 view 의존성으로 실패: `0008_flippant_amphibian.sql`이
   `session_standings`를 `security_invoker` 옵션 그대로 재생성하는 버전인지 확인한다.
 - 레거시 바이인 백필이 append-only 트리거에 막힘: `0009_perfect_molly_hayes.sql`의 트리거
@@ -169,3 +220,9 @@ order by p.proname;
 - 2026-07-24: Supabase 0015로 `round_fairness_reveals` full reveal의 update/delete를 차단했다.
 - 2026-07-24: Drizzle 0017로 세션 칩의 bigint→JavaScript number 직렬화 경계를 DB CHECK와
   room/user 누적 activity 트리거로 강제하고, live Drizzle 이력을 같은 hash로 동기화했다.
+- 2026-08-02: Supabase `0019_drizzle_ledger_sync_0020.sql`을 추가해 Drizzle `0020`
+  (`users.is_managed`)의 누락된 원장 행을 채운다. DDL은 `add_users_is_managed`로 이미 들어가
+  있었는데 원장만 20건이라 `pnpm db:migrate`가 `column "is_managed" already exists`로 죽는
+  상태였다. 반복되던 원장 동기화 절차를 Ledger Sync 절로 문서화하고 원장/journal 대조 쿼리를
+  Verification에 추가했다. **이 파일은 아직 live DB에 적용되지 않았다** — 적용 뒤 원장은 21건이
+  된다.
