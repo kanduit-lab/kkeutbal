@@ -17,6 +17,7 @@ export function PokerRankingPanel({ cards }: { cards: readonly PokerCard[] }) {
   const isDesktop = useIsDesktop()
   const [expanded, setExpanded] = useState(false)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [caveatsOpen, setCaveatsOpen] = useState(false)
   const fullListActiveRowRef = useRef<HTMLDivElement | null>(null)
 
   const currentRank = useMemo(() => {
@@ -60,7 +61,7 @@ export function PokerRankingPanel({ cards }: { cards: readonly PokerCard[] }) {
     minRows: 3,
   })
 
-  function renderRow(tier: PokerRankTier, ref?: React.Ref<HTMLDivElement>) {
+  function renderRow(tier: PokerRankTier, index: number, ref?: React.Ref<HTMLDivElement>) {
     const isActive = tier.rank === currentRank
     return (
       <div
@@ -72,11 +73,24 @@ export function PokerRankingPanel({ cards }: { cards: readonly PokerCard[] }) {
           isActive ? 'bg-accent/20 ring-1 ring-inset ring-accent/50' : 'bg-white/5',
         )}
       >
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* 줄마다 순위 번호를 둔다 — 목록을 스크롤할 때 헤더의 "N위"는 화면 밖으로 나간다. */}
+          <span
+            className={clsx(
+              'shrink-0 tabular-nums text-micro font-bold',
+              isActive ? 'text-accent' : 'text-muted/60',
+            )}
+          >
+            {format(d.advisor.pokerRanking.positionBadge, { position: index + 1 })}
+          </span>
           <span className={clsx('truncate text-sm font-bold', isActive && 'text-accent')}>
             {tier.label}
           </span>
-          {isActive ? <Badge tone="accent">{d.advisor.pokerRanking.current}</Badge> : null}
+          {isActive ? (
+            <span className="ms-auto shrink-0">
+              <Badge tone="accent">{d.advisor.pokerRanking.current}</Badge>
+            </span>
+          ) : null}
         </div>
         <p className="mt-0.5 truncate text-xs text-muted/70">
           {d.advisor.pokerRanking.description[tier.descriptionKey]}
@@ -86,10 +100,26 @@ export function PokerRankingPanel({ cards }: { cards: readonly PokerCard[] }) {
   }
 
   function renderFullList() {
-    return POKER_RANK_TABLE.map((tier) =>
-      renderRow(tier, tier.rank === currentRank ? fullListActiveRowRef : undefined),
+    return POKER_RANK_TABLE.map((tier, index) =>
+      renderRow(tier, index, tier.rank === currentRank ? fullListActiveRowRef : undefined),
     )
   }
+
+  const caveats = (
+    <ul className="space-y-2">
+      {(['bestFive', 'wheel', 'kicker', 'suit'] as const).map((key) => {
+        const caveat = d.advisor.pokerRanking.caveats[key]
+        return (
+          <li key={key} className="rounded-xl bg-white/5 px-3 py-2.5">
+            <p className="text-sm font-bold">{caveat.title}</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              {caveat.body.replaceAll('**', '')}
+            </p>
+          </li>
+        )
+      })}
+    </ul>
+  )
 
   return (
     <Panel className="flex min-h-0 flex-1 flex-col gap-2">
@@ -106,17 +136,34 @@ export function PokerRankingPanel({ cards }: { cards: readonly PokerCard[] }) {
               : d.advisor.pokerRanking.noSelectionHint}
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="shrink-0"
-          onClick={() => (isDesktop ? setExpanded((current) => !current) : setSheetOpen(true))}
-        >
-          {isDesktop && expanded ? d.advisor.pokerRanking.collapse : d.advisor.pokerRanking.viewAll}
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            aria-expanded={caveatsOpen}
+            onClick={() => setCaveatsOpen((current) => !current)}
+          >
+            {caveatsOpen
+              ? d.advisor.pokerRanking.caveatsToggleHide
+              : d.advisor.pokerRanking.caveatsToggleShow}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => (isDesktop ? setExpanded((current) => !current) : setSheetOpen(true))}
+          >
+            {isDesktop && expanded
+              ? d.advisor.pokerRanking.collapse
+              : d.advisor.pokerRanking.viewAll}
+          </Button>
+        </div>
       </div>
 
-      {isDesktop && expanded ? (
+      {caveatsOpen ? (
+        <ScrollPane label={d.advisor.pokerRanking.caveatsTitle} className="pe-1">
+          {caveats}
+        </ScrollPane>
+      ) : isDesktop && expanded ? (
         <ScrollPane label={d.advisor.pokerRanking.fullListAria} className="space-y-1.5">
           {renderFullList()}
         </ScrollPane>
@@ -128,7 +175,9 @@ export function PokerRankingPanel({ cards }: { cards: readonly PokerCard[] }) {
             </p>
           ) : null}
           <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
-            <div className="space-y-1.5">{rows.map((tier) => renderRow(tier))}</div>
+            <div className="space-y-1.5">
+              {rows.map((tier) => renderRow(tier, POKER_RANK_TABLE.indexOf(tier)))}
+            </div>
           </div>
           {belowCount > 0 ? (
             <p className="shrink-0 text-center text-xs text-muted/60">

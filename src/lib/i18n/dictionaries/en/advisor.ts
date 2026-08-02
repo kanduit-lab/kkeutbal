@@ -32,6 +32,38 @@ export const advisor: Dictionary['advisor'] = {
     detailPair: 'Month {month}, 2 cards',
     detailMonths: 'Month {a} + Month {b}',
     detailExamplePrefix: 'e.g. {detail}',
+    positionBadge: 'No. {position}',
+    combos: '{n} combos',
+    combosAria: '{n} of {total} possible two-card combinations reach this rank',
+    traitAmhaengeosa: '암행어사',
+    traitTtaengjabi: '땡잡이',
+    traitGusa: '구사',
+    traitCount: '{trait} ×{n}',
+    caveatsTitle: 'Watch out for',
+    caveatsToggleShow: 'Show caveats',
+    caveatsToggleHide: 'Hide caveats',
+    caveats: {
+      amhaengeosa: {
+        title: '암행어사 inverts the ranking',
+        body: 'Month 4 and month 7 held as **both 열끗** beats an opponent 광땡. Only one of the four possible 4·7 pairs qualifies; the rest are plain 1끗. Against anything other than a 광땡 it does nothing.',
+      },
+      ttaengjabi: {
+        title: '땡잡이 only catches 땡',
+        body: 'A month 3 + month 7 pair beats an opponent 땡, regardless of card kind. It **cannot** catch a 광땡 — against one it is just 망통.',
+      },
+      gusa: {
+        title: '구사 undoes the hand',
+        body: 'Month 4 + month 9 scores as 3끗, but holding it voids the hand and everyone is dealt again. It does not win — it avoids losing.',
+      },
+      tie: {
+        title: 'Equal hands are re-dealt',
+        body: 'By default an exact rank tie is not broken; the hand is dealt again. Some rooms let the first-dealt player (선) win instead, so agree before you start.',
+      },
+      deck: {
+        title: 'Seotda uses only 20 cards',
+        body: 'Only the 광/열끗/띠 of months 1–10 are used, 20 of the 48 hwatu cards. 광 exists only in months 1, 3 and 8, which is why there are just three 광땡: 38, 18 and 13. There are {total} two-card combinations in total.',
+      },
+    },
   },
   pokerRanking: {
     title: 'Poker hand ranking',
@@ -43,6 +75,28 @@ export const advisor: Dictionary['advisor'] = {
     moreAbove: '▲ {n} more ranks above',
     moreBelow: '▼ {n} more ranks below',
     fullListAria: 'Full poker hand ranking',
+    positionBadge: 'No. {position}',
+    caveatsTitle: 'Watch out for',
+    caveatsToggleShow: 'Show caveats',
+    caveatsToggleHide: 'Hide caveats',
+    caveats: {
+      bestFive: {
+        title: 'With 7 cards, the best 5 play',
+        body: 'Once hole cards and board add up to 7, the highest of the 21 possible five-card combinations becomes your hand automatically. The other two cards do not count.',
+      },
+      wheel: {
+        title: 'The ace works at both ends',
+        body: 'A·2·3·4·5 is the lowest straight (**five-high**) and 10·J·Q·K·A the highest. Wrapping around, as in A·K·2·3·4, is not a straight.',
+      },
+      kicker: {
+        title: 'Equal categories are split by rank',
+        body: 'Two one-pair hands compare the pair first, then the remaining cards (kickers) from high to low. Only when all five match is it a genuine tie.',
+      },
+      suit: {
+        title: 'Suits have no order',
+        body: 'Spades do not beat hearts. Two hands with the same ranks are exactly equal no matter the suits.',
+      },
+    },
     description: {
       'royal-flush': 'Same suit 10·J·Q·K·A',
       'straight-flush': '5 consecutive ranks, same suit',

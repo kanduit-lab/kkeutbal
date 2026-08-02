@@ -27,6 +27,38 @@ export const advisor = {
     detailPair: '{month}월 2장',
     detailMonths: '{a}월 + {b}월',
     detailExamplePrefix: '예: {detail}',
+    positionBadge: '{position}위',
+    combos: '{n}가지',
+    combosAria: '이 서열이 나오는 조합 {n}가지 / 전체 {total}가지',
+    traitAmhaengeosa: '암행어사',
+    traitTtaengjabi: '땡잡이',
+    traitGusa: '구사',
+    traitCount: '{trait} {n}가지',
+    caveatsTitle: '유의사항',
+    caveatsToggleShow: '유의사항 보기',
+    caveatsToggleHide: '유의사항 접기',
+    caveats: {
+      amhaengeosa: {
+        title: '암행어사는 순위를 뒤집는다',
+        body: '4월·7월을 **둘 다 열끗**으로 들면 상대의 광땡을 잡는다. 4·7 조합 네 가지 중 이 한 가지만 해당하고, 나머지 4·7은 그냥 1끗이다. 광땡이 아닌 상대에게는 아무 효과가 없다.',
+      },
+      ttaengjabi: {
+        title: '땡잡이는 땡만 잡는다',
+        body: '3월·7월 조합은 상대의 땡을 잡는다. 열끗·띠 같은 종류는 가리지 않는다. 다만 **광땡은 못 잡는다** — 광땡 상대로는 그냥 망통이다.',
+      },
+      gusa: {
+        title: '구사는 판을 무르는 패다',
+        body: '4월·9월 조합은 끗으로는 3끗이지만, 들고 있으면 판이 무효가 되고 다시 돌린다. 이기는 패가 아니라 지는 판을 피하는 패다.',
+      },
+      tie: {
+        title: '같은 족보면 재경기',
+        body: '기본 규칙은 완전히 같은 서열일 때 승부를 가리지 않고 다시 돌린다. 방마다 선(먼저 받은 사람)이 이기는 규칙을 쓰기도 하니 시작 전에 정해두는 편이 낫다.',
+      },
+      deck: {
+        title: '섯다는 20장만 쓴다',
+        body: '화투 48장 중 1~10월의 광·열끗·띠 20장만 쓴다. 광은 1·3·8월에만 있어서 광땡도 38·18·13 세 가지뿐이다. 전체 두 장 조합은 {total}가지다.',
+      },
+    },
   },
   pokerRanking: {
     title: '포커 족보 순위',
@@ -38,6 +70,28 @@ export const advisor = {
     moreAbove: '▲ 위로 {n}단계 더 있어요',
     moreBelow: '▼ 아래로 {n}단계 더 있어요',
     fullListAria: '포커 족보 전체 순위',
+    positionBadge: '{position}위',
+    caveatsTitle: '유의사항',
+    caveatsToggleShow: '유의사항 보기',
+    caveatsToggleHide: '유의사항 접기',
+    caveats: {
+      bestFive: {
+        title: '7장이면 그중 가장 좋은 5장으로 친다',
+        body: '손패와 보드를 합쳐 7장이 되면 21가지 조합 중 가장 높은 5장이 자동으로 내 족보가 된다. 남는 2장은 계산에 들어가지 않는다.',
+      },
+      wheel: {
+        title: 'A는 위아래 양쪽에 붙는다',
+        body: 'A·2·3·4·5는 **5 하이** 스트레이트로 가장 낮은 스트레이트이고, 10·J·Q·K·A가 가장 높다. A·K·2·3·4처럼 A를 사이에 두고 이어지는 건 스트레이트가 아니다.',
+      },
+      kicker: {
+        title: '같은 족보면 숫자로 가른다',
+        body: '원페어끼리는 페어 숫자를 먼저 보고, 같으면 남은 카드(킥커)를 높은 순서로 비교한다. 다섯 장이 전부 같은 숫자여야 비긴다.',
+      },
+      suit: {
+        title: '무늬끼리는 우열이 없다',
+        body: '스페이드가 하트보다 세지 않다. 같은 숫자 구성이면 무늬가 달라도 완전히 같은 값이다.',
+      },
+    },
     description: {
       'royal-flush': '같은 무늬 10·J·Q·K·A',
       'straight-flush': '같은 무늬 숫자 5장 연속',
