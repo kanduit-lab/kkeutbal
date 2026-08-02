@@ -61,7 +61,7 @@ function formatChipsEn(n: number): string {
   return `${formatted}${useMillion ? 'M' : 'k'}`
 }
 
-/** 액션 종류별 뱃지 색. 좌석 카드(`game-table`)와 내 좌석 패널(`my-seat-panel`)이 같이 쓴다. */
+/** 액션 종류별 뱃지 색. 지금은 펠트 좌석 카드(`game-table`)만 쓴다. */
 export const ACTION_BADGE: Record<BetActionKind, string> = {
   check: 'bg-white/15 text-text',
   call: 'bg-win/25 text-win',

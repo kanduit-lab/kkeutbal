@@ -49,14 +49,6 @@
   - 변경 범위: `src/features/game/components/use-room-actions.ts` 또는 `src/lib/realtime/event-sync-policy.ts`
   - 완료 기준: 되돌리기 뒤 다른 참가자 화면이 폴링을 기다리지 않고 수렴한다
 
-### 정리
-
-- [ ] **모바일 자기 좌석 표시가 둘로 갈렸다**: `MySeatPanel` + `GameTable`의 `excludeSelfSeat` 모드가 어디에도 연결돼 있지 않다
-  - 배경: 같은 문제(폰에서 좌석 카드가 겹친다)를 두 방향으로 고쳤다. `a350306`은 좌석 링을 유지한 채 내 좌석만 펠트 밖으로 뺐고, 세로 화면을 노선도+팟으로 다시 짠 쪽은 좌석 링 자체를 걷어내고 `SelfBar`를 쓴다. 후자가 채택돼서 전자의 두 조각이 호출자 없이 남았다
-  - 결정할 것: `MySeatPanel`·`excludeSelfSeat`를 지울지, 아니면 좌석 링을 되살릴 여지로 남길지
-  - 지울 경우 범위: `src/features/game/components/my-seat-panel.tsx` 삭제, `game-table.tsx`의 `excludeSelfSeat` 분기와 `shared.ts`의 `seatX`/`seatRadiusX` 인자 제거, 두 파일의 `MySeatPanel` 언급 주석 정리
-  - 완료 기준: 두 이름 중 어느 쪽도 호출자 없는 상태로 남아 있지 않다
-
 ### 운영
 
 - [ ] **테스트 계정 정리**: `testadmin1`/`testadmin2`/`testadmin3`을 배포 전에 없애거나 권한을 내린다
