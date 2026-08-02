@@ -22,19 +22,10 @@ interface Flight {
 // 놓친 탭) left/top 전체가 무효가 되고, absolute 요소는 static 위치 — 섹션 좌상단 모서리 —
 // 로 떨어져 전 좌석이 한 점에 겹쳐 화면 밖으로 잘린다. 기본값으로 대신 계산되면 간격은
 // 어긋나도 배치 자체는 유지된다.
-//
-// hug: 내 좌석을 뺀 모바일 배치에서는 felt-inset 몫까지 좌석을 바깥으로 밀어 카드가
-// 섹션 가장자리에 딱 붙게 한다(dx=±1이면 카드 바깥 모서리 = 섹션 모서리). 폰은 가로가
-// 좁아 테두리 안쪽으로 들여놓는 몫이 그대로 이름 폭 손해였다. 세로(seatY)는 그대로 둔다 —
-// 위쪽 좌석이 섹션 밖 헤더와 겹치는 것을 felt-inset이 막아주고 있다.
-function seatRadiusX(hug: boolean): string {
-  return hug
-    ? `(50cqw - var(--seat-half-w, 3.5rem))`
-    : `(50cqw - var(--felt-inset, 7) * 1cqw - var(--seat-half-w, 3.5rem))`
-}
+const SEAT_RADIUS_X = `(50cqw - var(--felt-inset, 7) * 1cqw - var(--seat-half-w, 3.5rem))`
 
-function seatX(dx: number, hug = false): string {
-  return `calc(50cqw + ${seatRadiusX(hug)} * ${dx.toFixed(4)})`
+function seatX(dx: number): string {
+  return `calc(50cqw + ${SEAT_RADIUS_X} * ${dx.toFixed(4)})`
 }
 
 function seatY(dy: number): string {
@@ -53,7 +44,6 @@ export function GameTable({
   scale = 'default',
   gameType = 'seotda',
   fit = false,
-  excludeSelfSeat = false,
 }: {
   members: readonly MemberView[]
   online: ReadonlySet<string>
@@ -71,13 +61,6 @@ export function GameTable({
 
   /** 남은 높이에 맞춰 테이블을 줄인다(모바일 포함) — 뷰포트 스크롤을 막기 위한 모드 */
   fit?: boolean
-
-  /**
-   * 내 좌석을 펠트에서 빼고 상대만 배치한다. 폰에서 좌석 카드 폭이 펠트 반지름보다
-   * 커져 서로 겹치던 문제를 배치 단계에서 없애기 위한 모드 — 내 정보는 `MySeatPanel`이
-   * 펠트 밖에서 더 넓게 보여준다.
-   */
-  excludeSelfSeat?: boolean
 }) {
   const { d, locale } = useDict()
   const [flights, setFlights] = useState<readonly Flight[]>([])
@@ -87,15 +70,14 @@ export function GameTable({
 
   const board = scale === 'board'
 
-  // 내 좌석을 뺐으면 실제로 펠트에 놓이는 수를 기준으로 밀집 여부를 판단한다.
-  const seatCount = excludeSelfSeat ? Math.max(0, members.length - 1) : members.length
+  const seatCount = members.length
   const compact = seatCount >= 7
   // 좌석이 2개 이하일 때만 카드를 넓힌다. 폰의 펠트는 납작해서(가로:세로 ≈ 1.8:1) 세로
   // 여유가 거의 없고, 좌우 끝에 마주 놓인 두 좌석 사이는 팟 표시가 차지한다 — 그래서 폭
   // 상한은 팟까지의 거리에서 나온다. 3개가 되면 위쪽 좌석이 양옆 좌석과 세로로 40px 남짓
   // 밖에 안 떨어져서, 조금만 넓혀도 서로 겹친다.
   const roomy = !board && seatCount <= 2
-  // 펠트 좌석 아바타는 내 좌석 패널(34px)과 같은 크기 — 상대만 커 보일 이유가 없다.
+  // 밀집 배치에서만 아바타를 줄여 이름 줄 높이를 아낀다. 크게 키우는 건 전광판(board)뿐이다.
   const avatarSize = board ? 64 : compact ? 30 : 34
   const labels = betLabelsFor(gameType, d)
   const badgeTextClass = board ? 'text-lg' : 'text-[11px] sm:text-xs'
@@ -108,20 +90,6 @@ export function GameTable({
   }
 
   const seats = useMemo(() => {
-    // 내 좌석을 뺀 모드에서는 상대를 아래쪽(내 패널 자리)을 피해 위쪽 호에 편다.
-    // 3명 이하면 반원(왼쪽~위~오른쪽), 그 이상은 270° 호로 넓혀 간격을 유지한다.
-    if (excludeSelfSeat) {
-      const others = members.filter((member) => member.userId !== selfId)
-      const count = others.length
-      const arc = count <= 3 ? Math.PI : Math.PI * 1.5
-      const start = -Math.PI / 2 - arc / 2
-      return others.map((member, i) => {
-        const angle = count === 1 ? -Math.PI / 2 : start + (i / (count - 1)) * arc
-        const radius = count >= 7 && i % 2 === 0 ? 0.94 : 1
-        return { member, dx: radius * Math.cos(angle), dy: radius * Math.sin(angle) }
-      })
-    }
-
     const selfIdx = Math.max(
       0,
       members.findIndex((m) => m.userId === selfId),
@@ -134,7 +102,7 @@ export function GameTable({
       const radius = dense && i % 2 === 0 ? 0.94 : 1
       return { member, dx: radius * Math.cos(angle), dy: radius * Math.sin(angle) }
     })
-  }, [members, selfId, excludeSelfSeat])
+  }, [members, selfId])
 
   const lastAccepted = useMemo(() => lastAcceptedByUser(actions), [actions])
 
@@ -200,8 +168,8 @@ export function GameTable({
             : roomy
               ? // 폭 하한 3.25rem(박스 104px)은 가장 넓은 내용 줄(칩 13 + "1,000" + "+0" +
                 // 좌우 패딩 ≈ 103px)이 줄바꿈 없이 들어가는 최소값이고, 15cqw 상한은 박스가
-                // 펠트를 덮지 않게 팟 블록(반폭 ≈ 13cqw)과의 거리에서 나온다 — hug 배치에서
-                // 박스 안쪽 모서리가 2×폭 = 30cqw < 50 - 13 = 37cqw.
+                // 팟 블록(반폭 ≈ 13cqw)을 덮지 않는 한계값이다 — 좌우 끝 좌석의 중심이
+                // (93 - 폭)cqw이므로 안쪽 모서리는 93 - 2×폭 = 63cqw = 팟 오른쪽 끝(50 + 13).
                 '[--seat-half-h:3rem] [--seat-half-w:clamp(3.25rem,15cqw,6rem)] sm:[--seat-half-h:4rem] sm:[--seat-half-w:clamp(3.5rem,15cqw,7rem)]'
               : 'max-[359px]:[--seat-half-h:3.5rem] max-[359px]:[--seat-half-w:3rem] [--seat-half-h:3.75rem] [--seat-half-w:3.5rem] sm:[--seat-half-h:4.75rem] sm:[--seat-half-w:5.5rem]',
       )}
@@ -270,9 +238,9 @@ export function GameTable({
               {
                 width: 20,
                 height: 20,
-                left: seatX(seat.dx, excludeSelfSeat),
+                left: seatX(seat.dx),
                 top: seatY(seat.dy),
-                '--fly-x': `calc(${seatRadiusX(excludeSelfSeat)} * ${(-seat.dx * 0.9).toFixed(4)})`,
+                '--fly-x': `calc(${SEAT_RADIUS_X} * ${(-seat.dx * 0.9).toFixed(4)})`,
                 '--fly-y': `calc((50cqh - var(--felt-inset, 7) * 1cqh - var(--seat-half-h, 3.75rem)) * ${(-seat.dy * 0.9).toFixed(4)})`,
               } as React.CSSProperties
             }
@@ -303,7 +271,7 @@ export function GameTable({
           .join(' · ')
 
         const interactive = Boolean(onSeatTap)
-        const seatPosition = { left: seatX(dx, excludeSelfSeat), top: seatY(dy) }
+        const seatPosition = { left: seatX(dx), top: seatY(dy) }
         const avatarEl = (
           <div className="relative">
             <Avatar name={member.displayName} url={member.avatarUrl} size={avatarSize} />
@@ -343,7 +311,7 @@ export function GameTable({
                       ? // 좌우 여백을 줄여 늘어난 폭이 그대로 내용 자리로 가게 한다. 폭을
                         // 2×half-w로 고정하는 이유: 내용이 좁으면 카드가 max-w보다 작아지는데,
                         // 좌석 중심은 half-w 기준이라 그 차이의 절반만큼 가장자리에서 뜬다 —
-                        // hug 배치의 "모서리 밀착"은 폭이 정확히 2×half-w일 때만 성립한다.
+                        // 위 15cqw 상한 계산도 폭이 정확히 2×half-w일 때만 성립한다.
                         'w-[calc(var(--seat-half-w)*2)] px-1.5 pb-1 pt-3 sm:px-2'
                       : 'min-w-24 px-2 pb-1 pt-3 max-[359px]:min-w-20 max-[359px]:px-1.5 sm:min-w-32 sm:px-3',
                 folded ? 'border-white/5 bg-black/50' : 'border-gold/20 bg-black/60',
