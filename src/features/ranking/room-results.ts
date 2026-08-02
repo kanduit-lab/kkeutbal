@@ -116,7 +116,10 @@ export async function getSessionStandings(roomId: string): Promise<StandingRow[]
         folds: foldMap.get(member.userId) ?? 0,
       }
     })
-    .sort((a, b) => b.net - a.net)
+    // 동점자는 `userId`로 한 번 더 가른다. 이 정렬 결과가 순위 번호와 👑 MVP 뱃지를
+    // 정하는데, 2차 기준이 없으면 Postgres가 돌려주는 행 순서(보장 없음)에 따라 같은
+    // 방을 새로 고칠 때마다 두 사람의 등수가 서로 바뀐다.
+    .sort((a, b) => b.net - a.net || (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0))
 }
 
 export interface RoundHistoryRow {

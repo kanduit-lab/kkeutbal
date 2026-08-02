@@ -139,6 +139,54 @@ describe('computeSettlementTransfers', () => {
     ).toThrow(/safe integer/)
   })
 
+  it('안전 정수 범위 판정이 입력 순서에 좌우되지 않는다', () => {
+    const max = Number.MAX_SAFE_INTEGER
+    const rows = [
+      { userId: 'a', net: max },
+      { userId: 'b', net: max },
+      { userId: 'c', net: -max },
+      { userId: 'd', net: -max },
+    ]
+    // 딴 쪽·잃은 쪽을 따로 누적하지 않으면, 같은 행 묶음인데도 a,b가 붙어 있을 때만
+    // 중간 합이 범위를 넘어 예외가 나고 섞어 주면 그냥 통과했다.
+    const grouped = () => computeSettlementTransfers(rows)
+    const interleaved = () =>
+      computeSettlementTransfers([rows[0]!, rows[2]!, rows[1]!, rows[3]!])
+    expect(grouped).toThrow(/safe integer/)
+    expect(interleaved).toThrow(/safe integer/)
+  })
+
+  it('이체 총액은 언제나 딴 사람들의 몫 합과 같다', () => {
+    const rows = [
+      { userId: 'a', net: 6 },
+      { userId: 'b', net: 4 },
+      { userId: 'c', net: -5 },
+      { userId: 'd', net: -5 },
+    ]
+    const transfers = computeSettlementTransfers(rows)
+    const moved = transfers.reduce((sum, transfer) => sum + transfer.amount, 0)
+    expect(moved).toBe(10)
+    expect(transfers.every((transfer) => transfer.amount > 0)).toBe(true)
+    expect(transfers.every((transfer) => transfer.fromId !== transfer.toId)).toBe(true)
+    // 같은 (보내는 사람, 받는 사람) 쌍이 두 번 나오면 안 된다 — 정산표가 이 쌍을
+    // React key로 쓰기 때문에 중복되면 행이 조용히 사라진다.
+    const pairs = transfers.map((transfer) => `${transfer.fromId}:${transfer.toId}`)
+    expect(new Set(pairs).size).toBe(pairs.length)
+    expect(transfers.length).toBeLessThanOrEqual(rows.length - 1)
+  })
+
+  it('같은 금액을 잃은 사람끼리는 id 순으로 갚는다', () => {
+    const transfers = computeSettlementTransfers([
+      { userId: 'debtor-b', net: -5 },
+      { userId: 'debtor-a', net: -5 },
+      { userId: 'creditor', net: 10 },
+    ])
+    expect(transfers).toEqual([
+      { fromId: 'debtor-a', toId: 'creditor', amount: 5 },
+      { fromId: 'debtor-b', toId: 'creditor', amount: 5 },
+    ])
+  })
+
   it('입력 배열과 행을 변형하지 않는다', () => {
     const rows = [
       { userId: 'a', net: 5 },
