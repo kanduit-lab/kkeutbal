@@ -1,6 +1,10 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
+import type { Tx } from './action-helpers'
 import { toSafeChipInteger } from './chip-integers'
+
+/** 풀 커넥션(`db`)이든 진행 중인 트랜잭션이든 같은 조회를 돌릴 수 있는 실행기. */
+type Executor = typeof db | Tx
 import { toRoomView } from './room-lookup-queries'
 import type {
   BetActionView,
@@ -76,8 +80,20 @@ async function getMembers(roomId: string): Promise<MemberView[]> {
   }))
 }
 
-export async function getRoundPot(roundId: string): Promise<number> {
-  const [row] = await db
+/**
+ * 판에 걸린 판돈. `bet`은 음수(-금액), 되돌린 `correction`은 양수라 부호를 뒤집어 더하면
+ * 남아 있는 판돈이 된다. fold한 사람이 이미 낸 몫도 그대로 포함된다 — 다이했다고 판돈이
+ * 줄지는 않는다.
+ *
+ * `executor`를 반드시 받는 이유: 정산은 베팅 행을 방금 INSERT한 **같은 트랜잭션 안에서**
+ * 이 값을 읽는다. 모듈 레벨 `db`로 읽으면 postgres-js가 풀에서 다른 커넥션을 꺼내오고,
+ * READ COMMITTED에서 그 커넥션은 아직 커밋 안 된 그 행을 못 본다 — 판을 끝낸 마지막
+ * 베팅 금액만큼 판돈이 비어 승자에게 덜 지급되고, 그 방은 `netTotalInRoom !== 0`이 돼
+ * 영영 종료할 수 없게 된다. 게다가 방 advisory lock을 쥔 채 두 번째 커넥션을 점유하는
+ * 모양이라(`max: 5`) 동시 베팅 5건이면 풀이 서로를 기다리며 멈춘다.
+ */
+export async function getRoundPot(roundId: string, executor: Executor = db): Promise<number> {
+  const [row] = await executor
     .select({
       pot: sql<string>`coalesce(-sum(${chipLedger.delta}), 0)::text`,
     })

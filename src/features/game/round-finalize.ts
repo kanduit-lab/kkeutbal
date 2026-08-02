@@ -33,7 +33,15 @@ export async function creditPotToWinner(
   })
 }
 
-/** 판을 `ended`로 확정 기록한다 — 정산(팟 지급) 자체는 호출부가 먼저 끝내둔다. */
+/**
+ * 판을 `ended`로 확정 기록한다 — 정산(팟 지급) 자체는 호출부가 먼저 끝내둔다.
+ *
+ * `status = 'playing'` 조건을 UPDATE 자체에 건다. 지금은 모든 호출부가 방 advisory lock을
+ * 잡은 뒤 상태를 다시 읽으므로 이 조건이 없어도 맞지만, lock을 빠뜨린 새 정산 경로가
+ * 생기면 이미 끝난 판의 승자와 판돈을 조용히 덮어쓰게 된다. 0행이면 이미 누군가
+ * 끝낸 판이므로 트랜잭션 전체를 되돌린다 — 팟은 이 시점에 이미 지급돼 있어서
+ * 그냥 넘어가면 중복 지급이 된다.
+ */
 export async function finalizeRoundRecord(
   tx: Tx,
   round: { id: string },
@@ -41,10 +49,12 @@ export async function finalizeRoundRecord(
   pot: number,
   result: unknown,
 ): Promise<void> {
-  await tx
+  const settled = await tx
     .update(rounds)
     .set({ status: 'ended', pot, winnerId, result, endedAt: new Date() })
-    .where(eq(rounds.id, round.id))
+    .where(and(eq(rounds.id, round.id), eq(rounds.status, 'playing')))
+    .returning({ id: rounds.id })
+  if (settled.length === 0) throw new Error('Round was already finalized')
 }
 
 /** 공정 딜 라운드면 공개 리빌을 진행한다. 공정 딜이 아니면 아무것도 안 한다. */
@@ -140,7 +150,9 @@ export async function autoSettleRoundIfComplete(
     .limit(1)
   if (anyPending) return null
 
-  const pot = await getRoundPot(round.id)
+  // `tx`를 넘겨야 한다. 이 경로는 `placeBet`/`approveBet`가 방금 INSERT한 베팅 행과 같은
+  // 트랜잭션 안이라, 풀 커넥션으로 읽으면 그 행이 안 보여 판돈이 그만큼 비어 버린다.
+  const pot = await getRoundPot(round.id, tx)
   await creditPotToWinner(tx, room, round, winnerId, pot)
   await finalizeRoundRecord(tx, round, winnerId, pot, null)
   await revealFairnessIfNeeded(tx, fairRound, triggeredBy)

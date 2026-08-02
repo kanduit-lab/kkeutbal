@@ -79,10 +79,24 @@ export function readJoinAsObserver(rulePreset: unknown): boolean {
   return false
 }
 
+/**
+ * preset의 규칙 숫자 상한. 쓰기 경로(`createRoom`/`updateRoomSettings`)는 이미 zod로
+ * 막지만, 읽기 쪽에 상한이 없으면 그 경로를 거치지 않고 들어온 jsonb 값이 고스톱 정산의
+ * `점수 × 점당 × 배수` 곱을 안전 정수 밖으로 밀어낸다. 쓰기 스키마의 최대치와 맞춘다.
+ */
+const MAX_RULE_NUMBER = 1_000_000
+
 function readRuleNumber(rulePreset: unknown, key: string): number | null {
   if (rulePreset && typeof rulePreset === 'object' && key in rulePreset) {
     const value = (rulePreset as Record<string, unknown>)[key]
-    if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 1) return value
+    if (
+      typeof value === 'number' &&
+      Number.isSafeInteger(value) &&
+      value >= 1 &&
+      value <= MAX_RULE_NUMBER
+    ) {
+      return value
+    }
   }
   return null
 }

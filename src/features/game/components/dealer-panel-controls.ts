@@ -91,10 +91,15 @@ export function useDealerPanelControls({
 
   const confirmVoid = () => {
     const reason = voidReason
+    // 다이얼로그가 "N번째 판을 무효화한다"고 말한 바로 그 판을 같이 보낸다. 안 보내면
+    // 서버가 대상을 혼자 다시 고르는데, 그 사이 다른 딜러가 새 판을 시작했으면
+    // "지난 판 취소"가 방금 시작한 판을 지운다.
+    const targetRoundId =
+      voidTarget === 'current' ? snapshot.currentRound?.id : snapshot.lastResult?.roundId
     setVoidTarget(null)
     run('void', () =>
       runAction(
-        () => voidRound({ roomId, reason }),
+        () => voidRound({ roomId, reason, ...(targetRoundId ? { roundId: targetRoundId } : {}) }),
         (data) => ({
           event: 'round.voided',
           payload: { roundId: data.roundId, seq: data.seq, reason },

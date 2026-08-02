@@ -8,6 +8,7 @@ import { currentUserId } from '../auth/session'
 import type { PersistedFairRound } from '../fairness/fair-round-service'
 import { getRoundPot } from './queries'
 import { balanceInRoom, lockRoom, readPointValue, requireRole } from './action-helpers'
+import { addSafeChipIntegers, multiplySafeChipIntegers } from './chip-integers'
 import { winnerPayout } from './round-settlement'
 import { creditPotToWinner, finalizeRoundRecord, revealFairnessIfNeeded } from './round-finalize'
 import {
@@ -197,7 +198,7 @@ export async function endRound(
         .limit(1)
       if (pending) return fail('errors.pendingBetsBeforeEnd')
 
-      let pot = await getRoundPot(round.id)
+      let pot = await getRoundPot(round.id, tx)
 
       let persistedPenalties: RoundPenaltyView[] = []
 
@@ -221,11 +222,17 @@ export async function endRound(
 
         let collected = 0
         for (const loser of losers) {
-          const owed = score * pointValue * (factorByLoser.get(loser.userId) ?? 1)
+          // 점수·점당·배수는 각각은 작아도 곱하면 안전 정수 범위를 넘길 수 있다(점당은
+          // preset에서 오고 상한이 없다). 누적도 마찬가지 — 패자 9명이면 아홉 번 더한다.
+          const owed = multiplySafeChipIntegers(
+            multiplySafeChipIntegers(score, pointValue, 'Gostop owed'),
+            factorByLoser.get(loser.userId) ?? 1,
+            'Gostop owed',
+          )
           const balance = await balanceInRoom(tx, roomId, loser.userId)
           const pay = Math.min(balance, owed)
           if (pay <= 0) continue
-          collected += pay
+          collected = addSafeChipIntegers(collected, pay, 'Gostop collected')
           await tx.insert(chipLedger).values({
             roomId,
             roundId: round.id,
@@ -277,6 +284,13 @@ export async function endRound(
 const voidRoundSchema = z.object({
   roomId: z.string().uuid(),
   reason: z.string().trim().min(1).max(60),
+  /**
+   * 화면이 "이 판을 무효화한다"고 보여준 판. 서버는 무효화 대상을 여전히 스스로 고르지만,
+   * 고른 결과가 이 값과 다르면 거부한다 — 다이얼로그를 열어둔 사이 다른 딜러가 새 판을
+   * 시작하면 "지난 판 취소"를 눌렀는데 방금 시작한 판이 지워진다. 옛 클라이언트 호환을
+   * 위해 optional이다.
+   */
+  roundId: z.string().uuid().optional(),
 })
 
 export async function voidRound(
@@ -287,13 +301,22 @@ export async function voidRound(
 
   const parsed = voidRoundSchema.safeParse(input)
   if (!parsed.success) return fail('errors.invalidInput')
-  const { roomId, reason } = parsed.data
+  const { roomId, reason, roundId: expectedRoundId } = parsed.data
 
   try {
     return await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       if (!(await requireRole(tx, roomId, userId, ['host', 'dealer']))) {
         return fail('errors.dealerOrHostOnlyVoidRound')
+      }
+
+      // 정산이 끝난 방은 손대지 않는다. 여기서 막지 않으면 이미 손익 합계 0을 확인하고
+      // 크레딧까지 푼 방의 원장에 보정 행이 더 붙어, 되돌릴 방법 없이 합계가 깨진다.
+      // 다른 판 조작 액션들은 전부 이 검사를 하는데 무효화만 빠져 있었다.
+      const [room] = await tx.select().from(rooms).where(eq(rooms.id, roomId)).limit(1)
+      if (!room) return fail('errors.roomNotFound')
+      if (room.status === 'settled' || room.status === 'closed') {
+        return fail('errors.voidAfterSettlement')
       }
 
       const [playing] = await tx
@@ -313,6 +336,10 @@ export async function voidRound(
           .limit(1)
         if (!latest || latest.status !== 'ended') return fail('errors.noRoundToVoid')
         round = latest
+      }
+
+      if (expectedRoundId && round.id !== expectedRoundId) {
+        return fail('errors.voidTargetChanged')
       }
 
       const moveRows = await tx
@@ -370,9 +397,15 @@ export async function voidRound(
           ),
         )
 
+      // 이미 종료됐던 판을 무효화하면 원래 `result`(고스톱 점수·피박/광박 배수)를 덮어쓰게
+      // 된다. 고스톱은 베팅 행이 없어서 그 blob이 무엇으로 정산했는지에 대한 유일한 기록이다 —
+      // 잘못 매긴 점수를 고치려고 무효화하는 순간 무엇이 잘못이었는지가 사라진다. 지운 대신
+      // `voidedResult`로 옮겨 남긴다.
+      const priorResult =
+        round.result && typeof round.result === 'object' ? { voidedResult: round.result } : {}
       await tx
         .update(rounds)
-        .set({ status: 'voided', result: { note: reason }, endedAt: new Date() })
+        .set({ status: 'voided', result: { ...priorResult, note: reason }, endedAt: new Date() })
         .where(eq(rounds.id, round.id))
 
       // 공정 딜 상태 마감(abort 또는 append-only reveal) — round-fairness-ops.ts.
