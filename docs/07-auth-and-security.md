@@ -6,7 +6,7 @@
 | Audience        | engineering / operators / reviewers                                     |
 | Status          | active                                                                  |
 | Source of truth | 구현은 auth·권한 코드와 스키마, 이 문서는 인증 흐름·역할 권한·보안 경계 |
-| Last reviewed   | 2026-07-30                                                              |
+| Last reviewed   | 2026-08-02                                                              |
 
 ## Context
 
@@ -38,8 +38,9 @@ password (항상 활성)
     · 연결이 일어나면 console.warn 으로 남긴다 (소유권 이동이라 사후 추적이 필요하다).
 
 guest-token (항상 활성)
-  → 관리자가 발급한 8자 토큰 + 이름 → sub = `guest:{tokenId}:{name}`
-  → 같은 (토큰, 이름) = 같은 계정. 토큰은 만료·회수 가능
+  → 관리자가 발급한 8자 토큰 + 이름 + 이 기기의 비밀값
+  → sub = `guest:{tokenId}:HMAC(AUTH_SECRET, 기기비밀값 ∥ tokenId ∥ 이름)`
+  → 같은 (기기, 토큰, 이름) = 같은 계정. 토큰은 만료·회수 가능
   → 신규 토큰은 `guest_tokens.code_hash` HMAC만 저장, 레거시 원문은 관리자 콘솔 최초 진입 시 일괄 해시 전환
 
 ```
@@ -47,6 +48,56 @@ guest-token (항상 활성)
 로그인 화면은 활성 provider만 노출한다. 관리자(`users.is_admin`)는 `/admin`에서 게스트 토큰
 발급·회수, 관리자 지정, SSO 설정을 한다
 (`features/auth/admin-actions.ts`, 게이트는 `features/auth/roles.ts` `isAdminUser`).
+
+### 게스트 신원은 기기에 묶인다 (2026-08-02)
+
+게스트 토큰 하나를 MT 현장에서 여럿이 나눠 쓰는 것이 **정상 사용 방식**이다. 그래서 토큰은
+"이 방에 들어올 자격"만 증명할 뿐 사람을 가르지 못한다. 2026-08-02 이전 sub는
+`guest:{tokenId}:{name.toLowerCase()}`였고, 사람을 가르는 유일한 값이 이름이었다 — 토큰을 가진
+사람이 남의 이름을 그대로 입력하면 그 계정으로 로그인됐다. 대상이 방장이면 정산 확정·역할
+변경·판 종료 권한까지 그대로 넘어갔다. 게다가 인증 없이 호출되는 `getGuestNamesForToken`이
+그 토큰의 표시 이름을 최대 20개 돌려줘서, 이름을 추측할 필요조차 없었다.
+
+지금은 게스트마다 **기기 비밀값**을 하나 발급해 sub 계산에 섞는다.
+
+- 값: `randomBytes(32)`의 base64url. `kkeutbal_guest_device` 쿠키(httpOnly · SameSite=Lax ·
+  production에서 Secure · path `/` · 180일)에만 존재하고 **DB에는 어떤 형태로도 저장하지 않는다**.
+  sub 자체가 검증이라 별도 컬럼이 필요 없다 — 비밀값을 모르면 같은 sub를 만들 수 없다.
+- 발급 시점: 게스트 로그인 Server Action이 `signIn` **직전에** 쿠키를 확정하고, 그 값을
+  credentials로 넘긴다. provider의 `authorize`는 요청 헤더만 받아 방금 발급한 쿠키를 스스로
+  읽을 수 없기 때문이다. 이 값은 서버가 만드는 내부 요청 본문에만 실리고 브라우저로 나가지 않는다.
+- `device`가 없거나 형식이 다르면 게스트 로그인을 거부한다. 기기 결속 없이 만든 계정은 아무도
+  다시 들어올 수 없고, 무엇보다 이름만으로 남의 계정에 붙는 예전 동작으로 조용히 되돌아간다.
+- 세션 쿠키(3일)보다 훨씬 길게 잡는다. 세션이 만료돼도 같은 폰·같은 이름이면 원래 좌석으로
+  돌아와야 한다.
+
+결과로 갈리는 경우:
+
+| 상황                              | 결과                                                            |
+| --------------------------------- | --------------------------------------------------------------- |
+| 같은 기기 · 같은 토큰 · 같은 이름 | 같은 계정으로 이어진다 (로그아웃·세션 만료 후 재입장)           |
+| 같은 기기 · 다른 이름             | 별도 계정 (폰 하나를 잠깐 빌려주는 경우)                        |
+| **다른 기기 · 같은 이름**         | **별도 계정.** 기존 계정을 가져가지 못한다                      |
+| 쿠키를 지운 뒤 같은 이름          | 별도 계정. 이전 신원으로는 다시 들어올 수 없다                  |
+
+**기기를 바꾼 게스트의 복구 경로는 없다 — 의도한 선택이다.** 새 기기에서 같은 이름으로 들어오면
+조용히 새 계정이 되고, 방에는 같은 이름의 새 좌석으로 참가한다. 이전 좌석의 칩·전적은 그 계정에
+남는다. "이름만 맞으면 이어진다"를 조금이라도 남기면 그것이 곧 공격 경로이므로, 복구는 사람이
+해결한다 — 방장이 이전 좌석을 정리하거나 정산에 반영한다. 로그인 화면은 이 규칙을 미리 알린다
+(`d.auth.sameDeviceNameHint`).
+
+**2026-08-02 이전에 만들어진 게스트 계정은 어느 기기로도 다시 로그인되지 않는다.** sub 계산식이
+바뀌었기 때문이다. 이미 발급된 세션 JWT는 3일 만료까지 그대로 동작한다(jwt 콜백은 로그인 시점에만
+실행된다). 이 계정들의 전적·정산 기록은 남으며, 되살리는 마이그레이션은 두지 않았다 — 되살리려면
+"이름으로 기존 게스트 계정을 잡는" 경로를 다시 여는 셈이다.
+
+이름 목록 조회(`getGuestNamesForToken` / `guest-name-lookup.ts`)는 **제거했다**. 이름만으로는
+계정에 붙을 수 없게 된 이상 목록의 쓸모가 없고, 남겨두면 토큰 소지자에게 참석자 명단을 흘리는
+일만 남는다.
+
+구현 근거: `src/features/auth/guest-identity.ts`(sub 계산, 순수 함수 + 단위 테스트),
+`src/features/auth/guest-device.ts`(쿠키), `src/lib/auth-providers.ts`(`guest-token` provider),
+`src/features/auth/actions.ts` `loginWithGuestToken`.
 
 ### 로그인 경로가 없는 사용자 행 — 로컬 플레이어
 
@@ -272,6 +323,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 | Vision 모델 출력 | 신뢰 경계 밖. zod 파싱 실패 시 부분 반영 없이 실패 반환                                                                                                                                                                                                                                          | `src/features/jokbo-advisor/vision/actions.ts`                                                                                         |
 | 칩 원장 쓰기     | append-only 트리거로 UPDATE/DELETE 자체가 불가. 정정은 반대 부호 INSERT                                                                                                                                                                                                                          | `chip_ledger_is_append_only` 트리거                                                                                                    |
 | 비밀값           | `DATABASE_URL`, `AUTH_SECRET`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`는 서버 환경변수다. SSO client secret과 10분짜리 최초 관리자 설정 코드만 `auth_settings`에 `AUTH_SECRET` 기반 암호문으로 저장하며, Vision API key는 DB에 저장하지 않는다. CA 인증서는 서버 전용 구성값이지만 secret은 아니다 | `src/lib/env.ts`, `features/auth/sso-settings.ts`, `features/auth/initial-admin-setup.ts`, `features/jokbo-advisor/vision/settings.ts` |
+| 게스트 신원      | 게스트 토큰은 공유물이라 사람을 가르지 못한다. 신원은 기기 비밀값 쿠키를 섞은 sub로만 결정하며, 이름은 신원의 일부일 뿐 그 자체로 계정을 잡지 못한다                                                                                                                                             | `features/auth/guest-identity.ts`, `features/auth/guest-device.ts`, 위 "게스트 신원은 기기에 묶인다"                                   |
 | DB 접근          | 서버(drizzle)만 `kkeutbal_app`으로 접속. 브라우저는 DB에 직접 붙지 않는다                                                                                                                                                                                                                        | `src/lib/db.ts`                                                                                                                        |
 | 데이터 격리      | RLS는 전 테이블에 활성화되어 있으나 정상 경로에서 평가되지 않음(위 "RLS는 방어층" 절). 실질 격리는 Server Action의 방 소속 검사                                                                                                                                                                  | `requireRole` / `memberRole` 패턴                                                                                                      |
 
@@ -310,6 +362,9 @@ Vision은 사용자당 분당 6회·시간당 30회로 제한한다. 비밀번�
   않는다. 가입 실패 redirect에는 전화번호를 싣지 않는다.
 - 사진 인식 업로드 이미지는 Server Action 호출 한 번 처리 후 보존하지 않는다. 인식 결과 자체도
   DB에 저장되지 않는다(위 참조) — 현재는 신뢰도 로그도 남지 않는다.
+- 게스트 기기 비밀값 쿠키(`kkeutbal_guest_device`)는 순수 난수이며 기기·사람 정보를 담지 않는다.
+  서버는 이 값을 저장하지 않고 로그인 때 sub를 계산하는 데만 쓴다. 브라우저에서 지우면 그 신원은
+  복구할 수 없다.
 
 ## Verification
 
@@ -322,6 +377,7 @@ Vision은 사용자당 분당 6회·시간당 30회로 제한한다. 비밀번�
 | 직접 DB 접근 차단  | publishable key로 PostgREST 테이블 SELECT/INSERT → 권한 거부 확인                                                 |
 | TLS 검증           | `DATABASE_CA_CERT_BASE64`가 없거나 잘못되면 DB 연결이 실패하는지 확인                                             |
 | 가입코드 게이트    | 가입코드 없이 `/register` 접근·가입 폼 제출 → `/login`으로 이동, 올바른 코드 뒤에는 가입 가능                     |
+| 게스트 신원 결속   | 다른 브라우저에서 같은 토큰·같은 이름으로 입장 → 별도 계정이 되는지 확인                                          |
 | 토큰 누출          | 클라이언트 번들(`next build` 산출물)에서 `DATABASE_URL`, `AUTH_SECRET` 및 Vision API key 문자열 검색 → 부재 확인  |
 
 ## Open Questions

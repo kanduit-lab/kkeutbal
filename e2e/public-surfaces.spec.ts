@@ -16,8 +16,10 @@ test('로그인 전환과 안전한 리다이렉트 경로를 제공한다', asy
   await page.getByRole('button', { name: '게스트 토큰으로 입장' }).click()
   await expect(page.getByRole('heading', { name: '게스트 입장' })).toBeVisible()
 
-  await page.getByRole('button', { name: '이름 불러오기' }).click()
-  await expect(page.getByText('토큰 8자리를 먼저 입력하세요')).toBeVisible()
+  // 이름 목록 불러오기 버튼은 없앴다 — 토큰만 있으면 남의 이름을 골라 그 계정이 될 수 있는
+  // 경로였다. 지금 게스트 폼은 토큰·이름 입력과 기기 결속 안내만 보여준다.
+  await expect(page.getByPlaceholder('토큰 8자리')).toBeVisible()
+  await expect(page.getByText('이 기기에서 쓰던 이름')).toBeVisible()
 })
 
 test('알 수 없는 로그인 오류는 안전한 공통 문구로만 표시한다', async ({ page }) => {
