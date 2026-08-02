@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { addBuyIn } from '@/features/budget/actions'
 import { format, useDict } from '@/lib/i18n/client'
 import { Button, Stepper } from '@/components/ui'
@@ -33,6 +33,22 @@ export function BuyInSection({
   const [buyInAmount, setBuyInAmount] = useState(startingChips)
 
   const [granting, setGranting] = useState(false)
+
+  // 응답이 끊겨 다시 누르는 재시도는 같은 요청 id를 재사용해 서버가 중복 확정을 흡수하게
+  // 한다. 단 **확정된 뒤에는 반드시 버린다** — 안 버리면 "같은 사람에게 같은 금액을 한 번
+  // 더 지급"이 서버에서 기존 바이인으로 취급돼 칩은 그대로인데 화면만 성공이라고 말한다
+  // (같은 함정을 `wallet/components/credit-admin.tsx`에서 먼저 밟았다).
+  //
+  // 초안 키에 금액을 넣으므로 금액을 바꿔 누르면 자동으로 새 id가 나온다. 대상은 시트당
+  // 고정이지만 같은 이유로 함께 넣어 둔다. 구분자는 NUL이라 금액·id 경계가 흐려지지 않는다.
+  const requestIdRef = useRef<{ draft: string; id: string } | null>(null)
+  function requestIdForDraft(): string {
+    const draft = `${memberId}\0${buyInAmount}`
+    if (!requestIdRef.current || requestIdRef.current.draft !== draft) {
+      requestIdRef.current = { draft, id: crypto.randomUUID() }
+    }
+    return requestIdRef.current.id
+  }
 
   const buyInPresets = useMemo(() => {
     const half = Math.max(1, Math.round(startingChips / 2))
@@ -75,15 +91,18 @@ export function BuyInSection({
         loadingLabel={d.ui.processing}
         disabled={isPending}
         onClick={() => {
+          const requestId = requestIdForDraft()
           setGranting(true)
           run(async () => {
             const success = await runAction(() =>
               addBuyIn({
+                requestId,
                 roomId,
                 amount: buyInAmount,
                 targetUserId: memberId,
               }),
             )
+            if (success) requestIdRef.current = null
             setGranting(false)
             return success
           }, false)

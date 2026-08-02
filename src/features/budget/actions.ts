@@ -8,11 +8,15 @@ import { consumeRateLimitsUnlessAdmin } from '@/lib/rate-limit'
 import { currentUserId } from '../auth/session'
 import { balanceInRoom, lockRoom, requireRole } from '../game/action-helpers'
 import { readFundingMode } from '../game/funding-mode'
-import { toSafeChipInteger } from '../game/chip-integers'
 
 const { rooms, roomMembers, buyIns, chipLedger } = schema
 
 const addBuyInSchema = z.object({
+  // 재전송 흡수용 요청 id. 클라이언트가 초안(대상·금액)마다 하나씩 만들고 확정되면 버린다.
+  // `adminAdjustCredits`의 `requestId`와 역할이 같지만 저장 위치가 다르다 — 저쪽은
+  // `credit_transactions.idempotency_key`에 흡수되고, 이쪽은 session 재원 방(크레딧 거래가
+  // 아예 없는 경로)까지 덮어야 해서 `buy_ins.id`를 그대로 키로 쓴다.
+  requestId: z.string().uuid(),
   roomId: z.string().uuid(),
   amount: z.number().int().min(1).max(10_000_000),
   targetUserId: z.string().uuid().optional(),
@@ -26,7 +30,7 @@ export async function addBuyIn(
 
   const parsed = addBuyInSchema.safeParse(input)
   if (!parsed.success) return fail('errors.invalidInput')
-  const { roomId, amount } = parsed.data
+  const { requestId, roomId, amount } = parsed.data
   const userId = parsed.data.targetUserId ?? callerId
 
   // 한도는 호출자(딜러 대리 입력 포함) 기준. 정상 사용 최악 케이스: 딜러가 여러 참가자의
@@ -101,37 +105,59 @@ export async function addBuyIn(
       if (!room) return fail('errors.roomNotFound')
       if (room.status === 'settled' || room.status === 'closed') return fail('errors.roomEnded')
 
-      const [buyIn] = await tx
+      // 요청 id를 그대로 `buy_ins.id`로 쓴다. 세션 원장(`chip_ledger.ref_buy_in_id`)도,
+      // 지갑 잠금(`room_credit_locks.buy_in_id`와 `room-credit-lock:v1:{buy_in_id}` 키)도
+      // 전부 이 id 하나에 매달려 있으므로, PK 충돌 한 번이 세 벌의 중복을 동시에 막는다.
+      // 방 advisory lock을 이미 잡고 있어서 같은 키의 동시 요청도 여기서 직렬화된다.
+      const [inserted] = await tx
         .insert(buyIns)
-        .values({ roomId, userId, amount, createdBy: callerId })
+        .values({ id: requestId, roomId, userId, amount, createdBy: callerId })
+        .onConflictDoNothing({ target: buyIns.id })
         .returning({ id: buyIns.id })
-      if (!buyIn) return fail('errors.addBuyInFailed')
+
+      if (!inserted) {
+        // `admin_adjust_credit`과 같은 **의미 비교**를 한다 — 같은 키라도 뜻이 다르면
+        // 흡수하지 않는다. 방·대상·금액·기록자가 전부 같고 되돌리기 행이 아닐 때만
+        // "이미 확정한 그 요청"으로 인정하고 같은 결과를 돌려준다.
+        const [existing] = await tx
+          .select({
+            roomId: buyIns.roomId,
+            userId: buyIns.userId,
+            amount: buyIns.amount,
+            createdBy: buyIns.createdBy,
+            revertedOf: buyIns.revertedOf,
+          })
+          .from(buyIns)
+          .where(eq(buyIns.id, requestId))
+          .limit(1)
+        const sameRequest =
+          existing !== undefined &&
+          existing.roomId === roomId &&
+          existing.userId === userId &&
+          existing.amount === amount &&
+          existing.createdBy === callerId &&
+          existing.revertedOf === null
+        if (!sameRequest) return fail('errors.addBuyInFailed')
+        return ok({ userId, amount, balance: await balanceInRoom(tx, roomId, userId) })
+      }
+
       await tx
         .insert(chipLedger)
-        .values({ roomId, userId, delta: amount, reason: 'buy_in', refBuyInId: buyIn.id })
+        .values({ roomId, userId, delta: amount, reason: 'buy_in', refBuyInId: inserted.id })
 
       if (readFundingMode(room.rulePreset) === 'account_credit') {
         await tx.execute(sql`
           select public.lock_room_credit_buy_in(
             ${roomId}::uuid,
             ${userId}::uuid,
-            ${buyIn.id}::uuid,
+            ${inserted.id}::uuid,
             ${amount}::bigint,
             ${callerId}::uuid
           )
         `)
       }
 
-      const [balanceRow] = await tx
-        .select({ balance: sql<string>`coalesce(sum(${chipLedger.delta}), 0)::text` })
-        .from(chipLedger)
-        .where(and(eq(chipLedger.roomId, roomId), eq(chipLedger.userId, userId)))
-
-      return ok({
-        userId,
-        amount,
-        balance: toSafeChipInteger(balanceRow?.balance ?? '0', 'Buy-in room balance'),
-      })
+      return ok({ userId, amount, balance: await balanceInRoom(tx, roomId, userId) })
     })
   } catch (error) {
     console.error('addBuyIn failed:', error)
