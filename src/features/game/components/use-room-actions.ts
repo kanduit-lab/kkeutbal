@@ -88,6 +88,14 @@ export function useRoomActions({
       if (broadcast) {
         sends.push(sendRoomEvent(channel, roomId, selfId, broadcast.event, broadcast.payload))
       }
+      // state.snapshot is best-effort, NOT guaranteed: its whole payload is
+      // built from the refetch above, so a failed/timed-out refetch leaves
+      // nothing truthful to broadcast (sending our pre-mutation numbers would
+      // be actively wrong — receivers paint the pot from this hint, see
+      // state-snapshot-hint.ts). Receivers must therefore never depend on it
+      // arriving; every event schedules its own refetch instead
+      // (event-sync-policy.ts). Do not "restore" this send by making it
+      // unconditional.
       if (result.success) {
         sends.push(
           sendRoomEvent(channel, roomId, selfId, 'state.snapshot', {
