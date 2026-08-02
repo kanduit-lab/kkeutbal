@@ -6,28 +6,14 @@
 
 ## Priority
 
-### 적용 대기 — 코드는 병합됐고 DB 반영만 남았다
-
-두 마이그레이션 모두 **파일만 작성돼 있고 적용되지 않았다**. 앱 코드는 적용 전 DB에서도
-그대로 동작한다(호출하는 RPC 시그니처가 안 바뀌었고, 새 복구 RPC는 아직 호출부가 없다) —
-다만 DB 쪽 권위 검사가 없는 동안은 TS 앞단 검사만 남는다.
-
-- [ ] **`supabase/migrations/0018_buy_in_idempotency.sql` 적용**: 바이인 멱등키와 취소 보존식의 DB 쪽 권위
-  - 배경: `addBuyIn`이 `requestId`를 `buy_ins.id`로 넣어 PK 충돌 한 번이 `buy_ins`·`chip_ledger`·`room_credit_locks` 세 벌 중복을 동시에 막는다. 이 마이그레이션은 `release_room_credit_buy_in`에 "칩은 남았는데 활성 lock이 없는 사용자가 생기면 거부" 불변식을 넣고, 이미 잠긴 방을 위한 관리자 전용 `admin_repair_room_credit_settlement`를 추가한다
-  - 완료 기준: 적용 후 `test/integration/`에 바이인 재전송·취소 거부 케이스를 붙여 통과시킨다 (지금은 적용 전이라 실패하므로 추가하지 않았다)
-  - 참조: 현재 프로덕션에 정산이 막힌 방은 0건으로 확인했다
-
-- [ ] **`supabase/migrations/0019_drizzle_ledger_sync_0020.sql` 적용**: 새 환경에서 `drizzle-kit migrate`가 실패하는 지뢰 제거
-  - 배경: `0020_lying_leader`(`users.is_managed`)는 supabase 쪽 `add_users_is_managed`로 반영됐지만 `drizzle.__drizzle_migrations`에는 기록되지 않았다. 디스크 journal은 21개(idx 0~20), DB 원장은 20행이다
-  - 완료 기준: 적용 후 `select count(*) from drizzle.__drizzle_migrations`가 21이고, `pnpm db:migrate`가 "No migrations to apply"로 끝난다
-  - 참조: hash는 기존 20행 전부와 파일 sha256을 대조해 20/20 일치를 확인했다. 절차는 `docs/08-database-migrations.md`의 "원장 동기화"
-
 ### Medium
 
-- [ ] **기존 게스트 계정 2개가 어느 기기로도 로그인되지 않는다**: 게스트 sub 계산식이 바뀌면서 생긴 고아 행
-  - 배경: 계정 탈취를 막느라 sub를 `guest:{tokenId}:HMAC(기기비밀값 ∥ tokenId ∥ 이름)`으로 바꿨다. 되살리는 마이그레이션은 일부러 두지 않았다 — 복구 경로가 곧 공격 경로이기 때문
-  - 현재 상태: 조회 결과 게스트 계정 2개, 진행 중인 방에 있는 게스트 0명, 방장 0명, 칩 기록이 있는 계정 1개. 이미 발급된 세션 JWT는 3일 만료까지는 동작한다
-  - 완료 기준: 그 2개 행을 지울지, 이름을 바꿔 보존할지 정하고 실행한다. 칩 기록이 있는 1개는 지우면 그 방 정산 이력이 어그러지는지 먼저 확인한다
+- [ ] **게스트 계정 `테스터` 1건이 로그인 불가인 채 남아 있다**: 삭제가 append-only 보호막에 막힌다
+  - 배경: 게스트 sub 계산식이 `guest:{tokenId}:HMAC(기기비밀값 ∥ tokenId ∥ 이름)`으로 바뀌면서 옛 계정은 어느 기기로도 로그인되지 않는다. 되살리는 마이그레이션은 일부러 두지 않았다 — 복구 경로가 곧 공격 경로이기 때문
+  - 처리한 것: `모바일점검`(참조 0건)은 크레딧 계정과 함께 삭제했다
+  - 막힌 것: `테스터`(`540f7ca7-fac5-4b2e-8176-230d619666a2`)는 **정산 완료된 방**에 바이인 1건(500)과 그에 대응하는 `chip_ledger` 1행을 갖고 있다. `chip_ledger.user_id → users`는 NO ACTION이라 사용자 삭제가 막히고, 그 원장 행 자체는 `chip_ledger_no_update`(`BEFORE DELETE OR UPDATE` → `raise exception`)가 막는다. 지우려면 정산 끝난 방의 원장에서 append-only 보증을 일시적으로 꺼야 한다
+  - 완료 기준: 셋 중 하나를 고른다 — (a) 이미 로그인 불가이므로 그대로 둔다, (b) `display_name`만 `(삭제된 게스트)` 류로 바꿔 표시상 정리한다, (c) 트리거를 끄고 원장 행까지 지운다(그 방 정산표에서 참가자 한 명이 사라진다)
+  - 참조: 그 방은 이미 `settled`이고 이 계정은 베팅·승리 기록이 없다. 칩 순액 500은 바이인 그 자체다
 
 ### 운영
 
