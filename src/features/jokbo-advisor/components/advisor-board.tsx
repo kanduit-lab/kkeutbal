@@ -26,6 +26,9 @@ const TAB_EMOJI: Record<AdvisorTab, string> = {
 
 const POKER_MAX_SELECT = 7
 
+/** 포커 족보가 성립하는 최소 장수. 이보다 적으면 판정할 게 없다. */
+const POKER_MIN_HAND = 5
+
 const GOSTOP_MAX_SELECT = 30
 
 /**
@@ -72,23 +75,34 @@ export function AdvisorBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTab])
 
+  /**
+   * 판정에 필요한 장수가 채워지는 순간 결과 패널로 넘어간다. 세로 화면은 픽커와 결과가
+   * 탭으로 갈려 있어서, 두 장을 고르고도 손으로 탭을 눌러야 족보가 보였다 — 고르는 이유가
+   * 곧 판정을 보는 것인데 그 마지막 한 걸음이 늘 수동이었다.
+   *
+   * 고스톱은 대상이 아니다. 획득한 패를 계속 담는 방식이라 "다 골랐다"는 시점 자체가 없고,
+   * 중간에 화면이 넘어가면 오히려 다음 장을 못 고른다.
+   */
+  function revealIfComplete(count: number) {
+    const needed = tab === 'poker' ? POKER_MIN_HAND : tab === 'seotda' ? maxSelect : null
+    if (needed !== null && count === needed) setPane('result')
+  }
+
   function toggle(id: CardId) {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else if (next.size < maxSelect) next.add(id)
     setVision(null)
-    setSelected((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else if (next.size < maxSelect) next.add(id)
-      return next
-    })
+    setSelected(next)
+    revealIfComplete(next.size)
   }
 
   function togglePoker(id: string) {
-    setPokerSelected((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else if (next.size < POKER_MAX_SELECT) next.add(id)
-      return next
-    })
+    const next = new Set(pokerSelected)
+    if (next.has(id)) next.delete(id)
+    else if (next.size < POKER_MAX_SELECT) next.add(id)
+    setPokerSelected(next)
+    revealIfComplete(next.size)
   }
 
   function applyRecognized(ids: readonly CardId[], confidence: number) {
@@ -188,6 +202,16 @@ export function AdvisorBoard({
                       }
                     : undefined
                 }
+                // 사진 인식은 "직접 고르기"의 대안이므로 고르는 화면 바로 아래 둔다.
+                // 결과 패널에 있을 때는 판정을 보러 넘어간 뒤에야 보여서, 손으로 고르기
+                // 시작한 사람에게는 있는 줄도 몰랐던 기능이었다.
+                footer={
+                  <VisionCapture
+                    gameType={hwatuGameType}
+                    enabled={visionEnabled}
+                    onRecognized={applyRecognized}
+                  />
+                }
               >
                 <CardPicker
                   gameType={hwatuGameType}
@@ -201,17 +225,7 @@ export function AdvisorBoard({
           {
             key: 'result',
             label: d.advisor.resultTab,
-            node: (
-              <ResultPane
-                tab={tab}
-                cards={cards}
-                pokerCards={pokerCards}
-                vision={vision}
-                visionEnabled={visionEnabled}
-                hwatuGameType={hwatuGameType}
-                onRecognized={applyRecognized}
-              />
-            ),
+            node: <ResultPane tab={tab} cards={cards} pokerCards={pokerCards} vision={vision} />,
           },
         ]}
       />
@@ -223,11 +237,13 @@ function PickerPane({
   selectedCount,
   max,
   onClear,
+  footer,
   children,
 }: {
   selectedCount: number
   max: number
   onClear?: () => void
+  footer?: ReactNode
   children: ReactNode
 }) {
   const { d } = useDict()
@@ -244,6 +260,7 @@ function PickerPane({
         ) : null}
       </div>
       <ScrollPane label={d.advisor.pickerScrollLabel}>{children}</ScrollPane>
+      {footer ? <div className="shrink-0 border-t border-white/10 pt-3">{footer}</div> : null}
     </Panel>
   )
 }
@@ -253,17 +270,11 @@ function ResultPane({
   cards,
   pokerCards,
   vision,
-  visionEnabled,
-  hwatuGameType,
-  onRecognized,
 }: {
   tab: AdvisorTab
   cards: readonly HwatuCard[]
   pokerCards: readonly PokerCard[]
   vision: VisionSource | null
-  visionEnabled: boolean
-  hwatuGameType: GameType
-  onRecognized: (ids: readonly CardId[], confidence: number) => void
 }) {
   const { d } = useDict()
   return (
@@ -278,11 +289,6 @@ function ResultPane({
       </div>
       {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
       {tab === 'poker' ? <PokerRankingPanel cards={pokerCards} /> : null}
-      {tab !== 'poker' ? (
-        <div className="shrink-0">
-          <VisionCapture gameType={hwatuGameType} enabled={visionEnabled} onRecognized={onRecognized} />
-        </div>
-      ) : null}
     </ScrollPane>
   )
 }

@@ -102,40 +102,37 @@ export function VisionCapture({
         }}
       />
       {fallbackNotice ? <Alert tone="info">{fallbackNotice}</Alert> : null}
-      {preview ? (
-        <div className="flex items-center gap-3 rounded-xl bg-bg-deep/60 p-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+
+      {/*
+        고르는 화면 바로 아래 붙는 한 줄이라 키가 낮아야 한다. 예전에는 `size="lg"`(56px)
+        버튼 위에 64px짜리 미리보기 카드가 따로 얹혀서 두 덩이가 픽커 높이를 잡아먹었다.
+        지금은 썸네일을 버튼과 같은 줄에 넣어 한 줄(44px)로 끝낸다.
+      */}
+      <div className="flex items-center gap-2">
+        {preview ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={preview}
             alt={d.advisor.vision.preview}
-            className="size-16 shrink-0 rounded-lg object-cover"
+            className="size-11 shrink-0 rounded-lg object-cover ring-1 ring-white/10"
           />
-          <p className="min-w-0 flex-1 text-xs text-muted">{d.advisor.vision.preview}</p>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            loading={isPending}
-            onClick={() => inputRef.current?.click()}
-          >
-            {d.advisor.vision.retake}
-          </Button>
-        </div>
-      ) : null}
-
-      <Button
-        type="button"
-        variant={isPending ? 'primary' : 'surface'}
-        size="lg"
-        className="w-full border border-white/10"
-        loading={isPending}
-        loadingLabel={d.advisor.vision.checking}
-        disabled={!enabled}
-        disabledReason={!enabled ? d.advisor.vision.disabledReason : undefined}
-        onClick={openCapture}
-      >
-        {d.advisor.vision.captureButton}
-      </Button>
+        ) : null}
+        <Button
+          type="button"
+          variant={isPending ? 'primary' : 'surface'}
+          size="sm"
+          className="min-w-0 flex-1 border border-white/10"
+          loading={isPending}
+          loadingLabel={d.advisor.vision.checking}
+          disabled={!enabled}
+          disabledReason={!enabled ? d.advisor.vision.disabledReason : undefined}
+          onClick={openCapture}
+        >
+          <span className="truncate">
+            {preview ? d.advisor.vision.retake : d.advisor.vision.captureButton}
+          </span>
+        </Button>
+      </div>
 
       <Sheet
         open={sheetOpen}
