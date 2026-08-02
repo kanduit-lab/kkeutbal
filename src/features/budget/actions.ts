@@ -137,7 +137,7 @@ export async function addBuyIn(
           existing.amount === amount &&
           existing.createdBy === callerId &&
           existing.revertedOf === null
-        if (!sameRequest) return fail('errors.addBuyInFailed')
+        if (!sameRequest) return fail('errors.buyInRequestReused')
         return ok({ userId, amount, balance: await balanceInRoom(tx, roomId, userId) })
       }
 
@@ -239,7 +239,7 @@ export async function undoLastBuyIn(
             ),
           )
           .limit(1)
-        if (!otherLock) return fail('errors.buyInAlreadySpent')
+        if (!otherLock) return fail('errors.undoBuyInWouldStrandCredits')
       }
 
       // 레거시 폴백(`refBuyInId = lastBuyIn.id OR refBuyInId IS NULL`)은 제거했다 — 같은

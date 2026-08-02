@@ -115,6 +115,10 @@ export const errors: Dictionary['errors'] = {
   nothingToUndoBuyIn: 'No buy-in to undo',
   buyInAlreadySpent:
     'The chips have already been spent, so the grant cannot be undone. Adjust with a bet correction instead',
+  buyInRequestReused:
+    'A different buy-in already went through under this request number. Refresh and try again',
+  undoBuyInWouldStrandCredits:
+    'Undoing this buy-in would leave chips with no locked credit behind them, which would make the room impossible to settle',
   undoBuyInLedgerMismatch: 'Could not find the exact ledger entry for this buy-in, so it cannot be undone',
   undoBuyInFailed: 'Failed to undo the buy-in',
   dealerOrHostOnlyStartRound: 'Only the dealer or host can start a round',

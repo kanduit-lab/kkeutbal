@@ -104,6 +104,9 @@ export const errors = {
   dealerOrHostOnlyUndoBuyIn: '딜러 또는 방장만 지급을 취소할 수 있습니다',
   nothingToUndoBuyIn: '취소할 바이인이 없습니다',
   buyInAlreadySpent: '이미 사용한 칩이라 지급을 취소할 수 없습니다. 정정 베팅으로 조정하세요',
+  buyInRequestReused: '같은 요청 번호로 다른 바이인이 이미 처리됐습니다. 화면을 새로 고치고 다시 시도하세요',
+  undoBuyInWouldStrandCredits:
+    '이 바이인을 취소하면 잠긴 크레딧 없이 칩만 남아 방을 정산할 수 없게 됩니다',
   undoBuyInLedgerMismatch: '이 바이인과 정확히 연결되는 원장 기록을 찾을 수 없어 되돌릴 수 없습니다',
   undoBuyInFailed: '지급 취소에 실패했습니다',
   dealerOrHostOnlyStartRound: '딜러 또는 방장만 판을 시작할 수 있습니다',
