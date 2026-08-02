@@ -50,6 +50,16 @@ describe('nextActorId', () => {
     expect(nextActorId(participants, actions)).toBe('a')
   })
 
+  it('상대가 올인이고 나도 더 낼 이유가 없으면 null — 판을 끝내는 것은 round-completion의 몫', () => {
+    // 짧은 올인 교착의 원인 절반이 여기다: a가 5000을 걸고 b가 500 올인이면, a가 마지막
+    // 행동자가 되는 순간 b는 allin이라 건너뛰어져 후보가 사라진다. 이 함수는 없는 차례를
+    // 만들어 내지 않는다 — "그러면 판이 끝난 것"이라는 판정은 `betting/round-completion.ts`가
+    // 하고, 그쪽이 올인 참가자를 정산 완료로 본다.
+    const participants = ['a', 'b']
+    const actions = [accepted('a', 'raise', 1), accepted('b', 'allin', 2), accepted('a', 'check', 3)]
+    expect(nextActorId(participants, actions)).toBe(null)
+  })
+
   it('fold·allin이 아닌 참가자가 정말 하나도 없으면(전원 fold) null을 반환한다', () => {
     const participants = ['a', 'b', 'c']
     const actions = [accepted('a', 'fold', 1), accepted('b', 'fold', 2), accepted('c', 'fold', 3)]

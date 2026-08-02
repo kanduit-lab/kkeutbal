@@ -5,8 +5,8 @@
 | Type | technical-design |
 | Audience | engineering / QA |
 | Status | active |
-| Source of truth | this document (카드 모델·족보 규칙) + 구현 코드 (계산 순서·경계값) |
-| Last reviewed | 2026-07-24 |
+| Source of truth | this document (카드 모델·족보 규칙, 짧은 올인 결정) + 구현 코드 (계산 순서·경계값) |
+| Last reviewed | 2026-08-02 |
 
 구현: `src/features/hwatu/`, `src/features/seotda/`, `src/features/gostop/`, `src/features/poker/`.
 섯다·고스톱·포커 순수 엔진 테스트는 각 기능 폴더의 `*.test.ts`에 있으며, 섯다는 20장 중
@@ -389,6 +389,30 @@ Advisor 화면이 판정과 함께 보여주는 파생 통계. 섯다·고스톱
   확률")로 구분해 표시한다.
 
 ---
+
+## 베팅 규칙 — 짧은 올인 (액션 레이어, 엔진 밖)
+
+섯다·포커의 베팅 금액 판정은 순수 엔진이 아니라 `src/features/betting/`이 한다
+(`bet-amount-rule.ts` 금액 규칙, `round-completion.ts` 판 완료 판정,
+`round-bet-state.ts` 누적 기여액). 이 절은 그중 **사이드팟 부재**에서 나오는 규칙 하나만
+확정한다 — 나머지 베팅 흐름은 구현 코드가 source of truth다.
+
+**결정(2026-08-02): 사이드팟을 만들지 않는다. 대신 콜 금액을 못 채우는 짧은 올인·짧은 콜을
+규칙 층에서 거부한다.**
+
+- `round-finalize.ts`의 `creditPotToWinner`는 팟 전체를 승자 한 명에게 준다 — 단일 팟 모델이다.
+  기여액이 다른 참가자가 한 팟에 섞이면 나눌 수단이 없다.
+- 그래서 `checkBetAmount`는 `neededToCall > balance`이면 `errors.cannotCoverCurrentBet`으로
+  막는다. 못 받는 사람의 정상 경로는 **바이인**(`features/budget/`)이나 **다이**다 —
+  다이는 잔액과 무관하게 항상 통과하므로 판이 잠기지 않는다.
+- 이 앱은 실물 카드로 노는 사람들이 나중에 이 숫자를 보고 실제로 정산하는 기록 도구다.
+  짧은 올인을 완료로 인정하면(500칩 낸 사람이 5000 팟을 통째로) 틀린 정산액을 확신 있게
+  출력하게 되므로, MT 하우스 룰과 같은 "못 받으면 다이"를 택했다.
+- 규칙 층이 못 막는 경우가 하나 남는다: **콜을 채운 정상 올인 위로 남들이 더 올리는** 판.
+  그때 올인한 사람의 기여액은 자동으로 뒤처지는데 더 낼 칩이 없다. `computeRoundCompletion`은
+  올인 참가자를 정산 완료로 보고 판을 `showdown_ready`로 보낸다 — 그러지 않으면
+  `turn-order.ts`가 올인 참가자를 차례에서 빼는 것과 맞물려 아무도 행동할 수 없는 교착이 된다.
+  초과분은 그 위험을 알고 더 건 사람들끼리의 몫으로 남는다.
 
 ## 엔진 계약 (공통 인터페이스 — 미구현)
 
