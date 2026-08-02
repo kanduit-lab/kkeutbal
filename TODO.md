@@ -8,12 +8,6 @@
 
 ### High
 
-- [ ] **게스트 토큰 하나로 같은 토큰의 다른 게스트가 된다**: 게스트 sub가 `guest:{tokenId}:{name.toLowerCase()}`뿐이라 이름만 맞추면 그 계정으로 로그인된다
-  - 배경: `src/lib/auth-providers.ts`가 만든 sub를 `provider-account-resolution.ts`가 기존 사용자로 바로 해석한다. 여기에 **인증 없이 호출되는** `getGuestNamesForToken`(`src/features/auth/actions.ts`)이 그 토큰의 표시 이름을 최대 20개 돌려주므로, 토큰을 가진 사람은 이름 목록을 읽고 아무나 골라 그 사람이 될 수 있다. 그 사람이 방장이면 정산·역할 변경·판 종료까지 전부 넘어간다
-  - 변경 범위: `src/lib/auth-providers.ts`, `src/features/auth/provider-account-resolution.ts`, `src/features/auth/guest-name-lookup.ts`, `drizzle/schema.ts`(게스트별 비밀값 컬럼), `docs/07-auth-and-security.md`
-  - 완료 기준: 이름만으로는 기존 게스트 계정에 로그인되지 않는다. 이름 목록은 인증된 호출에만 응답하거나 없앤다
-  - 참조: MT 현장에서 토큰 하나를 여럿이 공유하는 것이 정상 사용 방식이라 실사용 조건에서 재현된다
-
 - [ ] **`/monitor`·`/result`가 방 코드만 알면 열린다**: 참가자 확인 없이 전원의 잔액·바이인·정산표를 그린다
   - 배경: 형제 라우트인 `/history`·`/settings`는 `getMemberRole`로 막는데 이 둘만 빠져 있다. 방 코드는 31글자 6자리(약 29.7비트)이고 이 두 경로에는 rate limit이 없어서, 코드를 훑어 남의 방 돈을 읽는 비용이 사실상 네트워크 속도뿐이다
   - 변경 범위: `src/app/rooms/[code]/monitor/page.tsx`, `src/app/rooms/[code]/result/page.tsx`

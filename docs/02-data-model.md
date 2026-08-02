@@ -176,7 +176,8 @@ erDiagram
 ### `guest_tokens`
 
 - 신규 발급은 `code_hash`에 `AUTH_SECRET` HMAC만 저장하고 원문은 발급 응답에서 한 번만 보여준다.
-- 구버전 `code` 원문 행은 로그인 또는 이름 조회 성공 시 해시로 전환하고 원문을 지운다.
+- 구버전 `code` 원문 행은 로그인 성공 시 해시로 전환하고 원문을 지운다(이름 목록 조회 경로는
+  제거됐다 — [`07-auth-and-security.md`](07-auth-and-security.md) "게스트 신원은 기기에 묶인다").
 - `expires_at`·`revoked_at`으로 새 로그인을 차단한다.
 
 ### `auth_settings`
