@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { auth } from '@/lib/auth'
-import { findRoomByCode } from '@/features/game/queries'
+import { findRoomByCode, getMemberRole } from '@/features/game/queries'
 import { normalizeRoomCode } from '@/features/game/room-code'
 import { getDict, format } from '@/lib/i18n/server'
 import { getRoundHistory, getSessionStandings } from '@/features/ranking/queries'
@@ -36,6 +36,7 @@ export async function generateMetadata({
 export default async function RoomResultPage({ params }: { params: Promise<{ code: string }> }) {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
+  const userId = session.user.id
 
   const { code: rawCode } = await params
 
@@ -52,7 +53,38 @@ export default async function RoomResultPage({ params }: { params: Promise<{ cod
     )
   }
 
+  // 이 화면은 참가자 전원의 손익·정산 이체표를 그린다. 방 코드는 31글자 6자리라 훑을 수 있고
+  // 이 경로에는 rate limit이 없어서, 열어 두면 남의 방 돈을 읽는 비용이 네트워크 속도뿐이다.
+  // `/history`·`/settings`와 같은 규칙으로 막되, 판정은 한 칸 넓다 — `getMemberRole`은
+  // `left_at`이 찍힌 사람에게 null을 주는데, 홈의 "지난 세션"과 개인 통계는 나간 방까지
+  // 목록에 올리고 그 줄이 이 화면으로 링크된다. 자기가 뛴 세션의 정산표(내가 누구에게 얼마를
+  // 줘야 하는지)는 방을 나온 뒤에도 봐야 하므로, 순위표에 이름이 남아 있으면 통과시킨다.
+  // 순위표는 이 방의 `room_members` 행에서만 만들어지므로 참가한 적 없는 사람은 걸리지 않는다.
+  const role = await getMemberRole(room.id, userId)
   const standings = await getSessionStandings(room.id)
+  if (!role && !standings.some((row) => row.userId === userId)) {
+    return (
+      <main
+        id="main"
+        className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-4 px-6"
+      >
+        <Panel className="space-y-3 py-8 text-center">
+          <p className="text-3xl" aria-hidden>
+            🔒
+          </p>
+          <h1 className="text-xl font-bold">{d.errors.notMember}</h1>
+          <div className="pt-2">
+            {/* `/history`는 방으로 되돌리지만 여기서는 홈으로 보낸다 — 정산이 끝난 방은
+                `/rooms/[code]`가 다시 이 화면으로 리다이렉트해서 오갈 데가 없어진다. */}
+            <ButtonLink href="/" variant="primary" className="w-full">
+              {d.common.home}
+            </ButtonLink>
+          </div>
+        </Panel>
+      </main>
+    )
+  }
+
   const rounds = await getRoundHistory(room.id)
 
   const mvp = standings[0]
