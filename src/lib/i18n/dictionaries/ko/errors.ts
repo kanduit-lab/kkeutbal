@@ -72,6 +72,7 @@ export const errors = {
   cannotCheckAfterBet: '베팅이 나온 뒤에는 체크할 수 없습니다',
   noBetToCall: '콜할 베팅이 없습니다',
   invalidCallAmount: '콜 금액이 현재 베팅과 맞지 않습니다',
+  cannotCoverCurrentBet: '남은 칩이 지금 걸린 베팅에 못 미칩니다. 바이인을 받거나 다이하세요',
   raiseBelowMinimum: '최소 레이즈 금액보다 작습니다',
   raiseMustFollowTtadang: '따당 규칙상 레이즈는 직전 최고 베팅액의 정확히 2배여야 합니다',
   raiseExceedsPotLimit: '팟 리밋 규칙상 레이즈 뒤 누적 베팅이 팟을 넘을 수 없습니다',

@@ -81,6 +81,8 @@ export const errors: Dictionary['errors'] = {
   cannotCheckAfterBet: 'You cannot check after a bet has been placed',
   noBetToCall: 'There is no bet to call',
   invalidCallAmount: 'The call amount does not match the current bet',
+  cannotCoverCurrentBet:
+    'Your remaining chips cannot cover the current bet. Take a buy-in or fold (다이)',
   raiseBelowMinimum: 'The amount is below the minimum raise',
   raiseMustFollowTtadang: 'Under the ttadang rule, a raise must be exactly double the current highest bet',
   raiseExceedsPotLimit: 'Under the pot-limit rule, your total bet after this raise cannot exceed the pot',

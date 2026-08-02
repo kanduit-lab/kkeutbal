@@ -152,7 +152,7 @@ describe('checkBetAmount', () => {
     ).toBeNull()
   })
 
-  it('잔액이 콜 필요액보다 적으면 잔액 전액 콜(숏 올인)이 통과', () => {
+  it('잔액이 콜 금액에 못 미치면 짧은 콜을 거부한다 — 바이인하거나 다이해야 한다', () => {
     const state = roundBetState([accepted('b', 'raise', 100)])
     expect(
       checkBetAmount({
@@ -161,6 +161,51 @@ describe('checkBetAmount', () => {
         action: 'call',
         amount: 40,
         balance: 40,
+        baseBet: 10,
+        raiseRule: 'free',
+      }),
+    ).toBe('errors.cannotCoverCurrentBet')
+  })
+
+  it('잔액이 콜 금액에 못 미치면 짧은 올인도 거부한다 (500칩 vs 5000 레이즈)', () => {
+    const state = roundBetState([accepted('b', 'raise', 5000)])
+    expect(
+      checkBetAmount({
+        state,
+        userId: 'a',
+        action: 'allin',
+        amount: 500,
+        balance: 500,
+        baseBet: 10,
+        raiseRule: 'free',
+      }),
+    ).toBe('errors.cannotCoverCurrentBet')
+  })
+
+  it('잔액이 콜 금액을 채우면 올인은 통과한다', () => {
+    const state = roundBetState([accepted('b', 'raise', 500)])
+    expect(
+      checkBetAmount({
+        state,
+        userId: 'a',
+        action: 'allin',
+        amount: 500,
+        balance: 500,
+        baseBet: 10,
+        raiseRule: 'free',
+      }),
+    ).toBeNull()
+  })
+
+  it('콜을 못 채우는 잔액이어도 다이는 항상 통과한다 — 유일한 탈출구', () => {
+    const state = roundBetState([accepted('b', 'raise', 5000)])
+    expect(
+      checkBetAmount({
+        state,
+        userId: 'a',
+        action: 'fold',
+        amount: 0,
+        balance: 500,
         baseBet: 10,
         raiseRule: 'free',
       }),
