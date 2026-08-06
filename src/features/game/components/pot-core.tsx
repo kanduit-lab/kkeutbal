@@ -119,11 +119,21 @@ function tossChipsFor(amount: number, isSelf: boolean): readonly TossChip[] {
 
 export function PotCore({
   pot,
+  carriedPot = 0,
   pulse,
   roundActive,
   className,
 }: {
   pot: number
+
+  /**
+   * 재경기로 무효화된 판에서 다음 판으로 넘어갈 판돈(`docs/04-game-engines.md`). 판이 없는
+   * 동안 이 값을 숫자 자리에 그린다 — 무효화 시점에는 칩이 일단 환불되므로, 여기서 0을
+   * 보여주면 "판돈이 그냥 사라졌다"로 읽힌다. 판이 열리면 그 판의 팟이 이미 이월액을
+   * 품고 있으므로 다시 볼 일이 없다.
+   */
+  carriedPot?: number
+
   /** null이면 연출 없음. actionId가 바뀔 때마다 한 번 연출한다 */
   pulse: PotPulse | null
   roundActive: boolean
@@ -170,7 +180,9 @@ export function PotCore({
     timers.current = [...timers.current, timer]
   }, [pulse, roundActive])
 
-  const potText = formatChips(pot, locale)
+  const showCarried = !roundActive && carriedPot > 0
+  const displayPot = showCarried ? carriedPot : pot
+  const potText = formatChips(displayPot, locale)
   const ringStyle: CSSProperties | undefined = burst
     ? ({ '--pulse-color': PULSE_COLOR[burst.action] } as CSSProperties)
     : undefined
@@ -284,7 +296,11 @@ export function PotCore({
             둘 다 장식이고, 읽어 주는 건 아래 sr-only aria-live 한 곳뿐이다.
           */}
           <p className="-mr-[0.1em] mt-[2.8cqmin] text-[clamp(0.5625rem,4.7cqmin,0.75rem)] leading-none tracking-[0.1em] text-muted/70">
-            {roundActive ? d.table.potSubLabel : d.rail.roundIdle}
+            {roundActive
+              ? d.table.potSubLabel
+              : showCarried
+                ? d.table.potCarriedLabel
+                : d.rail.roundIdle}
           </p>
 
           {/*
@@ -293,9 +309,9 @@ export function PotCore({
             비례)이라, 원이 작아지면 absolute로는 라벨을 덮어 버린다. 흐름 안에 있으면 컬럼이
             같이 커지고 가운데 정렬이 다시 잡혀서 어떤 크기에서도 겹치지 않는다.
           */}
-          {pot > 0 ? (
+          {displayPot > 0 ? (
             <span className="mt-[6cqmin] block">
-              <ChipStack amount={pot} size={14} />
+              <ChipStack amount={displayPot} size={14} />
             </span>
           ) : null}
         </div>

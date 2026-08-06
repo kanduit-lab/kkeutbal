@@ -10,6 +10,8 @@ import { getRoundPot } from './queries'
 import { balanceInRoom, lockRoom, readPointValue, requireRole } from './action-helpers'
 import { addSafeChipIntegers, multiplySafeChipIntegers } from './chip-integers'
 import { winnerPayout } from './round-settlement'
+import { carrySharesFromLedger } from './round-carry'
+import { collectCarriedPot } from './round-carry-ops'
 import { creditPotToWinner, finalizeRoundRecord, revealFairnessIfNeeded } from './round-finalize'
 import {
   handleVoidRoundFairness,
@@ -76,6 +78,11 @@ export async function startRound(
           userId: participant.userId,
         })),
       )
+      // 재경기로 무효화된 판의 판돈을 이 판으로 걷어 온다. 기여도(`bet_actions`)는 만들지
+      // 않는다 — 이월 판돈은 팟에만 들어가고 아무의 콜 의무도 만들지 않는다(앤티와 같은
+      // 모양). 정책과 근거는 `docs/04-game-engines.md`.
+      await collectCarriedPot(tx, roomId, round.id, participants)
+
       // 공정 딜(commit-reveal) 준비 — 검증 딜 방이 아니면 아무 것도 하지 않는다.
       await setUpFairRoundIfVerified(tx, room, round.id, participants)
 
@@ -149,7 +156,13 @@ export async function endRound(
       let winnerId = requestedWinnerId
       if (fairRound) {
         // 검증 딜 방이면 fold 여부·쇼다운 재구성으로 승자를 판정한다 (round-fairness-ops.ts).
-        const resolution = await resolveFairRoundWinner(tx, room, round, fairRound, requestedWinnerId)
+        const resolution = await resolveFairRoundWinner(
+          tx,
+          room,
+          round,
+          fairRound,
+          requestedWinnerId,
+        )
         if (!resolution.ok) return fail(resolution.error)
         winnerId = resolution.winnerId
       }
@@ -403,9 +416,24 @@ export async function voidRound(
       // `voidedResult`로 옮겨 남긴다.
       const priorResult =
         round.result && typeof round.result === 'object' ? { voidedResult: round.result } : {}
+
+      // 재경기는 승부가 안 난 판이므로 판돈을 다음 판으로 이월한다(정책·근거는
+      // `docs/04-game-engines.md`). 여기서는 사람별 기여액만 남기고, 실제 재징수는 다음
+      // `startRound`가 한다 — 무효화 직후 방이 정산되거나 아무도 다음 판을 안 열면 위에서
+      // 넣은 환불이 그대로 진실이어야 하기 때문이다. 이미 끝난 판을 뒤늦게 무효화하는
+      // 경우(`ended`)는 승부가 났던 판이라 이월 대상이 아니다.
+      const carry =
+        reason === '재경기' && round.status === 'playing'
+          ? carrySharesFromLedger(moveRows, corrected)
+          : null
+
       await tx
         .update(rounds)
-        .set({ status: 'voided', result: { ...priorResult, note: reason }, endedAt: new Date() })
+        .set({
+          status: 'voided',
+          result: { ...priorResult, note: reason, ...(carry ? { carry } : {}) },
+          endedAt: new Date(),
+        })
         .where(eq(rounds.id, round.id))
 
       // 공정 딜 상태 마감(abort 또는 append-only reveal) — round-fairness-ops.ts.
