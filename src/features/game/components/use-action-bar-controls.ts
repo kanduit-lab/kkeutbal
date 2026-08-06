@@ -98,13 +98,15 @@ export function useActionBarControls({
   // 서버가 실제로 강제하는 턴 검증과 같은 순수 함수(`../turn-order`)로 클라이언트에서도 미리
   // 막는다 — 서버 왕복 없이 바로 "왜 안 되는지"를 보여주기 위함이다. 최종 방어선은 서버
   // (`betting/actions.ts`의 `errors.notYourTurn`)이지 이 UI가 아니다.
-  const participantIds = useMemo(
-    () => snapshot.members.filter((m) => m.role !== 'observer').map((m) => m.userId),
-    [snapshot.members],
-  )
+  //
+  // 참가자 목록은 반드시 `round.participantUserIds`(판 시작 시점 스냅샷)를 쓴다. 예전처럼
+  // `members`에서 관전자만 걸러 쓰면 **판 도중 입장한 사람**이 좌석 순환에 끼어, 마지막
+  // 좌석이 행동한 뒤 화면이 그 신규 입장자를 차례로 가리킨다. 그러면 진짜 행동자는
+  // "○○님 차례"로 잠기고 신규 입장자는 서버에서 `joinedAfterRoundStart`로 거부돼, 딜러가
+  // 판을 끝낼 때까지 아무도 베팅할 수 없다.
   const currentActorId = useMemo(
-    () => (round ? nextActorId(participantIds, snapshot.actions) : null),
-    [round, participantIds, snapshot.actions],
+    () => (round ? nextActorId(round.participantUserIds, snapshot.actions) : null),
+    [round, snapshot.actions],
   )
   // currentActorId가 null이면(한 바퀴 완료·참가자 없음 등) 판단을 서버에 맡기고 UI는 막지 않는다.
   const isMyTurn = currentActorId === null || currentActorId === self.userId
@@ -140,8 +142,13 @@ export function useActionBarControls({
   // 짧은 콜·짧은 올인을 거부하므로, 예전처럼 `Math.min(needed, balance)`를 그대로 쏘면
   // 반드시 거절 토스트로 돌아온다 — 누르기 전에 사유를 보여주고 막는 편이 맞다.
   // 판정은 서버 규칙과 같은 순수 함수를 쓴다.
+  //
+  // 표시 금액은 잔액이 아니라 **실제로 맞춰야 할 금액**이다. 예전에는 못 맞출 때 잔액을
+  // 그대로 실어서, 5000짜리 판에 300만 남은 사람 화면이 "받을 금액 300"으로 보였다 —
+  // 콜만 하면 되는 줄 알고 버튼을 누르다 잠긴 이유를 못 찾는다. 못 맞추는 경우 콜 버튼은
+  // `cannotCoverCallReason`으로 이미 잠겨 있어서 이 값이 그대로 전송되지는 않는다.
   const canCall = canCoverCall(betting, self.userId, balance)
-  const callAmount = canCall ? needed : balance
+  const callAmount = needed
   const callIsAllin = needed > 0 && balance === needed
   const cannotCoverCallReason = canCall ? null : d.actionBar.cannotCoverCall
   const minRaise = minimumRaiseAmount(betting, self.userId, base)

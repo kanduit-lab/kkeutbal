@@ -44,6 +44,8 @@ export function GameTable({
   scale = 'default',
   gameType = 'seotda',
   fit = false,
+  participantUserIds,
+  carriedPot = 0,
 }: {
   members: readonly MemberView[]
   online: ReadonlySet<string>
@@ -61,6 +63,12 @@ export function GameTable({
 
   /** 남은 높이에 맞춰 테이블을 줄인다(모바일 포함) — 뷰포트 스크롤을 막기 위한 모드 */
   fit?: boolean
+
+  /** 서버가 확정한 판 참가자 목록. 없으면 관전자를 뺀 좌석 순서로 되돌아간다. */
+  participantUserIds?: readonly string[]
+
+  /** 재경기로 무효화된 판에서 다음 판으로 넘어갈 판돈. 판이 없는 동안 팟 자리에 그린다. */
+  carriedPot?: number
 }) {
   const { d, locale } = useDict()
   const [flights, setFlights] = useState<readonly Flight[]>([])
@@ -114,12 +122,15 @@ export function GameTable({
     return map
   }, [actions])
 
-  // 턴 순서 계산은 `../turn-order`(순수 함수, 서버 `betting/actions.ts`와 공유)로 뺐다 — 관전자를
-  // 미리 걸러 좌석 순서 배열로 넘긴다. 상세 근거·제외 규칙은 그 파일의 주석 참고.
-  const participantIds = useMemo(
+  // 턴 순서 계산은 `../turn-order`(순수 함수, 서버 `betting/actions.ts`와 공유)로 뺐다.
+  // 판이 돌고 있으면 서버가 확정한 참가자 목록(`RoundView.participantUserIds`)을 그대로 쓴다 —
+  // `members`에서 관전자만 걸러 추정하면 판 도중 입장한 사람이 좌석 순환에 끼어 좌석 강조가
+  // 서버 판정과 갈라진다. 목록이 없는 화면(판 없음)에서만 관전자 필터로 되돌아간다.
+  const seatOrderIds = useMemo(
     () => members.filter((m) => m.role !== 'observer').map((m) => m.userId),
     [members],
   )
+  const participantIds = participantUserIds ?? seatOrderIds
   const nextActorId = useMemo(() => {
     if (!roundActive) return null
     return computeNextActorId(participantIds, actions)
@@ -153,7 +164,10 @@ export function GameTable({
   )
 
   const potChips = chipBreakdown(pot, 7)
-  const potText = formatChips(pot, locale)
+  // 판이 없는 동안에는 다음 판으로 넘어갈 이월 판돈을 대신 그린다 — 무효화 시점에 칩이 일단
+  // 환불되므로 여기서 0을 보여주면 "판돈이 그냥 사라졌다"로 읽힌다(`docs/04-game-engines.md`).
+  const showCarried = !roundActive && carriedPot > 0
+  const potText = formatChips(showCarried ? carriedPot : pot, locale)
 
   return (
     <section
@@ -220,7 +234,7 @@ export function GameTable({
             {potText}
           </p>
           <p className="mt-1 text-xs font-medium uppercase tracking-[0.3em] text-white/80">
-            {d.table.potLabel}
+            {showCarried ? d.table.potCarriedLabel : d.table.potLabel}
           </p>
           <p className="sr-only" aria-live="polite" aria-atomic="true">
             {format(d.room.potAnnounce, { n: potText })}

@@ -170,12 +170,23 @@ export function ActionBar({
                     size="lg"
                     loading={firingSlot === 'raise'}
                     loadingLabel={d.ui.processing}
-                    disabled={isPending || raiseAmount < minRaise || raiseAmount > balance}
+                    /*
+                      잔액 전부(= 올인)는 최소 레이즈 하한을 적용받지 않는다 — 아래 onClick이
+                      'raise'가 아니라 'allin'을 쏘고, 서버 규칙(`bet-amount-rule.ts`)도 올인은
+                      `amount === balance`만 본다. 예전 조건은 `raiseAmount < minRaise`를 무조건
+                      막아서, 삥보다 잔액이 적은 사람이 판을 여는 올인을 아예 못 눌렀다.
+                    */
+                    disabled={
+                      isPending ||
+                      raiseAmount < 1 ||
+                      raiseAmount > balance ||
+                      (raiseAmount < minRaise && raiseAmount !== balance)
+                    }
                     disabledReason={
-                      raiseAmount < minRaise
-                        ? format(d.actionBar.minRaise, { n: formatChips(minRaise, locale) })
-                        : raiseAmount > balance
-                          ? d.actionBar.insufficientBalance
+                      raiseAmount > balance
+                        ? d.actionBar.insufficientBalance
+                        : raiseAmount < minRaise && raiseAmount !== balance
+                          ? format(d.actionBar.minRaise, { n: formatChips(minRaise, locale) })
                           : undefined
                     }
                     onClick={() =>
@@ -218,12 +229,10 @@ export function ActionBar({
                   className={STACK_BUTTON_CLASS}
                   loading={firingSlot === 'call'}
                   loadingLabel={d.ui.processing}
-                  disabled={disabled || callAmount < 1 || cannotCoverCallReason !== null}
-                  disabledReason={
-                    reason ??
-                    cannotCoverCallReason ??
-                    (callAmount < 1 ? d.actionBar.noBalance : undefined)
-                  }
+                  // 이 가지는 `canCheck === false`(= 맞출 금액이 남았다)일 때만 그려지므로
+                  // callAmount는 항상 1 이상이다. 남은 게이트는 "잔액이 콜에 못 미친다" 하나뿐.
+                  disabled={disabled || cannotCoverCallReason !== null}
+                  disabledReason={reason ?? cannotCoverCallReason ?? undefined}
                   onClick={() => fire(callIsAllin ? 'allin' : 'call', callAmount, 'call')}
                 >
                   {callIsAllin ? labels.allin : labels.call}

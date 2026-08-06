@@ -55,10 +55,12 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
       pot: 500,
       startedAt: '2026-07-30T00:00:00.000Z',
       fairness: null,
+      participantUserIds: ['user-1'],
     },
     actions: [],
     lastResult: null,
     endedRounds: 0,
+    carriedPot: 0,
     recentRounds: [],
     ...overrides,
   }

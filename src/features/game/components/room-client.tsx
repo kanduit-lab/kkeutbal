@@ -31,6 +31,10 @@ import { FairnessPanel } from './fairness-panel'
 import { AdvisorBoard } from '@/features/jokbo-advisor/components/advisor-board'
 import { MATCH_SELF_BAR_HEIGHT_CLASS } from './button-recipes'
 import { useRoomActions } from './use-room-actions'
+import { useWakeLock } from './use-wake-lock'
+
+/** 판이 없을 때의 참가자 목록. 매 렌더 새 배열을 만들면 useMemo 의존성이 항상 바뀐다. */
+const EMPTY_PARTICIPANTS: readonly string[] = []
 
 export function RoomClient({
   initial,
@@ -50,6 +54,10 @@ export function RoomClient({
   const [memberListOpen, setMemberListOpen] = useState(false)
   const [advisorOpen, setAdvisorOpen] = useState(false)
   const isDesktop = useIsDesktop()
+
+  // 판이 도는 동안 폰 화면이 꺼지면 차례가 와도 모른다. 전광판(monitor-client)에만 걸려
+  // 있었고 정작 참가자 폰에는 없었다. 지원하지 않는 브라우저에서는 조용히 넘어간다.
+  useWakeLock()
 
   // 실시간 동기화(useRoomSync)·뮤테이션 후 브로드캐스트(afterMutation)·서버 액션 실행 레이스
   // (runAction)는 전부 이 훅 하나에 배선돼 있다 — 아래는 그 결과로 화면을 어떻게 배치할지만
@@ -79,10 +87,10 @@ export function RoomClient({
 
   // 세로 모바일 화면의 정보 축. 좌석 링을 걷어낸 자리를 이 세 값이 대신한다 —
   // 노선도(누가 무엇을 했고 다음은 누구인가) · 팟 연출 · 내 숫자.
-  const participantIds = useMemo(
-    () => snapshot.members.filter((member) => member.role !== 'observer').map((m) => m.userId),
-    [snapshot.members],
-  )
+  // 판 참가자는 서버가 확정한 목록(`RoundView.participantUserIds` = `round_participants` ∩ 재실
+  // 멤버, 좌석 오름차순)을 그대로 쓴다. `members`에서 관전자만 걸러 추정하면 판 도중 입장한
+  // 사람이 좌석 순환에 끼어 노선도의 "다음 차례"가 서버 판정과 갈라진다.
+  const participantIds = snapshot.currentRound?.participantUserIds ?? EMPTY_PARTICIPANTS
   const rail = useMemo(
     () =>
       turnRail(participantIds, snapshot.actions, { roundActive: Boolean(snapshot.currentRound) }),
@@ -248,6 +256,8 @@ export function RoomClient({
                     roundActive={Boolean(snapshot.currentRound)}
                     gameType={snapshot.room.gameType}
                     onSeatTap={(member) => setSeatUserId(member.userId)}
+                    participantUserIds={snapshot.currentRound?.participantUserIds}
+                    carriedPot={snapshot.carriedPot}
                     fit
                   />
                 </div>
@@ -265,6 +275,7 @@ export function RoomClient({
                   <div className="rise-in rise-in-2 flex min-h-0 flex-1 items-center justify-center py-3 [@media(orientation:landscape)_and_(max-height:500px)]:py-1">
                     <PotCore
                       pot={snapshot.currentRound?.pot ?? 0}
+                      carriedPot={snapshot.carriedPot}
                       pulse={pulse}
                       roundActive={Boolean(snapshot.currentRound)}
                       className="h-full"

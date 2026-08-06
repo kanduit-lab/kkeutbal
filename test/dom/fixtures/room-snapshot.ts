@@ -105,11 +105,22 @@ export function buildRoomSnapshot({
     },
     members,
     currentRound: hasRound
-      ? { id: 'round-1', seq: 1, pot: 300, startedAt: '2026-07-30T00:00:00.000Z', fairness: null }
+      ? {
+          id: 'round-1',
+          seq: 1,
+          pot: 300,
+          startedAt: '2026-07-30T00:00:00.000Z',
+          // 서버 스냅샷과 같은 규칙 — 관전자는 판 참가자가 아니다
+          participantUserIds: members
+            .filter((member) => member.role !== 'observer')
+            .map((member) => member.userId),
+          fairness: null,
+        }
       : null,
     actions,
     lastResult: null,
     endedRounds: 0,
+    carriedPot: 0,
     recentRounds: [],
   }
 }

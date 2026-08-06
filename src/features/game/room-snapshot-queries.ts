@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import type { Tx } from './action-helpers'
 import { toSafeChipInteger } from './chip-integers'
@@ -24,6 +24,7 @@ const {
   buyIns,
   roundFairness,
   roundFairnessParticipants,
+  roundParticipants,
 } = schema
 
 async function getMembers(roomId: string): Promise<MemberView[]> {
@@ -118,63 +119,85 @@ function toActionView(action: typeof betActions.$inferSelect): BetActionView {
 }
 
 export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | null> {
-  const [roomRows, members, currentRoundRows, lastEndedRows, endedCountRows, recentRoundRows] =
-    await Promise.all([
-      db.select().from(rooms).where(eq(rooms.id, roomId)).limit(1),
-      getMembers(roomId),
-      db
-        .select()
-        .from(rounds)
-        .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
-        .orderBy(desc(rounds.seq))
-        .limit(1),
-      db
-        .select({
-          id: rounds.id,
-          seq: rounds.seq,
-          winnerId: rounds.winnerId,
-          pot: rounds.pot,
-          result: rounds.result,
-          hasFairnessAudit: sql<boolean>`exists (
+  const [
+    roomRows,
+    members,
+    currentRoundRows,
+    lastEndedRows,
+    endedCountRows,
+    recentRoundRows,
+    carryRows,
+  ] = await Promise.all([
+    db.select().from(rooms).where(eq(rooms.id, roomId)).limit(1),
+    getMembers(roomId),
+    db
+      .select()
+      .from(rounds)
+      .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
+      .orderBy(desc(rounds.seq))
+      .limit(1),
+    db
+      .select({
+        id: rounds.id,
+        seq: rounds.seq,
+        winnerId: rounds.winnerId,
+        pot: rounds.pot,
+        result: rounds.result,
+        hasFairnessAudit: sql<boolean>`exists (
             select 1 from ${roundFairness} fairness_audit
             where fairness_audit.round_id = ${rounds.id}
               and fairness_audit.phase = 'revealed'
           )`,
-        })
-        .from(rounds)
-        .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended')))
-        .orderBy(desc(rounds.seq))
-        .limit(1),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(rounds)
-        .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended'))),
-      db
-        .select({
-          id: rounds.id,
-          seq: rounds.seq,
-          winnerId: rounds.winnerId,
-          pot: rounds.pot,
-          result: rounds.result,
-          status: rounds.status,
-          hasFairnessAudit: sql<boolean>`exists (
+      })
+      .from(rounds)
+      .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended')))
+      .orderBy(desc(rounds.seq))
+      .limit(1),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(rounds)
+      .where(and(eq(rounds.roomId, roomId), eq(rounds.status, 'ended'))),
+    db
+      .select({
+        id: rounds.id,
+        seq: rounds.seq,
+        winnerId: rounds.winnerId,
+        pot: rounds.pot,
+        result: rounds.result,
+        status: rounds.status,
+        hasFairnessAudit: sql<boolean>`exists (
             select 1 from ${roundFairness} fairness_audit
             where fairness_audit.round_id = ${rounds.id}
               and fairness_audit.phase = 'revealed'
           )`,
-        })
-        .from(rounds)
-        .where(and(eq(rounds.roomId, roomId), inArray(rounds.status, ['ended', 'voided'])))
-        .orderBy(desc(rounds.seq))
-        .limit(5),
-    ])
+      })
+      .from(rounds)
+      .where(and(eq(rounds.roomId, roomId), inArray(rounds.status, ['ended', 'voided'])))
+      .orderBy(desc(rounds.seq))
+      .limit(5),
+    // 재경기로 무효화된 판 중 아직 다음 판이 걷어가지 않은 이월 판돈
+    // (`docs/04-game-engines.md`). 로비가 "이월 판돈"으로 보여준다.
+    db
+      .select({
+        total: sql<string>`coalesce(sum((${rounds.result} -> 'carry' ->> 'total')::bigint), 0)::text`,
+      })
+      .from(rounds)
+      .where(
+        and(
+          eq(rounds.roomId, roomId),
+          eq(rounds.status, 'voided'),
+          sql`${rounds.result} -> 'carry' ->> 'total' is not null`,
+          sql`${rounds.result} ->> 'carryConsumedBy' is null`,
+        ),
+      ),
+  ])
 
   const [room] = roomRows
   if (!room) return null
 
   const [currentRoundRow] = currentRoundRows
 
-  const [pot, actionRows, fairnessRows, fairnessParticipantRows]: [
+  const [pot, actionRows, fairnessRows, fairnessParticipantRows, roundParticipantRows]: [
     number,
     Array<typeof betActions.$inferSelect>,
     Array<{
@@ -189,6 +212,7 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
       participantUserIds: string[]
       submittedParticipantUserIds: string[]
     }>,
+    Array<{ userId: string }>,
   ] = currentRoundRow
     ? await Promise.all([
         getRoundPot(currentRoundRow.id),
@@ -220,8 +244,25 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
           })
           .from(roundFairnessParticipants)
           .where(eq(roundFairnessParticipants.roundId, currentRoundRow.id)),
+        // 서버가 차례를 강제할 때 쓰는 목록과 같은 조건이어야 한다 —
+        // `action-helpers.ts`의 `activeRoundParticipantIds`와 한 글자도 다르면 안 된다.
+        db
+          .select({ userId: roomMembers.userId })
+          .from(roundParticipants)
+          .innerJoin(
+            roomMembers,
+            and(eq(roomMembers.roomId, roomId), eq(roomMembers.userId, roundParticipants.userId)),
+          )
+          .where(
+            and(
+              eq(roundParticipants.roundId, currentRoundRow.id),
+              isNull(roomMembers.leftAt),
+              ne(roomMembers.role, 'observer'),
+            ),
+          )
+          .orderBy(asc(roomMembers.seatNo)),
       ])
-    : [0, [], [], []]
+    : [0, [], [], [], []]
 
   const [fairness] = fairnessRows
   const [fairnessParticipants] = fairnessParticipantRows
@@ -232,6 +273,7 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
         seq: currentRoundRow.seq,
         pot,
         startedAt: currentRoundRow.startedAt.toISOString(),
+        participantUserIds: roundParticipantRows.map((row) => row.userId),
         fairness: fairness
           ? {
               phase: fairness.phase,
@@ -269,6 +311,7 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
     actions: actionRows.map(toActionView),
     lastResult,
     endedRounds: endedCount?.count ?? 0,
+    carriedPot: toSafeChipInteger(carryRows[0]?.total ?? '0', 'Carried pot'),
     recentRounds: recentRoundRows.map((row) => ({
       roundId: row.id,
       seq: row.seq,

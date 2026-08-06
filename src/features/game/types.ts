@@ -72,6 +72,17 @@ export interface RoundView {
 
   readonly startedAt: string
 
+  /**
+   * 이번 판의 유효 참가자 — 좌석(seatNo) 오름차순. 서버가 차례를 강제할 때 쓰는
+   * `activeRoundParticipantIds`와 같은 목록이다(판 시작 시점 스냅샷 ∩ 현재 재실 멤버,
+   * 관전자·퇴장자 제외).
+   *
+   * 클라이언트가 `members`에서 관전자만 걸러 쓰면 **판 도중에 입장한 사람**까지 좌석
+   * 순환에 끼어 서버와 차례가 어긋난다 — 실제 행동자는 "○○님 차례"로 잠기고, 화면이
+   * 가리킨 신규 입장자는 서버에서 `joinedAfterRoundStart`로 거부돼 판이 멈춘다.
+   */
+  readonly participantUserIds: readonly string[]
+
   readonly fairness: FairnessRoundView | null
 }
 
@@ -122,6 +133,12 @@ export interface RoomSnapshot {
   readonly actions: readonly BetActionView[]
   readonly lastResult: LastResultView | null
   readonly endedRounds: number
+
+  /**
+   * 재경기로 무효화된 판에서 다음 판으로 넘어갈 판돈. 다음 `startRound`가 걷어간다.
+   * 정책은 `docs/04-game-engines.md`의 "재경기의 판돈 — 이월".
+   */
+  readonly carriedPot: number
 
   readonly recentRounds: readonly RecentRoundView[]
 }

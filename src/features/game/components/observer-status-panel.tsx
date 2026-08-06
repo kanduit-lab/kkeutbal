@@ -20,9 +20,9 @@ export function ObserverStatusPanel({ snapshot }: { snapshot: RoomSnapshot }) {
   const { d } = useDict()
   const hasRound = Boolean(snapshot.currentRound)
 
-  const participantIds = snapshot.members
-    .filter((member) => member.role !== 'observer')
-    .map((member) => member.userId)
+  // 서버가 확정한 판 참가자 목록을 그대로 쓴다 — `members`에서 관전자만 걸러 추정하면 판
+  // 도중 입장한 사람이 좌석 순환에 끼어 관전자에게 틀린 차례가 표시된다.
+  const participantIds = snapshot.currentRound?.participantUserIds ?? []
   const actorId = hasRound ? nextActorId(participantIds, snapshot.actions) : null
   const actorName = actorId
     ? (snapshot.members.find((member) => member.userId === actorId)?.displayName ?? null)

@@ -1,14 +1,16 @@
 'use client'
 
 import Link from 'next/link'
+import type { Route } from 'next'
+import { useRouter } from 'next/navigation'
 import { clsx } from 'clsx'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { format, useDict } from '@/lib/i18n/client'
+import { format, translateError, useDict } from '@/lib/i18n/client'
 import type { RoomEvent } from '@/lib/realtime/events'
 import { playChip, playRoundStart, playWin } from '@/lib/sound'
 import type { MemberView, RoomSnapshot } from '../types'
-import { Badge } from '@/components/ui'
-import { useRoomSync } from './use-room-sync'
+import { Badge, useToast } from '@/components/ui'
+import { AUTH_ERROR_KEYS, useRoomSync } from './use-room-sync'
 import { useWakeLock } from './use-wake-lock'
 import { RoomConnectionBar } from './room-connection-bar'
 import { GameTable } from './game-table'
@@ -16,6 +18,8 @@ import { RoundLog } from './round-log'
 
 export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; selfId: string }) {
   const { d } = useDict()
+  const router = useRouter()
+  const { toast } = useToast()
 
   useWakeLock()
 
@@ -32,9 +36,27 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
     everConnected,
     connectTimedOut,
     syncFailed,
+    authError,
     refetch,
     reconnect,
   } = useRoomSync({ initial, selfId, spectator: true, onEvent })
+
+  // 전광판은 몇 시간씩 켜 두는 화면이라 세션 만료·강퇴가 여기서 제일 먼저 터진다. 그런데
+  // 여태 `authError`를 아무도 안 봐서, 그 순간 남는 건 "동기화 실패" 배너와 아무리 눌러도
+  // 안 되는 "다시 연결" 버튼뿐이었다 — 재시도로 복구되는 오류가 아니다(재로그인·재입장이
+  // 필요하다). 방 화면(`use-room-actions.ts`)과 같은 처리를 준다.
+  const roomCode = initial.room.code
+  useEffect(() => {
+    if (!authError) return
+    if (authError === AUTH_ERROR_KEYS.loginRequired) {
+      toast(d.room.sessionExpired, 'error')
+      router.push(`/login?next=${encodeURIComponent(`/rooms/${roomCode}/monitor`)}` as Route)
+      return
+    }
+    // 방에서 빠진 경우다. 방 화면으로 보내면 거기서 다시 들어갈 길이 나온다.
+    toast(translateError(d, authError), 'error')
+    router.push(`/rooms/${roomCode}` as Route)
+  }, [authError, router, toast, d, roomCode])
 
   const { fullscreenSupported, isFullscreen, toggleFullscreen } = useFullscreen()
 
@@ -132,6 +154,8 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
             winnerId={snapshot.currentRound ? null : (snapshot.lastResult?.winnerId ?? null)}
             scale="board"
             gameType={snapshot.room.gameType}
+            participantUserIds={snapshot.currentRound?.participantUserIds}
+            carriedPot={snapshot.carriedPot}
             fit
           />
         </div>
