@@ -90,41 +90,73 @@ describe('raiseRuleViolation — ttadang', () => {
 })
 
 describe('raiseRuleViolation — pot_limit', () => {
-  it('레이즈 뒤 누적 베팅이 팟 이하면 통과', () => {
+  it('판을 여는 첫 베팅은 baseBet까지 허용한다 — 팟이 0이라 상한이 0이면 아무도 못 연다', () => {
     expect(
       raiseRuleViolation({
         rule: 'pot_limit',
         amount: 100,
         contributionBefore: 0,
         lastBet: 0,
-        baseBet: 10,
-        pot: 100,
+        baseBet: 100,
+        pot: 0,
       }),
     ).toBe(null)
-  })
-
-  it('레이즈 뒤 누적 베팅이 팟을 넘으면 거부', () => {
     expect(
       raiseRuleViolation({
         rule: 'pot_limit',
         amount: 101,
         contributionBefore: 0,
         lastBet: 0,
+        baseBet: 100,
+        pot: 0,
+      }),
+    ).toBe('errors.raiseExceedsPotLimit')
+  })
+
+  it('맞상대(2인) 레이즈 상한은 콜을 채운 뒤의 팟 = lastBet + pot + 콜 부족액', () => {
+    // a가 100을 걸어 팟 100, lastBet 100. b는 콜 100을 채운 뒤 팟(200)만큼 더 걸 수 있다 → 300
+    expect(
+      raiseRuleViolation({
+        rule: 'pot_limit',
+        amount: 300,
+        contributionBefore: 0,
+        lastBet: 100,
+        baseBet: 10,
+        pot: 100,
+      }),
+    ).toBe(null)
+    expect(
+      raiseRuleViolation({
+        rule: 'pot_limit',
+        amount: 301,
+        contributionBefore: 0,
+        lastBet: 100,
         baseBet: 10,
         pot: 100,
       }),
     ).toBe('errors.raiseExceedsPotLimit')
   })
 
-  it('기존 기여분을 합산해서 판단한다', () => {
+  it('기존 기여분을 합산해서 판단한다 — 재레이즈 상한도 같은 공식', () => {
+    // a 100, b 300 → 팟 400, lastBet 300. a는 콜 200을 채운 뒤 팟(600)만큼 더 → 누적 900까지
     expect(
       raiseRuleViolation({
         rule: 'pot_limit',
-        amount: 60,
-        contributionBefore: 50,
-        lastBet: 50,
+        amount: 800,
+        contributionBefore: 100,
+        lastBet: 300,
         baseBet: 10,
-        pot: 100,
+        pot: 400,
+      }),
+    ).toBe(null)
+    expect(
+      raiseRuleViolation({
+        rule: 'pot_limit',
+        amount: 801,
+        contributionBefore: 100,
+        lastBet: 300,
+        baseBet: 10,
+        pot: 400,
       }),
     ).toBe('errors.raiseExceedsPotLimit')
   })

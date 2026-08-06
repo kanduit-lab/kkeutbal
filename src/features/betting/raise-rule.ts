@@ -6,8 +6,9 @@
  *   지정하지 않은 기존 방·새 방은 전부 이 값으로 읽힌다(하위 호환).
  * - `ttadang`: 재레이즈는 직전 최고 베팅액(`lastBet`)의 정확히 2배로만 낼 수 있다. 이번
  *   라운드 첫 베팅(`lastBet === 0`)은 `baseBet` 그대로.
- * - `pot_limit`: 이번 액션 뒤 내 누적 베팅(`contributionBefore + amount`)이 이번 라운드
- *   팟(`pot`)을 넘을 수 없다.
+ * - `pot_limit`: 이번 액션 뒤 내 누적 베팅(`contributionBefore + amount`)이 "콜을 채운 뒤의
+ *   팟"까지만 갈 수 있다 — 상한은 `lastBet + pot + 콜 부족액`이고, 판을 여는 베팅
+ *   (`pot === 0`)은 `baseBet`까지다.
  */
 export type RaiseRule = 'free' | 'ttadang' | 'pot_limit'
 
@@ -42,5 +43,16 @@ export function raiseRuleViolation(check: RaiseRuleCheck): string | null {
     return totalAfter === target ? null : 'errors.raiseMustFollowTtadang'
   }
 
-  return totalAfter <= pot ? null : 'errors.raiseExceedsPotLimit'
+  // 상한을 `pot`(이 액션 이전 팟) 하나로 잡으면 규칙이 스스로를 막는다. 레이즈는 정의상
+  // `totalAfter > lastBet`이어야 하는데(`round-bet-state.ts`의 `minimumRaiseAmount`),
+  // `pot`은 기여액 합이라 참가자가 둘이면 `pot === lastBet`이 되고 그 사이에 legal한 값이
+  // 하나도 없다. 판을 여는 첫 베팅은 더해서 `pot === 0`이라 아무 금액도 통과하지 못했다 —
+  // 팟 리밋 방에서는 올인 말고는 베팅 자체가 불가능했다.
+  //
+  // 그래서 실제 팟 리밋 계산을 쓴다: 콜을 채운 뒤의 팟만큼 더 걸 수 있다
+  // = `lastBet + (pot + 콜 부족액)`. 판을 여는 베팅은 이 앱에 앤티·블라인드가 없어
+  // 상한이 0이 되므로 `baseBet`을 바닥으로 둔다(따당의 `lastBet === 0` 처리와 같은 취지).
+  const callNeeded = Math.max(0, lastBet - contributionBefore)
+  const cap = Math.max(baseBet, lastBet + pot + callNeeded)
+  return totalAfter <= cap ? null : 'errors.raiseExceedsPotLimit'
 }

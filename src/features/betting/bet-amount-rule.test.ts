@@ -257,6 +257,51 @@ describe('checkBetAmount', () => {
     ).toBe('errors.raiseMustFollowTtadang')
   })
 
+  it('팟 리밋 방에서도 판을 여는 첫 베팅(삥)이 통과한다', () => {
+    // 회귀: 상한이 "이 액션 이전 팟"이던 시절엔 팟이 0이라 첫 베팅이 전부 거부됐고,
+    // 팟 리밋 방은 올인 말고는 베팅 자체가 불가능했다.
+    const state = roundBetState([])
+    expect(
+      checkBetAmount({
+        state,
+        userId: 'a',
+        action: 'raise',
+        amount: 100,
+        balance: 10_000,
+        baseBet: 100,
+        raiseRule: 'pot_limit',
+      }),
+    ).toBeNull()
+  })
+
+  it('팟 리밋 방에서 2인 재레이즈가 가능하다', () => {
+    // 회귀: 2인 판은 pot === currentToCall 이라 "누적 <= 팟" 상한과 최소 레이즈 하한 사이에
+    // 통과 가능한 금액이 하나도 없었다.
+    const state = roundBetState([accepted('b', 'raise', 100)])
+    expect(
+      checkBetAmount({
+        state,
+        userId: 'a',
+        action: 'raise',
+        amount: 300,
+        balance: 10_000,
+        baseBet: 100,
+        raiseRule: 'pot_limit',
+      }),
+    ).toBeNull()
+    expect(
+      checkBetAmount({
+        state,
+        userId: 'a',
+        action: 'raise',
+        amount: 301,
+        balance: 10_000,
+        baseBet: 100,
+        raiseRule: 'pot_limit',
+      }),
+    ).toBe('errors.raiseExceedsPotLimit')
+  })
+
   it('정상 레이즈는 통과', () => {
     const state = roundBetState([accepted('b', 'raise', 100)])
     expect(
