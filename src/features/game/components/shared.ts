@@ -23,6 +23,25 @@ export const VOID_REASONS = [
 ] as const
 export type VoidReason = (typeof VOID_REASONS)[number]['value']
 
+/**
+ * 무효화 다이얼로그가 겨냥한 판. `replay`는 대상 판(진행 중인 판)이 `current`와 같지만,
+ * 승부가 안 난 경우(섯다 구사·무승부, 고스톱 나가리)라 다이얼로그 문구만 다르다 —
+ * 딜러가 "왜 승자를 못 고르는가"를 그 자리에서 읽을 수 있어야 한다.
+ */
+export type VoidTarget = 'current' | 'last' | 'replay'
+
+/**
+ * 무효화 다이얼로그가 겨냥한 판의 id. `current`/`replay`는 진행 중인 판, `last`는 마지막으로
+ * 끝난 판이다. 이 값은 `voidRound`에 그대로 실려 가고 서버가 스스로 고른 대상과 다르면
+ * 거부된다 — 여기서 대상을 잘못 고르면 "재경기"가 방금 끝난 다른 판을 지운다.
+ */
+export function voidTargetRoundId(
+  target: VoidTarget | null,
+  ids: { readonly current?: string; readonly last?: string },
+): string | undefined {
+  return target === 'last' ? ids.last : ids.current
+}
+
 const VOID_REASON_VALUES: ReadonlySet<string> = new Set(VOID_REASONS.map((item) => item.value))
 
 export function isKnownVoidReason(reason: string): reason is VoidReason {

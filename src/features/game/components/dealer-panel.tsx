@@ -137,6 +137,12 @@ export function DealerPanel({
           staleReason={staleReason}
           onCancel={c.cancelPickWinner}
           onConfirm={c.confirmWinnerNow}
+          // 폼을 먼저 닫는다 — 무효화가 끝나면 `round`가 사라지는데 `mode`가 'pickWinner'로
+          // 남아 있으면 패널이 폼도 버튼 그리드도 못 그린다.
+          onReplay={() => {
+            c.cancelPickWinner()
+            c.openVoidDialog('replay')
+          }}
         />
       ) : null}
 

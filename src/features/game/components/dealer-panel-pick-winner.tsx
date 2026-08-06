@@ -31,6 +31,7 @@ export function DealerPickWinnerForm({
   staleReason = null,
   onCancel,
   onConfirm,
+  onReplay,
 }: {
   round: RoundView
   isGostop: boolean
@@ -51,6 +52,13 @@ export function DealerPickWinnerForm({
   staleReason?: string | null
   onCancel: () => void
   onConfirm: () => void
+  /**
+   * 승부가 안 나 승자를 고를 수 없을 때(섯다 구사·무승부, 고스톱 나가리) 무효화(재경기)로
+   * 빠지는 경로. 이 폼이 떠 있는 동안에는 딜러 컨트롤의 "판 무효" 버튼이 화면에서 사라지므로
+   * (데스크톱은 버튼 그리드가 폼으로 교체되고, 모바일은 퀵바가 시트에 가린다) 여기 없으면
+   * 딜러가 폼을 먼저 닫는 방법을 스스로 찾아내야 한다.
+   */
+  onReplay?: () => void
 }) {
   const { d } = useDict()
   return (
@@ -96,6 +104,17 @@ export function DealerPickWinnerForm({
         placeholder={format(d.dealer.notePlaceholder, { example: noteExample })}
         maxLength={60}
       />
+      {onReplay ? (
+        <Button
+          variant="outline"
+          className="w-full"
+          disabled={isPending || staleReason !== null}
+          disabledReason={staleReason ?? undefined}
+          onClick={onReplay}
+        >
+          {d.dealer.voidAsReplay}
+        </Button>
+      ) : null}
       <div className="grid grid-cols-2 gap-2">
         <Button variant="ghost" disabled={isPending} onClick={onCancel}>
           {d.common.cancel}

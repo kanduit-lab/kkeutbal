@@ -6,6 +6,7 @@ import {
   lastAcceptedByUser,
   nonFoldedParticipantIds,
   raisePresets,
+  voidTargetRoundId,
   VOID_REASONS,
 } from './shared'
 import type { BetActionView } from '../types'
@@ -127,5 +128,26 @@ describe('isKnownVoidReason', () => {
     expect(isKnownVoidReason('constructor')).toBe(false)
     expect(isKnownVoidReason('__proto__')).toBe(false)
     expect(isKnownVoidReason('toString')).toBe(false)
+  })
+})
+
+describe('voidTargetRoundId', () => {
+  const ids = { current: 'round-current', last: 'round-last' }
+
+  it('진행 중인 판을 겨냥한 무효화는 현재 판을 보낸다', () => {
+    expect(voidTargetRoundId('current', ids)).toBe('round-current')
+  })
+
+  it('재경기(구사·무승부·나가리)도 진행 중인 판을 겨냥한다 — 지난 판이 아니다', () => {
+    expect(voidTargetRoundId('replay', ids)).toBe('round-current')
+  })
+
+  it('지난 판 취소만 마지막으로 끝난 판을 겨냥한다', () => {
+    expect(voidTargetRoundId('last', ids)).toBe('round-last')
+  })
+
+  it('대상 판이 없으면 undefined — 서버가 스스로 고르게 둔다', () => {
+    expect(voidTargetRoundId('replay', {})).toBeUndefined()
+    expect(voidTargetRoundId(null, {})).toBeUndefined()
   })
 })

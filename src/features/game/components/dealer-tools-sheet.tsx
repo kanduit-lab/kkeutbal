@@ -66,6 +66,14 @@ export function DealerToolsSheet({
               onClose()
             }}
             onConfirm={c.confirmWinnerNow}
+            onReplay={() => {
+              // 무효 확인 다이얼로그는 이 시트 밖(`DealerQuickBar`)에 있다. 시트를 열어둔 채
+              // 띄우면 시트와 다이얼로그의 포커스 트랩이 서로를 물어 ESC·바깥 클릭이 먹지
+              // 않는다 — 같은 배치에서 시트를 먼저 닫고 다이얼로그를 연다.
+              c.cancelPickWinner()
+              onClose()
+              c.openVoidDialog('replay')
+            }}
           />
         ) : (
           <div className="space-y-3">

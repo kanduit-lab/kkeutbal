@@ -6,7 +6,14 @@ import { computeRoundCompletion } from '@/features/betting/round-completion'
 import { closeRoom } from '../actions'
 import { endRound, startRound, voidRound } from '../round-actions'
 import type { RoomSnapshot } from '../types'
-import { betLabelsFor, nonFoldedParticipantIds, type RunAction, type VoidReason } from './shared'
+import {
+  betLabelsFor,
+  nonFoldedParticipantIds,
+  voidTargetRoundId,
+  type RunAction,
+  type VoidReason,
+  type VoidTarget,
+} from './shared'
 import {
   gostopEffectiveScore,
   gostopLoserPenalties,
@@ -16,6 +23,13 @@ import {
 
 export type DealerPanelMode = 'idle' | 'pickWinner'
 export type DealerSlot = 'start' | 'end' | 'void' | 'settle' | 'confirmWinner'
+
+/**
+ * 검증 딜 방에서 승부가 안 났을 때 `endRound`가 돌려주는 키
+ * (`round-fairness-ops.ts`의 `FairRoundWinnerResolution`). 화면이 이 하나만 다르게 다룬다 —
+ * 실패했으니 토스트를 띄우고 끝, 이 아니라 "다음에 뭘 눌러야 하는지"를 보여줘야 한다.
+ */
+const REPLAY_REQUIRED_ERROR = 'errors.fairnessReplayRequired'
 
 /**
  * 딜러 컨트롤(판 시작/종료/무효/정산/승자 확정)의 상태·서버 액션 로직을 데스크톱
@@ -37,7 +51,7 @@ export function useDealerPanelControls({
   const [note, setNote] = useState('')
   const [gostop, setGostop] = useState<GostopScoreState>(initialGostopScore)
   const [settleOpen, setSettleOpen] = useState(false)
-  const [voidTarget, setVoidTarget] = useState<'current' | 'last' | null>(null)
+  const [voidTarget, setVoidTarget] = useState<VoidTarget | null>(null)
   const [voidReason, setVoidReason] = useState<VoidReason>('재경기')
   const [isPending, startTransition] = useTransition()
   const [firingSlot, setFiringSlot] = useState<DealerSlot | null>(null)
@@ -45,7 +59,14 @@ export function useDealerPanelControls({
   const roomId = snapshot.room.id
   const round = snapshot.currentRound
   const isHost = snapshot.members.find((member) => member.userId === selfId)?.role === 'host'
-  const players = snapshot.members.filter((member) => member.role !== 'observer')
+  const seatedMembers = snapshot.members.filter((member) => member.role !== 'observer')
+  // 판이 돌고 있으면 서버가 확정한 참가자 목록으로 좁힌다. `members`에서 관전자만 걸러 쓰면
+  // 판 도중 입장한 사람이 승자 후보와 완료 판정에 끼어, `computeRoundCompletion`이 계속
+  // `active`를 돌려줘 승자 확정 폼이 자동으로 열리지 않고 서버가 거부할 사람이 후보로 뜬다.
+  const roundParticipantIds = round?.participantUserIds ?? null
+  const players = roundParticipantIds
+    ? seatedMembers.filter((member) => roundParticipantIds.includes(member.userId))
+    : seatedMembers
   const isGostop = snapshot.room.gameType === 'gostop'
   const verifiedFairness = snapshot.room.gameType === 'seotda' ? (round?.fairness ?? null) : null
   const verifiedDealReady = verifiedFairness?.phase === 'sealed'
@@ -84,7 +105,7 @@ export function useDealerPanelControls({
   const nameOf = (userId: string) =>
     snapshot.members.find((member) => member.userId === userId)?.displayName ?? '?'
 
-  const openVoidDialog = (target: 'current' | 'last') => {
+  const openVoidDialog = (target: VoidTarget) => {
     setVoidReason('재경기')
     setVoidTarget(target)
   }
@@ -94,8 +115,11 @@ export function useDealerPanelControls({
     // 다이얼로그가 "N번째 판을 무효화한다"고 말한 바로 그 판을 같이 보낸다. 안 보내면
     // 서버가 대상을 혼자 다시 고르는데, 그 사이 다른 딜러가 새 판을 시작했으면
     // "지난 판 취소"가 방금 시작한 판을 지운다.
-    const targetRoundId =
-      voidTarget === 'current' ? snapshot.currentRound?.id : snapshot.lastResult?.roundId
+    // `replay`(구사·무승부·나가리)는 대상이 `current`와 같은 진행 중인 판이다.
+    const targetRoundId = voidTargetRoundId(voidTarget, {
+      current: snapshot.currentRound?.id,
+      last: snapshot.lastResult?.roundId,
+    })
     setVoidTarget(null)
     run('void', () =>
       runAction(
@@ -112,7 +136,19 @@ export function useDealerPanelControls({
     if (!round || !verifiedDealReady) return
     run('end', () =>
       runAction(
-        () => endRound({ roomId }),
+        async () => {
+          const result = await endRound({ roomId })
+          // 검증 딜 방에서 구사·무승부가 나면 서버가 승자를 정할 수 없어 판이 그대로 멈춘다.
+          // 이 경로는 쇼다운이 되면 딜러가 누르지 않아도 자동으로 한 번 도는데(아래 effect),
+          // 그때 뜨는 토스트 한 줄을 놓치면 아무도 다음에 뭘 눌러야 하는지 모른 채 판이 잠긴다.
+          // 그래서 무효화(재경기) 확인 다이얼로그를 바로 띄운다 — 데스크톱 패널과 모바일
+          // 퀵바가 같은 `voidTarget` 상태로 같은 다이얼로그를 그리므로 두 화면 모두 뜬다.
+          if (!result.success && result.error === REPLAY_REQUIRED_ERROR) {
+            setVoidReason('재경기')
+            setVoidTarget('replay')
+          }
+          return result
+        },
         (data) => ({
           event: 'round.ended',
           payload: {
@@ -168,6 +204,11 @@ export function useDealerPanelControls({
   useEffect(() => {
     if (!round) {
       autoTriggeredForRound.current = null
+      // 판이 사라졌는데 승자 확정 폼이 열려 있으면 딜러 화면이 통째로 비어 버린다 —
+      // 패널은 `mode === 'idle'`일 때만 버튼 그리드를, `mode === 'pickWinner' && round`일 때만
+      // 폼을 그리므로 둘 다 거짓인 상태가 된다. 판이 다른 경로로 끝났을 때(자동 종료·다른
+      // 딜러의 종료·무효화) 실제로 그렇게 된다.
+      if (mode !== 'idle') setMode('idle')
       return
     }
     if (mode !== 'idle' || isPending) return
