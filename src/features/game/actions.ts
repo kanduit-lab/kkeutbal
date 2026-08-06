@@ -15,9 +15,10 @@ import {
   readJoinAsObserver,
   readMaxMembers,
   requireRole,
+  type Tx,
 } from './action-helpers'
 import { applyStartingChipsAdjustment, recordInitialBuyIn } from './buy-in-ledger'
-import { settleRoomCredits } from './credit-rpc'
+import { isInsufficientCreditError, settleRoomCredits } from './credit-rpc'
 import { checkCreateRoomRateLimit, checkJoinRoomRateLimit } from './room-rate-limits'
 import { fundingModeSchema, readFundingMode } from './funding-mode'
 import {
@@ -27,7 +28,7 @@ import {
 } from './fair-play-settings'
 import type { RoomSnapshot } from './types'
 
-const { rooms, roomMembers, rounds } = schema
+const { rooms, roomMembers, rounds, buyIns, chipLedger, roomCreditLocks } = schema
 
 const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(30),
@@ -99,6 +100,10 @@ export async function createRoom(
       return ok({ code: createdCode })
     } catch (error) {
       if (isUniqueViolation(error)) continue
+      // 계정 크레딧 방은 만드는 순간 방장의 시작 칩만큼 크레딧을 잠근다. 잔액이 모자라면
+      // DB가 거절하는데, 그걸 일반 실패로 뭉개면 "방 생성에 실패했습니다"만 뜨고 시작 칩을
+      // 낮추면 된다는 사실이 화면 어디에도 없다.
+      if (isInsufficientCreditError(error)) return fail('errors.insufficientCredit')
       console.error('createRoom failed:', error)
       return fail('errors.createRoomFailed')
     }
@@ -167,18 +172,33 @@ export async function joinRoom(codeRaw: string): Promise<ActionResult<{ code: st
           .values({ roomId: room.id, userId, role: entryRole, seatNo: seat?.next ?? 0 })
       }
 
-      if (!existing && !joinAsObserver) {
-        await recordInitialBuyIn(tx, {
-          roomId: room.id,
-          userId,
-          amount: room.startingChips,
-          fundingMode: readFundingMode(room.rulePreset),
-        })
+      // 재입장은 두고 간 칩을 그대로 되찾는 것이라 바이인을 새로 찍지 않는다. 다만 판정
+      // 기준이 "처음 들어오는가"가 아니라 "이 방에 바이인이 하나라도 있는가"여야 한다 —
+      // 관전자로 들어왔다 나간 사람은 바이인이 한 번도 없어서, 참가자로 돌아오면 칩 0으로
+      // 자리에 앉는다. `startRound`는 관전자가 아닌 활성 멤버를 전부 판에 넣으므로 그 사람은
+      // 아무 것도 걸지 못한 채 판에 들어가고, 계정 크레딧 방에서 그 사람이 판을 이기면
+      // **잠긴 크레딧 없이 칩만 가진 참가자**가 생겨 `settle_room_credits`의 보존식이 깨진다.
+      // 그러면 방장도 관리자도 방을 닫을 수 없고 나머지 참가자의 크레딧까지 계속 잠긴다.
+      if (!joinAsObserver) {
+        const [priorBuyIn] = await tx
+          .select({ id: buyIns.id })
+          .from(buyIns)
+          .where(and(eq(buyIns.roomId, room.id), eq(buyIns.userId, userId)))
+          .limit(1)
+        if (!priorBuyIn) {
+          await recordInitialBuyIn(tx, {
+            roomId: room.id,
+            userId,
+            amount: room.startingChips,
+            fundingMode: readFundingMode(room.rulePreset),
+          })
+        }
       }
 
       return ok({ code: room.code })
     })
   } catch (error) {
+    if (isInsufficientCreditError(error)) return fail('errors.insufficientCredit')
     console.error('joinRoom failed:', error)
     return fail('errors.joinRoomFailed')
   }
@@ -260,7 +280,10 @@ export async function updateRoomSettings(
       }
       if (startingChips !== undefined) {
         if (readFundingMode(room.rulePreset) === 'account_credit') {
-          return fail('errors.updateSettingsFailed')
+          // 소급 지급·회수는 크레딧 잠금을 함께 움직이지 않는다(`applyStartingChipsAdjustment`).
+          // 막는 것 자체는 원래 동작이고, 여기서는 이유를 이름 붙여 돌려준다 — 예전에는
+          // 일반 실패와 같은 문구라 방장이 무엇을 되돌려야 하는지 알 수 없었다.
+          return fail('errors.startingChipsAccountCredit')
         }
         if (room.status !== 'waiting') {
           return fail('errors.startingChipsWaitingOnly')
@@ -351,6 +374,20 @@ export async function closeRoom(roomId: string): Promise<ActionResult<{ code: st
         return fail('errors.hostOnlySettle')
       }
 
+      const [roomBeforeClose] = await tx
+        .select({ status: rooms.status, rulePreset: rooms.rulePreset })
+        .from(rooms)
+        .where(eq(rooms.id, roomId))
+        .limit(1)
+      if (!roomBeforeClose) return fail('errors.roomNotFound')
+      // 이미 끝난 방은 다시 닫지 않는다. 다른 쓰기 액션(`voidRound`·`adminCloseRoom`·
+      // `updateRoomSettings`·`addBuyIn`)은 전부 하는 검사가 여기만 빠져 있었다 — 두 번째
+      // 호출이 통과하면 `closedAt`이 지금으로 다시 찍혀서, 랭킹의 기간 필터(`closedAt >= since`)와
+      // 홈 "지난 세션" 정렬이 실제로 끝난 시각에서 밀린다.
+      if (roomBeforeClose.status === 'settled' || roomBeforeClose.status === 'closed') {
+        return fail('errors.roomEnded')
+      }
+
       const [playing] = await tx
         .select({ id: rounds.id })
         .from(rounds)
@@ -361,13 +398,16 @@ export async function closeRoom(roomId: string): Promise<ActionResult<{ code: st
         return fail('errors.settlementNotBalanced')
       }
 
-      const [roomBeforeClose] = await tx
-        .select({ rulePreset: rooms.rulePreset })
-        .from(rooms)
-        .where(eq(rooms.id, roomId))
-        .limit(1)
-      if (!roomBeforeClose) return fail('errors.roomNotFound')
       if (readFundingMode(roomBeforeClose.rulePreset) === 'account_credit') {
+        // `settle_room_credits`는 **활성 잠금 보유자**를 기준으로 세션 잔액을 조인한다. 잠금
+        // 없이 칩만 가진 사람이 하나라도 있으면 그 칩이 보존식 양쪽에서 통째로 빠져 함수가
+        // 예외를 던지고, 방장도 관리자 강제 정산도 실패해 **나머지 참가자의 크레딧까지 계속
+        // 잠긴 채로 남는다**. 예외를 그냥 받으면 화면에는 원인 없는 "정산에 실패했습니다"만
+        // 뜬다 — 복구는 관리자 전용 `admin_repair_room_credit_settlement`이므로
+        // (`docs/10-virtual-credit-and-fair-play.md`) 그쪽으로 보내는 문구를 준다.
+        if (await hasStrandedChipHolder(tx, roomId)) {
+          return fail('errors.roomCreditsStranded')
+        }
         await settleRoomCredits(tx, roomId, userId)
       }
 
@@ -384,4 +424,36 @@ export async function closeRoom(roomId: string): Promise<ActionResult<{ code: st
     console.error('closeRoom failed:', error)
     return fail('errors.settleFailed')
   }
+}
+
+/**
+ * 계정 크레딧 방에서 "잠긴 크레딧 없이 칩만 가진 참가자"가 있는지 본다.
+ *
+ * 방 전체 원장 합은 늘 바이인 합과 같고(`netTotalInRoom`), 계정 크레딧 방에서는 바이인 합이
+ * 곧 활성 잠금 합이다 — 잠금 없는 바이인을 만드는 경로(`addLocalMember`,
+ * `applyStartingChipsAdjustment`)는 이 재원 모드에서 모두 막혀 있다. 그래서 잠금 보유자만
+ * 모은 `settle_room_credits`의 보존식이 깨지는 조건은 정확히 "잠금 없는 칩 보유자가 있다"이다.
+ * 칩 잔액은 음수가 될 수 없으므로 한 명이라도 있으면 합이 어긋난다.
+ *
+ * 판정만 하고 아무 것도 쓰지 않는다 — 실제 복구는 관리자 전용 RPC의 몫이다.
+ */
+async function hasStrandedChipHolder(tx: Tx, roomId: string): Promise<boolean> {
+  const [stranded] = await tx
+    .select({ userId: chipLedger.userId })
+    .from(chipLedger)
+    .where(
+      and(
+        eq(chipLedger.roomId, roomId),
+        sql`not exists (
+          select 1 from ${roomCreditLocks}
+          where ${roomCreditLocks.roomId} = ${roomId}
+            and ${roomCreditLocks.userId} = ${chipLedger.userId}
+            and ${roomCreditLocks.releasedTransactionId} is null
+        )`,
+      ),
+    )
+    .groupBy(chipLedger.userId)
+    .having(sql`coalesce(sum(${chipLedger.delta}), 0) <> 0`)
+    .limit(1)
+  return Boolean(stranded)
 }

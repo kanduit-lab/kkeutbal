@@ -102,5 +102,13 @@ export async function getCumulativeRanking(
         sessions: row.sessions,
       }
     })
-    .sort((a, b) => b.net - a.net)
+    // 동점자는 `userId`로 한 번 더 가른다. 세션 순위표(`room-results.ts`)와 같은 이유다 —
+    // 2차 기준이 없으면 Postgres가 돌려주는 행 순서(보장 없음)에 따라 랭킹판을 새로 고칠
+    // 때마다 같은 net을 가진 두 사람의 등수가 서로 뒤바뀐다. 판을 한 번도 안 뛴 사람들이
+    // net 0으로 몰려 있어 실제로 흔한 상황이다.
+    .sort((a, b) => b.net - a.net || compareId(a.userId, b.userId))
+}
+
+function compareId(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0
 }

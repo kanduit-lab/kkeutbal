@@ -36,7 +36,11 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
   const isGostop = room.gameType === 'gostop'
   const supportsVerifiedFairDeal = room.gameType === 'seotda'
 
-  const canEditStartingChips = room.status === 'waiting'
+  // 계정 크레딧 방은 시작 칩을 못 바꾼다. 소급 지급·회수(`applyStartingChipsAdjustment`)가
+  // 세션 원장만 움직이고 지갑 잠금은 그대로 두기 때문에 서버가 거절한다. 예전에는 스테퍼가
+  // 그대로 열려 있어서, 방장이 값을 바꿔 저장하면 이유 없는 실패 토스트만 반복됐다.
+  const isAccountCredit = room.fundingMode === 'account_credit'
+  const canEditStartingChips = room.status === 'waiting' && !isAccountCredit
 
   function save() {
     if (isPending) return
@@ -175,7 +179,11 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
               <p className="tabular-nums text-lg font-black">
                 {room.startingChips.toLocaleString()}
               </p>
-              <p className="mt-1 text-xs text-muted">{d.settings.startingChipsLocked}</p>
+              <p className="mt-1 text-xs text-muted">
+                {isAccountCredit
+                  ? d.settings.startingChipsCreditLocked
+                  : d.settings.startingChipsLocked}
+              </p>
             </>
           )}
         </Field>

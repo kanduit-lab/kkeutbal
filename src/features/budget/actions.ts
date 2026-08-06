@@ -7,6 +7,7 @@ import { db, schema } from '@/lib/db'
 import { consumeRateLimitsUnlessAdmin } from '@/lib/rate-limit'
 import { currentUserId } from '../auth/session'
 import { balanceInRoom, lockRoom, requireRole } from '../game/action-helpers'
+import { isInsufficientCreditError } from '../game/credit-rpc'
 import { readFundingMode } from '../game/funding-mode'
 
 const { rooms, roomMembers, buyIns, chipLedger, roomCreditLocks } = schema
@@ -160,6 +161,10 @@ export async function addBuyIn(
       return ok({ userId, amount, balance: await balanceInRoom(tx, roomId, userId) })
     })
   } catch (error) {
+    // 계정 크레딧 방의 추가 바이인은 대상자의 available 크레딧을 잠근다. 모자라면 DB가
+    // 거절하는데, 딜러 화면에는 "바이인 추가에 실패했습니다"만 떠서 대상자가 크레딧을
+    // 채워야 한다는 것을 알 수 없었다.
+    if (isInsufficientCreditError(error)) return fail('errors.insufficientCredit')
     console.error('addBuyIn failed:', error)
     return fail('errors.addBuyInFailed')
   }

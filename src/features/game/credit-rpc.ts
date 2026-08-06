@@ -41,3 +41,18 @@ export async function settleRoomCredits(
     select public.settle_room_credits(${roomId}::uuid, ${settledBy}::uuid)
   `)
 }
+
+/**
+ * `post_credit_transaction`이 available 잔액을 음수로 만드는 항목을 거부할 때 던지는 예외인지
+ * 판정한다(`0009_virtual_credits_security.sql`).
+ *
+ * 이 예외를 그냥 catch로 흘리면 화면에는 "입장에 실패했습니다"·"방 생성에 실패했습니다"처럼
+ * 원인 없는 문구만 뜬다. 크레딧이 모자란 것은 사용자가 바로 고칠 수 있는 상태이므로 그대로
+ * 알려준다. 문자열 비교인 이유는 이 예외가 `raise exception`이라 SQLSTATE가 일반값(P0001)뿐이고,
+ * 그 코드로는 같은 함수의 다른 실패와 구분되지 않기 때문이다.
+ */
+export function isInsufficientCreditError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const message = (error as { message?: unknown }).message
+  return typeof message === 'string' && message.includes('insufficient virtual credit')
+}
