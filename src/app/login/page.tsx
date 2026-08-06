@@ -9,7 +9,8 @@ import { LocaleSwitcher } from '@/components/locale-switcher'
 import { Alert, Button } from '@/components/ui'
 import { format, getDict, type Dictionary } from '@/lib/i18n/server'
 
-const SHOWCASE_CARD_IDS = ['03-gwang', '08-gwang', '01-gwang'] as const
+// `/about` 히어로와 같은 5광 조합. 로그인이 첫 화면인 사람이 많아 두 화면의 첫인상을 맞춘다.
+const SHOWCASE_CARD_IDS = ['01-gwang', '03-gwang', '08-gwang', '11-gwang', '12-gwang'] as const
 
 function loginErrorCopy(d: Dictionary): Record<string, string> {
   return {
@@ -55,16 +56,19 @@ export default async function LoginPage({
         <LocaleSwitcher />
       </div>
       <section className="rise-in text-center lg:text-left">
-        <div className="mb-6 hidden justify-center gap-3 lg:flex lg:justify-start">
+        {/*
+          모바일에서도 그린다. 이전에는 `hidden lg:flex`라 폰으로 처음 들어온 사람에게는
+          로그인 화면이 글자만 남았다 — 그런데 폰이 이 앱의 기본 기기다. 세로 여백이
+          빠듯하므로(아래 주석의 720px 제약) 폰에서는 카드를 w-12까지 줄인다.
+        */}
+        <div className="mb-3 flex justify-center gap-1.5 lg:mb-6 lg:justify-start lg:gap-3">
           {showcase.map((card, index) => (
             <div
               key={card.id}
-              className="rise-in w-24 lg:w-28"
-              style={{
-                transform: `rotate(${(index - 1) * 8}deg) translateY(${index === 1 ? -6 : 0}px)`,
-              }}
+              className="rise-in w-12 sm:w-16 lg:w-24"
+              style={{ transform: `rotate(${(index - 2) * 6}deg)` }}
             >
-              <HwatuCardView card={card} size="md" />
+              <HwatuCardView card={card} size="sm" />
             </div>
           ))}
         </div>
