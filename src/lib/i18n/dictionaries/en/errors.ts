@@ -26,6 +26,7 @@ export const errors: Dictionary['errors'] = {
   startingChipsHasRounds: 'Starting chips cannot change once a round has been played',
   startingChipsBelowBalance:
     'Cannot lower starting chips. A player holds fewer chips than would be taken back',
+  startingChipsAccountCredit: 'Starting chips cannot change in an account-credit room',
   maxMembersBelowCurrent: 'The room capacity cannot be lower than the current member count',
   fairPlayLocked: 'Fair dealing options cannot change after the first round starts',
   updateSettingsFailed: 'Failed to update room options',
@@ -33,6 +34,9 @@ export const errors: Dictionary['errors'] = {
   activeRoundBeforeSettle: 'Finish or void the round in progress first',
   settlementNotBalanced: 'Cannot settle because the session net total is not balanced',
   settleFailed: 'Failed to settle the session',
+  roomCreditsStranded:
+    'This room cannot be settled: a player holds chips without any locked credit. Ask an administrator to repair it',
+  insufficientCredit: 'Not enough virtual credit',
   cannotTransferSelf: 'You cannot transfer the host role to yourself',
   hostOnlyTransfer: 'Only the host can transfer the host role',
   targetNotMember: 'The target is not a member of this room',
@@ -43,6 +47,8 @@ export const errors: Dictionary['errors'] = {
   cannotChangeHostRole: 'The host role cannot be changed',
   cannotChangeParticipationDuringRound:
     'Observer and participant roles cannot be changed during a round',
+  observerNeedsBuyInBeforePlaying:
+    'In a credit room you need to buy in before you can sit down as a player',
   setRoleFailed: 'Failed to change the role',
   cannotRemoveSelf: 'You cannot remove yourself. Use leave instead',
   dealerOrHostOnlyRemove: 'Only the dealer or host can remove members',
@@ -85,7 +91,8 @@ export const errors: Dictionary['errors'] = {
     'Your remaining chips cannot cover the current bet. Take a buy-in or fold (다이)',
   raiseBelowMinimum: 'The amount is below the minimum raise',
   raiseMustFollowTtadang: 'Under the ttadang rule, a raise must be exactly double the current highest bet',
-  raiseExceedsPotLimit: 'Under the pot-limit rule, your total bet after this raise cannot exceed the pot',
+  raiseExceedsPotLimit:
+    'Under the pot-limit rule, you can raise at most the size of the pot after calling',
   allInMustUseFullBalance: 'An all-in must use your full remaining balance',
   allInMustUseAllInAction: 'Use the all-in action when betting your full remaining balance',
   placeBetRecordFailed: 'Failed to record the bet',

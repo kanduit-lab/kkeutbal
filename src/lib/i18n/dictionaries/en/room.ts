@@ -64,6 +64,7 @@ export const table: Dictionary['table'] = {
   waiting: 'Waiting',
   potLabel: 'pot',
   potSubLabel: 'total bets',
+  potCarriedLabel: 'carried over',
 } as const
 
 export const rail: Dictionary['rail'] = {
@@ -155,6 +156,12 @@ export const memberSheet: Dictionary['memberSheet'] = {
   undoneToast: 'Canceled the grant of {n}',
   roleTitle: 'Role',
   roleHint: 'Dealers run and approve rounds; observers just watch without betting',
+  selfRoleTitle: 'My participation',
+  selfRoleHint:
+    'Switch to observer to sit out. Observers are left out of the player count and betting',
+  selfRoleDuringRound: 'You cannot switch while a round is running. Change it after it ends',
+  roleDuringRound:
+    'They are playing this round, so they cannot switch to observer. Change it after the round ends',
   transferHost: 'Make this person host',
   remove: 'Remove',
   leave: 'Leave room',
@@ -188,6 +195,10 @@ export const lobby: Dictionary['lobby'] = {
   linkCopied: 'Link copied',
   copyFailed: 'Could not copy. Share the code directly',
   membersCount: 'Players · {n}',
+  membersSplit: 'Playing {players} · Watching {observers}',
+  manageMemberHint: 'Tap a name to change their role (playing or observing) or remove them',
+  selfRoleHint: 'Tap your own name to switch to observing and sit this one out',
+  needTwoPlayers: 'You need at least 2 non-observer players to start a round',
   startRound: 'Start round',
   waitingForDealer: 'The game screen opens when the host or dealer starts a round',
   addLocalMember: 'Add someone by name',
@@ -221,8 +232,13 @@ export const dealer: Dictionary['dealer'] = {
   pickWinnerFirst: 'Pick a winner',
   foldWinHint: 'Everyone else folded. {winner} has been preselected as the winner.',
   confirmWinner: 'Confirm winner',
+  voidAsReplay: 'No winner · rematch',
+  voidReplayTitle: 'Void the round for a rematch?',
+  voidReplayBody:
+    'This round ended without a winner. The pot so far carries over to the next round',
   voidCurrentTitle: 'Void this round?',
-  voidCurrentBody: 'All bets this round will be returned and it will be recorded as a rematch',
+  voidCurrentBody: 'The pot so far carries over to the next round',
+  voidRefundBody: 'All bets this round will be returned and it will be recorded as void',
   voidLastTitle: 'Cancel the last round?',
   voidLastBody:
     'All chip movements from round {seq} will be returned and it will be recorded as void',
@@ -313,7 +329,7 @@ export const roomForm: Dictionary['roomForm'] = {
   raiseRulePotLimit: 'Pot limit',
   raiseRuleFreeHint: 'Only the minimum raise floor is enforced. Everything else is up to the table',
   raiseRuleTtadangHint: 'A re-raise must be exactly double the current highest bet',
-  raiseRulePotLimitHint: 'After a raise, your total bet this round cannot exceed the pot',
+  raiseRulePotLimitHint: 'You can raise up to the size of the pot after calling',
 } as const
 
 export const settings: Dictionary['settings'] = {
@@ -323,6 +339,8 @@ export const settings: Dictionary['settings'] = {
   startingChipsLocked:
     'Starting chips cannot change mid-session. Tap a seat → extra buy-in for anyone running low',
   startingChipsEditHint: 'Members already seated are compensated by the difference',
+  startingChipsCreditLocked:
+    'Starting chips are fixed in an account-credit room, because chips are locked credit. Tap a seat → extra buy-in instead',
   maxMembersLabel: 'Max players',
   maxMembersHint: 'New players cannot join once the room is full',
   joinAsObserverLabel: 'New joiners enter as observers',

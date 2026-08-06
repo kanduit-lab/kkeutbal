@@ -59,6 +59,7 @@ export const table = {
   waiting: '대기',
   potLabel: 'pot',
   potSubLabel: '누적 베팅',
+  potCarriedLabel: '이월 판돈',
 } as const
 
 /**
@@ -154,6 +155,10 @@ export const memberSheet = {
   undoneToast: '{n} 지급을 취소했어요',
   roleTitle: '역할',
   roleHint: '딜러는 판을 진행하고 승인해요. 관전자는 베팅 없이 구경만 해요',
+  selfRoleTitle: '내 참여',
+  selfRoleHint: '이번 판을 쉬려면 관전으로 바꾸세요. 관전 중에는 판 인원과 베팅에서 빠져요',
+  selfRoleDuringRound: '판이 도는 중에는 바꿀 수 없어요. 판이 끝난 뒤에 바꾸세요',
+  roleDuringRound: '이번 판에 참가 중이라 관전으로 못 바꿔요. 판이 끝난 뒤에 바꾸세요',
   transferHost: '이 사람에게 방장 위임',
   remove: '내보내기',
   leave: '방 나가기',
@@ -186,6 +191,10 @@ export const lobby = {
   linkCopied: '링크를 복사했어요',
   copyFailed: '복사가 안 돼요. 코드를 직접 알려주세요',
   membersCount: '참가자 {n}명',
+  membersSplit: '참가 {players}명 · 관전 {observers}명',
+  manageMemberHint: '이름을 누르면 역할(참가·관전)을 바꾸거나 내보낼 수 있어요',
+  selfRoleHint: '내 이름을 누르면 이번 판을 쉬는 관전으로 바꿀 수 있어요',
+  needTwoPlayers: '관전자를 뺀 참가자가 2명 이상이어야 판을 시작할 수 있어요',
   startRound: '판 시작',
   waitingForDealer: '방장이나 딜러가 판을 시작하면 게임 화면으로 바뀌어요',
   addLocalMember: '이름만으로 사람 추가',
@@ -219,8 +228,12 @@ export const dealer = {
   pickWinnerFirst: '승자를 선택하세요',
   foldWinHint: '다른 참가자가 모두 다이했어요. {winner} 님을 승자로 미리 선택했어요.',
   confirmWinner: '승자 확정',
+  voidAsReplay: '승부 무산 · 재경기',
+  voidReplayTitle: '재경기로 판을 무효화할까요?',
+  voidReplayBody: '승부가 나지 않은 판이에요. 지금까지 걸린 판돈은 다음 판으로 이월돼요',
   voidCurrentTitle: '판을 무효화할까요?',
-  voidCurrentBody: '이번 판의 베팅이 모두 반환되고, 재경기로 기록돼요',
+  voidCurrentBody: '지금까지 걸린 판돈은 다음 판으로 이월돼요',
+  voidRefundBody: '이번 판의 베팅이 모두 반환되고, 무효로 기록돼요',
   voidLastTitle: '지난 판을 취소할까요?',
   voidLastBody: '지난 {seq}판의 칩 이동이 모두 반환되고, 무효로 기록돼요',
   voidReasonAria: '무효 사유',
@@ -309,7 +322,7 @@ export const roomForm = {
   raiseRulePotLimit: '팟 리밋',
   raiseRuleFreeHint: '최소 레이즈 하한만 지켜요. 나머지는 참가자끼리 정해요',
   raiseRuleTtadangHint: '재레이즈는 직전 최고 베팅액의 정확히 2배로만 낼 수 있어요',
-  raiseRulePotLimitHint: '레이즈 뒤 내 누적 베팅이 이번 판 팟을 넘을 수 없어요',
+  raiseRulePotLimitHint: '콜을 채운 뒤의 팟만큼까지 올릴 수 있어요',
 } as const
 
 export const settings = {
@@ -319,6 +332,8 @@ export const settings = {
   startingChipsLocked:
     '시작 칩은 진행 중에는 못 바꿔요. 부족한 사람은 좌석을 탭해서 추가 바이인을 쓰세요',
   startingChipsEditHint: '이미 들어온 참가자에게는 차액만큼 지급하거나 회수해요',
+  startingChipsCreditLocked:
+    '계정 크레딧 방은 시작 칩을 못 바꿔요. 칩이 곧 잠긴 크레딧이라 좌석을 탭해서 추가 바이인을 쓰세요',
   maxMembersLabel: '최대 인원',
   maxMembersHint: '정원이 차면 새 참가자는 들어올 수 없어요',
   joinAsObserverLabel: '새 참가자는 관전자로 입장',
