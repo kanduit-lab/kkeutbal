@@ -4,7 +4,13 @@ import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { currentUserId } from './session'
 import { isAdminUser } from './roles'
-import { listActiveRooms, listGuestTokens, listRegistrationCodes, listUsers } from './admin-queries'
+import {
+  countActiveRooms,
+  listActiveRooms,
+  listGuestTokens,
+  listRegistrationCodes,
+  listUsers,
+} from './admin-queries'
 import { getSsoSettings } from './sso-settings'
 import { migrateLegacyGuestTokenSecrets } from './guest-tokens'
 import { ADMIN_SECTIONS, type AdminSection, type AdminSectionData } from './admin-dashboard-types'
@@ -43,8 +49,12 @@ export async function loadAdminSection(input: {
         return ok({ section: 'people', users: await listUsers() })
       }
       case 'operations': {
-        const [rooms, promotions] = await Promise.all([listActiveRooms(), listPromotions()])
-        return ok({ section: 'operations', rooms, promotions })
+        const [rooms, roomTotal, promotions] = await Promise.all([
+          listActiveRooms(),
+          countActiveRooms(),
+          listPromotions(),
+        ])
+        return ok({ section: 'operations', rooms, roomTotal, promotions })
       }
     }
   } catch (error) {

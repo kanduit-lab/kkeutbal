@@ -176,9 +176,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
               {
                 key: 'members',
                 label: d.adminConsole.members.title,
-                node: (
-                  <MembersPanel selfId={selfId} users={data.users} onDataChanged={reload} />
-                ),
+                node: <MembersPanel selfId={selfId} users={data.users} onDataChanged={reload} />,
               },
               {
                 key: 'credits',
@@ -200,7 +198,9 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
               {
                 key: 'rooms',
                 label: d.adminConsole.rooms.title,
-                node: <RoomsPanel rooms={data.rooms} onDataChanged={reload} />,
+                node: (
+                  <RoomsPanel rooms={data.rooms} total={data.roomTotal} onDataChanged={reload} />
+                ),
               },
               {
                 key: 'promotions',
@@ -229,7 +229,10 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
         className="flex min-h-0 flex-1 flex-col"
       >
         <div className="mb-3 flex shrink-0 items-baseline gap-3">
-          <h2 id={`admin-${activeSection}-title`} className="shrink-0 text-lg font-black lg:text-xl">
+          <h2
+            id={`admin-${activeSection}-title`}
+            className="shrink-0 text-lg font-black lg:text-xl"
+          >
             {d.adminDashboard.sections[activeSection].label}
           </h2>
           <p className="hidden min-w-0 flex-1 truncate text-sm text-muted sm:block">

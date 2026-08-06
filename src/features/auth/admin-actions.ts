@@ -9,6 +9,7 @@ import { lockRoom, netTotalInRoom } from '../game/action-helpers'
 import { readFundingMode } from '../game/funding-mode'
 import { currentUserId } from './session'
 import { isAdminUser } from './roles'
+import type { AdminBulkFailure } from './admin-queries'
 import { generateRegistrationCode, registrationCodeHash } from './registration-codes'
 import { guestTokenHash } from './guest-tokens'
 import { encryptSsoClientSecret, SETTINGS_ID } from './sso-settings'
@@ -362,4 +363,37 @@ export async function adminCloseRoom(roomId: string): Promise<ActionResult<{ cod
     console.error('adminCloseRoom failed:', error)
     return fail('errors.adminCloseRoomFailed')
   }
+}
+/**
+ * 방을 한 번에 여러 개 강제 정산한다. 한 방씩 `adminCloseRoom`을 그대로 호출하므로
+ * 방마다 트랜잭션과 advisory lock이 따로 잡힌다 — **하나가 실패해도 나머지는 정산된다**.
+ * 크레딧 보존식이 깨진 방(`errors.roomCreditsStranded`)이 섞여 있어도 나머지가 막히지 않게
+ * 하려는 것이 이 분리의 목적이다.
+ *
+ * 결과는 코드별로 돌려준다 — 무엇이 왜 실패했는지 모르면 관리자가 다음에 무엇을 할지
+ * 정할 수 없다.
+ */
+const closeRoomsSchema = z.array(z.string().uuid()).min(1).max(100)
+
+export async function adminCloseRooms(
+  roomIds: readonly string[],
+): Promise<ActionResult<{ closed: readonly string[]; failed: readonly AdminBulkFailure[] }>> {
+  const adminId = await requireAdmin()
+  if (!adminId) return fail('errors.adminOnlyCloseRoom')
+
+  const parsed = closeRoomsSchema.safeParse(roomIds)
+  if (!parsed.success) return fail('errors.invalidInput')
+
+  // 같은 id가 두 번 들어오면 두 번째는 `roomEnded`로 실패해 결과가 시끄러워진다.
+  const unique = [...new Set(parsed.data)]
+
+  const closed: string[] = []
+  const failed: AdminBulkFailure[] = []
+  for (const roomId of unique) {
+    const result = await adminCloseRoom(roomId)
+    if (result.success) closed.push(result.data.code)
+    else failed.push({ roomId, error: result.error })
+  }
+
+  return ok({ closed, failed })
 }

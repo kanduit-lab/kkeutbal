@@ -78,6 +78,30 @@ export interface AdminRoomView {
   readonly hostName: string
 }
 
+/**
+ * 일괄 작업에서 방 하나가 실패한 이유. 일괄 처리는 방마다 트랜잭션이 따로라
+ * 일부만 실패할 수 있고, 무엇이 왜 실패했는지가 그 다음 조치를 정한다.
+ */
+export interface AdminBulkFailure {
+  readonly roomId: string
+  readonly error: string
+}
+
+/**
+ * 목록이 상한(`ACTIVE_ROOMS_LIMIT`)에 걸렸는지 알기 위한 실제 전체 수. 일괄 정산을 돌리고도
+ * "100건"이 그대로면 아무 일도 안 일어난 것처럼 보이는데, 실제로는 상한 뒤에 밀려 있던 방이
+ * 그 자리를 채운 것이다 — 화면이 잘린 목록임을 말해야 그 오해가 사라진다.
+ */
+const ACTIVE_ROOMS_LIMIT = 100
+
+export async function countActiveRooms(): Promise<number> {
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.rooms)
+    .where(inArray(schema.rooms.status, ['waiting', 'playing']))
+  return row?.count ?? 0
+}
+
 export async function listActiveRooms(): Promise<AdminRoomView[]> {
   const rows = await db
     .select({
@@ -98,7 +122,7 @@ export async function listActiveRooms(): Promise<AdminRoomView[]> {
     .innerJoin(schema.users, eq(schema.users.id, schema.rooms.hostId))
     .where(inArray(schema.rooms.status, ['waiting', 'playing']))
     .orderBy(desc(schema.rooms.createdAt))
-    .limit(100)
+    .limit(ACTIVE_ROOMS_LIMIT)
 
   return rows.flatMap((row) =>
     row.status === 'waiting' || row.status === 'playing'

@@ -29,5 +29,8 @@ export type AdminSectionData =
   | {
       readonly section: 'operations'
       readonly rooms: readonly AdminRoomView[]
+
+      /** 진행 중인 방의 실제 전체 수. `rooms`는 100개에서 잘리므로 이 값이 더 클 수 있다. */
+      readonly roomTotal: number
       readonly promotions: readonly AdminPromotionView[]
     }
