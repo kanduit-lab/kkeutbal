@@ -10,10 +10,10 @@ import { nextActorId } from '../turn-order'
 import type { MemberView, RoomSnapshot } from '../types'
 import { Avatar, Badge, Button, ConfirmDialog, Sheet, StatTile, useToast } from '@/components/ui'
 import { formatChips, lastAcceptedByUser, type RunAction } from './shared'
-import { proxyBlockReason, selfBlockReason } from './member-sheet-gating'
+import { proxyBlockReason, selfBlockReason, selfRoleSwitchBlockReason } from './member-sheet-gating'
 import { ProxyBetSection, ProxyBlockedNotice } from './member-sheet-proxy-bet'
 import { BuyInSection } from './member-sheet-buy-in'
-import { RoleSection } from './member-sheet-role'
+import { RoleSection, SelfRoleSection } from './member-sheet-role'
 import { SelfBetNotice } from './member-sheet-self-notice'
 
 export function MemberSheet({
@@ -72,6 +72,14 @@ export function MemberSheet({
     ? selfBlockReason({ isBettingGame, selfRole: member.role, hasRound })
     : null
 
+  // "나 이번 판 쉴게"는 모임에서 가장 흔한 요청인데 예전에는 방장만 눌러줄 수 있었다.
+  // 판이 도는 중(`duringRound`)에는 숨기지 않고 왜 막혔는지 보여준다 — 방장/딜러는
+  // 애초에 이 경로가 없으므로(위임·방장 지정이 먼저다) 아예 그리지 않는다.
+  const selfRoleBlock = isSelf
+    ? selfRoleSwitchBlockReason({ selfRole: member.role, hasRound })
+    : 'host'
+  const showSelfRole = selfRoleBlock === null || selfRoleBlock === 'duringRound'
+
   const showRemove = isDealer && !isSelf && member.role !== 'host'
 
   const lastAcceptedMap = useMemo(() => lastAcceptedByUser(snapshot.actions), [snapshot.actions])
@@ -80,9 +88,13 @@ export function MemberSheet({
   // 차례는 좌석 순서 순수 함수 한 곳에서만 계산한다 — 서버(`betting/actions.ts`)와
   // 좌석 강조(`game-table.tsx`)가 쓰는 바로 그 함수다. 대리 베팅을 눌러도 차례가
   // 아니면 서버가 거절하므로, 누를 수 있는지를 여기서 미리 알려준다.
+  //
+  // 명부는 `members`에서 관전자만 거른 목록이 아니라 스냅샷이 들고 오는 이번 판 참가자를
+  // 쓴다 — 판 도중에 들어온 사람은 관전자가 아니어도 이번 판 참가자가 아니라서, 걸러낸
+  // 목록으로 계산하면 서버가 강제하는 차례와 어긋난 사람을 "지금 이 사람 차례"로 띄운다.
   const participantIds = useMemo(
-    () => snapshot.members.filter((m) => m.role !== 'observer').map((m) => m.userId),
-    [snapshot.members],
+    () => snapshot.currentRound?.participantUserIds ?? [],
+    [snapshot.currentRound],
   )
   const isMembersTurn =
     isBettingGame && hasRound && nextActorId(participantIds, snapshot.actions) === member.userId
@@ -174,6 +186,7 @@ export function MemberSheet({
             roomId={snapshot.room.id}
             memberId={member.userId}
             memberRole={member.role}
+            targetIsRoundParticipant={participantIds.includes(member.userId)}
             isPending={isPending}
             run={run}
             runAction={runAction}
@@ -190,6 +203,17 @@ export function MemberSheet({
           >
             🚪 {d.memberSheet.remove}
           </Button>
+        ) : null}
+        {showSelfRole ? (
+          <SelfRoleSection
+            roomId={snapshot.room.id}
+            selfId={selfId}
+            selfRole={member.role}
+            hasRound={hasRound}
+            isPending={isPending}
+            run={run}
+            runAction={runAction}
+          />
         ) : null}
         {isSelf ? (
           <Button
