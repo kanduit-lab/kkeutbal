@@ -211,8 +211,12 @@ Broadcast는 전역 순서를 보장하지 않는다. 순서가 의미를 갖는
 
 `useRoomSync`(`src/features/game/components/use-room-sync.ts`)가 두 가지 가드를 건다.
 
-- **단조 순번 가드**: refetch는 시작 시 순번을 올리고, 응답 반영 시점에 자기 순번이 최신일 때만
-  스냅샷을 교체한다 — 늦게 도착한 이전 응답이 더 새 스냅샷을 덮어쓰지 않는다.
+- **단조 순번 가드**: refetch는 시작 시 순번을 올리고, 응답 반영 시점에 **이미 반영된 순번보다
+  클 때만** 스냅샷을 교체한다(`src/lib/realtime/snapshot-order.ts`) — 늦게 도착한 이전 응답이 더
+  새 스냅샷을 덮어쓰지 않는다. 비교 대상은 "마지막으로 **발행된** 순번"이 아니다(2026-08-06 수정):
+  refetch 왕복이 이벤트 간격(`MIN_EVENT_INTERVAL_MS`, 1초)보다 길어지는 회선에서는 응답이 돌아올
+  때마다 이미 더 새 요청이 나가 있어 전부 버려졌고, 베팅이 몰릴수록 refetch만 갱신하는 값(액션
+  로그, 그리고 그것으로 계산하는 차례 표시)이 버스트 내내 멈춰 있었다.
 - **동일 내용 참조 유지**: 새 스냅샷이 기존과 내용이 같으면(JSON 직렬화 비교) 기존 참조를
   유지한다 — 무변화 폴링이 리렌더를 일으키지 않는다.
 
@@ -226,7 +230,9 @@ Broadcast는 전역 순서를 보장하지 않는다. 순서가 의미를 갖는
   30s(상한)로 채널을 처음부터 다시 구독한다. `SUBSCRIBED` 성공 시 백오프 카운터가 리셋된다.
 - **수동 재접속(`reconnect`)**: 백오프 없이 즉시. `resetRealtimeSocket()`(`client.ts`,
   `realtime.disconnect()`)으로 웹소켓을 먼저 끊고 새 소켓으로 재구독한다 — 절전 복귀처럼 소켓은
-  죽었는데 라이브러리는 살아있다고 믿는 상태를 뚫는다.
+  죽었는데 라이브러리는 살아있다고 믿는 상태를 뚫는다. 자동 재구독 시도 횟수(`MAX_RECONNECT_ATTEMPTS`)
+  도 함께 0으로 되돌린다 — 수동 버튼·`online`·탭 복귀는 "조건이 달라졌다"는 신호인데, 카운터를
+  그대로 두면 상한을 쓴 방이 재연결 한 번 더 실패하는 순간 다시 영영 자동 복구를 안 한다.
 - **생명주기 트리거**: `pageshow`(bfcache 복원, `persisted`) → reconnect. `online` → refetch +
   미연결이면 reconnect. `offline` → connected=false. `visibilitychange` 복귀 → refetch +
   미연결이면 reconnect.
