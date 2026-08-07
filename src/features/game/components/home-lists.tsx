@@ -78,7 +78,7 @@ export function HomeLists({
                     {pagedRooms.rows.map((room) => (
                       <li key={room.code}>
                         <Link href={`/rooms/${room.code}` as Route} className="block">
-                          <div className="flex h-16 items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3 transition-transform hover:-translate-y-0.5">
+                          <div className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3 transition-transform hover:-translate-y-0.5">
                             <div className="min-w-0">
                               <p className="truncate font-bold">{room.name}</p>
                               <p className="mt-0.5 truncate text-sm text-muted">
@@ -133,7 +133,7 @@ export function HomeLists({
                     {pagedSessions.rows.map((past) => (
                       <li key={past.id}>
                         <Link href={`/rooms/${past.code}/result` as Route} className="block">
-                          <div className="flex h-16 items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3 transition-transform hover:-translate-y-0.5">
+                          <div className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3 transition-transform hover:-translate-y-0.5">
                             <div className="min-w-0">
                               <p className="flex items-center gap-1.5">
                                 <span className="truncate font-bold">{past.name}</span>

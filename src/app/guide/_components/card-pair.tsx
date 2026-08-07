@@ -18,7 +18,7 @@ export function CardPair({
   note?: string
 }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl bg-bg-deep/40 p-3 text-center">
+    <div className="flex flex-col items-center gap-2 rounded-xl bg-inset p-3 text-center">
       <div className="flex gap-1">
         {ids.map((id) => (
           <HwatuCardView key={id} card={resolveCard(id)} size="md" />

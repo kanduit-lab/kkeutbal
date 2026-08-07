@@ -98,7 +98,7 @@ export function SeotdaResult({
                 })}
               </span>
             </div>
-            <div className="flex h-2.5 overflow-hidden rounded-full bg-bg-deep/70">
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-field">
               <div className="bg-win" style={{ width: `${result.stats.winRate * 100}%` }} />
               <div className="bg-white/25" style={{ width: `${result.stats.replayRate * 100}%` }} />
               <div className="bg-accent" style={{ width: `${result.stats.loseRate * 100}%` }} />

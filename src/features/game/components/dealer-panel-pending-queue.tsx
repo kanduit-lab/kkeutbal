@@ -53,7 +53,7 @@ export function PendingApprovalQueue({
         {format(d.dealer.pendingCount, { n: pendingActions.length })}
       </p>
       {pendingActions.map((action) => (
-        <div key={action.id} className="rounded-xl bg-bg-deep/60 px-3 py-2">
+        <div key={action.id} className="rounded-xl bg-inset px-3 py-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm">
               <span className="font-medium">{nameOf(action.userId)}</span>{' '}

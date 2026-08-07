@@ -141,7 +141,7 @@ export function PlayerRecentSessionsList({
           {paged.rows.map((session) => (
             <li key={session.id}>
               <MaybeResultLink code={session.code} enabled={linkToResult}>
-                <div className="flex h-16 items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3">
+                <div className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3">
                   <div className="flex min-w-0 items-center gap-2">
                     <p className="truncate font-bold">{session.name}</p>
                     <Badge tone={GAME_BADGE_TONE[session.gameType]}>

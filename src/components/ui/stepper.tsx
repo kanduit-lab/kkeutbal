@@ -148,7 +148,7 @@ export function Stepper({
     <>
       <div
         className={clsx(
-          'flex items-stretch overflow-hidden rounded-xl border border-gold/20 bg-bg-deep/70',
+          'flex items-stretch overflow-hidden rounded-xl border border-gold/15 bg-field',
           className,
         )}
         role="group"

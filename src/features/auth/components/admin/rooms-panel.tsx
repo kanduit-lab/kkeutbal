@@ -338,7 +338,7 @@ export function RoomsPanel({
               {paged.rows.map((room) => (
                 <li
                   key={room.id}
-                  className="flex h-16 items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3"
+                  className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3"
                 >
                   <SelectBox
                     checked={selection.isSelected(room.id)}

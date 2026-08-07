@@ -5,7 +5,7 @@ import { useId } from 'react'
 import type { ReactNode } from 'react'
 
 export const CONTROL_CLASS =
-  'min-h-12 w-full rounded-xl border border-gold/15 bg-bg-deep/70 px-4 text-base text-text placeholder:text-muted/60 focus:border-gold/50'
+  'min-h-12 w-full rounded-xl border border-gold/15 bg-field px-4 text-base text-text placeholder:text-muted/60 focus:border-gold/50'
 
 export function Input({ className, ...props }: React.ComponentPropsWithRef<'input'>) {
   return <input {...props} className={clsx(CONTROL_CLASS, className)} />
@@ -47,7 +47,7 @@ export function Checkbox({
     <div className="space-y-1.5">
       <label
         className={clsx(
-          'flex min-h-12 cursor-pointer items-center gap-3 rounded-xl bg-bg-deep/60 px-4 font-medium',
+          'flex min-h-12 cursor-pointer items-center gap-3 rounded-xl bg-inset px-4 font-medium',
           props.disabled && 'cursor-not-allowed opacity-60',
           className,
         )}

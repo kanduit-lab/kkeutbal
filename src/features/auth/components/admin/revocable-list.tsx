@@ -132,7 +132,7 @@ export function RevocableList<T extends RevocableItem>({
               {paged.rows.map((item) => (
                 <li
                   key={item.id}
-                  className="flex h-14 items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3"
+                  className="flex h-14 items-center justify-between gap-3 rounded-xl bg-inset px-3"
                 >
                   <div className="min-w-0">
                     <p

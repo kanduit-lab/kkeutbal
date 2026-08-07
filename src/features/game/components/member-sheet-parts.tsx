@@ -14,7 +14,7 @@ export function Section({
   children: ReactNode
 }) {
   return (
-    <section className="space-y-2.5 rounded-2xl border border-white/5 bg-bg-deep/50 p-4">
+    <section className="space-y-2.5 rounded-2xl border border-white/5 bg-inset p-4">
       <div>
         <p className="flex items-center gap-1.5 text-sm font-bold">
           <span aria-hidden>{icon}</span>

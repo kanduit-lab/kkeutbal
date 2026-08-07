@@ -96,7 +96,7 @@ export function SettlementTransferList({
               {paged.rows.map((transfer) => (
                 <li
                   key={`${transfer.fromId}:${transfer.toId}`}
-                  className="flex h-16 items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3"
+                  className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3"
                 >
                   {transferCell(transfer)}
                   <span className="shrink-0 font-black tabular-nums">

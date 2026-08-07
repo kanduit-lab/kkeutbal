@@ -45,7 +45,7 @@ export function RevertList({
 
   return (
     <>
-      <div className="rounded-xl bg-bg-deep/60 px-2 py-1.5">
+      <div className="rounded-xl bg-inset px-2 py-1.5">
         <Button
           type="button"
           variant="ghost"

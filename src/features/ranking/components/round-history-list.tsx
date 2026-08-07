@@ -113,7 +113,7 @@ export function RoundHistoryList({ rounds }: { rounds: readonly RoundHistoryList
             return (
               <li
                 key={round.seq}
-                className="flex h-16 items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3"
+                className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3"
               >
                 <div className="min-w-0">
                   <p className="truncate text-sm">

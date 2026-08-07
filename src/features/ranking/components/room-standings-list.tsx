@@ -103,7 +103,7 @@ export function RoomStandingsList({ rows }: { rows: readonly RoomStandingRow[] }
           {paged.rows.map((row) => (
             <li
               key={row.userId}
-              className="flex h-16 items-center gap-3 rounded-xl bg-bg-deep/60 px-3"
+              className="flex h-16 items-center gap-3 rounded-xl bg-inset px-3"
             >
               <span className="w-7 shrink-0 text-center text-lg font-black text-muted">
                 {rankMark(row.rank)}

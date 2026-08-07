@@ -157,7 +157,7 @@ export function CreditHistory({ transactions }: { transactions: readonly Transac
               {paged.rows.map((transaction) => (
                 <li
                   key={transaction.id}
-                  className="flex h-16 items-center justify-between gap-3 rounded-xl bg-bg-deep/60 px-3"
+                  className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-bold">{transaction.reason}</p>

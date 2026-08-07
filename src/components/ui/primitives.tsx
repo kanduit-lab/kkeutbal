@@ -88,7 +88,7 @@ export function StatTile({
     <div
       className={clsx(
         'px-2 text-center',
-        tone === 'inset' && 'rounded-xl bg-bg-deep/60 py-2.5',
+        tone === 'inset' && 'rounded-xl bg-inset py-2.5',
         tone === 'panel' && 'lacquer rounded-2xl py-4',
       )}
     >

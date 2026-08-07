@@ -33,7 +33,7 @@ const STATUS_FOR_ACTION: Record<StatusAction, MemberStatus> = {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-2 rounded-2xl bg-bg-deep/45 p-3">
+    <section className="space-y-2 rounded-2xl bg-inset p-3">
       <h3 className="text-sm font-black">{title}</h3>
       {children}
     </section>

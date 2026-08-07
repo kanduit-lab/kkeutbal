@@ -117,7 +117,7 @@ export function CreditAdminDialog({
           ) : (
             <>
               {fixedUserId ? (
-                <div className="rounded-xl bg-bg-deep/60 px-3 py-2">
+                <div className="rounded-xl bg-inset px-3 py-2">
                   <p className="font-bold">{target?.displayName ?? ''}</p>
                   <p className="text-xs text-muted">
                     {target?.username ? `${target.username} · ` : ''}

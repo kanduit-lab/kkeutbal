@@ -33,7 +33,7 @@ export function SectionNav({
     >
       <div
         role="tablist"
-        className="flex w-full min-w-max items-center gap-1 rounded-2xl border border-gold/15 bg-bg-deep/45 p-1"
+        className="flex w-full min-w-max items-center gap-1 rounded-2xl border border-gold/15 bg-inset p-1"
       >
         {ADMIN_SECTIONS.map((section) => {
           const copy = d.adminDashboard.sections[section]

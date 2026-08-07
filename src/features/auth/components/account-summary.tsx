@@ -22,7 +22,7 @@ export async function AccountSummary({ account }: { account: AccountView }) {
       <PanelHeader title={d.account.summaryTitle} />
       <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {rows.map((row) => (
-          <div key={row.label} className="rounded-xl bg-bg-deep/60 px-3 py-2.5">
+          <div key={row.label} className="rounded-xl bg-inset px-3 py-2.5">
             <dt className="text-micro font-medium text-muted">{row.label}</dt>
             <dd className="mt-0.5 truncate text-sm font-bold">{row.value}</dd>
           </div>

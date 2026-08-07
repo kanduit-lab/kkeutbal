@@ -117,7 +117,7 @@ export function MemberCardRow({
   return (
     <li
       className={`flex h-16 items-center gap-3 rounded-xl px-3 ${
-        isSelf ? 'bg-gold/10 ring-1 ring-inset ring-gold/25' : 'bg-bg-deep/60'
+        isSelf ? 'bg-gold/10 ring-1 ring-inset ring-gold/25' : 'bg-inset'
       }`}
     >
       <div className="shrink-0">{select}</div>

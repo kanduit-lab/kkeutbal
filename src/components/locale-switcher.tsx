@@ -30,7 +30,7 @@ export function LocaleSwitcher({ compact = false }: { compact?: boolean }) {
   return (
     <div
       className={clsx(
-        'inline-flex shrink-0 items-center gap-0.5 rounded-full border border-gold/20 bg-bg-deep/60',
+        'inline-flex shrink-0 items-center gap-0.5 rounded-full border border-gold/15 bg-inset',
         compact ? 'p-0.5' : 'ms-auto p-0.5',
       )}
     >

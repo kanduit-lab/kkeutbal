@@ -51,7 +51,7 @@ export function AddLocalMemberForm({
   }
 
   return (
-    <div className="space-y-2 rounded-xl bg-bg-deep/50 p-3">
+    <div className="space-y-2 rounded-xl bg-inset p-3">
       <p className="text-xs text-muted">{d.lobby.addLocalMemberHint}</p>
       <div className="flex gap-2">
         <Input
