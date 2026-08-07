@@ -5,6 +5,9 @@ import type { Dictionary } from '@/lib/i18n/client'
 /**
  * 홈 상단 가로 탭. 링크가 줄바꿈되면 헤더 높이가 늘고, `FixedPage`가 `overflow-hidden`이라
  * 그만큼 목록 아래가 잘렸다. 가로 스크롤 한 줄이면 항목이 늘어도 높이가 고정이다.
+ *
+ * 탭은 **내 계정에서 하는 일**만 담는다. `끗발 소개`는 제품 설명 페이지라 성격이 달라
+ * 헤더 오른쪽에 따로 둔다(`page.tsx`).
  */
 export interface HomeNavItem {
   readonly href: Route
@@ -16,7 +19,6 @@ export function homeNavItems(d: Dictionary, isAdmin: boolean): readonly HomeNavI
     { href: '/wallet' as Route, label: d.common.myCredits },
     { href: '/account' as Route, label: d.account.navLabel },
     ...(isAdmin ? [{ href: '/admin' as Route, label: d.common.admin }] : []),
-    { href: '/about' as Route, label: d.home.aboutLink },
   ]
 }
 
@@ -26,7 +28,7 @@ export function HomeNav({ items, label }: { items: readonly HomeNavItem[]; label
       aria-label={label}
       className="-mx-1 min-w-0 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      <ul className="flex w-max items-center gap-1 rounded-2xl border border-gold/15 bg-bg-deep/50 p-1">
+      <ul className="flex w-max items-center gap-1 rounded-2xl border border-gold/15 bg-inset p-1">
         {items.map((item) => (
           <li key={item.href}>
             <Link

@@ -47,7 +47,14 @@ export default async function HomePage({
         <div className="order-last w-full min-w-0 lg:order-none lg:w-auto lg:flex-1">
           <HomeNav items={homeNavItems(d, isAdmin)} label={d.home.navLabel} />
         </div>
-        <div className="ms-auto flex shrink-0 items-center gap-2">
+        <div className="ms-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          {/* 제품 설명 페이지라 계정 탭과 성격이 달라 따로 둔다 */}
+          <Link
+            href={'/about' as Route}
+            className="inline-flex min-h-9 items-center whitespace-nowrap rounded-xl px-2 text-xs font-semibold text-muted transition hover:text-text sm:px-3"
+          >
+            {d.home.aboutLink}
+          </Link>
           <LocaleSwitcher compact />
           <form
             action={async () => {
