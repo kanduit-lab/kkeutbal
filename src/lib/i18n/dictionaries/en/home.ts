@@ -19,6 +19,7 @@ export const home: Dictionary['home'] = {
   recentEmptyTitle: 'No finished sessions yet',
   recentEmptyHint: 'Settle a room and your net shows up here',
   listNavLabel: 'Select list',
+  navLabel: 'Main menu',
   netUnit: 'chips',
   memberCount: '{n} players',
   aboutLink: 'About Kkeutbal',

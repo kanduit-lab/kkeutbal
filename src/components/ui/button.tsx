@@ -9,7 +9,7 @@ import type { ReactNode } from 'react'
 import { ToastContext } from './toast'
 
 type ButtonVariant = 'primary' | 'surface' | 'outline' | 'danger' | 'ghost' | 'win'
-type ButtonSize = 'sm' | 'md' | 'lg' | 'icon'
+type ButtonSize = 'xs' | 'sm' | 'md' | 'lg' | 'icon'
 
 const BASE_CLASS =
   'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-xl font-semibold transition duration-100'
@@ -18,6 +18,8 @@ const SIZE_CLASS: Record<ButtonSize, string> = {
   lg: 'min-h-14 px-5 text-lg',
   md: 'min-h-12 px-4 text-base',
   sm: 'min-h-11 px-3 text-sm',
+  /** 44px 터치 목표 미달. 헤더 보조 컨트롤 전용이고 목록 행·폼 제출에는 쓰지 않는다. */
+  xs: 'min-h-9 px-2.5 text-xs',
   icon: 'size-12 shrink-0 p-0 text-lg leading-none',
 }
 

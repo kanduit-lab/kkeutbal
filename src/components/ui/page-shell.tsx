@@ -7,6 +7,8 @@ const WIDTH_CLASS = {
   content: 'max-w-3xl',
   wide: 'max-w-6xl',
   board: 'max-w-7xl',
+  /** 긴 산문 없이 목록·표만 있는 화면(홈, 관리자 콘솔)용. `wide`로는 표 열이 눌린다. */
+  app: 'max-w-[96rem]',
 } as const
 
 export function PageShell({

@@ -17,24 +17,35 @@ const LABELS: Record<Locale, string> = { ko: '한국어', en: 'EN' }
  */
 const SHORT_LABELS: Record<Locale, string> = { ko: '한', en: 'EN' }
 
-export function LocaleSwitcher() {
+/**
+ * 크기는 `className`이 아니라 `Button`의 `size`로 고른다. `tailwind-merge`가 없어서
+ * `size="sm"`에 `min-h-9`를 덧대면 둘 다 살아남고 `min-h-11`이 이긴다 — 예전 코드가
+ * 그 상태라 낮추려던 높이가 실제로는 44px 그대로였다.
+ */
+export function LocaleSwitcher({ compact = false }: { compact?: boolean }) {
   const { locale } = useI18n()
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   return (
-    <div className="ms-auto inline-flex shrink-0 items-center gap-0.5 rounded-full border border-gold/20 bg-bg-deep/60 p-0.5">
+    <div
+      className={clsx(
+        'inline-flex shrink-0 items-center gap-0.5 rounded-full border border-gold/20 bg-bg-deep/60',
+        compact ? 'p-0.5' : 'ms-auto p-0.5',
+      )}
+    >
       {LOCALES.map((candidate) => (
         <Button
           key={candidate}
           type="button"
           variant="ghost"
-          size="sm"
+          size={compact ? 'xs' : 'sm'}
           disabled={isPending || candidate === locale}
           aria-label={LABELS[candidate]}
           aria-current={candidate === locale ? 'true' : undefined}
           className={clsx(
-            'min-h-9 min-w-9 rounded-full px-2 font-bold disabled:opacity-100 sm:min-w-11 sm:px-2.5',
+            'rounded-full font-bold disabled:opacity-100',
+            compact ? 'min-w-8' : 'min-w-9 sm:min-w-11',
             candidate === locale ? 'bg-gold/20 text-gold' : 'text-muted hover:text-text',
           )}
           onClick={() =>
@@ -44,8 +55,14 @@ export function LocaleSwitcher() {
             })
           }
         >
-          <span className="sm:hidden">{SHORT_LABELS[candidate]}</span>
-          <span className="hidden sm:inline">{LABELS[candidate]}</span>
+          {compact ? (
+            SHORT_LABELS[candidate]
+          ) : (
+            <>
+              <span className="sm:hidden">{SHORT_LABELS[candidate]}</span>
+              <span className="hidden sm:inline">{LABELS[candidate]}</span>
+            </>
+          )}
         </Button>
       ))}
     </div>

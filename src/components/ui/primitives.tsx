@@ -27,16 +27,21 @@ export function PanelHeader({
   title,
   description,
   badge,
+  actions,
 }: {
   title: ReactNode
   description?: ReactNode
   badge?: ReactNode
+  actions?: ReactNode
 }) {
   return (
     <div className="space-y-1">
       <div className="flex items-start justify-between gap-3">
         <h2 className="text-lg font-bold leading-snug">{title}</h2>
-        {badge ? <span className="mt-0.5 shrink-0">{badge}</span> : null}
+        <span className="mt-0.5 flex shrink-0 items-center gap-2">
+          {badge}
+          {actions}
+        </span>
       </div>
       {description ? <p className="text-sm text-muted">{description}</p> : null}
     </div>

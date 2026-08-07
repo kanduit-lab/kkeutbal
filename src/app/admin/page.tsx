@@ -33,14 +33,14 @@ export default async function AdminPage() {
   }
 
   return (
-    <FixedPage width="wide">
+    <FixedPage width="app">
       <PageHeader
         className="mb-3 shrink-0"
         title={d.adminDashboard.title}
         subtitle={d.adminDashboard.subtitle}
         backHref="/"
         backLabel={d.common.home}
-        actions={<LocaleSwitcher />}
+        actions={<LocaleSwitcher compact />}
       />
       <AdminDashboard selfId={session.user.id} />
     </FixedPage>

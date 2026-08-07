@@ -14,6 +14,7 @@ export const home = {
   recentEmptyTitle: '아직 끝난 세션이 없어요',
   recentEmptyHint: '방을 정산하면 손익이 여기에 남습니다',
   listNavLabel: '목록 선택',
+  navLabel: '주요 메뉴',
   netUnit: '칩',
   memberCount: '{n}명',
   aboutLink: '끗발 소개',

@@ -6,6 +6,7 @@ import { isAdminUser } from '@/features/auth/roles'
 import { joinRoomAndGo } from '@/features/game/actions'
 import { getMyActiveRooms, getMyRecentSessions } from '@/features/game/queries'
 import { HomeLists } from '@/features/game/components/home-lists'
+import { HomeNav, homeNavItems } from '@/features/game/components/home-nav'
 import {
   Alert,
   Button,
@@ -18,17 +19,6 @@ import {
 } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { getDict, translateError } from '@/lib/i18n/server'
-
-function HeaderNavLink({ href, children }: { href: Route; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex min-h-11 items-center rounded-xl px-2 text-xs font-semibold text-muted transition hover:text-text sm:px-3 sm:text-sm"
-    >
-      {children}
-    </Link>
-  )
-}
 
 export default async function HomePage({
   searchParams,
@@ -47,34 +37,25 @@ export default async function HomePage({
   ])
 
   return (
-    <FixedPage width="wide">
-      <header className="rise-in mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 lg:mb-5">
-        <h1 className="font-brush text-3xl font-black tracking-tight lg:text-5xl">
+    <FixedPage width="app">
+      {/* 좁은 폭에서는 탭 묶음만 `order-last w-full`로 아래 줄에 떨어진다 */}
+      <header className="rise-in mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 lg:mb-4 lg:flex-nowrap">
+        <h1 className="font-brush shrink-0 text-3xl font-black tracking-tight lg:text-4xl">
           {d.common.appName}
           <span className="text-accent">.</span>
         </h1>
-        {/* 로케일은 로고와 같은 줄 오른쪽 끝. 자기 혼자 한 줄을 차지하던 자리를
-            없애야 아래 본문이 그만큼 올라온다. */}
-        <div className="ms-auto flex items-center">
-          <LocaleSwitcher />
+        <div className="order-last w-full min-w-0 lg:order-none lg:w-auto lg:flex-1">
+          <HomeNav items={homeNavItems(d, isAdmin)} label={d.home.navLabel} />
         </div>
-        {/* 링크가 5개라 좁은 폭에서 한 줄에 안 들어간다. w-full로 줄을 통째로 넘겨야
-            고정 페이지의 overflow-hidden에 로그아웃이 잘려 나가지 않는다.
-            한 줄에 다 들어가는 lg부터는 로케일 옆에 이어 붙인다. */}
-        <div className="flex w-full flex-wrap items-center justify-end gap-1 lg:w-auto">
-          <HeaderNavLink href={'/wallet' as Route}>{d.common.myCredits}</HeaderNavLink>
-          <HeaderNavLink href={'/account' as Route}>{d.account.navLabel}</HeaderNavLink>
-          {isAdmin ? (
-            <HeaderNavLink href={'/admin' as Route}>{d.common.admin}</HeaderNavLink>
-          ) : null}
-          <HeaderNavLink href={'/about' as Route}>{d.home.aboutLink}</HeaderNavLink>
+        <div className="ms-auto flex shrink-0 items-center gap-2">
+          <LocaleSwitcher compact />
           <form
             action={async () => {
               'use server'
               await signOut({ redirectTo: '/login' })
             }}
           >
-            <Button type="submit" variant="ghost" size="sm">
+            <Button type="submit" variant="ghost" size="xs">
               {d.common.logout}
             </Button>
           </form>
@@ -96,7 +77,8 @@ export default async function HomePage({
       ) : null}
 
       <FixedBody className="gap-3 lg:grid lg:grid-cols-12 lg:gap-6">
-        <div className="shrink-0 space-y-3 lg:col-span-5 lg:space-y-6">
+        {/* 넓어진 폭은 입장 폼이 아니라 방 목록이 가져간다 */}
+        <div className="shrink-0 space-y-3 lg:col-span-5 lg:space-y-6 xl:col-span-4">
           <Panel className="rise-in rise-in-1 space-y-4">
             <h2 className="text-lg font-bold">{d.home.joinTitle}</h2>
             <form action={joinRoomAndGo} className="flex gap-2">
@@ -143,7 +125,7 @@ export default async function HomePage({
             ))}
           </div>
         </div>
-        <div className="rise-in rise-in-3 flex min-h-0 flex-col lg:col-span-7">
+        <div className="rise-in rise-in-3 flex min-h-0 flex-col lg:col-span-7 xl:col-span-8">
           <HomeLists rooms={myRooms} sessions={recentSessions} />
         </div>
       </FixedBody>

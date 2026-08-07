@@ -13,8 +13,8 @@ const SECTION_ICON: Record<AdminSection, string> = {
 }
 
 /**
- * 데스크톱은 왼쪽 세로 레일, 모바일은 위쪽 네 칸 — 둘 다 높이가 고정이라
- * 본문이 쓸 공간이 예측 가능하다.
+ * 어느 폭에서든 한 줄 가로 탭. 데스크톱 좌측 14rem 세로 레일이던 것을 걷어냈다 —
+ * 탭 4개에 본문 폭을 14rem 내주느라 회원 표 열이 눌렸다.
  */
 export function SectionNav({
   activeSection,
@@ -29,38 +29,43 @@ export function SectionNav({
   return (
     <nav
       aria-label={d.adminDashboard.sectionNavLabel}
-      className="grid shrink-0 grid-cols-4 gap-1.5 lg:grid-cols-1 lg:gap-2 lg:self-start"
+      className="shrink-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
-      {ADMIN_SECTIONS.map((section) => {
-        const copy = d.adminDashboard.sections[section]
-        const active = activeSection === section
-        return (
-          <Button
-            key={section}
-            type="button"
-            variant={active ? 'surface' : 'outline'}
-            pressed={active}
-            onClick={() => onSelect(section)}
-            className={clsx(
-              'min-h-14 flex-col items-center gap-0 rounded-xl px-1 lg:min-h-16 lg:flex-row lg:items-center lg:gap-3 lg:rounded-2xl lg:px-3 lg:text-left',
-              active ? 'border-gold/50 bg-gold/15 text-text' : 'bg-bg-deep/35 text-muted',
-            )}
-          >
-            <span className="text-lg leading-none lg:text-2xl" aria-hidden="true">
-              {SECTION_ICON[section]}
-            </span>
-            <span className="min-w-0 lg:flex-1">
-              <span className="block truncate text-[11px] font-bold text-text lg:text-sm">
-                {copy.label}
+      <div
+        role="tablist"
+        className="flex w-full min-w-max items-center gap-1 rounded-2xl border border-gold/15 bg-bg-deep/45 p-1"
+      >
+        {ADMIN_SECTIONS.map((section) => {
+          const copy = d.adminDashboard.sections[section]
+          const active = activeSection === section
+          return (
+            <Button
+              key={section}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              variant="ghost"
+              size="sm"
+              pressed={active}
+              onClick={() => onSelect(section)}
+              className={clsx(
+                'min-w-0 flex-1 justify-center gap-2 whitespace-nowrap rounded-xl px-3',
+                active
+                  ? 'bg-gold/15 text-text ring-1 ring-inset ring-gold/40'
+                  : 'text-muted hover:bg-surface-raised hover:text-text',
+              )}
+            >
+              <span className="text-base leading-none" aria-hidden="true">
+                {SECTION_ICON[section]}
               </span>
-              <span className="hidden truncate text-xs font-medium lg:block">{copy.short}</span>
-            </span>
-            {loadedSections.includes(section) ? (
-              <span className="hidden size-2 shrink-0 rounded-full bg-win lg:block" />
-            ) : null}
-          </Button>
-        )
-      })}
+              <span className="truncate font-bold">{copy.label}</span>
+              {loadedSections.includes(section) ? (
+                <span className="size-1.5 shrink-0 rounded-full bg-win" aria-hidden="true" />
+              ) : null}
+            </Button>
+          )
+        })}
+      </div>
     </nav>
   )
 }
