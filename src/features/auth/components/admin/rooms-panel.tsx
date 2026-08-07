@@ -40,6 +40,15 @@ const STATUS_FILTERS: readonly RoomStatusFilter[] = ['all', 'waiting', 'playing'
 const ROW_H = 72
 
 
+/**
+ * 검색 툴바 등 줄 영역 밖 높이. 데스크톱 실측 chrome은 200px이고 `paged.tsx`가 이미 140을
+ * 잡으므로 순수 여유분은 60이면 맞다. 그보다 크게 두는 이유는 두 가지다 — 좁은 화면에서
+ * 툴바가 세로로 쌓여 ~56px 더 커지고, 모자랄 때의 대가가 크다(상한이 줄을 깎으면
+ * "전체 선택" 버튼이 나타나 chrome이 또 늘어 회원 3명이 3페이지가 된 적이 있다).
+ * 남는 쪽은 마지막 줄 아래 여백으로 끝난다.
+ */
+const TOOLBAR_H = 190
+
 export function RoomsPanel({
   rooms,
   total,
@@ -75,6 +84,7 @@ export function RoomsPanel({
     rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
     reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
     resetKey: roomQueryKey(query),
+  chrome: TOOLBAR_H,
   })
 
   // 헤더 체크박스의 범위는 **지금 보이는 페이지**다. 안 보이는 페이지까지 한 번에 고르면
@@ -127,7 +137,10 @@ export function RoomsPanel({
   }
 
   return (
-    <Panel className="flex min-h-0 flex-1 flex-col gap-3">
+    <Panel
+      style={{ maxHeight: paged.maxPanelHeight }}
+      className="flex min-h-0 flex-1 flex-col gap-3"
+    >
       <PanelHeader
         title={d.adminConsole.rooms.title}
         badge={
