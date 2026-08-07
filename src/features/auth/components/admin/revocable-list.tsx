@@ -72,7 +72,10 @@ export function RevocableList<T extends RevocableItem>({
   }
 
   return (
-    <Panel className="flex min-h-0 flex-1 flex-col gap-3">
+    <Panel
+      style={{ maxHeight: paged.maxPanelHeight }}
+      className="flex min-h-0 flex-1 flex-col gap-3"
+    >
       <PanelHeader
         title={heading}
         badge={<Badge tone="muted">{format(d.common.itemCount, { n: items.length })}</Badge>}

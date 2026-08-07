@@ -46,6 +46,7 @@ type BulkAction = 'grantAdmin' | 'revokeAdmin' | 'suspend'
  * 개별 회원 조작(프로필·비밀번호·정지·삭제·크레딧)은 전부 상세 다이얼로그로 들어간다.
  * 표에는 여러 명을 한 번에 훑고 고르는 일만 남긴다.
  */
+
 export function MembersPanel({
   users,
   total,

@@ -30,8 +30,10 @@ export function LocaleSwitcher({ compact = false }: { compact?: boolean }) {
   return (
     <div
       className={clsx(
-        'inline-flex shrink-0 items-center gap-0.5 rounded-full border border-gold/15 bg-inset',
-        compact ? 'p-0.5' : 'ms-auto p-0.5',
+        'inline-flex shrink-0 items-center gap-0.5 rounded-full bg-inset p-0.5',
+        // 테두리는 넓은 화면 헤더에서만 뺀다. 조밀 모드는 맨 텍스트 링크들과 나란히 서는데
+        // 테두리까지 두르면 이 알약만 무거워 보인다.
+        compact ? '' : 'ms-auto border border-gold/15',
       )}
     >
       {LOCALES.map((candidate) => (

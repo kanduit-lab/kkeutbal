@@ -1,7 +1,7 @@
 'use client'
 
 import { clsx } from 'clsx'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Segmented } from './segmented'
 import { useIsDesktop } from './use-media-query'
@@ -26,6 +26,7 @@ export interface Pane {
 export function PaneGroup({
   panes,
   columns = 'lg:grid-cols-2',
+  stack = false,
   ariaLabel,
   activeKey: controlledKey,
   onActiveKeyChange,
@@ -33,6 +34,12 @@ export function PaneGroup({
   panes: readonly Pane[]
   /** 데스크톱 열 구성. 기본은 반반 */
   columns?: string
+  /**
+   * 데스크톱에서 위아래로 쌓을 때 켠다. grid의 `1fr` 행은 내용이 적어도 배정된 몫을
+   * 그대로 차지해서, 높이가 상한에 걸린 패널 **사이**에 빈 구멍이 남는다. flex는 남은 높이를
+   * 아래로 몰아 주므로 패널들이 위에 붙고 여백이 한 덩어리로 모인다.
+   */
+  stack?: boolean
   ariaLabel: string
   /**
    * 모바일 탭을 부모가 제어할 때 쓴다. 사진 인식처럼 화면 밖 사건으로
@@ -50,6 +57,17 @@ export function PaneGroup({
   }
 
   if (isDesktop) {
+    // 쌓기 모드는 패널을 감싸지 않고 flex 자식으로 직접 둔다. 래퍼가 `flex-1`을 먹으면
+    // 그 안에서 패널만 줄어들어 결국 같은 구멍이 생긴다.
+    if (stack) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          {panes.map((pane) => (
+            <Fragment key={pane.key}>{pane.node}</Fragment>
+          ))}
+        </div>
+      )
+    }
     return (
       <div className={clsx('grid min-h-0 flex-1 items-stretch gap-4', columns)}>
         {panes.map((pane) => (

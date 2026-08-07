@@ -64,6 +64,15 @@ export function listPanelMinHeight(rowHeight: number, reserve = 0): number {
   return LIST_PANEL_CHROME_H + reserve + rowHeight
 }
 
+/** `EmptyState`(p-8 + 제목·힌트 두 줄)의 실측 높이. 목록이 비었을 때의 상한 계산에 쓴다. */
+const EMPTY_STATE_H = 132
+
+/**
+ * `PanelHeader`(제목 + 선택적 설명 줄)와 그 아래 간격을 넉넉히 잡은 값.
+ * `LIST_PANEL_CHROME_H`에는 머리글이 빠져 있어서 상한 계산에는 이걸 따로 더한다.
+ */
+const PANEL_HEADER_ALLOWANCE = 64
+
 export interface PagedRows<T> {
   readonly areaRef: React.RefObject<HTMLDivElement | null>
   readonly rows: readonly T[]
@@ -74,6 +83,21 @@ export interface PagedRows<T> {
   readonly to: number
   readonly total: number
   readonly setPage: (next: number) => void
+
+  /**
+   * 패널이 내용보다 커지지 않게 막는 상한(px). `Panel`의 `style={{ maxHeight }}`에 넣는다.
+   *
+   * 없으면 목록이 0건이어도 패널이 뷰포트 높이를 통째로 차지해 거대한 빈 상자가 된다.
+   * 값이 **`items.length`에서만** 나오는 것이 핵심이다 — 측정 결과인 `perPage`를 참조하면
+   * 높이 → 줄 수 → 높이로 도는 되먹임 루프가 생긴다. 상한이 실제 남은 높이보다 크면
+   * `flex-1`이 그대로 이기므로, 내용이 넉넉할 때의 동작은 예전과 같다.
+   *
+   * **줄 수에 따라 나타났다 사라지는 요소가 패널 안에 있으면 쓰지 않는다.** 회원·방 목록이
+   * 그렇다 — "검색 결과 N개 전체 선택" 버튼이 `filtered.length > rows.length`일 때만 뜨는데,
+   * 상한이 줄을 하나 깎으면 그 버튼이 생기고, 그만큼 chrome이 늘어 줄이 또 깎인다.
+   * 실제로 회원 3명이 3페이지가 됐다. 그 둘은 예전처럼 남은 높이를 다 쓴다.
+   */
+  readonly maxPanelHeight: number
 }
 
 /**
@@ -86,12 +110,21 @@ export function usePagedRows<T>({
   reserve = 0,
   minRows = 1,
   resetKey = '',
+  chrome = 0,
 }: {
   items: readonly T[]
   rowHeight: number
   reserve?: number
   minRows?: number
   resetKey?: string
+  /**
+   * 줄 영역 **밖에** 있는 이 패널만의 추가 높이(px) — 검색 툴바, 일괄 선택 막대 등.
+   *
+   * **넉넉하게 잡는다.** 남는 쪽은 패널 아래 여백이 조금 생기는 것으로 끝나지만, 모자라면
+   * 상한이 줄 영역을 파먹어 다 들어갈 목록이 여러 페이지로 쪼개진다. 실제로 회원 3명이
+   * 3페이지가 됐고, 그때 뜬 "전체 선택" 버튼이 chrome을 더 키워 악화시켰다.
+   */
+  chrome?: number
 }): PagedRows<T> {
   const { areaRef, count: perPage } = useFitCount({ rowHeight, reserve, min: minRows })
   const [state, setState] = useState({ page: 0, resetKey })
@@ -120,6 +153,12 @@ export function usePagedRows<T>({
     to: from + rows.length,
     total,
     setPage,
+    maxPanelHeight:
+      LIST_PANEL_CHROME_H +
+      PANEL_HEADER_ALLOWANCE +
+      chrome +
+      reserve +
+      (total === 0 ? EMPTY_STATE_H : total * rowHeight),
   }
 }
 

@@ -39,6 +39,7 @@ const STATUS_FILTERS: readonly RoomStatusFilter[] = ['all', 'waiting', 'playing'
 /** 모바일 한 줄 높이(px) — `h-16` + `space-y-2` 간격 */
 const ROW_H = 72
 
+
 export function RoomsPanel({
   rooms,
   total,

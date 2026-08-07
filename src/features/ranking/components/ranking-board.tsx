@@ -75,7 +75,10 @@ export function RankingBoard({
 
   return (
     <>
-      <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+      <Panel
+        style={{ maxHeight: paged.maxPanelHeight }}
+        className="flex min-h-0 flex-1 flex-col gap-2"
+      >
         <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
           <div className="hidden lg:block">
             <DataTable

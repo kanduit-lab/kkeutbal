@@ -47,25 +47,29 @@ export default async function HomePage({
         <div className="order-last w-full min-w-0 lg:order-none lg:w-auto lg:flex-1">
           <HomeNav items={homeNavItems(d, isAdmin)} label={d.home.navLabel} />
         </div>
-        <div className="ms-auto flex shrink-0 items-center gap-1 sm:gap-2">
-          {/* 제품 설명 페이지라 계정 탭과 성격이 달라 따로 둔다 */}
+        {/*
+          글자 링크 둘(소개·로그아웃)을 먼저 붙이고, 유일한 컨트롤인 로케일 알약을 맨 끝에 둔다.
+          알약을 글자 사이에 끼우면 그것만 떠 보여서 세로선으로 갈라 놓는다.
+        */}
+        <div className="ms-auto flex shrink-0 items-center gap-3">
           <Link
             href={'/about' as Route}
-            className="inline-flex min-h-9 items-center whitespace-nowrap rounded-xl px-2 text-xs font-semibold text-muted transition hover:text-text sm:px-3"
+            className="whitespace-nowrap text-xs font-semibold text-muted transition hover:text-text"
           >
             {d.home.aboutLink}
           </Link>
-          <LocaleSwitcher compact />
           <form
             action={async () => {
               'use server'
               await signOut({ redirectTo: '/login' })
             }}
           >
-            <Button type="submit" variant="ghost" size="xs">
+            <Button type="submit" variant="ghost" size="xs" className="px-0">
               {d.common.logout}
             </Button>
           </form>
+          <span aria-hidden className="h-4 w-px bg-white/10" />
+          <LocaleSwitcher compact />
         </div>
       </header>
       {error ? (

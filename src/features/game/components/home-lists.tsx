@@ -59,13 +59,16 @@ export function HomeLists({
   return (
     <PaneGroup
       ariaLabel={d.home.listNavLabel}
-      columns="lg:grid-cols-1 lg:grid-rows-2"
+      stack
       panes={[
         {
           key: 'rooms',
           label: d.home.activeRooms,
           node: (
-            <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+            <Panel
+              style={{ maxHeight: pagedRooms.maxPanelHeight }}
+              className="flex min-h-0 flex-1 flex-col gap-2"
+            >
               <PanelHeader
                 title={d.home.activeRooms}
                 badge={<Badge tone="muted">{format(d.common.itemCount, { n: rooms.length })}</Badge>}
@@ -118,7 +121,10 @@ export function HomeLists({
           key: 'sessions',
           label: d.home.recentSessions,
           node: (
-            <Panel className="flex min-h-0 flex-1 flex-col gap-2">
+            <Panel
+              style={{ maxHeight: pagedSessions.maxPanelHeight }}
+              className="flex min-h-0 flex-1 flex-col gap-2"
+            >
               <PanelHeader
                 title={d.home.recentSessions}
                 badge={
