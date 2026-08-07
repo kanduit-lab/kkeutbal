@@ -224,48 +224,8 @@ export async function revokeRegistrationCode(
   }
 }
 
-const setAdminSchema = z.object({
-  targetUserId: z.string().uuid(),
-  isAdmin: z.boolean(),
-})
-
-export async function setAdmin(
-  input: z.infer<typeof setAdminSchema>,
-): Promise<ActionResult<{ targetUserId: string; isAdmin: boolean }>> {
-  const adminId = await requireAdmin()
-  if (!adminId) return fail('errors.adminOnlyChange')
-
-  const parsed = setAdminSchema.safeParse(input)
-  if (!parsed.success) return fail('errors.invalidInput')
-  const { targetUserId, isAdmin } = parsed.data
-
-  if (targetUserId === adminId && !isAdmin) {
-    return fail('errors.cannotRevokeOwnAdmin')
-  }
-
-  try {
-    const [target] = await db
-      .select({ id: schema.users.id, authentikSub: schema.users.authentikSub })
-      .from(schema.users)
-      .where(eq(schema.users.id, targetUserId))
-      .limit(1)
-    if (!target) return fail('errors.adminUserNotFound')
-    if (target.authentikSub.startsWith('guest:')) {
-      return fail('errors.guestCannotBeAdmin')
-    }
-
-    const [updated] = await db
-      .update(schema.users)
-      .set({ isAdmin })
-      .where(eq(schema.users.id, targetUserId))
-      .returning({ id: schema.users.id })
-    if (!updated) return fail('errors.setAdminUpdateFailed')
-    return ok({ targetUserId, isAdmin })
-  } catch (error) {
-    console.error('setAdmin failed:', error)
-    return fail('errors.setAdminFailed')
-  }
-}
+// 관리자 권한 변경은 `member-actions.ts`의 `setAdminBulk`로 옮겼다. 단건과 일괄이 갈라져
+// 있으면 계정 상태(`users.status`) 같은 새 규칙이 한쪽에만 적용되는 상태가 생긴다.
 
 const ADMIN_CLOSE_REASON = '관리자 강제 정산'
 

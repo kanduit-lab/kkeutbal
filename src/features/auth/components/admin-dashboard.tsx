@@ -9,7 +9,6 @@ import { RoomsPanel } from './admin/rooms-panel'
 import { SectionNav } from './admin/section-nav'
 import { SsoSettingsPanel } from './admin/sso-settings-panel'
 import { VisionSettingsPanel } from './admin/vision-settings-panel'
-import { CreditAdmin } from '@/features/wallet/components/credit-admin'
 import { PromotionsAdmin } from '@/features/promotions/components/promotions-admin'
 import {
   Alert,
@@ -168,26 +167,13 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
           />
         )
       case 'people':
+        // 크레딧 관리는 다이얼로그로 빠졌다. 회원 표가 폭을 전부 쓴다.
         return (
-          <PaneGroup
-            ariaLabel={d.adminDashboard.paneNavLabel}
-            columns="lg:grid-cols-[minmax(0,1fr)_20rem]"
-            panes={[
-              {
-                key: 'members',
-                label: d.adminConsole.members.title,
-                node: <MembersPanel selfId={selfId} users={data.users} onDataChanged={reload} />,
-              },
-              {
-                key: 'credits',
-                label: d.wallet.admin.paneLabel,
-                node: (
-                  <ScrollPane label={d.wallet.admin.title}>
-                    <CreditAdmin users={data.users} onDataChanged={reload} />
-                  </ScrollPane>
-                ),
-              },
-            ]}
+          <MembersPanel
+            selfId={selfId}
+            users={data.users}
+            total={data.userTotal}
+            onDataChanged={reload}
           />
         )
       case 'operations':
@@ -218,7 +204,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <SectionNav
         activeSection={activeSection}
         loadedSections={loadedSections}

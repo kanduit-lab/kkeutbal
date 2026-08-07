@@ -277,8 +277,26 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 ## 역할 · 권한
 
 방 단위 역할은 `room_members.role`의 `host` / `dealer` / `player` / `observer`다. 별도로
-`users.is_admin` 전역 관리자는 `/admin`에서 게스트 토큰·가입코드·SSO 설정·관리자 지정·공지를 관리하며,
+`users.is_admin` 전역 관리자는 `/admin`에서 게스트 토큰·가입코드·SSO 설정·회원 관리·공지를 관리하며,
 방의 게임 권한을 자동으로 얻지는 않는다.
+
+### 회원 관리 (`features/auth/member-actions.ts`)
+
+관리자 콘솔 "회원 · 크레딧" 영역이 쓰는 액션이다. 전부 `requireAdmin()`을 먼저 통과한다.
+
+| 액션                   | 하는 일                                                                    |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `getMemberDetail`      | 프로필 + 크레딧 잔액·최근 20건 + 방 참여 통계                              |
+| `updateMemberProfile`  | 표시 이름·전화번호. 게스트·삭제 계정은 거부                                |
+| `resetMemberPassword`  | 임시 비밀번호 발급(응답에서 한 번만 노출). 아이디 없는 계정은 거부         |
+| `setMemberStatus`      | 정지 · 해제 · 삭제. 대상이 하나여도 이 경로를 탄다                         |
+| `setAdminBulk`         | 관리자 권한 부여·회수                                                      |
+
+상태·권한 변경은 **단건과 일괄이 같은 액션**이다. 갈라두면 자기 자신 보호나 게스트 제외 같은
+규칙이 한쪽에만 남는다. 대상별 실패는 예외가 아니라 `failed[]`로 돌려주고 화면이 사유를 나열한다.
+
+자기 자신에게는 상태 변경도 관리자 권한 회수도 할 수 없다 — 마지막 관리자가 스스로를 잠그면
+복구 경로가 서버 콘솔 재설정밖에 남지 않는다.
 
 | 권한                                        | host | dealer | player |    observer     | Server Action                                                 |
 | ------------------------------------------- | :--: | :----: | :----: | :-------------: | ------------------------------------------------------------- |
@@ -297,6 +315,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 | 본인 바이인 추가 (`addBuyIn`)               |  ✅  |   ✅   |   ✅   | — (명시적 거부) | `addBuyIn`                                                    |
 | 방 스냅샷 조회 (`refreshRoom`)              |  ✅  |   ✅   |   ✅   |       ✅        | 로그인 사용자 전광판 조회 허용, 쓰기는 별도 검사              |
 | 전역 운영 설정·공지 관리                    |  —   |   —    |   —    |        —        | `users.is_admin`을 별도 검사하는 관리자 액션 (방 역할과 무관) |
+| 회원 조회·수정·정지·삭제                    |  —   |   —    |   —    |        —        | `features/auth/member-actions.ts` (위 표)                     |
 
 공통 규칙:
 

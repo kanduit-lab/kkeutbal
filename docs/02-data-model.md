@@ -87,6 +87,9 @@ erDiagram
         text authentik_sub UK
         text display_name
         text avatar_url
+        boolean is_admin
+        text status
+        timestamptz status_changed_at
         timestamptz created_at
     }
     rooms {
@@ -168,6 +171,17 @@ erDiagram
 - `authentik_sub` — 유일 키. OIDC `sub` 클레임 또는 내부 계정의 `local:{username}` 형태.
   같은 sub → 같은 계정. 로그인 시 upsert.
 - 표시 이름·아바타는 로컬 편집 가능(방에서 부르는 별명).
+- `status` — `active` / `suspended` / `deleted`. **삭제는 소프트 삭제다.** `rooms.host_id`,
+  판 기록, `credit_transactions.initiated_by`가 이 행을 참조해서 행을 지우면 지난 판 승패와
+  원장이 끊긴다. 삭제 시 `username`·`phone`·`password_hash`를 비우고 `authentik_sub`을
+  `deleted:{id}`로 바꿔 로그인 수단과 고유 제약만 푼다 — 표시 이름과 원장은 남는다.
+  `status_reason`·`status_changed_at`·`status_changed_by`가 누가 왜 언제 바꿨는지를 남긴다.
+  - `users_admin_must_be_active_ck` — 관리자는 활성 계정만. 정지 시 `is_admin`도 함께 내린다.
+  - `users_status_change_stamped_ck` — 활성이 아니면 `status_changed_at`이 반드시 있다.
+  - 차단 지점: 비밀번호 로그인(`auth-providers.ts`), SSO·게스트 계정 해석
+    (`provider-account-resolution.ts`), 그리고 **모든 서버 액션이 통과하는**
+    `currentUserId()`(`features/auth/session.ts`). 세션이 JWT라 발급 뒤 3일간 살아 있으므로
+    토큰만으로는 정지가 반영되지 않는다 — 마지막 지점이 실질적인 쓰기 차단선이다.
 - `is_managed` — 대리 기록용 로컬 플레이어. 방 호스트·딜러가 로비에서 이름만으로 만든 좌석이고
   `authentik_sub`이 `managed:{roomId}:{uuid}`라 어느 로그인 경로로도 잡히지 않는다.
   좌석·시작 칩·원장은 일반 참가자와 같은 경로를 타므로 방 안 손익·정산·결과는 동일하다.

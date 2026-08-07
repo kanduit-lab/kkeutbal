@@ -25,6 +25,9 @@ export type AdminSectionData =
   | {
       readonly section: 'people'
       readonly users: readonly AdminUserView[]
+
+      /** `users`는 상한에서 잘리므로 이 값이 더 클 수 있다. */
+      readonly userTotal: number
     }
   | {
       readonly section: 'operations'

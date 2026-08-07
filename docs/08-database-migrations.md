@@ -17,6 +17,11 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 - 대상 Supabase 프로젝트와 백업 시점을 확인한다.
 - DDL 권한이 있는 관리자 연결 문자열을 준비한다. 앱 런타임 롤 `kkeutbal_app`은 DDL 용도가 아니다.
+  `.env.local`의 `DATABASE_URL`은 **앱 롤**이라 `pnpm db:migrate`가
+  `permission denied for database postgres`로 죽는다 — 관리자 문자열을 셸에 따로 주입한다.
+- `drizzle-kit`은 `.env.local`을 읽지 않는다. `DATABASE_URL`과 `DATABASE_CA_CERT_BASE64`를
+  명령 앞에 붙여 넘긴다. CA는 Supabase pooler가 SSL을 요구하기 때문에 필요하다
+  (`drizzle.config.ts`가 앱과 같은 검증 TLS를 쓴다).
 - 런타임 앱을 중지하거나 쓰기 트래픽이 없는 유지보수 창을 잡는다.
 - 저장소의 `drizzle/migrations/meta/_journal.json`과 SQL 파일이 함께 배포 대상에 포함됐는지 확인한다.
 
@@ -226,3 +231,18 @@ Get-Content drizzle/migrations/meta/_journal.json | ConvertFrom-Json |
   상태였다. 반복되던 원장 동기화 절차를 Ledger Sync 절로 문서화하고 원장/journal 대조 쿼리를
   Verification에 추가했다. **이 파일은 아직 live DB에 적용되지 않았다** — 적용 뒤 원장은 21건이
   된다.
+- 2026-08-07: Drizzle `0021_handy_microbe.sql`로 `user_status` enum과 `users.status` ·
+  `status_reason` · `status_changed_at` · `status_changed_by`를 추가했다. 기존 행은 전부
+  `active` 기본값을 받으므로 두 CHECK(`users_admin_must_be_active_ck`,
+  `users_status_change_stamped_ck`)가 적용 시점에 위반되지 않는다. `users`는 0007에서
+  anon/authenticated 정책을 걷어낸 뒤 앱 롤(bypassrls) 전용이라 대응 Supabase 마이그레이션은
+  없다.
+- 2026-08-07: `0021`을 live DB에 적용했다. 관리자 연결 문자열이 없어 `pnpm db:migrate` 대신
+  **DDL과 `drizzle.__drizzle_migrations` 행 삽입을 한 트랜잭션으로** 관리자 SQL 경로에 실행했다.
+  0020 때와 달리 원장이 어긋난 구간이 없어 별도 ledger sync 파일은 만들지 않았다. 원장은 22건,
+  마지막 `created_at`은 journal idx 21의 `when`(1786090509784)과 일치한다.
+- 2026-08-07: `drizzle.config.ts`에 SSL 설정을 추가했다. Supabase pooler가 SSL을 요구하는데
+  config에 그게 없어서 `pnpm db:migrate`가 이 DB에 **한 번도 붙을 수 없는** 상태였다
+  (`ESSLREQUIRED`). `dbCredentials`에 `url`과 `ssl`을 함께 주면 drizzle-kit이 `ssl`을 버리므로
+  URL을 host/port/user/password/database로 분해해 넘긴다. `DATABASE_URL`이 없으면 빈 자격증명으로
+  떨어져 `db:generate`는 그대로 동작한다.

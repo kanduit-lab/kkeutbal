@@ -31,45 +31,13 @@ import {
   type RoomQuery,
   type RoomStatusFilter,
 } from './rooms-filter'
+import { SelectBox } from './select-box'
 import { selectionState, useRowSelection } from './use-row-selection'
 
 const STATUS_FILTERS: readonly RoomStatusFilter[] = ['all', 'waiting', 'playing']
 
 /** 모바일 한 줄 높이(px) — `h-16` + `space-y-2` 간격 */
 const ROW_H = 72
-
-/**
- * 선택 체크박스. `Checkbox` 프리미티브는 라벨을 낀 전체 폭 행이라 표 칸에 안 맞는다 —
- * 여기서는 칸 안에 들어가는 맨몸 체크박스에 접근성 이름만 붙인다.
- */
-function SelectBox({
-  checked,
-  indeterminate = false,
-  onChange,
-  label,
-  disabled,
-}: {
-  checked: boolean
-  indeterminate?: boolean
-  onChange: () => void
-  label: string
-  disabled?: boolean
-}) {
-  return (
-    <input
-      type="checkbox"
-      className="size-5 shrink-0 cursor-pointer accent-accent disabled:cursor-not-allowed disabled:opacity-40"
-      checked={checked}
-      disabled={disabled}
-      aria-label={label}
-      ref={(node) => {
-        if (node) node.indeterminate = indeterminate
-      }}
-      onChange={onChange}
-      onClick={(event) => event.stopPropagation()}
-    />
-  )
-}
 
 export function RoomsPanel({
   rooms,

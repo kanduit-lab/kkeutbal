@@ -6,6 +6,7 @@ import { currentUserId } from './session'
 import { isAdminUser } from './roles'
 import {
   countActiveRooms,
+  countUsers,
   listActiveRooms,
   listGuestTokens,
   listRegistrationCodes,
@@ -46,7 +47,8 @@ export async function loadAdminSection(input: {
         return ok({ section: 'access', tokens, registrationCodes })
       }
       case 'people': {
-        return ok({ section: 'people', users: await listUsers() })
+        const [users, userTotal] = await Promise.all([listUsers(), countUsers()])
+        return ok({ section: 'people', users, userTotal })
       }
       case 'operations': {
         const [rooms, roomTotal, promotions] = await Promise.all([

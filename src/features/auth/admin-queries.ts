@@ -1,6 +1,7 @@
 import { desc, eq, inArray, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import type { RoomGameType } from '@/features/game/types'
+import type { MemberStatus } from './member-types'
 
 export interface GuestTokenView {
   readonly id: string
@@ -151,7 +152,21 @@ export interface AdminUserView {
   readonly isAdmin: boolean
   readonly isGuest: boolean
   readonly authType: 'internal' | 'sso' | 'guest'
+  readonly status: MemberStatus
+  readonly statusReason: string | null
+
+  /** 크레딧 계정이 아직 없으면 0. 잔액을 모르고 지급하면 회수 폭을 가늠할 수 없다. */
+  readonly availableBalance: number
+  readonly lockedBalance: number
   readonly createdAt: string
+}
+
+const USERS_LIMIT = 200
+
+/** 목록이 상한에 걸렸는지 알려면 실제 전체 수가 필요하다 — 방 목록과 같은 이유. */
+export async function countUsers(): Promise<number> {
+  const [row] = await db.select({ count: sql<number>`count(*)::int` }).from(schema.users)
+  return row?.count ?? 0
 }
 
 export async function listUsers(): Promise<AdminUserView[]> {
@@ -163,20 +178,32 @@ export async function listUsers(): Promise<AdminUserView[]> {
       phone: schema.users.phone,
       isAdmin: schema.users.isAdmin,
       authentikSub: schema.users.authentikSub,
+      status: schema.users.status,
+      statusReason: schema.users.statusReason,
       createdAt: schema.users.createdAt,
+      availableBalance: schema.creditAccounts.availableBalance,
+      lockedBalance: schema.creditAccounts.lockedBalance,
     })
     .from(schema.users)
+    .leftJoin(schema.creditAccounts, eq(schema.creditAccounts.userId, schema.users.id))
     .orderBy(desc(schema.users.createdAt))
-    .limit(200)
+    .limit(USERS_LIMIT)
 
-  return rows.map((row) => ({
-    id: row.id,
-    displayName: row.displayName,
-    username: row.username,
-    phoneMasked: row.phone ? `****${row.phone.slice(-4)}` : null,
-    isAdmin: row.isAdmin,
-    isGuest: row.authentikSub.startsWith('guest:'),
-    authType: row.authentikSub.startsWith('guest:') ? 'guest' : row.username ? 'internal' : 'sso',
-    createdAt: row.createdAt.toISOString(),
-  }))
+  return rows.map((row) => {
+    const isGuest = row.authentikSub.startsWith('guest:')
+    return {
+      id: row.id,
+      displayName: row.displayName,
+      username: row.username,
+      phoneMasked: row.phone ? `****${row.phone.slice(-4)}` : null,
+      isAdmin: row.isAdmin,
+      isGuest,
+      authType: isGuest ? 'guest' : row.username ? 'internal' : 'sso',
+      status: row.status,
+      statusReason: row.statusReason,
+      availableBalance: row.availableBalance ?? 0,
+      lockedBalance: row.lockedBalance ?? 0,
+      createdAt: row.createdAt.toISOString(),
+    }
+  })
 }
