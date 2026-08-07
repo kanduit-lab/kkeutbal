@@ -193,7 +193,7 @@ export function MemberDetailDialog({
           )
         ) : (
           <div className="space-y-4">
-            <header className="flex items-start gap-3">
+            <header className="flex items-center gap-3">
               <div className="min-w-0 flex-1">
                 <h2 className="flex flex-wrap items-center gap-2 text-lg font-black">
                   <span className="truncate">{detail.displayName}</span>
@@ -265,7 +265,6 @@ export function MemberDetailDialog({
                 <Stat label={copy.creditLocked} value={detail.lockedBalance.toLocaleString()} />
               </div>
               <Button
-                size="sm"
                 variant="surface"
                 className="w-full"
                 disabled={isDeleted}
@@ -349,8 +348,7 @@ export function MemberDetailDialog({
                     )}
                   </Field>
                   <Button
-                    size="sm"
-                    variant="primary"
+                        variant="primary"
                     className="w-full"
                     loading={isPending}
                     disabled={isDeleted || !nameValid || !phoneValid}
@@ -377,8 +375,7 @@ export function MemberDetailDialog({
                     </Alert>
                   ) : null}
                   <Button
-                    size="sm"
-                    variant="outline"
+                        variant="outline"
                     className="w-full"
                     loading={isPending}
                     disabled={isDeleted}
@@ -414,8 +411,7 @@ export function MemberDetailDialog({
                   <div className="grid gap-2 sm:grid-cols-2">
                     {detail.status === 'suspended' ? (
                       <Button
-                        size="sm"
-                        variant="win"
+                                variant="win"
                         loading={isPending}
                         onClick={() => setConfirmAction('restore')}
                       >
@@ -423,8 +419,7 @@ export function MemberDetailDialog({
                       </Button>
                     ) : (
                       <Button
-                        size="sm"
-                        variant="danger"
+                                variant="danger"
                         loading={isPending}
                         disabled={reasonMissing}
                         disabledReason={reasonMissing ? copy.reasonRequired : undefined}
@@ -434,8 +429,7 @@ export function MemberDetailDialog({
                       </Button>
                     )}
                     <Button
-                      size="sm"
-                      variant="danger"
+                            variant="danger"
                       loading={isPending}
                       disabled={reasonMissing}
                       disabledReason={reasonMissing ? copy.reasonRequired : undefined}

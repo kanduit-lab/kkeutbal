@@ -36,12 +36,18 @@ export function PanelHeader({
 }) {
   return (
     <div className="space-y-1">
-      <div className="flex items-start justify-between gap-3">
+      {/*
+        배지만 있으면 위를 맞춘다 — 제목이 두 줄로 접혀도 배지가 첫 줄 옆에 남는다.
+        버튼(44px)이 오면 얘기가 달라서, 위를 맞추면 26px 제목과 중심선이 11px 어긋난다.
+      */}
+      <div className={clsx('flex justify-between gap-3', actions ? 'items-center' : 'items-start')}>
         <h2 className="text-lg font-bold leading-snug">{title}</h2>
-        <span className="mt-0.5 flex shrink-0 items-center gap-2">
-          {badge}
-          {actions}
-        </span>
+        {badge || actions ? (
+          <span className={clsx('flex shrink-0 items-center gap-2', !actions && 'mt-0.5')}>
+            {badge}
+            {actions}
+          </span>
+        ) : null}
       </div>
       {description ? <p className="text-sm text-muted">{description}</p> : null}
     </div>
