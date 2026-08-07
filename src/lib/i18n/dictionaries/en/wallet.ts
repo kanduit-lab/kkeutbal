@@ -35,6 +35,9 @@ export const wallet: Dictionary['wallet'] = {
   admin: {
     title: 'Virtual credit admin',
     paneLabel: 'Credits',
+    openDialog: 'Grant · revoke credits',
+    currentBalance: 'Current balance',
+    balanceUnknown: 'Balance unknown',
     description:
       'Game-only credits with no exchange and no withdrawal. Every grant and revoke goes into the ledger with its reason and cannot be deleted.',
     noUsers: 'No users to adjust',

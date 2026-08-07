@@ -30,6 +30,9 @@ export const wallet = {
   admin: {
     title: '가상 크레딧 관리',
     paneLabel: '크레딧',
+    openDialog: '크레딧 지급 · 회수',
+    currentBalance: '현재 잔액',
+    balanceUnknown: '잔액 정보 없음',
     description:
       '환전도 출금도 없는 게임 전용 크레딧입니다. 지급과 회수는 사유와 함께 원장에 남고 지울 수 없습니다.',
     noUsers: '조정할 사용자가 없습니다',
