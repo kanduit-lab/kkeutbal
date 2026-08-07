@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { signIn } from '@/lib/auth'
 import { clientAddressFromHeaders, consumeRateLimits } from '@/lib/rate-limit'
 import { displayNameSchema } from './schemas'
-import { safeInternalPath, isRateLimited } from './signin-redirects'
+import { safeInternalPath, isAccountInactive, isRateLimited } from './signin-redirects'
 import { issueGuestDeviceSecret } from './guest-device'
 import {
   verifyInitialAdminSetupAccess,
@@ -58,6 +58,7 @@ export type AuthErrorCode =
   | 'register_failed'
   | 'registration_code_required'
   | 'initial_admin_setup_required'
+  | 'account_inactive'
 
 export type RegistrationCodeState =
   { status: 'idle' } | { status: 'error'; error: 'invalid' | 'unavailable' } | { status: 'success' }
@@ -264,15 +265,16 @@ export async function loginWithPassword(formData: FormData): Promise<void> {
     await signIn('password', { username, password, redirectTo })
   } catch (error) {
     if (error instanceof AuthError) {
-      backTo(
-        '/login',
-        isRateLimited(error) ? 'too_many_attempts' : 'invalid_credentials',
-        undefined,
-        redirectTo,
-      )
+      backTo('/login', passwordSignInError(error), undefined, redirectTo)
     }
     throw error
   }
+}
+
+function passwordSignInError(error: AuthError): AuthErrorCode {
+  if (isRateLimited(error)) return 'too_many_attempts'
+  if (isAccountInactive(error)) return 'account_inactive'
+  return 'invalid_credentials'
 }
 
 function guestSignInFailed(

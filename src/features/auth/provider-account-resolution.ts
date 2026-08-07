@@ -26,6 +26,14 @@ export function mergeHints(profile: unknown): { phone: string | null } {
   return { phone: phoneDigits && phoneDigits.length >= 9 ? phoneDigits : null }
 }
 
+/** 정지·삭제된 계정으로 다시 들어오려는 시도. jwt 콜백이 이 사건만 따로 알아야 한다. */
+export class AccountInactiveError extends Error {
+  constructor() {
+    super('account is not active')
+    this.name = 'AccountInactiveError'
+  }
+}
+
 export async function resolveProviderUser(input: {
   sub: string
   displayName: string
@@ -36,16 +44,17 @@ export async function resolveProviderUser(input: {
   const { db, schema } = await import('@/lib/db')
 
   const [bySub] = await db
-    .select({ id: schema.users.id })
+    .select({ id: schema.users.id, status: schema.users.status })
     .from(schema.users)
     .where(and(eq(schema.users.authentikSub, sub), eq(schema.users.isManaged, false)))
     .limit(1)
   if (bySub) {
+    if (bySub.status !== 'active') throw new AccountInactiveError()
     await db
       .update(schema.users)
       .set({ displayName, avatarUrl })
       .where(eq(schema.users.id, bySub.id))
-    return bySub
+    return { id: bySub.id }
   }
 
   if (hints.phone) {
@@ -60,7 +69,12 @@ export async function resolveProviderUser(input: {
       .select({ id: schema.users.id })
       .from(schema.users)
       .where(
-        and(eq(schema.users.phone, hints.phone), eq(schema.users.isManaged, false), unlinkedAccount),
+        and(
+          eq(schema.users.phone, hints.phone),
+          eq(schema.users.isManaged, false),
+          eq(schema.users.status, 'active'),
+          unlinkedAccount,
+        ),
       )
       .limit(2)
 

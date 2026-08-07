@@ -2,11 +2,15 @@ import NextAuth from 'next-auth'
 import { authConfigBase } from './auth-config'
 import { buildProviders } from './auth-providers'
 import { getActiveSsoSettings } from '@/features/auth/sso-settings'
-import { mergeHints, resolveProviderUser } from '@/features/auth/provider-account-resolution'
+import {
+  AccountInactiveError,
+  mergeHints,
+  resolveProviderUser,
+} from '@/features/auth/provider-account-resolution'
 import { linkAuthentikSubToAccount } from '@/features/auth/sso-link-resolution'
 import { consumeSsoLinkIntent, setSsoLinkResult } from '@/features/auth/sso-link-cookies'
 
-export { RATE_LIMITED_CODE } from './auth-providers'
+export { ACCOUNT_INACTIVE_CODE, RATE_LIMITED_CODE } from './auth-providers'
 
 export async function hasAuthentik(): Promise<boolean> {
   return Boolean(await getActiveSsoSettings())
@@ -75,6 +79,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth(async () => {
             token.uid = row.id
             token.name = displayName
           } catch (error) {
+            if (error instanceof AccountInactiveError) {
+              throw new Error('정지되었거나 삭제된 계정입니다')
+            }
             console.error('sign-in user resolution failed:', error)
             throw new Error('로그인 처리 중 오류가 발생했습니다')
           }

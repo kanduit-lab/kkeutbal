@@ -22,9 +22,14 @@ import { GUEST_DEVICE_SECRET_PATTERN, guestIdentitySub } from '@/features/auth/g
  */
 
 export const RATE_LIMITED_CODE = 'rate_limited'
+export const ACCOUNT_INACTIVE_CODE = 'account_inactive'
 
 class RateLimitedSignIn extends CredentialsSignin {
   override code = RATE_LIMITED_CODE
+}
+
+class AccountInactiveSignIn extends CredentialsSignin {
+  override code = ACCOUNT_INACTIVE_CODE
 }
 
 const ADDRESS_LIMITS = {
@@ -113,6 +118,8 @@ export function buildProviders(sso: ActiveSsoSettings | null): NextAuthConfig['p
         if (!row?.passwordHash) return null
         const match = await bcrypt.compare(parsed.data.password, row.passwordHash)
         if (!match) return null
+        // 비밀번호 확인 뒤에 본다. 먼저 보면 응답 차이로 어떤 아이디가 정지됐는지 알 수 있다.
+        if (row.status !== 'active') throw new AccountInactiveSignIn()
         return { id: row.id, name: row.displayName, image: row.avatarUrl }
       },
     }),

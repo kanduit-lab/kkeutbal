@@ -25,6 +25,7 @@ export const auth: Dictionary['auth'] = {
   errorTooManyAttempts:
     'Too many sign-in attempts. People on the same Wi-Fi are counted together. Try again in a moment',
   errorLoginFailed: 'Sign-in failed',
+  errorAccountInactive: 'This account is suspended or deleted. Contact an administrator',
   initialAdminTitle: 'Initial administrator setup',
   initialAdminDescription: 'This instance has no accounts yet.',
   initialAdminCodeHint: 'Enter the one-time setup code shown in the server console.',

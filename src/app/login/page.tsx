@@ -19,6 +19,7 @@ function loginErrorCopy(d: Dictionary): Record<string, string> {
     too_many_attempts: d.auth.errorTooManyAttempts,
     registration_code_required: d.auth.registrationCodeRequired,
     initial_admin_setup_required: d.auth.initialAdminSetupRequired,
+    account_inactive: d.auth.errorAccountInactive,
   }
 }
 

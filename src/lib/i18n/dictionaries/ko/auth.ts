@@ -20,6 +20,7 @@ export const auth = {
   errorTooManyAttempts:
     '로그인 시도가 너무 많습니다. 같은 와이파이를 쓰면 다른 사람의 시도까지 함께 셉니다. 잠시 후 다시 시도하세요',
   errorLoginFailed: '로그인에 실패했습니다',
+  errorAccountInactive: '정지되었거나 삭제된 계정입니다. 관리자에게 문의하세요',
   initialAdminTitle: '초기 관리자 설정',
   initialAdminDescription: '처음 실행된 인스턴스입니다.',
   initialAdminCodeHint: '서버 콘솔의 1회용 설정 코드를 입력하세요.',

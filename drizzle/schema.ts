@@ -43,6 +43,12 @@ export const creditTransactionKind = pgEnum('credit_transaction_kind', [
 ])
 export const visionProvider = pgEnum('vision_provider', ['anthropic', 'gemini'])
 
+/**
+ * `deleted`는 소프트 삭제다. `users.id`를 `rooms.host_id`, 판 기록,
+ * `credit_transactions.initiated_by`가 참조해서 행을 지우면 지난 판 승패와 원장이 끊긴다.
+ */
+export const userStatus = pgEnum('user_status', ['active', 'suspended', 'deleted'])
+
 export const fairRoundPhase = pgEnum('fair_round_phase', [
   'collecting_seeds',
   'sealed',
@@ -52,18 +58,37 @@ export const fairRoundPhase = pgEnum('fair_round_phase', [
 
 const MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  authentikSub: text('authentik_sub').notNull().unique(),
-  username: text('username').unique(),
-  passwordHash: text('password_hash'),
-  phone: text('phone').unique(),
-  displayName: text('display_name').notNull(),
-  avatarUrl: text('avatar_url'),
-  isAdmin: boolean('is_admin').notNull().default(false),
-  isManaged: boolean('is_managed').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-})
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    authentikSub: text('authentik_sub').notNull().unique(),
+    username: text('username').unique(),
+    passwordHash: text('password_hash'),
+    phone: text('phone').unique(),
+    displayName: text('display_name').notNull(),
+    avatarUrl: text('avatar_url'),
+    isAdmin: boolean('is_admin').notNull().default(false),
+    isManaged: boolean('is_managed').notNull().default(false),
+    status: userStatus('status').notNull().default('active'),
+    statusReason: text('status_reason'),
+    statusChangedAt: timestamp('status_changed_at', { withTimezone: true }),
+    statusChangedBy: uuid('status_changed_by').references((): AnyPgColumn => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('users_status_created_idx').on(table.status, table.createdAt),
+    // 정지된 계정이 관리자 권한을 들고 있으면 로그인만 막히고 권한은 살아 있는 상태가 된다.
+    check(
+      'users_admin_must_be_active_ck',
+      sql`${table.isAdmin} = false or ${table.status} = 'active'`,
+    ),
+    check(
+      'users_status_change_stamped_ck',
+      sql`${table.status} = 'active' or ${table.statusChangedAt} is not null`,
+    ),
+  ],
+)
 
 export const creditAccounts = pgTable(
   'credit_accounts',
