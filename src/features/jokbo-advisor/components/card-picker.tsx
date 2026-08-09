@@ -61,8 +61,11 @@ export function CardPicker({
   }
 
   if (gameType === 'seotda') {
+    // 10개월을 자동 채움으로 깔면 폭에 따라 4열이 되어 4·4·2로 떨어지고, 마지막 줄에 빈 칸
+    // 두 개와 그 아래 큰 여백이 남는다. 2열(폰) → 5열(데스크톱)로 못박으면 어느 폭에서도
+    // 줄이 정확히 나뉜다.
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-2.5">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {byMonth.map(([month, cards]) => (
           <div
             key={month}

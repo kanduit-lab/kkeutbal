@@ -259,7 +259,14 @@ function PickerPane({
           </Button>
         ) : null}
       </div>
-      <ScrollPane label={d.advisor.pickerScrollLabel}>{children}</ScrollPane>
+      {/*
+        데스크톱에서는 카드 20장이 패널 높이를 다 채우지 못해 그리드와 아래 버튼 사이에
+        빈 구멍이 남는다. 남는 높이를 위아래로 나눠 카드를 가운데 두면 구멍이 아니라
+        여백으로 읽힌다 — 내용이 넘칠 때는 `justify-center`가 아무 일도 하지 않는다.
+      */}
+      <ScrollPane label={d.advisor.pickerScrollLabel} className="flex flex-col justify-center">
+        <div className="shrink-0">{children}</div>
+      </ScrollPane>
       {footer ? <div className="shrink-0 border-t border-white/10 pt-3">{footer}</div> : null}
     </Panel>
   )

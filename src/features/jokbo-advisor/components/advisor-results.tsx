@@ -66,7 +66,7 @@ export function SeotdaResult({
   }, [cards])
 
   return (
-    <ResultRegion className="min-h-36 space-y-3 text-center" vision={vision}>
+    <ResultRegion className="space-y-3 text-center" vision={vision}>
       {result ? (
         <>
           <p className="font-brush gilt text-6xl font-black">{result.hand.label}</p>
@@ -108,7 +108,7 @@ export function SeotdaResult({
           <SeotdaAdviceList advice={result.stats.advice} catcherRate={result.stats.catcherRate} />
         </>
       ) : (
-        <p className="pt-9 text-sm text-muted">
+        <p className="text-sm text-muted">
           {cards.length < 2 ? d.advisor.selectTwoCards : d.advisor.invalidCombination}
         </p>
       )}
@@ -241,7 +241,7 @@ export function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
   const stats = result ? POKER_CATEGORY_STATS[result.category] : null
 
   return (
-    <ResultRegion className="min-h-36 space-y-3 text-center">
+    <ResultRegion className="space-y-3 text-center">
       {result && stats ? (
         <>
           <p className="font-brush gilt text-5xl font-black">{result.label}</p>
@@ -260,7 +260,7 @@ export function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
       ) : preview?.computed ? (
         <PokerPreviewList preview={preview} />
       ) : (
-        <p className="pt-9 text-sm text-muted">
+        <p className="text-sm text-muted">
           {cards.length >= 5
             ? d.advisor.invalidCombination
             : preview && !preview.computed && preview.reason === 'tooManyCombinations'
@@ -272,11 +272,7 @@ export function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
   )
 }
 
-function PokerPreviewList({
-  preview,
-}: {
-  preview: Extract<PokerHandPreview, { computed: true }>
-}) {
+function PokerPreviewList({ preview }: { preview: Extract<PokerHandPreview, { computed: true }> }) {
   const { d } = useDict()
   const completable = preview.categories.filter((entry) => entry.probability > 0)
   return (
