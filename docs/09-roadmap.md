@@ -41,12 +41,12 @@
 | 베팅 턴 강제 | 구현 완료. 서버가 차례를 검사하고 위반은 `errors.notYourTurn`. 좌석 강조·시트가 같은 순수 함수를 쓴다 | `src/features/game/turn-order.ts`, `src/features/betting/bet-semantics.ts` |
 | 판 자동 종료 | 구현 완료. 1인 생존·콜 완료를 감지해 베팅 트랜잭션 안에서 종료·정산까지 간다 | `src/features/betting/round-completion.ts`, `src/features/game/round-finalize.ts` |
 | 레이즈 배수·상한 | 구현 완료. `free`/`ttadang`/`pot_limit` 3종을 방 만들기에서 고르고 서버가 강제한다 | `src/features/betting/raise-rule.ts` |
-| 검증 가능한 섯다 딜 | 구현 완료. 시드 commit-reveal → 봉인 → 개인 손패 → 종료 후 덱 재계산 감사까지 e2e가 매 실행 검증한다 | `src/features/fairness/`, `e2e/authenticated-room.spec.ts` |
+| 검증 가능한 섯다 딜 | 구현 완료. 시드 commit-reveal → 봉인 → 개인 손패 → 종료 후 덱 재계산 감사까지 이어진다 | `src/features/fairness/` |
 | 족보 Advisor | 수동 피커·포커 설명·부분 선택 미리보기 구현 완료 | `src/features/jokbo-advisor/components/` |
 | Vision 인식 | 구현 완료 | `src/features/jokbo-advisor/vision/actions.ts` |
 | 정산 · 랭킹 | 집계·이체 계산 구현 완료 | `src/features/ranking/`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
-| 고정 뷰포트 UI | 목록·조회·방·모니터 화면이 문서 스크롤을 만들지 않고, e2e가 그 불변식을 지킨다 | `src/components/ui/page-shell.tsx`, `e2e/fixed-viewport.spec.ts` |
-| 자동 검증 | 세 층: 단위 342개(순수 엔진 + jsdom 컴포넌트), Server Action 통합 5개(실제 DB 트랜잭션·advisory lock·트리거, 기본 꺼짐), e2e 90개(모바일·데스크톱 두 프로젝트, 방 수명주기·검증 딜·소켓 끊김 복구 포함) | `vitest.config.ts`, `test/dom/`, `test/integration/`, `playwright.config.ts` |
+| 고정 뷰포트 UI | 목록·조회·방·모니터 화면이 문서 스크롤을 만들지 않는다. **불변식을 지키던 e2e를 걷어냈으므로 지금은 사람이 확인해야 한다** | `src/components/ui/page-shell.tsx` |
+| 자동 검증 | 두 층: 단위·컴포넌트(순수 엔진 + jsdom), Server Action 통합 5개(실제 DB 트랜잭션·advisory lock·트리거, 기본 꺼짐). **브라우저 층은 없다** — e2e는 2026-08-09에 제거했다 | `vitest.config.ts`, `test/dom/`, `test/integration/` |
 | CI/CD | **배포가 동작하지 않는다.** `develop` 푸시마다 워크플로가 0초에 실패하고 staging에 올라간 적이 없다 | `.github/workflows/deploy.yml`, `.deploy.yml` |
 
 ## MVP 경계
@@ -83,9 +83,9 @@ MVP는 "고스톱과 vision 없이도 그날 판이 돌아가는가" 기준으�
    남았다(실제 OAuth 왕복, 실제 네트워크에서의 Broadcast 왕복 지연).
 3. **실물 리허설** — 실제 화투로 3판 이상. 규칙이 서버에서 강제되는 지금이 리허설의 정보량이
    가장 큰 시점이다(사람이 순서를 지킨 결과가 아니라 서버가 지킨 결과를 본다).
-4. **회귀 가드** — 더 열려 있는 항목이 없다. 경쟁 상태(동시 판 시작, 같은 actionId 재전송,
-   승인 순서)는 `test/integration/`이 실제 DB 트랜잭션으로, 끊김·복원은 `e2e/reconnect.spec.ts`가
-   realtime 소켓을 실제로 끊어서 덮는다.
+4. **회귀 가드** — 경쟁 상태(동시 판 시작, 같은 actionId 재전송, 승인 순서)는
+   `test/integration/`이 실제 DB 트랜잭션으로 덮는다. 끊김·복원과 브라우저에서만 드러나는
+   레이아웃 회귀는 e2e가 덮고 있었으나 2026-08-09에 제거했다 — 지금은 열려 있는 구멍이다.
 
 실행 항목과 완료 기준은 [`TODO.md`](../TODO.md)가, 조사 근거와 미확정 설계 질문은
 [`docs/12-handoff.md`](12-handoff.md)가 소유한다.

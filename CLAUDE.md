@@ -70,8 +70,7 @@ docs/                   # 설계 문서
 pnpm dev            # 개발 서버
 pnpm typecheck      # tsc --noEmit
 pnpm lint           # eslint
-pnpm test           # vitest (단위)
-pnpm test:e2e       # playwright
+pnpm test           # vitest (단위 + jsdom 컴포넌트)
 pnpm db:generate    # drizzle 마이그레이션 생성
 pnpm db:push        # 스키마 반영
 ```

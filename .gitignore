@@ -15,9 +15,6 @@ next-env.d.ts
 
 # testing / coverage
 /coverage
-/test-results
-/playwright-report
-/.playwright
 
 # env — .env.example 만 추적한다.
 # 개별 이름을 나열하면 새 파일(.env.production 등)이 조용히 추적돼 비밀값이 커밋된다.
@@ -59,6 +56,3 @@ docs/design-decisions/
 # 테스트 도구 산출물
 /.playwright-mcp/
 /.qa-reports/
-
-# playwright storageState (세션 재사용) — 커밋하지 않는다
-playwright/.auth/

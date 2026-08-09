@@ -59,7 +59,7 @@
 - 미적용(의도): `/guide/*`, `/about` — 읽는 문서라서 문서 스크롤이 맞다
 - **로딩 골격도 같은 규약을 따른다.** `loading.tsx`는 전환 중에만 뜨지만, 제약이 없으면 그
   순간 문서 스크롤이 생긴다. `src/app/rooms/[code]/loading.tsx`만 손으로 만든 `main`이라
-  963px까지 자랐고, 모니터 화면으로 이동하는 순간을 e2e가 잡았다. 나머지 `loading.tsx`는
+  963px까지 자랐고, 모니터 화면으로 이동하는 순간에 드러났다. 나머지 `loading.tsx`는
   전부 `FixedPage`를 쓴다.
 - **"한 패널 화면은 예외"가 아니다**: 우선 불변식은 "문서 스크롤 없음"이고 `flex-1` 중앙
   정렬은 그걸 지키는 한에서의 기본 선택지다. 필드가 많아 고정 뷰포트에 안 들어가는 화면
@@ -67,10 +67,13 @@
 
 ### 무엇이 이 규약을 강제하는가
 
-`e2e/support.ts`의 `expectNoDocumentScroll`이 불변식이고, `e2e/fixed-viewport.spec.ts`가
-공개·인증 화면에, `e2e/authenticated-room.spec.ts`의 lifecycle 테스트가 방·모니터·결과 화면에
-그걸 건다. 타입·lint·단위 테스트는 이 계열 결함을 하나도 잡지 못한다 — 실제로 위에 적힌
-위반 네 건 전부 e2e가 처음 찾았다.
+**지금은 아무것도 강제하지 않는다.** 예전에는 `e2e/support.ts`의 `expectNoDocumentScroll`이
+불변식이었고 공개·인증 화면과 방·모니터·결과 화면에 그걸 걸었지만, e2e 스위트는
+2026-08-09에 제거했다.
+
+타입·lint·단위 테스트는 이 계열 결함을 **하나도** 잡지 못한다. 위에 적힌 위반 네 건은 전부
+e2e가 처음 찾은 것이고, 제거 당일에도 카드 픽커가 탭을 먹는 회귀를 e2e만 잡았다(CI는
+통과했다). 화면을 건드리면 폰·데스크톱 폭에서 직접 열어 문서 스크롤과 겹침을 확인할 것.
 
 ### 줄 높이를 바꿀 때
 
@@ -178,17 +181,12 @@ Authentik 계정으로 흐름을 완주하면 피해자 계정에 공격자 sub�
 
 - 전역 `pnpm`이 corepack shim으로 깨지는 경우가 있다(`ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING`). `~/.nvm/versions/node/<ver>/bin/pnpm`을 지우고 `npm install -g pnpm@11.15.1`로 재설치하면 해결된다.
 - `package.json`의 `pnpm@11.15.1`은 Node 22.13 이상을 요구한다. `.nvmrc`는 `22`로 고정돼 있다.
-- **e2e는 `.env.local`을 Playwright가 직접 읽는다**(`playwright.config.ts`의 `process.loadEnvFile`).
-  Next가 읽어주는 것은 앱 프로세스뿐이라, 이걸 하지 않으면 계정 관련 스펙이 조용히 전부 skip된다.
 - **Server Action 통합 테스트(`test/integration/`)도 실제 DB에 쓴다.** `INTEGRATION_DB=true`일 때만
   돌고 기본은 꺼져 있다. 액션이 각자 `db.transaction()`을 열기 때문에 테스트가 밖에서 트랜잭션을
   열고 롤백하는 방식이 통하지 않고, `chip_ledger`가 append-only + `room_id` FK가 cascade라서
   **원장 행이 생긴 방은 삭제 자체가 불가능하다.** 그래서 잔여 데이터가 남는다 — 방 이름 `[int]`
   접두사로 식별 가능하게 하고, 정산하지 않아 누적 랭킹 집계(`settled`/`closed`만 본다)에는 들어가지
   않게 해 뒀다.
-- **방 lifecycle 스펙은 실제 DB에 방을 만든다.** `E2E_ENABLE_ROOM_LIFECYCLE=true`와 서로 다른
-  계정 두 개가 필요하고, 로그인은 계정당 한 번만 해서(`e2e/auth.setup.ts` + `storageState`)
-  `auth.password` 한도를 쓰지 않는다. 전체 스위트 한 번이 방 생성·입장을 각각 6번 쓰므로
-  (스펙 3개 × 프로젝트 2개) 일반 계정으로는 시간당 한도(60)에 몇 번 만에 닿는다 — 전용 e2e
-  계정을 관리자로 두면 게임 액션 한도는 면제된다(`consumeRateLimitsUnlessAdmin`). 로그인 한도는
-  관리자도 면제되지 않는다.
+- **`.env.local`의 `E2E_*`는 이제 아무 코드도 읽지 않는다.** e2e 스위트와 함께 소비처가
+  사라졌다(앱은 원래 읽은 적이 없다). `testadmin1~3` 계정 자체는 통합 테스트용으로 남아 있고,
+  셋 다 관리자라 게임 액션 한도가 면제된다(`consumeRateLimitsUnlessAdmin`).

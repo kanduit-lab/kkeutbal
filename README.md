@@ -127,9 +127,7 @@ dockerfiles/            # Dockerfile.nextjs
 pnpm dev            # 개발 서버
 pnpm typecheck      # tsc --noEmit
 pnpm lint           # eslint
-pnpm test           # vitest (단위)
-pnpm test:e2e       # Playwright 모바일 공개 화면 스모크 (DB 없이 실행)
-                    #   방 수명주기 spec은 E2E_ENABLE_ROOM_LIFECYCLE=true + 전용 계정 2개가 있을 때만 실행
+pnpm test           # vitest (단위 + jsdom 컴포넌트)
 pnpm db:generate    # drizzle 마이그레이션 생성
 pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 ```
