@@ -9,7 +9,7 @@
 ### 운영
 
 - [ ] **테스트 계정 정리**: `testadmin1`/`testadmin2`/`testadmin3`을 배포 전에 없애거나 권한을 내린다
-  - 변경 범위: DB(`users`), `.env.local`의 `E2E_*`(e2e 제거로 이제 아무 코드도 읽지 않는다)
+  - 변경 범위: DB(`users`), `.env.local`의 `DEV_*_USERNAME`/`DEV_*_PASSWORD`(아무 코드도 읽지 않는다 — 사람이 로그인할 때 쓰는 비밀번호의 유일한 사본)
   - 완료 기준: 실 사용 DB에 테스트용 관리자 계정이 남아 있지 않다
   - 현재 상태: 비밀번호는 무작위 32자로 교체했고 값은 `.env.local`에만 있다(gitignore 대상). 남은 위험은 "관리자 계정이 존재한다" 자체이므로 삭제·권한 하향은 배포 시점에 판단한다
   - 참조: 통합 테스트 실행용이고 셋 다 `is_admin = true`다(게임 액션 rate limit 면제 목적 — [`docs/12-handoff.md`](docs/12-handoff.md) "참고 — 로컬 개발 환경")

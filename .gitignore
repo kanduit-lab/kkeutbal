@@ -55,4 +55,3 @@ docs/design-decisions/
 
 # 테스트 도구 산출물
 /.playwright-mcp/
-/.qa-reports/
