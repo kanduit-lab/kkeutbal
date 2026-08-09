@@ -181,14 +181,13 @@ Authentik 계정으로 흐름을 완주하면 피해자 계정에 공격자 sub�
 
 - 전역 `pnpm`이 corepack shim으로 깨지는 경우가 있다(`ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING`). `~/.nvm/versions/node/<ver>/bin/pnpm`을 지우고 `npm install -g pnpm@11.15.1`로 재설치하면 해결된다.
 - `package.json`의 `pnpm@11.15.1`은 Node 22.13 이상을 요구한다. `.nvmrc`는 `22`로 고정돼 있다.
-- **Server Action 통합 테스트(`test/integration/`)도 실제 DB에 쓴다.** `INTEGRATION_DB=true`일 때만
-  돌고 기본은 꺼져 있다. 액션이 각자 `db.transaction()`을 열기 때문에 테스트가 밖에서 트랜잭션을
-  열고 롤백하는 방식이 통하지 않고, `chip_ledger`가 append-only + `room_id` FK가 cascade라서
-  **원장 행이 생긴 방은 삭제 자체가 불가능하다.** 그래서 잔여 데이터가 남는다 — 방 이름 `[int]`
-  접두사로 식별 가능하게 하고, 정산하지 않아 누적 랭킹 집계(`settled`/`closed`만 본다)에는 들어가지
-  않게 해 뒀다.
+- **DB에 남아 있는 `[int]` 접두사 방들은 제거된 통합 테스트의 잔여물이다.** 그 스위트가
+  실제 DB에 방을 만들었고, `chip_ledger`가 append-only + `room_id` FK가 cascade라서
+  **원장 행이 생긴 방은 삭제 자체가 불가능하다.** 정산하지 않은 채로 남겨 누적 랭킹 집계
+  (`settled`/`closed`만 본다)에는 들어가지 않는다. 관리자 콘솔의 일괄 강제 정산으로 닫을 수는 있다.
 - **`.env.local`의 테스트 계정 값은 아무 코드도 읽지 않는다.** e2e 스위트와 함께 소비처가
   사라져서 `E2E_*` → `DEV_*`로 이름만 바꿔 뒀다(앱은 원래 읽은 적이 없다). 남겨 둔 이유는
   무작위 32자 비밀번호의 **유일한 사본**이기 때문이다 — 사람이 로그인할 때 여기서 복사한다.
-  계정 자체는 `test/integration/harness.ts`가 username으로 조회하므로 DB에서 지우면 안 되고,
-  셋 다 관리자라 게임 액션 한도가 면제된다(`consumeRateLimitsUnlessAdmin`).
+  계정을 붙잡아 두던 통합 테스트도 같은 날 제거했으므로, 이제 이 계정을 참조하는 코드는 하나도
+  없다 — 원할 때 DB에서 지우거나 권한을 내려도 아무것도 깨지지 않는다. 셋 다 관리자라 게임 액션
+  한도가 면제된다(`consumeRateLimitsUnlessAdmin`).
