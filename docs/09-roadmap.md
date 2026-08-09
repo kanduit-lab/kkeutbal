@@ -47,7 +47,7 @@
 | 정산 · 랭킹 | 집계·이체 계산 구현 완료 | `src/features/ranking/`, `src/app/rooms/[code]/result/`, `src/app/ranking/` |
 | 고정 뷰포트 UI | 목록·조회·방·모니터 화면이 문서 스크롤을 만들지 않는다. **불변식을 지키던 e2e를 걷어냈으므로 지금은 사람이 확인해야 한다** | `src/components/ui/page-shell.tsx` |
 | 자동 검증 | **한 층뿐이다**: 단위·컴포넌트(순수 엔진 node + `test/dom/**` jsdom). 브라우저(e2e)와 실제 DB(Server Action 통합) 층은 2026-08-09에 둘 다 제거했다 | `vitest.config.ts`, `test/dom/` |
-| CI/CD | **배포가 동작하지 않는다.** `develop` 푸시마다 워크플로가 0초에 실패하고 staging에 올라간 적이 없다 | `.github/workflows/deploy.yml`, `.deploy.yml` |
+| CI/CD | CI만 있다 — 타입·린트·단위 테스트·프로덕션 빌드. 배포 워크플로는 계속 0초에 실패해서 2026-08-09에 제거했고, 자동 배포 경로는 지금 없다 | `.github/workflows/ci.yml` |
 
 ## MVP 경계
 
@@ -101,9 +101,8 @@ MVP는 "고스톱과 vision 없이도 그날 판이 돌아가는가" 기준으�
 ## 릴리스
 
 - 태그는 라이브 경로 검증이 끝난 뒤 `v0.1.0`부터. 그 전에는 태그를 붙이지 않는다.
-- 현재 배포 채널은 production 하나뿐이다(`.deploy.yml`). staging/preview 전환(`ENV_FILE_BASE64`
-  시크릿 구성)은 MT를 게이팅하지 않는 개발 편의 항목이다 — 단, 배포 워크플로 자체가 실패하는
-  문제는 편의 항목이 아니라 1순위다.
+- 배포 채널은 없다. 배포 워크플로를 제거했으므로(2026-08-09) 태그를 붙여도 아무 일도
+  일어나지 않는다 — 배포가 필요해지면 파이프라인부터 다시 세운다.
 
 ## 리스크 순서
 

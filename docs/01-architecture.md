@@ -258,13 +258,14 @@ src/features/<domain>/       도메인별 폴더가 경계
    `0008_rate_limit_buckets_rls.sql`은 기존 DB에 신규 내부 테이블 권한을 보강한다.
 3. Authentik 애플리케이션에 `{APP_URL}/api/auth/callback/authentik`을 Redirect URI로 등록하고,
    초기 관리자 계정으로 `/admin`의 SSO 설정을 저장·활성화.
-4. `.deploy.yml` — `preview`/`staging`는 `enabled: false`(ENV_FILE_BASE64 시크릿 구성 전).
-   `production`은 `v*` 안정 태그 push 시 `.github/workflows/deploy.yml`이
-   `kanduit-lab/docker-deploy-control-hub@v2`의 `ci-reusable.yml`/`cd-reusable.yml`을 호출해
-   빌드·배포한다. 도메인 `kkeutbal.kanduit.app`, health check `/api/health`.
+4. **자동 배포 경로가 없다.** `docker-deploy-control-hub` 기반 워크플로(`.github/workflows/deploy.yml`,
+   `.deploy.yml`)는 푸시마다 0초에 실패해 한 번도 배포한 적이 없어서 2026-08-09에 제거했다.
+   지금 남은 것은 패키징 방법(`dockerfiles/Dockerfile.nextjs`, `output: 'standalone'`)과
+   health check(`/api/health`)뿐이다 — 이미지를 만들어 올리는 일은 수동이다.
+   도메인은 `kkeutbal.kanduit.app`을 쓸 예정이다.
 5. 실제 MT 전에 2대 이상 기기로 리허설 1회 — 동기화·재접속·정산 확인.
 
-롤백: 이전 docker 이미지 태그로 재배포(`docker-deploy-control-hub` 워크플로 기준). 스키마는
+롤백: 이전 docker 이미지 태그로 재배포(수동). 스키마는
 초기 단계이므로 파괴적 변경 시 `drizzle-kit generate`로 down 경로를 명시적으로 만든다.
 
 ## Verification Plan

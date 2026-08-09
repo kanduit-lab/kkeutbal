@@ -1,5 +1,4 @@
-# 코드 품질 게이트 — 타입·린트·단위 테스트.
-# 도커 빌드·배포는 deploy.yml 이 담당한다. 여기서는 빠른 실패만 노린다.
+# 코드 품질 게이트 — 타입·린트·단위 테스트·프로덕션 빌드.
 name: CI
 
 on:
@@ -37,3 +36,15 @@ jobs:
 
       - name: Unit tests
         run: pnpm test
+
+      # 타입 검사만으로는 프로덕션 빌드가 통과하는지 알 수 없다 — 라우트 수집, 정적 생성,
+      # 번들링은 tsc 가 보지 않는 단계다. 산출물은 버리고 컴파일 여부만 본다.
+      #
+      # env 구성은 dockerfiles/Dockerfile.nextjs 와 같다: `SKIP_ENV_VALIDATION=1` 은
+      # `src/lib/env.ts` 가 빌드 단계에서만(`NEXT_PHASE` 확인) 허용하는 탈출구이고,
+      # `NEXT_PUBLIC_*` 는 넘기지 않는다 — 빌드가 그 값을 요구하지 않는다는 것 자체가
+      # 이 단계가 지키는 불변식이다.
+      - name: Build
+        run: pnpm build
+        env:
+          SKIP_ENV_VALIDATION: '1'

@@ -7,7 +7,6 @@
 방 코드 하나로 모이고, 각자 폰으로 베팅하고, 끝나면 손익과 랭킹이 자동으로 남습니다.
 
 [![CI](https://github.com/kanduit-lab/kkeutbal/actions/workflows/ci.yml/badge.svg)](https://github.com/kanduit-lab/kkeutbal/actions/workflows/ci.yml)
-[![Deploy](https://github.com/kanduit-lab/kkeutbal/actions/workflows/deploy.yml/badge.svg)](https://github.com/kanduit-lab/kkeutbal/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
 ![TypeScript strict](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
@@ -134,9 +133,12 @@ pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 
 ## 📦 배포
 
-`v*` 태그 push → [deploy.yml](.github/workflows/deploy.yml)(docker-deploy-control-hub v2)이
-이미지 빌드 후 프로덕션(`kkeutbal.kanduit.app`) 배포. 품질 게이트는
-[ci.yml](.github/workflows/ci.yml)(typecheck·lint·test)이 모든 push에서 돕니다.
+자동 배포는 없습니다. 배포 워크플로는 한 번도 성공한 적이 없어 2026-08-09에 제거했고,
+지금 남은 것은 패키징 방법([dockerfiles/Dockerfile.nextjs](dockerfiles/Dockerfile.nextjs),
+`output: 'standalone'`)뿐입니다 — 이미지 빌드·기동은 수동입니다.
+
+품질 게이트는 [ci.yml](.github/workflows/ci.yml)이 모든 push에서 돕니다:
+typecheck · lint · 단위 테스트 · 프로덕션 빌드.
 
 ## 📚 문서
 
