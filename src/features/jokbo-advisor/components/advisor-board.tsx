@@ -262,9 +262,17 @@ function PickerPane({
       {/*
         데스크톱에서는 카드 20장이 패널 높이를 다 채우지 못해 그리드와 아래 버튼 사이에
         빈 구멍이 남는다. 남는 높이를 위아래로 나눠 카드를 가운데 두면 구멍이 아니라
-        여백으로 읽힌다 — 내용이 넘칠 때는 `justify-center`가 아무 일도 하지 않는다.
+        여백으로 읽힌다.
+
+        중앙정렬은 반드시 `safe`여야 한다. 스크롤 컨테이너에 그냥 `justify-center`를 걸면
+        내용이 넘칠 때 위로 삐져나간 부분이 스크롤로 닿지 않는 자리에 박히고, 그 위에 있는
+        탭 전환 라디오가 카드 클릭을 가로챈다 — 세로 화면은 10개월 2열이라 늘 넘친다.
+        `safe`는 넘치는 순간 start 정렬로 물러나므로 그 함정이 없다.
       */}
-      <ScrollPane label={d.advisor.pickerScrollLabel} className="flex flex-col justify-center">
+      <ScrollPane
+        label={d.advisor.pickerScrollLabel}
+        className="flex flex-col [justify-content:safe_center]"
+      >
         <div className="shrink-0">{children}</div>
       </ScrollPane>
       {footer ? <div className="shrink-0 border-t border-white/10 pt-3">{footer}</div> : null}
