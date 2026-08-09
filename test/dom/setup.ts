@@ -42,3 +42,26 @@ export class ResizeObserverStub {
 if (typeof window !== 'undefined' && typeof window.ResizeObserver === 'undefined') {
   window.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver
 }
+
+/**
+ * ## jsdom에 없는 것: matchMedia
+ * jsdom은 미디어 쿼리를 평가하지 않아 `window.matchMedia`가 아예 없다. 실제 브라우저에는
+ * 전부 있는 API라 앱 코드에서 존재 여부를 확인하지 않는 게 맞고(`useIsDesktop`,
+ * 족보 순위표의 `prefers-reduced-motion` 확인), 없는 쪽이 jsdom의 한계다 — 그래서 앱을
+ * 방어적으로 고치는 대신 여기서 채운다.
+ *
+ * 항상 `matches: false`를 돌려준다: 데스크톱 분기도, 모션 축소도 켜지지 않은 기본 상태다.
+ * 특정 쿼리가 참이어야 하는 테스트는 이 스텁을 자기 파일에서 다시 덮어쓰면 된다.
+ */
+if (typeof window !== 'undefined' && typeof window.matchMedia === 'undefined') {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+}

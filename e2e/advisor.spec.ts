@@ -65,18 +65,25 @@ test.describe('족보 판독기', () => {
     await expect(ranking).toBeVisible()
 
     // 줄마다 "N위"가 붙어 있어야 목록을 스크롤하는 동안에도 지금 몇 위를 보는지 알 수 있다.
-    // 좁혀 보여주는 창은 내 패 주변만 그리므로 1위가 늘 보이지는 않는다 — 번호가 붙어
-    // 있다는 것 자체를 확인한다.
     await expect(page.getByText(/^\d+위$/).first()).toBeVisible()
     // 같은 서열이 몇 가지 조합으로 나오는지가 각 줄에 있다.
     await expect(page.getByText(/^\d+가지$/).first()).toBeVisible()
 
-    // 전체 보기를 열면 1위(38광땡)부터 나온다. 세로는 시트로, 데스크톱은 그 자리에서
-    // 펼쳐지므로 어느 표면인지는 묻지 않고 결과만 본다.
-    await page.getByRole('button', { name: ko.advisor.ranking.viewAll }).click()
+    // 표는 언제나 29단계 전부 그려지고, 결과 컬럼 하나가 그걸 스크롤한다. 예전에는 내 패
+    // 둘레만 잘라 그리고 "N단계 더 있어요"만 적어 두었는데, 그 영역이 스크롤되지 않아
+    // 나머지 단계로 갈 방법이 없었다.
+    await expect(page.getByRole('group', { name: ko.advisor.ranking.fullListAria })).toBeVisible()
     await expect(
       page.getByText(format(ko.advisor.ranking.positionBadge, { position: 1 }), { exact: true }),
-    ).toBeVisible()
+    ).toHaveCount(1)
+
+    const column = page.getByRole('region', { name: ko.advisor.resultScrollLabel })
+    const scrolled = await column.evaluate((node) => {
+      const before = node.scrollTop
+      node.scrollTop = node.scrollHeight
+      return node.scrollTop > before
+    })
+    expect(scrolled).toBe(true)
   })
 
   test('유의사항을 펼치면 암행어사·땡잡이 규칙이 나온다', async ({ page }) => {

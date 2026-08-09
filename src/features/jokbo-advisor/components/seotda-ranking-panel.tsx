@@ -5,18 +5,14 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HwatuCard } from '@/features/hwatu/types'
 import { evaluateSeotdaHand } from '@/features/seotda/engine'
 import type { SeotdaCategory, SeotdaTrait } from '@/features/seotda/types'
-import { Badge, Button, Panel, ScrollPane, Sheet, useIsDesktop } from '@/components/ui'
+import { Badge, Button, Panel } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
-import { useRankContextWindow } from './rank-context'
 import {
   SEOTDA_RANK_TABLE,
   SEOTDA_TOTAL_COMBOS,
   type SeotdaRankDetail,
   type SeotdaRankTier,
 } from './seotda-rank-table'
-
-/** 한 줄 높이(px) — `min-h-16`(64) + `space-y-1.5`(6). 모든 줄이 정확히 두 단이라 균일하다. */
-const ROW_H = 70
 
 type Dict = ReturnType<typeof useDict>['d']
 
@@ -37,16 +33,15 @@ function detailText(detail: SeotdaRankDetail, d: Dict, category: SeotdaCategory)
         ? format(d.advisor.ranking.detailPair, { month: detail.month })
         : format(d.advisor.ranking.detailMonths, { a: detail.months[0], b: detail.months[1] })
 
-  return category === 'kkeut' ? format(d.advisor.ranking.detailExamplePrefix, { detail: text }) : text
+  return category === 'kkeut'
+    ? format(d.advisor.ranking.detailExamplePrefix, { detail: text })
+    : text
 }
 
 export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
   const { d } = useDict()
-  const isDesktop = useIsDesktop()
-  const [expanded, setExpanded] = useState(false)
-  const [sheetOpen, setSheetOpen] = useState(false)
   const [caveatsOpen, setCaveatsOpen] = useState(false)
-  const fullListActiveRowRef = useRef<HTMLDivElement | null>(null)
+  const activeRowRef = useRef<HTMLDivElement | null>(null)
 
   const categoryLabel: Readonly<Record<SeotdaCategory, string>> = {
     gwangttaeng: d.advisor.ranking.categoryGwangttaeng,
@@ -70,32 +65,29 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
 
   const currentIndex = useMemo(
     () =>
-      currentRank === null ? null : SEOTDA_RANK_TABLE.findIndex((tier) => tier.rank === currentRank),
+      currentRank === null
+        ? null
+        : SEOTDA_RANK_TABLE.findIndex((tier) => tier.rank === currentRank),
     [currentRank],
   )
-  const currentTier = currentIndex === null || currentIndex < 0 ? null : SEOTDA_RANK_TABLE[currentIndex]
+  const currentTier =
+    currentIndex === null || currentIndex < 0 ? null : SEOTDA_RANK_TABLE[currentIndex]
 
-  const showingFullList = isDesktop ? expanded : sheetOpen
-
+  // 목록은 언제나 스크롤된다. 예전에는 현재 족보 둘레만 잘라 보여주고 위아래로 "N단계 더
+  // 있어요"를 적었는데, 그 영역이 `overflow-hidden`이라 아무리 굴려도 움직이지 않았다 —
+  // 29단계짜리 표에서 23단계가 남았다고 알려주면서 거기로 갈 방법을 주지 않은 셈이다.
   useEffect(() => {
-    if (!currentTier || !showingFullList) return
+    if (!currentTier) return
     const reduceMotion =
       typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const frame = window.requestAnimationFrame(() => {
-      fullListActiveRowRef.current?.scrollIntoView({
+      activeRowRef.current?.scrollIntoView?.({
         block: 'center',
         behavior: reduceMotion ? 'auto' : 'smooth',
       })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [currentTier, showingFullList])
-
-  const { areaRef, rows, aboveCount, belowCount } = useRankContextWindow({
-    items: SEOTDA_RANK_TABLE,
-    currentIndex: currentTier ? currentIndex : null,
-    rowHeight: ROW_H,
-    minRows: 3,
-  })
+  }, [currentTier, caveatsOpen])
 
   function renderRow(tier: SeotdaRankTier, index: number, ref?: React.Ref<HTMLDivElement>) {
     const isActive = tier.rank === currentRank
@@ -105,7 +97,7 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
         ref={ref}
         aria-current={isActive ? 'true' : undefined}
         className={clsx(
-          'min-h-16 rounded-xl px-3 py-2',
+          'rounded-xl px-3 py-2',
           isActive ? 'bg-accent/20 ring-1 ring-inset ring-accent/50' : 'bg-white/5',
         )}
       >
@@ -156,17 +148,14 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
     )
   }
 
-  function renderFullList() {
-    return SEOTDA_RANK_TABLE.map((tier, index) =>
-      renderRow(tier, index, tier.rank === currentRank ? fullListActiveRowRef : undefined),
-    )
-  }
-
   const caveats = <SeotdaCaveats myTraits={myTraits} />
 
   return (
-    <Panel className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="flex shrink-0 items-start justify-between gap-2">
+    // 이 패널은 스스로 스크롤하지 않는다. 바깥 결과 컬럼(`ResultPane`)이 유일한 스크롤
+    // 영역이라, 결과가 길어져도 순위표가 한 줄로 짜부라지지 않고 컬럼 전체가 같이 굴러간다.
+    // 스크롤 영역을 겹쳐 두면 휠이 어느 쪽을 움직이는지도 예측할 수 없다.
+    <Panel className="flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-bold text-muted">{d.advisor.ranking.title}</p>
           <p className="truncate text-xs text-muted/80">
@@ -176,72 +165,36 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
                   position: (currentIndex ?? 0) + 1,
                   total: SEOTDA_RANK_TABLE.length,
                 })
-              : d.advisor.ranking.noSelectionHint}
+              : /* 바로 위 결과 패널이 이미 "카드 2장을 선택하세요"라고 말한다. 같은 지시를
+                   두 번 쌓는 대신 이 표가 무엇인지를 적는다. */
+                format(d.advisor.ranking.totalTiers, { total: SEOTDA_RANK_TABLE.length })}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            aria-expanded={caveatsOpen}
-            onClick={() => setCaveatsOpen((current) => !current)}
-          >
-            {caveatsOpen ? d.advisor.ranking.caveatsToggleHide : d.advisor.ranking.caveatsToggleShow}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => (isDesktop ? setExpanded((current) => !current) : setSheetOpen(true))}
-          >
-            {isDesktop && expanded ? d.advisor.ranking.collapse : d.advisor.ranking.viewAll}
-          </Button>
-        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0"
+          aria-expanded={caveatsOpen}
+          onClick={() => setCaveatsOpen((current) => !current)}
+        >
+          {caveatsOpen ? d.advisor.ranking.caveatsToggleHide : d.advisor.ranking.caveatsToggleShow}
+        </Button>
       </div>
 
-      {caveatsOpen ? (
-        <ScrollPane label={d.advisor.ranking.caveatsTitle} className="pe-1">
-          {caveats}
-        </ScrollPane>
-      ) : isDesktop && expanded ? (
-        <ScrollPane label={d.advisor.ranking.fullListAria} className="space-y-1.5">
-          {renderFullList()}
-        </ScrollPane>
-      ) : (
-        <>
-          {aboveCount > 0 ? (
-            <p className="shrink-0 text-center text-xs text-muted/60">
-              {format(d.advisor.ranking.moreAbove, { n: aboveCount })}
-            </p>
-          ) : null}
-          <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
-            <div className="space-y-1.5">
-              {rows.map((tier) => renderRow(tier, SEOTDA_RANK_TABLE.indexOf(tier)))}
-            </div>
-          </div>
-          {belowCount > 0 ? (
-            <p className="shrink-0 text-center text-xs text-muted/60">
-              {format(d.advisor.ranking.moreBelow, { n: belowCount })}
-            </p>
-          ) : null}
-        </>
-      )}
-
-      <Sheet
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        ariaLabel={d.advisor.ranking.fullListAria}
+      <div
+        role="group"
+        aria-label={caveatsOpen ? d.advisor.ranking.caveatsTitle : d.advisor.ranking.fullListAria}
       >
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <p className="text-sm font-bold">{d.advisor.ranking.title}</p>
-          <Button size="sm" variant="ghost" onClick={() => setSheetOpen(false)}>
-            {d.common.close}
-          </Button>
-        </div>
-        <div className="space-y-1.5">{renderFullList()}</div>
-        {/* 전체 순위를 편 사람에게 유의사항을 같이 준다. 순위표만 보면 4·7이 왜 1끗인데
-            강한지, 4·9가 왜 3끗인데 특별한지가 끝내 설명되지 않는다. */}
-        <div className="mt-4 border-t border-white/10 pt-4">{caveats}</div>
-      </Sheet>
+        {caveatsOpen ? (
+          caveats
+        ) : (
+          <div className="space-y-1.5">
+            {SEOTDA_RANK_TABLE.map((tier, index) =>
+              renderRow(tier, index, tier.rank === currentRank ? activeRowRef : undefined),
+            )}
+          </div>
+        )}
+      </div>
     </Panel>
   )
 }
