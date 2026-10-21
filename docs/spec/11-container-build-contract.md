@@ -26,6 +26,8 @@
 
 `DATABASE_URL`, `DATABASE_CA_CERT_BASE64`, `AUTH_SECRET`과 Vision API 키는 이미지 빌드 인자나 파일로 전달하지 않는다. 런타임 프로세스 환경에서만 제공하며, 파일 기반 주입과 Doppler 주입 경로는 현재 구성하지 않는다.
 
+서버 초기화 단계에서 서버 필수값과 `NEXT_PUBLIC_*` 필수값을 함께 검증한다. 하나라도 빠졌거나 형식이 맞지 않으면 요청을 처리하기 전에 누락된 키 이름만 포함한 구성 오류로 기동을 실패시킨다.
+
 컨테이너는 포트 `3000`에서 `HOSTNAME=0.0.0.0`으로 수신한다. `GET /api/health`는 프로세스 생존을, `GET /api/ready`는 DB 연결 가능 여부를 확인한다.
 
 ## Boundary
@@ -35,5 +37,5 @@
 ## Verification
 
 - 이미지 빌드에서는 `SKIP_ENV_VALIDATION=1`이 빌드 단계에만 적용되는지 확인한다.
-- 실행 컨테이너에는 필수 서버 환경변수가 제공되어야 한다.
+- 실행 컨테이너에는 서버와 `NEXT_PUBLIC_*` 필수 환경변수가 제공되어야 한다.
 - 기동 후 `/api/health`와 `/api/ready`를 각각 확인한다.

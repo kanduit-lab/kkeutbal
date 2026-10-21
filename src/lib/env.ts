@@ -27,22 +27,37 @@ export type ClientEnv = z.infer<typeof clientSchema>
 
 const BUILD_PHASE = 'phase-production-build'
 
+export class EnvironmentConfigurationError extends Error {
+  constructor(scope: 'server' | 'public' | 'runtime', keys: readonly string[]) {
+    super(`Invalid ${scope} environment variables: ${keys.join(', ')}`)
+    this.name = 'EnvironmentConfigurationError'
+  }
+}
+
+function invalidKeys(result: z.SafeParseError<unknown>): readonly string[] {
+  return result.error.issues.map((issue) => issue.path.join('.'))
+}
+
+function skipServerValidation(): boolean {
+  if (process.env.SKIP_ENV_VALIDATION !== '1') return false
+  if (process.env.NEXT_PHASE !== BUILD_PHASE) {
+    throw new Error('SKIP_ENV_VALIDATION is build-only and must not be set at runtime')
+  }
+  return true
+}
+
 export function serverEnv(): ServerEnv {
   if (typeof window !== 'undefined') {
     throw new Error('serverEnv() must not be called on the client')
   }
 
-  if (process.env.SKIP_ENV_VALIDATION === '1') {
-    if (process.env.NEXT_PHASE !== BUILD_PHASE) {
-      throw new Error('SKIP_ENV_VALIDATION is build-only and must not be set at runtime')
-    }
+  if (skipServerValidation()) {
     return process.env as unknown as ServerEnv
   }
 
   const parsed = serverSchema.safeParse(process.env)
   if (!parsed.success) {
-    const missing = parsed.error.issues.map((issue) => issue.path.join('.')).join(', ')
-    throw new Error(`Invalid server environment variables: ${missing}`)
+    throw new EnvironmentConfigurationError('server', invalidKeys(parsed))
   }
   return parsed.data
 }
@@ -54,8 +69,23 @@ export function clientEnv(): ClientEnv {
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   })
   if (!parsed.success) {
-    const missing = parsed.error.issues.map((issue) => issue.path.join('.')).join(', ')
-    throw new Error(`Invalid public environment variables: ${missing}`)
+    throw new EnvironmentConfigurationError('public', invalidKeys(parsed))
   }
   return parsed.data
+}
+
+export function assertRuntimeEnv(): void {
+  if (skipServerValidation()) return
+
+  const server = serverSchema.safeParse(process.env)
+  const client = clientSchema.safeParse({
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+  })
+  const keys = [
+    ...(server.success ? [] : invalidKeys(server)),
+    ...(client.success ? [] : invalidKeys(client)),
+  ]
+  if (keys.length > 0) throw new EnvironmentConfigurationError('runtime', [...new Set(keys)])
 }

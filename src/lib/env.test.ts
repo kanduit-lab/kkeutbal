@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { serverEnv } from './env'
+import { assertRuntimeEnv, EnvironmentConfigurationError, serverEnv } from './env'
 
 describe('serverEnv', () => {
   afterEach(() => {
@@ -20,5 +20,20 @@ describe('serverEnv', () => {
     expect(env).not.toHaveProperty('KEEP_ALIVE_SECRET')
     expect(env.ANTHROPIC_API_KEY).toBeUndefined()
     expect(env.GEMINI_API_KEY).toBeUndefined()
+  })
+
+  it('reports every missing runtime key before a request is served', () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('DATABASE_URL', '')
+    vi.stubEnv('DATABASE_CA_CERT_BASE64', '')
+    vi.stubEnv('AUTH_SECRET', '')
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', '')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', '')
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', '')
+
+    expect(() => assertRuntimeEnv()).toThrow(EnvironmentConfigurationError)
+    expect(() => assertRuntimeEnv()).toThrow(
+      'DATABASE_URL, DATABASE_CA_CERT_BASE64, AUTH_SECRET, NEXT_PUBLIC_APP_URL, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+    )
   })
 })
