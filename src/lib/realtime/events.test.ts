@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PROTOCOL_VERSION, parseEvent } from './events'
+import { PROTOCOL_VERSION, parseEvent, parseRoomEvent } from './events'
 
 const ENVELOPE = {
   v: PROTOCOL_VERSION,
@@ -51,5 +51,20 @@ describe('parseEvent', () => {
         },
       }),
     ).toBeNull()
+  })
+
+  it('validates an event submitted without a trusted envelope', () => {
+    expect(
+      parseRoomEvent({
+        name: 'round.started',
+        payload: { roundId: '00000000-0000-4000-8000-000000000005', seq: 1 },
+      }),
+    ).toEqual({
+      name: 'round.started',
+      payload: { roundId: '00000000-0000-4000-8000-000000000005', seq: 1 },
+    })
+    expect(parseRoomEvent({ name: 'round.started', payload: { seq: 0 } })).toBeNull()
+    expect(parseRoomEvent({ name: 'unknown', payload: {} })).toBeNull()
+    expect(parseRoomEvent({ name: 'toString', payload: {} })).toBeNull()
   })
 })

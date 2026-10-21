@@ -7,16 +7,6 @@ const globalForDb = globalThis as unknown as {
   kkeutbalSql?: ReturnType<typeof postgres>
 }
 
-const TRANSACTION_MODE_PORT = '6543'
-
-function poolerOptions(databaseUrl: string): { max: number; prepare?: boolean } {
-  let port = ''
-  try {
-    port = new URL(databaseUrl).port
-  } catch {}
-  return port === TRANSACTION_MODE_PORT ? { max: 5, prepare: false } : { max: 5 }
-}
-
 function verifiedTls(caBase64: string): { ca: string; rejectUnauthorized: true } {
   const ca = Buffer.from(caBase64, 'base64').toString('utf8')
   if (!ca.includes('-----BEGIN CERTIFICATE-----') || !ca.includes('-----END CERTIFICATE-----')) {
@@ -25,16 +15,42 @@ function verifiedTls(caBase64: string): { ca: string; rejectUnauthorized: true }
   return { ca, rejectUnauthorized: true }
 }
 
-function createSql() {
-  const env = serverEnv()
-  const url = env.DATABASE_URL
-  return postgres(url, {
-    ...poolerOptions(url),
+function databaseTlsOptions(env: ReturnType<typeof serverEnv>) {
+  if (env.DATABASE_TLS_MODE === 'disable') return false
+  if (env.DATABASE_TLS_MODE === 'verify-system') return { rejectUnauthorized: true }
+  return verifiedTls(env.DATABASE_CA_CERT_BASE64!)
+}
+
+function databaseConnectionOptions(
+  env: ReturnType<typeof serverEnv>,
+  options: { max: number; prepare: boolean },
+) {
+  return {
+    ...options,
     idle_timeout: 30,
     connect_timeout: 10,
     max_lifetime: 30 * 60,
-    ssl: verifiedTls(env.DATABASE_CA_CERT_BASE64),
-  })
+    ssl: databaseTlsOptions(env),
+  }
+}
+
+function createSql() {
+  const env = serverEnv()
+  return postgres(
+    env.DATABASE_URL,
+    databaseConnectionOptions(env, {
+      max: 5,
+      prepare: env.DATABASE_POOL_MODE !== 'transaction',
+    }),
+  )
+}
+
+export function createListenerSql() {
+  const env = serverEnv()
+  return postgres(
+    env.DATABASE_LISTENER_URL ?? env.DATABASE_URL,
+    databaseConnectionOptions(env, { max: 1, prepare: false }),
+  )
 }
 
 type Db = ReturnType<typeof drizzle<typeof schema>>

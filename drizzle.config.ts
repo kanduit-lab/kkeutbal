@@ -1,20 +1,24 @@
 import { defineConfig } from 'drizzle-kit'
 
-/**
- * Supabase pooler는 SSL을 요구한다(`ESSLREQUIRED`). 앱(`src/lib/db.ts`)은
- * `DATABASE_CA_CERT_BASE64`로 CA를 검증하는데 여기에는 그 설정이 없어서
- * `pnpm db:migrate`가 이 DB에 아예 붙지 못했다.
- *
- * `dbCredentials`에 `url`과 `ssl`을 같이 주면 drizzle-kit이 `ssl`을 버린다 — 그래서
- * URL을 분해해 개별 필드로 넘긴다. `db:generate`는 접속하지 않으므로
- * `DATABASE_URL` 없이도 돌아야 한다(아래 빈 자격증명 폴백).
- */
-function ssl() {
+type DatabaseTlsMode = 'disable' | 'verify-system' | 'verify-ca'
+
+function databaseTlsMode(): DatabaseTlsMode {
+  const mode = process.env.DATABASE_TLS_MODE
+  if (mode === 'disable' || mode === 'verify-system' || mode === 'verify-ca') return mode
+  throw new Error('DATABASE_TLS_MODE must be disable, verify-system, or verify-ca')
+}
+
+function ssl(mode: DatabaseTlsMode) {
+  if (mode === 'disable') return false
+  if (mode === 'verify-system') return { rejectUnauthorized: true }
+
   const caBase64 = process.env.DATABASE_CA_CERT_BASE64
-  if (!caBase64) return 'require' as const
+  if (!caBase64) {
+    throw new Error('DATABASE_CA_CERT_BASE64 is required when DATABASE_TLS_MODE=verify-ca')
+  }
 
   const ca = Buffer.from(caBase64, 'base64').toString('utf8')
-  if (!ca.includes('-----BEGIN CERTIFICATE-----')) {
+  if (!ca.includes('-----BEGIN CERTIFICATE-----') || !ca.includes('-----END CERTIFICATE-----')) {
     throw new Error('DATABASE_CA_CERT_BASE64 must contain a base64-encoded PEM certificate')
   }
   return { ca, rejectUnauthorized: true }
@@ -31,7 +35,7 @@ function credentials() {
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
     database: url.pathname.slice(1) || 'postgres',
-    ssl: ssl(),
+    ssl: ssl(databaseTlsMode()),
   }
 }
 

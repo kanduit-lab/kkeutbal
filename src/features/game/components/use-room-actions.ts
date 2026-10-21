@@ -52,11 +52,10 @@ export function useRoomActions({
     authError,
     refetch,
     reconnect,
-    channelRef,
+    connectionRef,
   } = useRoomSync({ initial, selfId, onEvent })
 
   const showDisconnected = (everConnected && !connected) || connectTimedOut
-  const roomId = initial.room.id
   const roomCode = initial.room.code
 
   const staleReason = syncFailed ? d.room.staleGate : null
@@ -76,17 +75,17 @@ export function useRoomActions({
   const afterMutation = useCallback(
     async (broadcast?: BroadcastSpec) => {
       const result = await refetch()
-      const channel = channelRef.current
-      if (!channel) return
+      const connection = connectionRef.current
+      if (!connection) return
 
-      // sendRoomEvent retries internally and resolves to whether delivery is
-      // believed to have gone through. Don't block this action's own success
+      // sendRoomEvent resolves to whether delivery is believed to have gone
+      // through. Don't block this action's own success
       // path on that outcome (the actor's screen is already correct via the
       // refetch above) — just warn if it ultimately failed, since other
       // participants won't see this change until their next poll.
       const sends: Promise<boolean>[] = []
       if (broadcast) {
-        sends.push(sendRoomEvent(channel, roomId, selfId, broadcast.event, broadcast.payload))
+        sends.push(sendRoomEvent(connection, broadcast.event, broadcast.payload))
       }
       // state.snapshot is best-effort, NOT guaranteed: its whole payload is
       // built from the refetch above, so a failed/timed-out refetch leaves
@@ -98,7 +97,7 @@ export function useRoomActions({
       // unconditional.
       if (result.success) {
         sends.push(
-          sendRoomEvent(channel, roomId, selfId, 'state.snapshot', {
+          sendRoomEvent(connection, 'state.snapshot', {
             roomStatus: result.data.room.status,
             currentRound: result.data.currentRound
               ? {
@@ -120,7 +119,7 @@ export function useRoomActions({
         if (delivered.some((ok) => !ok)) toast(d.room.broadcastDelayed, 'info')
       })
     },
-    [refetch, channelRef, roomId, selfId, toast, d],
+    [refetch, connectionRef, toast, d],
   )
 
   const runAction: RunAction = useCallback(

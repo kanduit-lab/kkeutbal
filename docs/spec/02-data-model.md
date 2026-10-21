@@ -6,10 +6,11 @@
 | Audience        | engineering / reviewers                                           |
 | Status          | active                                                            |
 | Source of truth | 구현 스키마는 `database/schema.ts`, 이 문서는 관계·불변식·RLS 경계 |
-| Last reviewed   | 2026-07-28                                                        |
+| Last reviewed   | 2026-10-21                                                        |
 
 구현 스키마는 `database/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
-`database/migrations/supabase/0007_database_hardening.sql`과 신규 테이블 보강용 `0008`·`0016`이 소유한다.
+`database/migrations/supabase/0007_database_hardening.sql`과 신규 테이블 보강용
+`0008`·`0016`·`0020`이 소유한다.
 적용 순서는 [`../runbooks/01-database-migrations.md`](../runbooks/01-database-migrations.md)가 소유한다. 실제 상태는
 `pg_policies`, `information_schema.role_table_grants`, `pg_class.relrowsecurity`로 확인한다.
 
@@ -27,17 +28,17 @@
 이 프로젝트는 Supabase의 service role key도, Auth.js 세션을 Supabase JWT로 바꾸는 브리지도
 쓰지 않는다. 두 개의 분리된 경로만 있다.
 
-1. **Server Action → `kkeutbal_app` 롤(`BYPASSRLS`)**. `src/lib/db.ts`가 drizzle +
-   postgres-js로 Supabase pooler에 붙는다. 포트 5432(session)는 `max: 5`와 prepared statement를,
-   포트 6543(transaction)는 `max: 1`과 `prepare: false`를 자동 적용하며 Supabase CA를 검증한다.
+1. **Server Action → `kkeutbal_app` 롤(`BYPASSRLS`)**. `src/lib/db.ts`가 Drizzle과
+   postgres-js로 PostgreSQL에 붙는다. `DATABASE_POOL_MODE`가 session/transaction 동작을,
+   `DATABASE_TLS_MODE`가 TLS 검증 방식을 명시한다.
    모든 읽기·쓰기가 이 경로를 지난다. 단, 전역 credit 테이블은 이 롤의 직접 DML을 막고 전용
    RPC(`ensure_credit_account`, `admin_adjust_credit`, `lock_room_credit_buy_in`,
    `release_room_credit_buy_in`, `settle_room_credits`)로만 변경한다. 권한 검사(방 참가 여부, host/dealer 역할 등)는
    RLS가 아니라 각 Server Action이 쿼리로 직접 한다 (`src/features/betting/actions.ts`,
    `src/features/budget/actions.ts` 등).
-2. **브라우저 → Supabase publishable key**. `src/lib/supabase/client.ts`가 명시하듯 이 클라이언트는
-   **테이블 조회에 쓰지 않는다.** 용도는 Realtime Broadcast/Presence 구독
-   (`room:{room_id}` 공개 채널, `03-realtime-protocol.md`)뿐이다.
+2. **실시간 알림**. Supabase 모드는 브라우저 publishable key로 Broadcast/Presence만 쓰고,
+   self 모드는 인증된 앱 API와 PostgreSQL `LISTEN/NOTIFY`를 쓴다. 어느 쪽도 브라우저가 테이블을
+   직접 조회하는 경로를 열지 않는다.
 
 브라우저는 Supabase Auth 세션을 갖지 않으며, `anon`·`authenticated`에는 테이블·시퀀스·함수
 권한을 주지 않는다. 브라우저가 PostgREST를 직접 호출해도 RLS와 권한에서 거부된다.
@@ -74,6 +75,8 @@ erDiagram
     users ||--o{ rooms : "host"
     rooms ||--o{ room_members : "참가"
     users ||--o{ room_members : "참가"
+    rooms ||--o{ room_connections : "실시간 연결"
+    users ||--o{ room_connections : "실시간 접속"
     rooms ||--o{ rounds : "판"
     rounds ||--o{ round_participants : "참가자 스냅샷"
     rooms ||--o{ buy_ins : "바이인"
@@ -112,6 +115,14 @@ erDiagram
         int seat_no
         timestamptz joined_at
         timestamptz left_at
+    }
+    room_connections {
+        uuid id PK
+        uuid room_id FK
+        uuid user_id FK
+        timestamptz expires_at
+        timestamptz created_at
+        timestamptz updated_at
     }
     rounds {
         uuid id PK

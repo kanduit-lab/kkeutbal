@@ -6,22 +6,28 @@
 | Audience | operators / maintainers |
 | Status | active |
 | Source of truth | this document (DB 적용 순서·검증·복구) |
-| Last reviewed | 2026-08-02 |
+| Last reviewed | 2026-10-21 |
 
 ## Purpose
 
 Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유하는 RLS·권한·원장 트리거를
 새 DB와 기존 DB에 같은 순서로 적용한다. 스키마 정본은 `database/schema.ts`다.
 
+`REALTIME_MODE=self`에 필요한 DB lease presence는 Drizzle `0022_wakeful_swarm`에 작성돼 있다.
+사용자가 설계와 migration 파일 생성을 승인했지만 대상 DB에는 아직 적용하지 않았다.
+
 ## Preconditions
 
 - 대상 Supabase 프로젝트와 백업 시점을 확인한다.
 - DDL 권한이 있는 관리자 연결 문자열을 준비한다. 앱 런타임 롤 `kkeutbal_app`은 DDL 용도가 아니다.
   관리자 문자열은 저장소 파일에 쓰지 않고 대상 셸 환경에만 제공한다.
-- `drizzle-kit`은 `DATABASE_URL`과 `DATABASE_CA_CERT_BASE64`를 실행 환경에서 읽는다. CA는 Supabase pooler가 SSL을 요구하기 때문에 필요하다
-  (`drizzle.config.ts`가 앱과 같은 검증 TLS를 쓴다).
+- `drizzle-kit`은 `DATABASE_URL`, `DATABASE_TLS_MODE`를 실행 환경에서 읽는다. `DATABASE_TLS_MODE=verify-ca`일 때만
+  `DATABASE_CA_CERT_BASE64`도 제공한다. 이 값들은 앱과 같은 TLS 검증 계약을 따른다.
 - 런타임 앱을 중지하거나 쓰기 트래픽이 없는 유지보수 창을 잡는다.
 - 저장소의 `database/migrations/drizzle/meta/_journal.json`과 SQL 파일이 함께 배포 대상에 포함됐는지 확인한다.
+- `REALTIME_MODE=self` 전환은 long-running Node 실행 환경과 session-capable listener 연결이 준비된
+  뒤에만 검토한다. `DATABASE_POOL_MODE=transaction`이면 transaction endpoint가 아닌
+  `DATABASE_LISTENER_URL`도 준비한다.
 
 ## Inputs And Access
 
@@ -30,6 +36,20 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 - `kkeutbal_app` 롤 비밀번호: 저장소에 기록하지 않는다
 
 ## Procedure
+
+### Self realtime migration (적용 보류)
+
+1. `database/migrations/drizzle/0022_wakeful_swarm.sql`과 journal의 idx 22가 함께 있는지 확인한다.
+   migration은 `room_connections` 테이블과 방·만료, 사용자 인덱스를 만든다.
+2. 적용 전에는 대상 환경의 백업과 `REALTIME_MODE`, `DATABASE_POOL_MODE`, listener endpoint를 함께
+   확인한다. `DATABASE_POOL_MODE=transaction`에서 listener URL이 없거나 transaction endpoint를
+   가리키면 적용하지 않는다.
+3. DB 적용은 별도 실행 지시 뒤에 이 런북의 기존 DB 업그레이드 절차와 같은 유지보수 창에서 수행한다.
+4. 적용 뒤 `room_connections`와 두 인덱스, Drizzle 원장 idx 22를 확인한 다음
+   Supabase 배포라면 `database/migrations/supabase/0020_room_connections_security.sql`로
+   브라우저 역할 권한을 회수하고 앱 롤 DML을 부여한 뒤 `REALTIME_MODE=self`로 전환한다.
+
+현재는 migration 파일만 준비된 상태다. 이 작업에서는 `pnpm db:migrate`를 실행하지 않는다.
 
 ### 기존 DB 업그레이드
 
@@ -45,8 +65,8 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    pnpm db:migrate
    ```
 
-   live DB의 DDL은 2026-08-02 기준 `0000`~`0020`이 전부 반영돼 있다. 마지막 두 개는
-   `0019`(최초 관리자 설정 가드), `0020`(`users.is_managed` — 대리 기록용 로컬 플레이어)다.
+   live DB의 DDL은 2026-08-07 기준 `0000`~`0021`이 전부 반영돼 있다. `0022`는
+   `room_connections` lease 테이블이며 아직 적용하지 않았다.
    같은 커밋에서 재실행하면 새 마이그레이션만 적용된다.
 
    단, `0020`은 supabase `add_users_is_managed`로 먼저 들어가서 원장에 기록되지 않았다.
@@ -58,14 +78,16 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    `0009_virtual_credits_security.sql`, `0010_credit_posting_hardening.sql`,
    `0011_room_credit_lifecycle.sql`, `0012_room_credit_reversals.sql`,
    `0013_admin_room_credit_settlement.sql`, `0014_fair_round_security.sql`,
-   `0015_fair_reveal_immutability.sql`, `0016_vision_settings_security.sql`을 번호순으로 적용한다.
+   `0015_fair_reveal_immutability.sql`, `0016_vision_settings_security.sql`,
+   `0020_room_connections_security.sql`을 번호순으로 적용한다.
    0009는 **Drizzle** `0012` credit DDL 뒤에만 실행하며 credit 테이블의 직접 DML을 회수하고
    posting primitive·append-only 트리거를 만든다. 0010은 앱 롤의 generic posting 실행 권한을
    회수하고 관리자 조정 전용 RPC를 부여한다. 0011·0012는 account-credit 방의 buy-in 잠금,
    취소 release, 종료 정산 전용 RPC를 부여한다. 0013은 호스트를 잃은 account-credit 방을
    관리자 강제 정산할 때 DB에서 관리자 권한을 재검증한다. 0014는 Drizzle 0016의 공정 딜 상태
    테이블을 server-only로 잠그고, 0015는 종료 뒤 full reveal 행의 수정·삭제를 막는다. 0016은
-   Vision 설정 테이블의 브라우저 역할 접근을 회수한다.
+   Vision 설정 테이블의 브라우저 역할 접근을 회수한다. 0020은 Drizzle 0022 뒤에
+   `room_connections`의 브라우저 역할 권한을 회수하고 앱 롤 DML만 허용한다.
 
    `database/migrations/supabase/0019_drizzle_ledger_sync_0020.sql`은 DDL이 아니라 **원장 동기화 전용**
    파일이라 순서 규칙이 다르다. Drizzle `0020`의 결과가 이미 있는 DB에서 `drizzle.__drizzle_migrations`에
@@ -82,8 +104,9 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 1. 관리자 SQL로 `kkeutbal_app` 로그인 롤을 만들고 `BYPASSRLS`를 부여한다. 비밀번호는 운영
    시크릿 저장소에서 주입한다.
 2. 관리자 `DATABASE_URL`로 `pnpm db:migrate`를 실행한다.
-3. `database/migrations/supabase/0007_database_hardening.sql`을 적용한다. 이 파일이 현재 스키마의
-   RLS·최소 DML 권한·append-only 트리거 baseline이다.
+3. `database/migrations/supabase/0007_database_hardening.sql`과 신규 테이블 보강 파일인
+   `0008`·`0016`·`0020`을 적용한다. 0007은 기본 스키마의 RLS·최소 DML 권한·append-only
+   트리거 baseline이고, 뒤 파일들은 이후 추가된 테이블의 권한을 닫는다.
 4. 아래 Verification을 수행한다.
 
 `database/migrations/supabase/0001`~`0006`은 이미 적용된 과거 변화 기록이다. 제거된 옛 테이블을
@@ -124,7 +147,9 @@ where schemaname = 'public'
     'rounds_one_playing_per_room_uq',
     'bet_actions_round_seq_uq',
     'chip_ledger_reverted_of_uq',
-    'buy_ins_reverted_of_uq'
+    'buy_ins_reverted_of_uq',
+    'room_connections_room_expiry_idx',
+    'room_connections_user_idx'
   )
 order by indexname;
 
@@ -148,8 +173,8 @@ where p.pronamespace = 'public'::regnamespace
 order by p.proname;
 
 -- 원장 행 수와 마지막 created_at. 디스크 `_journal.json`의 entries 개수·마지막 `when`과
--- 같아야 한다. 0019_drizzle_ledger_sync_0020.sql 적용 뒤 기대값은
--- 21, 1785159109562(= 0020_lying_leader)다.
+-- 같아야 한다. 0022 적용 뒤 기대값은
+-- 23, 1792593674767(= 0022_wakeful_swarm)이다.
 select count(*) as ledger_rows, max(created_at) as last_created_at
 from drizzle.__drizzle_migrations;
 ```
@@ -169,7 +194,7 @@ Get-Content database/migrations/drizzle/meta/_journal.json | ConvertFrom-Json |
 추가로 `rate_limit_buckets`, `round_participants`, `credit_accounts`, `credit_transactions`,
 `credit_entries`, `room_credit_locks`, `round_fairness`, `round_fairness_participants`,
 `round_fairness_reveals`가 존재하고 `chip_ledger.delta`, `rounds.pot`이 `bigint`인지
-확인한다. `kkeutbal_app`은 credit 테이블에 SELECT만, `ensure_credit_account`,
+확인한다. self 모드에서는 `room_connections`도 존재해야 한다. `kkeutbal_app`은 credit 테이블에 SELECT만, `ensure_credit_account`,
 `admin_adjust_credit`, `lock_room_credit_buy_in`, `release_room_credit_buy_in`,
 `settle_room_credits`에는 EXECUTE를 가져야 한다. generic `post_credit_transaction`에는 EXECUTE가
 없어야 하며 `anon`·`authenticated`에는 앱 테이블 권한이 없어야 한다. Drizzle `0017` 뒤에는
@@ -244,3 +269,8 @@ Get-Content database/migrations/drizzle/meta/_journal.json | ConvertFrom-Json |
   (`ESSLREQUIRED`). `dbCredentials`에 `url`과 `ssl`을 함께 주면 drizzle-kit이 `ssl`을 버리므로
   URL을 host/port/user/password/database로 분해해 넘긴다. `DATABASE_URL`이 없으면 빈 자격증명으로
   떨어져 `db:generate`는 그대로 동작한다.
+- 2026-10-21: Drizzle `0022_wakeful_swarm.sql`로 self realtime의 만료형
+  `room_connections` lease 테이블과 인덱스를 추가했다. migration 파일은 생성했지만 대상 DB에는
+  아직 적용하지 않았다.
+- 2026-10-21: Supabase `0020_room_connections_security.sql`로 새 lease 테이블의 브라우저 역할
+  접근을 회수하고 `kkeutbal_app`에 필요한 DML만 부여했다. 대상 DB에는 아직 적용하지 않았다.

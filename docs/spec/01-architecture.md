@@ -6,7 +6,7 @@
 | Audience        | engineering / reviewers / operators                        |
 | Status          | active                                                     |
 | Source of truth | 구현은 코드·스키마, 이 문서는 스택·배포 토폴로지·모듈 경계 |
-| Last reviewed   | 2026-07-30                                                 |
+| Last reviewed   | 2026-10-21                                                 |
 
 ## Context
 
@@ -27,7 +27,7 @@
 ## Non-goals
 
 - 수평 확장·리전 분산·고가용성 설계.
-- 자체 WebSocket 서버 운영 — Supabase Realtime을 그대로 쓴다.
+- 별도 WebSocket 서버나 메시지 브로커 운영.
 - 오프라인 우선(offline-first) 완전 동기화. 재접속 시 스냅샷 복원까지만 한다.
 - Postgres Changes 기반 realtime — Broadcast만 쓴다.
 
@@ -37,7 +37,7 @@
 realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한다. Drizzle은 테이블 DDL을,
 `database/migrations/supabase/0007_database_hardening.sql`은 현 스키마의 RLS·권한·원장 트리거를 소유한다.
 
-## Proposed Design
+## Design
 
 ### 배포 토폴로지
 
@@ -52,15 +52,14 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
  │  Next.js 16 (standalone) 컨테이너       │
  │  운영 환경에서 수동으로 기동             │
  └──────┬───────────────────────────────┬──┘
-        │ postgres-js (kkeutbal_app)    │ publishable key (브라우저 직결)
-        ▼                               ▼
- ┌──────────────────────────────────────────┐
- │  Supabase                                │
- │  ├ PostgreSQL  : pooler(session 5432 / transaction 6543)│
- │  │   전용 롤 kkeutbal_app (bypassrls)    │
- │  └ Realtime    : Broadcast 공개 채널     │
- │                  room:{uuid}, Presence    │
- └──────────────────────────────────────────┘
+        │ postgres-js                 │ REALTIME_MODE=supabase일 때
+        ▼                             ▼
+ ┌───────────────────┐       ┌────────────────────────┐
+ │ PostgreSQL        │       │ Supabase Realtime      │
+ │ 앱 데이터         │       │ Broadcast + Presence   │
+ │ LISTEN/NOTIFY     │       │ 선택 경로              │
+ │ presence lease    │       └────────────────────────┘
+ └───────────────────┘
 ```
 
 전용 게임 서버를 두지 않는다는 원제약은 유지한다. Next.js는 `output: 'standalone'`으로 빌드해 `Dockerfile`이
@@ -68,12 +67,14 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
 
 ### DB 접근 — 전용 앱 롤, service role key 안 씀
 
-`src/lib/db.ts`가 서버 전용 drizzle 클라이언트를 만든다. 접속 정보는 `DATABASE_URL` 하나이며
-가리키는 대상은:
+`src/lib/db.ts`가 서버 전용 Drizzle 클라이언트를 만든다.
 
-- Supabase pooler. **session mode 5432**에서는 `max: 5`와 prepared statement를 쓰고,
-  **transaction mode 6543**에서는 `prepare: false`, `max: 1`로 제약에 맞춘다. 포트로 자동 선택한다.
-- `DATABASE_CA_CERT_BASE64`의 Supabase CA로 서버 인증서와 pooler 호스트명을 검증한다.
+- `DATABASE_POOL_MODE=session|transaction`이 prepared statement 사용 여부를 정한다. 포트 번호로
+  연결 방식을 추론하지 않는다.
+- `DATABASE_TLS_MODE=disable|verify-system|verify-ca`가 TLS 검증 방식을 정한다. 사용자 지정 CA는
+  `verify-ca`에서만 필요하다.
+- self realtime listener는 세션 연결을 사용한다. 기본 연결이 transaction pool이면
+  `DATABASE_LISTENER_URL`로 별도 연결을 제공한다.
 - 전용 롤 `kkeutbal_app`, 속성 `bypassrls`.
 
 즉 Supabase `service_role` 키도, Auth.js 세션을 Supabase JWT로 바꿔 넘기는 브리지도 쓰지 않는다.
@@ -109,43 +110,32 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
   유도하고 나머지 경로는 공개 페이지 또는 App Router 404로 둔다. **미들웨어는 UX 게이트일 뿐이며
   실제 권한 검사는 하지 않는다** — 각 Server Action이 다시 세션을 확인한다.
 
-### 실시간 전략 — 공개 Broadcast 채널 + 클라이언트 send + 스냅샷 truth
+### 실시간 전략 — 교체 가능한 전송 + 스냅샷 truth
 
-`src/lib/supabase/client.ts`가 브라우저 전용 Supabase 클라이언트를 publishable key로 만든다
-(`persistSession: false`, `autoRefreshToken: false` — 이 클라이언트는 DB 조회에 쓰지 않고
-Realtime 전용이다). `src/lib/realtime/client.ts` + `events.ts`가 프로토콜을 정의한다. 상세는
-`03-realtime-protocol.md`가 소유하며, 여기서는 아키텍처 결정만 적는다.
+`src/lib/realtime`의 공통 connection이 `REALTIME_MODE`에 따라 Supabase 또는 self 전송을 고른다.
+브라우저는 런타임 설정 API를 읽으므로 Supabase 공개 연결 값이 이미지에 고정되지 않는다.
 
-실제 구현은 애초 설계했던 "`realtime.messages` RLS로 `private: true` 채널 구독 제어"가 **아니다.**
-지금 채널은:
+- `supabase`: 공개 Broadcast 채널과 Presence를 사용한다. Supabase 클라이언트는 DB 조회나 Auth에
+  쓰지 않는다.
+- `self`: 인증된 same-origin SSE와 POST, PostgreSQL `LISTEN/NOTIFY`, 만료형 DB presence lease를
+  사용한다. 서버가 세션에서 actor를 정하고 방 멤버십을 검사한다.
 
-- **공개(public) 채널**, 토픽 `room:{roomId}`(`roomTopic()`). `roomId`가 UUID라 추측이 어렵다는
-  점에 의존하는 obscurity 방어이며, RLS로 강제되는 접근 제어가 아니다.
-- 인증 없는 publishable key로 구독·발행한다.
-- 이벤트는 **행동한 클라이언트가 Server Action 성공 응답을 받은 뒤 직접 `channel.send()`**
-  한다(`sendRoomEvent`). 서버가 대신 브로드캐스트하지 않는다.
-- 수신 측은 `onRoomEvent`로 이벤트를 받아도 그 payload를 상태에 바로 반영하지 않는다. 이벤트는
-  "지금 다시 읽어라"는 힌트 + 토스트 표시용일 뿐이고, 실제 상태 갱신은 항상 `refreshRoom()`
-  Server Action을 다시 호출해 얻은 스냅샷으로 한다(`use-room-sync.ts`의 `debouncedRefetch`).
-  그래서 이벤트가 유실되거나 위조돼도(공개 채널이라 이론상 가능) 최종 상태는 스냅샷이 정정한다.
+어느 모드에서도 이벤트는 "다시 읽어라"는 힌트다. 실제 상태는 `refreshRoom()`이 반환한 서버
+스냅샷으로 확정한다. 이벤트 유실과 중복은 폴링과 재조회가 복구한다. 상세 계약은
+`03-realtime-protocol.md`가 소유한다.
 
-**refetch 트리거**(`use-room-sync.ts`). 이벤트별 처리 정책은
-`src/lib/realtime/event-sync-policy.ts`가 소유하고, 상세는 `03-realtime-protocol.md`가 정본이다:
+**refetch 트리거**:
 
 | 트리거         | 조건                                                        |
 | -------------- | ----------------------------------------------------------- |
 | 이벤트 수신    | 정책에 따라 즉시(`round.*`) / 넘김 / 합침 — 250ms 디바운스  |
 | Presence sync  | 모르는 참가자 id가 나타날 때만 refetch                      |
-| 구독 성공 직후 | `channel.subscribe` 콜백에서 즉시 refetch(재연결 공백 복원) |
+| 구독 성공 직후 | 공통 connection의 `SUBSCRIBED` 상태에서 즉시 refetch       |
 | 폴링           | 탭이 visible일 때 20초 간격 `setInterval`                   |
 | 가시성·연결 복귀 | `visibilitychange`/`online`/`pageshow`에서 즉시 refetch    |
 
-payload 검증은 `events.ts`의 `parseEvent()` — envelope(`v`/`id`/`roomId`/`actorId`/`at`) +
-이벤트별 zod 스키마를 한 번에 검증하고, 실패하면 조용히 버린다(상태 미반영, 스냅샷 경로로 복구).
-
-과거 마이그레이션에 있던 `realtime.messages` RLS 정책은 현 baseline(`0007`)에서 제거됐다.
-현재 공개 채널에는 적용되는 Realtime RLS 정책이 없다. private 채널 전환은 새 정책과 Supabase JWT
-브리지를 함께 설계해야 한다.
+payload는 envelope와 이벤트별 zod 스키마로 검증한다. 실패한 이벤트는 버리고 스냅샷 경로로
+복구한다.
 
 ### 쓰기 경로
 
@@ -153,7 +143,7 @@ payload 검증은 `events.ts`의 `parseEvent()` — envelope(`v`/`id`/`roomId`/`
 1. 사용자 탭
 2. Server Action 호출 — 권한 검사, 도메인 엔진 판정, DB 커밋 (칩 관련은 방 단위
    pg_advisory_xact_lock 으로 동시 갱신 직렬화)
-3. 성공 응답을 받은 클라이언트가 sendRoomEvent() 로 방에 브로드캐스트
+3. 성공 응답을 받은 클라이언트가 공통 realtime connection으로 이벤트 힌트를 발행
 4. 다른 클라이언트는 이벤트를 힌트로 debouncedRefetch() → refreshRoom() 스냅샷으로 정합
 ```
 
@@ -206,7 +196,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 | ------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | 앱 프레임워크 | Next.js 16 App Router, `output: 'standalone'`      | SSR로 초기 방 상태를 즉시 그림. standalone 산출물을 docker 이미지에 그대로 담는다          |
 | 언어          | TypeScript strict                                  | 카드 배열 인덱싱이 많아 undefined 누락이 실제 버그 원인이 됨                               |
-| 실시간        | Supabase Realtime Broadcast(공개 채널) + Presence  | 전용 서버 불필요, 저지연. 인증 연동은 안 함 — obscurity + 스냅샷 재검증으로 대체           |
+| 실시간        | Supabase 또는 PostgreSQL self 전송                 | 배포 환경에 따라 고르고, 두 모드 모두 스냅샷 재검증으로 수렴                              |
 | DB 접근       | Drizzle ORM + postgres-js, 전용 롤(bypassrls)      | 스키마를 타입 소스로. service role key/JWT 브리지 없이 커넥션 문자열 하나로 통제           |
 | 인증          | Auth.js v5, Authentik 선택적 + 게스트 로그인       | Authentik 미등록 상태에서도 개발·현장 운영 가능                                            |
 | 검증          | zod                                                | realtime payload·env·폼 입력 단일 검증 수단                                                |
@@ -217,8 +207,8 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 ### A. 자체 Node + Socket.IO 서버
 
-- 기각 사유: docker 인프라로도 stateful WebSocket 서버를 별도로 유지하는 비용이 Supabase
-  Realtime 재사용보다 크다. 규칙 판정은 이미 Server Action에 있어 실익이 없다.
+- 기각 사유: 별도 stateful WebSocket 서비스를 하나 더 운영할 필요가 없다. self 모드는 기존
+  Next.js 프로세스의 인증된 SSE/POST와 PostgreSQL `LISTEN/NOTIFY`를 재사용한다.
 
 ### B. `realtime.messages` RLS + `private: true` 채널
 
@@ -245,7 +235,8 @@ src/features/<domain>/       도메인별 폴더가 경계
 - RLS는 `anon`/`authenticated` 대상 방어층. 실질적 권한 판정은 Server Action.
 - `kkeutbal_app`은 RLS를 우회하지만 DML과 시퀀스 사용 권한만 가진다. 정책·권한 기준은
   `0007_database_hardening.sql`이다.
-- 외부 공개 REST API는 없다. 클라이언트 진입점은 Server Actions와 Realtime 공개 채널뿐이다.
+- 외부 공개 REST API는 없다. 클라이언트 진입점은 Server Actions와 인증된 realtime API다.
+  Supabase 모드에서만 공개 Broadcast 채널을 추가로 사용한다.
 
 ## Migration And Rollout
 
@@ -281,13 +272,11 @@ src/features/<domain>/       도메인별 폴더가 경계
 | 공개 Realtime 채널 — 인증 없이 누구나 `roomId`만 알면 구독·발행 가능       | 칩 금액 등 payload 노출, 위조 이벤트 주입        | UUID 토픽 난독화, zod 검증 실패 시 폐기, 진실은 항상 Server Action 재검증 스냅샷                          |
 | `kkeutbal_app`이 bypassrls — Server Action 권한 검사 누락 시 RLS 방어 없음 | 방 데이터 교차 노출                              | 모든 쓰기 경로가 Server Action을 거치도록 코드 리뷰로 강제. 컴포넌트 직접 쿼리 금지 규칙                  |
 | 회원가입 코드가 유출됨                                                     | 무단 가입                                        | 관리자가 `/admin`에서 즉시 회수. DB에는 `AUTH_SECRET` 기반 해시만 저장하고, 원문은 발급 직후 한 번만 노출 |
-| DB 인증서 미검증                                                           | 중간자 서버에 DB 자격 증명·쿼리가 노출될 수 있음 | `DATABASE_CA_CERT_BASE64`로 TLS 체인·호스트 검증                                                          |
+| DB 인증서 미검증                                                           | 중간자 서버에 DB 자격 증명·쿼리가 노출될 수 있음 | 운영에서는 `verify-system` 또는 `verify-ca`를 사용                                                       |
 | MT 현장 Wi-Fi/LTE 불안정                                                   | 액션 유실·중복                                   | 멱등키(betting), 폴링+visibilitychange 재동기화, 서버 스냅샷 우선                                         |
 | Broadcast 메시지 유실(전달 보장 없음)                                      | 화면 불일치                                      | 이벤트를 힌트로만 쓰고 20초 폴링 + 250ms 디바운스 refetch로 항상 정정                                     |
 | Vision 오인식으로 잘못된 족보 안내                                         | 판 분쟁                                          | 인식은 보조. 수동 피커 폴백, 결과 수정 UI 필수                                                            |
 
 ## Open Questions
 
-- [ ] 공개 Broadcast + 스냅샷 재검증을 유지할지, private 채널(Supabase JWT 브리지와 새 RLS 정책 포함)로
-      전환할지 결정.
 - [ ] Authentik 실등록 일정 — 그 전에도 내부 계정과 게스트 토큰 로그인은 사용 가능.

@@ -281,6 +281,26 @@ export const roomMembers = pgTable(
   ],
 )
 
+export const roomConnections = pgTable(
+  'room_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    roomId: uuid('room_id')
+      .notNull()
+      .references(() => rooms.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('room_connections_room_expiry_idx').on(table.roomId, table.expiresAt),
+    index('room_connections_user_idx').on(table.userId),
+  ],
+)
+
 export const rounds = pgTable(
   'rounds',
   {

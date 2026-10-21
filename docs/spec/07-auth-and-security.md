@@ -6,7 +6,7 @@
 | Audience        | engineering / operators / reviewers                                     |
 | Status          | active                                                                  |
 | Source of truth | 구현은 auth·권한 코드와 스키마, 이 문서는 인증 흐름·역할 권한·보안 경계 |
-| Last reviewed   | 2026-08-02                                                              |
+| Last reviewed   | 2026-10-21                                                              |
 
 ## Context
 
@@ -209,10 +209,11 @@ SSO 설정에서 새 secret을 다시 저장해야 한다.
 **중요한 사실: 이 앱에는 Supabase JWT 브리지가 없다.** 예전 설계 초안(브라우저 세션을 Supabase
 JWT로 서명해 내려주는 방식)은 구현되지 않았다. 실제 경로는 다음 두 갈래로 완전히 분리된다.
 
-| 경로         | 클라이언트                                         | 인증 방식                                                                                           | 용도                 |
-| ------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------- |
-| DB 읽기/쓰기 | `src/lib/db.ts` (drizzle + postgres-js, 서버 전용) | 전용 롤 `kkeutbal_app` (`bypassrls`), 5432 session / 6543 transaction pooler 자동 설정, CA 검증 TLS | 모든 테이블 CRUD     |
-| Realtime     | `src/lib/supabase/client.ts` (브라우저)            | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, 로그인 세션과 무관                                          | Broadcast·Presence만 |
+| 경로 | 클라이언트 | 인증 방식 | 용도 |
+|------|------------|-----------|------|
+| DB 읽기/쓰기 | Drizzle + postgres-js 서버 연결 | 전용 롤 `kkeutbal_app` (`bypassrls`), 명시한 pool/TLS 모드 | 모든 테이블 CRUD |
+| Supabase realtime | Supabase 브라우저 클라이언트 | 공개 publishable key, 로그인 세션과 무관 | Broadcast·Presence |
+| Self realtime | 같은 origin의 SSE와 POST | Auth.js 세션과 활성 방 멤버십을 요청마다 검사 | 이벤트 힌트·DB lease presence |
 
 `kkeutbal_app`은 `bypassrls` 롤이므로 RLS 정책과 무관하게 모든 행에 접근한다. **인가는 RLS가
 아니라 Server Action의 명시적 검사가 담당한다.** 패턴은 두 곳에 반복된다:
@@ -237,7 +238,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 `database/migrations/supabase/0007_database_hardening.sql`은 현재 앱 테이블의 RLS를 켜고, `anon`·
 `authenticated`의 테이블·시퀀스·함수 권한을 모두 회수한다. 이 정책은 다음 상황에서 방어한다:
 
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`가 유출되어 누군가 PostgREST를 직접 두드리는 경우
+- Supabase publishable key로 누군가 PostgREST를 직접 두드리는 경우
 - 향후 브라우저에서 Supabase 클라이언트로 직접 테이블을 조회하는 코드가 추가되는 경우
 
 앱의 정상 동작 경로(Server Action → `kkeutbal_app`)는 RLS를 우회한다. 이 앱은 Supabase Auth를
@@ -251,28 +252,33 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 테이블 제약이다. 정정은 항상 `reverted_of`로 원본을 가리키는 반대 부호 새 행 INSERT로 한다
 (`revertBet`, `voidRound` in `src/features/betting/actions.ts`, `src/features/game/actions.ts`).
 
-## Realtime — 공개 채널, payload는 힌트일 뿐
+## Realtime — 모드가 달라도 payload는 힌트다
 
-`src/lib/realtime/client.ts`의 `createRoomChannel`은 `private: true`를 지정하지 않는다 —
-**공개(public) Broadcast 채널**이며 publishable key로 접속한다. 토픽은 `room:{roomId}` (UUID).
+`REALTIME_MODE=supabase`는 공개 Broadcast 채널과 Presence를 사용한다. publishable key는 런타임
+설정 API가 브라우저에 전달하며, 채널은 Auth.js 세션과 연결되지 않는다. 토픽은
+`room:{roomId}`(UUID)다.
 
 과거 `0001_init_rls.sql`의 `realtime.messages` 정책은 `0007_database_hardening.sql`에서
 제거한다. 앱이 Supabase Auth로 인증하지 않으므로 브라우저 클라이언트는 `authenticated`가 아니라
 `anon` 롤로 붙고, 공개 채널은 애초에 `realtime.messages` RLS를 타지 않는다.
 
-이 경계가 안전한 이유는 채널 자체의 인증이 아니라 **payload를 신뢰하지 않는 설계**에 있다
-(`03-realtime-protocol.md`):
+`REALTIME_MODE=self`는 같은 origin의 SSE와 POST만 연다. 두 경로 모두 Auth.js 세션의 활성 계정과
+방 멤버십을 검사한다. POST는 actor를 요청 body에서 받지 않고 세션에서 정하며, Origin도 공개 앱
+URL과 일치해야 한다. PostgreSQL `LISTEN/NOTIFY`는 인증이 끝난 이벤트만 앱 인스턴스에 전달한다.
 
-- 이벤트는 행동한 클라이언트가 Server Action 성공 뒤 직접 보낸다 — 서버가 검증한 결과의 사후
-  통지일 뿐, payload 자체가 권위 있는 상태가 아니다.
+두 모드가 안전 경계를 공유하는 이유는 **payload를 정본으로 쓰지 않는 설계**에 있다
+(`03-realtime-protocol.md`).
+
+- 이벤트는 행동한 클라이언트가 Server Action 성공 뒤 보내는 사후 통지다. self 모드는 이 발행
+  요청의 세션과 방 멤버십도 다시 검사하지만, payload 자체가 권위 있는 상태가 되는 것은 아니다.
 - 수신자는 payload를 "다시 조회하라"는 힌트로만 쓰고, 실제 상태는 `refreshRoom` Server Action
   스냅샷 refetch로 확정한다 (250ms 디바운스 + 20초 폴링 + `visibilitychange`).
 - 즉 토픽 UUID를 추측하거나 위조 payload를 보내도, 상태 변경은 여전히 `refreshRoom`이 다시
   검증한 결과로만 반영된다. 최악의 경우 화면에 잘못된 힌트가 잠깐 보였다가 다음 refetch에서
   정정된다 — 원장이나 역할이 실제로 바뀌지는 않는다.
 
-이 설계를 바꾸려면(예: private 채널 + `authenticated` 롤 도입) `03-realtime-protocol.md`와
-이 문서를 함께 갱신한다.
+Supabase 채널을 private 채널로 바꾸거나 self 발행을 Server Action 트랜잭션 안으로 옮기면
+`03-realtime-protocol.md`와 이 문서를 함께 갱신한다.
 
 ## 역할 · 권한
 

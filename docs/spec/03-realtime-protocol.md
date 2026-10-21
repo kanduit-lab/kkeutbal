@@ -3,284 +3,205 @@
 | Field | Value |
 |-------|-------|
 | Type | technical-design |
-| Audience | engineering / reviewers |
+| Audience | maintainers / operators / reviewers |
 | Status | active |
-| Source of truth | 구현 프로토콜은 `src/lib/realtime/events.ts`·`client.ts`, 이 문서는 채널·이벤트·동기화 규약 |
-| Last reviewed | 2026-08-02 |
+| Source of truth | 이 문서는 실시간 전송 모드와 동기화 계약을 소유한다 |
+| Last reviewed | 2026-10-21 |
 
-## Context
+## Requirement
 
-참가자 전원의 화면이 같은 판 상태를 보여야 한다. 전용 서버가 없으므로 Supabase Realtime Broadcast를
-쓰되, **전달 보장이 없는 pub/sub** 위에서 일관성을 만들어야 한다. 이 문서가 규정하는 것은 채널·이벤트
-모양·동기화 순서다. 데이터 확정 경로(칩 원장, RLS)는 `02-data-model.md`.
+방 참여자의 화면은 같은 서버 스냅샷으로 수렴해야 한다. 실시간 전송이 지연되거나 유실돼도
+칩, 판, 좌석 상태를 이벤트 payload로 확정하지 않는다. `REALTIME_MODE`는 `supabase` 또는
+`self`이며, 모드에 따라 전송 계층만 바뀐다.
 
-## 채널
+`supabase`는 Supabase Broadcast와 Presence를 쓰고, `self`는 인증된 앱 API와 PostgreSQL만
+사용한다. `self` 배포는 `0022_wakeful_swarm` 마이그레이션을 적용한 뒤 활성화한다.
 
-방 하나당 채널 하나. **공개 채널**이다 — `private: true`를 쓰지 않고 publishable key로 구독한다.
+## Contract
 
-```ts
-// src/lib/realtime/client.ts — createRoomChannel
-supabase.channel(`room:${roomId}`, {
-  config: {
-    broadcast: { self: false, ack: true },
-    presence: { key: userId },
-  },
-})
-```
+### 공통 동기화 규약
 
-- `self: false` — 자기 액션은 Server Action 성공 뒤의 refetch로 이미 반영했으므로 되받지 않는다.
-- `ack: true` (2026-07-30 변경) — 없으면 조인된 채널에서 `send()`가 서버 확인 없이 즉시 `'ok'`를
-  돌려준다. 소켓이 살아 있는 것처럼 보이면서 패킷이 버려지는 모바일 구간을 잡으려면 실제 확인이
-  필요하다. 전송당 왕복이 한 번 늘지만 payload가 작고, 호출부는 `afterMutation`에서 로컬 refetch
-  뒤에 병렬로 기다리므로 조작 체감 지연은 없다. 재시도(`send-retry.ts`)가 중복 배달을 만들어도
-  같은 envelope `id`를 재사용하므로 `seen-events.ts`의 dedup이 흡수한다.
-- 채널 구독 자체에는 인가 검사가 없다. **payload를 신뢰하지 않는 것**과 **모든 쓰기를 Server
-  Action이 권한 검사 후 수행하는 것**으로 방어한다 (아래 보안 경계).
-- 개인 채널은 만들지 않는다. 손패처럼 나만 볼 정보는 애초에 브로드캐스트하지 않고 서버 응답으로만
-  받는다.
+- 모든 이벤트는 **힌트**다. 수신자는 이벤트를 받으면 방 스냅샷을 다시 조회하고, 화면 상태는 그
+  응답으로만 확정한다.
+- 이벤트 유실, 중복, 순서 역전은 허용한다. 클라이언트는 탭 복귀, 온라인 복귀, 주기 폴링으로도
+  스냅샷을 조회한다.
+- 이벤트 payload와 발신자가 제공한 식별자는 권한·잔액·차례 판단에 쓰지 않는다. 쓰기는 인증과
+  방 권한을 확인하는 서버 경로를 거쳐 Postgres 트랜잭션으로 확정한다.
+- 액션 성공 뒤에는 발신자도 스냅샷을 다시 조회한다. 수신자 재조회는 중복 이벤트를 묶을 수 있지만,
+  다른 이벤트의 동반 전송을 전제로 삼지 않는다.
 
-## 이벤트
+### `REALTIME_MODE=supabase`
 
-모든 payload는 공통 봉투(envelope)를 가진다 (`envelopeSchema`, `src/lib/realtime/events.ts`).
+Supabase Broadcast와 Presence가 전송과 접속 표시를 담당한다. Broadcast는 상태 저장소가 아니며,
+위 공통 동기화 규약을 그대로 따른다. 브라우저는 런타임 설정 API에서 공개 연결 값을 받아
+Supabase 클라이언트를 만든다. 공개 값은 이미지에 굽지 않는다.
+
+### `REALTIME_MODE=self`
+
+`self` 모드는 다음 경계를 모두 갖는다.
+
+- 브라우저는 같은 origin의 인증된 SSE 스트림으로 이벤트를 수신한다. 스트림 연결 시 서버는 세션과
+  방 멤버십을 확인한다.
+- 브라우저는 같은 origin의 인증된 `POST` 경로로만 이벤트 발행을 요청한다. 서버는 세션과 방
+  멤버십을 다시 확인한 뒤에만 publish한다.
+- 서버 프로세스는 PostgreSQL `LISTEN/NOTIFY`를 받아 해당 방의 SSE 구독자에게 힌트를 전달한다.
+  `NOTIFY` payload도 스냅샷을 대신하지 않는다.
+- 접속 표시는 DB lease presence로 관리한다. 연결은 lease를 만들거나 갱신하고, 만료된 lease는
+  온라인 사용자로 보지 않는다. SSE 연결 종료만으로 presence를 즉시 확정하지 않는다.
+- `self`는 요청마다 종료되는 실행 환경에서 동작하지 않는다. long-running Node 프로세스와
+  PostgreSQL session listener 연결이 함께 있어야 한다.
+
+`self`를 선택한 서버는 시작할 때 listener 연결을 열며, 환경값이나 listener 연결이 잘못되면
+요청을 받기 전에 기동을 실패시킨다. 같은 단계에서 lease 테이블의 존재와 조회 권한도 확인하므로
+`0022_wakeful_swarm` 적용 전에는 이 모드를 켤 수 없다.
+
+### 채널과 envelope
+
+방 하나가 전송 채널 하나를 가진다. Supabase 토픽은 `room:{roomId}`, self 경로는
+`/api/realtime/rooms/{roomId}`다. 모든 방 이벤트는 같은 envelope를 쓴다.
 
 ```ts
 type Envelope = {
-  v: 1              // PROTOCOL_VERSION
-  id: string        // uuid, 멱등키
-  roomId: string     // uuid
-  actorId: string    // uuid, 발신 사용자
-  at: string          // ISO8601 datetime
+  v: 1
+  id: string
+  roomId: string
+  actorId: string
+  at: string
 }
 ```
 
-`parseEvent(name, raw)`가 이벤트 이름 + envelope + payload를 한 번에 zod로 검증한다. 실패하면
-`null`을 반환하고 `onRoomEvent`의 구독 콜백은 아무것도 하지 않는다 — 파싱 실패 payload는 조용히
-버려진다. 상태는 어차피 refetch로 복구되므로, 검증되지 않은 값을 반영하는 것보다 버리는 편이 안전
-하다.
+`parseEvent(name, raw)`가 이름·envelope·payload를 함께 검증한다. 실패한 입력은 버리고 다음
+스냅샷 조회로 복구한다. Supabase 모드의 `actorId`는 클라이언트가 만들므로 신뢰하지 않는다.
+self 모드는 서버가 인증 세션에서 `actorId`를 만들지만, 이벤트 payload 자체는 여전히 힌트다.
 
-### 이벤트 목록과 실제 사용처
+Supabase 채널은 `broadcast.self=false`, `broadcast.ack=true`, `presence.key=userId`를 쓴다.
+공개 채널이므로 개인 손패나 인증 정보는 보내지 않는다. self의 SSE와 POST는 세션과 방 멤버십을
+각각 확인하고, POST는 same-origin과 분당 발행 한도도 확인한다. self connection은 임의의
+source UUID를 공유해 발신 탭만 echo에서 제외하며, 같은 사용자의 다른 탭은 이벤트를 받는다.
 
-`eventPayloads`에 정의된 이벤트는 14개다.
+### 이벤트 목록
 
-발신 위치는 딜러 컨트롤·액션바·좌석 시트가 각자 훅으로 쪼개져 있다. 수신 처리는
-`use-room-sync.ts`(refetch)와 `use-room-event-feedback.ts`(토스트·소리)가 나눠 갖는다.
+이름과 payload 스키마의 정본은 `src/lib/realtime/events.ts`다.
 
-| 이벤트 | 발신 위치 | 수신 처리 |
-|--------|-----------|-----------|
-| `round.started` | `dealer-panel-controls.ts`, `lobby-panel.tsx` | 토스트("N번째 판 시작") + refetch |
-| `round.ended` | `dealer-panel-controls.ts`, `dealer-panel-pending-queue.tsx`, `use-action-bar-controls.ts` — 자동 종료가 승인·베팅 경로에서도 판을 끝내므로 발신 지점이 셋이다 | 토스트(승자·팟) + refetch |
-| `round.voided` | `dealer-panel-controls.ts` | refetch (payload의 `reason`은 토스트 힌트) |
-| `bet.placed` | `use-action-bar-controls.ts`, `member-sheet-proxy-bet.tsx`(대리 베팅) | refetch만 |
-| `bet.approved` | `dealer-panel-pending-queue.tsx` | refetch만 |
-| `bet.rejected` | `dealer-panel-pending-queue.tsx` | 자기 액션이면 토스트(거절 사유) + refetch |
-| `bet.reverted` | `dealer-panel-revert-list.tsx` | refetch만 |
-| `member.role_changed` | `member-sheet-role.tsx`, `member-sheet.tsx` | refetch만 |
-| `member.left` | `member-sheet.tsx` — 채널 해제 직전이므로 `sendOneShotRoomEvent` 사용 | refetch만 |
-| `room.settings_changed` | `room-settings-client.tsx` — 구독 채널 없는 화면이라 `sendOneShotRoomEvent` 사용 | refetch만 (payload 빈 객체) |
-| `state.snapshot` | `use-room-actions.ts`의 `afterMutation` — mutation 성공 **그리고 발신자 자신의 refetch 성공** 시에만 (payload가 그 refetch 결과로 만들어지므로) | 힌트 반영 + refetch |
-| `member.joined` | 스키마만 존재, 어디서도 send 안 함 | — |
-| `state.request` | 스키마만 존재, 어디서도 send 안 함 | — |
-| `chips.updated` | 스키마만 존재, 어디서도 send 안 함 | — |
+| 이벤트 | 실제 발신 경로 | 수신 동작 |
+|--------|----------------|-----------|
+| `round.started` | 딜러·로비 판 시작 | 즉시 재조회 + 피드백 |
+| `round.ended` | 종료·승인·베팅 자동 종료 | 즉시 재조회 + 피드백 |
+| `round.voided` | 딜러 판 무효 | 즉시 재조회 |
+| `bet.placed` | 액션바·대리 베팅 | 합쳐서 재조회 |
+| `bet.approved` | 승인 대기열 | 합쳐서 재조회 |
+| `bet.rejected` | 승인 대기열 | 합쳐서 재조회 + 해당 사용자 피드백 |
+| `bet.reverted` | 되돌림 목록 | 합쳐서 재조회 |
+| `member.role_changed` | 역할·방장 변경 | 합쳐서 재조회 |
+| `member.left` | 참가자 제거 | 합쳐서 재조회 |
+| `room.settings_changed` | 설정 저장 화면의 one-shot 발행 | 합쳐서 재조회 |
+| `state.snapshot` | mutation 뒤 발신자 재조회까지 성공했을 때 | 제한된 힌트 반영 + 확인 재조회 |
+| `member.joined` | 현재 발신 없음 | 스키마만 유지 |
+| `chips.updated` | 현재 발신 없음 | 스키마만 유지 |
+| `state.request` | 현재 발신 없음 | 스키마만 유지 |
 
-`round.voided`/`member.left`/`room.settings_changed`는 2026-07-23 하드닝에서 스키마가 추가됐다.
-수신 측은 다른 이벤트와 동일하게 "refetch 힌트"로만 다루고, 발신 연결은 각 기능 경로(판 무효·
-방 나가기·설정 저장)가 담당한다.
+`state.snapshot`은 동반 전송이 보장되지 않는다. 발신자의 mutation은 성공했어도 그 뒤 재조회가
+실패하면 만들 수 없는 payload이므로 보내지 않는다. 수신 측은 다른 이벤트가 뒤따를 것이라고
+가정하지 않는다.
 
-수신 타입은 `RoomEvent` 판별 유니온(`src/lib/realtime/events.ts`)이다 — `event.name` 분기만으로
-payload 타입이 캐스트 없이 좁혀진다. `useRoomSync`의 `onEvent` 콜백이 이 타입을 받는다.
+### 발신 순서
 
-payload 내용을 UI에 직접 반영하는 것은 토스트 문구를 가진 소수뿐이다 — `bet.rejected` /
-`round.started` / `round.ended`, 그리고 신규 `round.voided`의 `reason`. 나머지 이벤트는
-**"뭔가 바뀌었다" 신호일 뿐**이고, 실제 화면 갱신은 전부 `refreshRoom` 스냅샷 refetch가 담당한다.
-
-### payload 예시
-
-```ts
-// bet.placed
-{
-  actionId: string      // 베팅 DB 멱등키. envelope.id와 독립적으로 생성
-  roundId: string
-  action: 'check' | 'call' | 'raise' | 'fold' | 'allin'
-  amount: number         // 정수, nonnegative
-  seq: number             // 클라이언트 추정 순번. 표시용, 진실 아님
-}
-
-// bet.rejected
-{
-  actionId: string
-  rejectedBy: string
-  reason: string          // 1~200자, 필수
-}
-
-// state.snapshot
-{
-  roomStatus: 'waiting' | 'playing' | 'settled' | 'closed'
-  currentRound: { roundId: string; seq: number; pot: number } | null
-  balances: Array<{ userId: string; balance: number }>
-}
-```
-
-## 발신 모델 — 행동한 클라이언트가 직접 send
-
-서버는 이벤트를 발신하지 않는다. `member.joined`, `chips.updated`가 스키마상 "서버" 발신으로
-설계되었으나 실제 서버 발신 경로는 없다 — 미채택.
-
-```
+```text
 사용자 탭
-  │
-  ├─(1) Server Action 호출 (베팅 제출, 판 시작 등)
-  │       → 권한·규칙·불변식 검증 후 Postgres 커밋
-  │
-  ├─(2) 성공 시 refetch(refreshRoom) 로 자기 화면 갱신
-  │
-  └─(3) 성공 시 channel.send(event)  ← 행동한 본인이 직접 브로드캐스트
-          + (2)의 refetch도 성공했으면 state.snapshot 도 함께 send
-            (afterMutation, use-room-actions.ts)
-              │
-              └─(4) 다른 참가자 수신 → 250ms 디바운스 refetch로 자기 화면 갱신
+  -> Server Action: 권한·규칙 검사와 PostgreSQL 커밋
+  -> 성공한 발신자: refreshRoom으로 자기 화면 확정
+  -> 공통 realtime connection으로 이벤트 힌트 발행
+  -> 다른 참가자: 이벤트 수신 뒤 refreshRoom으로 서버 스냅샷 확정
 ```
 
-(3)의 `state.snapshot`은 **동반 전송이 보장되지 않는다.** payload를 (2)의 refetch 결과로
-채우기 때문에, 그 refetch가 8초 타임아웃(`REFETCH_TIMEOUT_MS`)으로 실패하면 보낼 진실이 없어
-생략된다 — 커밋은 됐는데 힌트만 안 나가는 구간이다. 따라서 **수신 측 어떤 이벤트도 "뒤따라올
-`state.snapshot`이 대신 refetch해 준다"에 기대면 안 된다** (아래 이벤트별 재조회 정책).
+설정 저장처럼 구독 connection이 없는 화면은 one-shot 발행을 쓴다. Supabase 모드는 미구독
+채널의 REST fallback을 사용하고, self 모드는 같은 인증 POST 경로를 사용한다. 발행 실패가 이미
+성공한 mutation을 실패로 바꾸지는 않는다. 상대 화면은 폴링으로 수렴한다.
 
-실패한 Server Action은 아무것도 브로드캐스트하지 않는다 — 실패는 호출자 화면에 토스트로만
-보인다 (`runAction`, `room-client.tsx`).
+Supabase 전송은 같은 envelope id로 최대 세 번 재시도한다. 수신자는 `seen-events.ts`로 중복
+피드백을 막는다. self의 POST는 서버가 새 envelope를 한 번 만들고 `NOTIFY`한다.
 
-구독 중인 채널이 없는 화면(설정 페이지, 퇴장 직전)은 `sendOneShotRoomEvent`(`client.ts`)로 쏜다.
-supabase-js는 미구독 채널의 `send`를 REST로 보내므로 웹소켓 구독 없이 이벤트 하나만 발신하고
-채널을 바로 해제한다. 발신 실패는 조용히 삼킨다 — 브로드캐스트는 힌트일 뿐이고 수신자는
-폴링으로 복구된다.
+### 스냅샷 재조회 정책
 
-## 스냅샷 refetch 전략 — 진실의 원천
+진실은 항상 `refreshRoom(roomId)`가 반환하는 PostgreSQL 스냅샷이다.
 
-이벤트 payload는 힌트다. **진실은 항상 `refreshRoom(roomId)`가 반환하는 Postgres 스냅샷.**
-`useRoomSync`는 다음 트리거로 refetch한다.
-
-| 트리거 | 지연 |
+| 트리거 | 동작 |
 |--------|------|
-| `round.started`/`round.ended`/`round.voided` 수신 | 즉시 (디바운스 우회) |
-| 그 외 Broadcast 이벤트 수신 | 250ms 트레일링 디바운스 + 최소 1초 간격 (`debouncedRefetch`) |
-| Presence `sync` (참가자 입장/이탈 감지) | 250ms 트레일링 디바운스 + 최소 1초 간격 |
-| 채널 `SUBSCRIBED` 전이 (최초 구독·재연결) | 즉시 |
-| `visibilitychange`로 탭 복귀 + 20초 폴링 인터벌 | 즉시 / 20초 주기 |
-| `online` 복귀 | 즉시 (+ 미연결이면 재구독) |
+| `round.started`·`round.ended`·`round.voided` | 즉시 재조회 |
+| 그 밖 이벤트·새 참가자 presence | 250ms 디바운스, 이벤트 재조회 최소 1초 간격 |
+| 연결 성공 | 즉시 재조회 |
+| 탭 복귀·온라인 복귀·bfcache 복원 | 즉시 재조회, 필요하면 재연결 |
+| 탭이 보이는 동안 | 20초 폴링 |
 
-이벤트 유입 refetch만 최소 1초 간격으로 묶인다(폭주 시 서버 호출 상한). 첫 이벤트는 250ms
-디바운스만 탄다. 폴링·visibility·afterMutation의 직접 refetch는 간격 제한을 받지 않는다.
+버킷의 정본은 `src/lib/realtime/event-sync-policy.ts`다. `state.snapshot`도 제한된 값을 먼저
+칠할 뿐 확인 재조회를 생략하지 않는다. refetch 응답은 `snapshot-order.ts`의 단조 순번 가드를
+통과한 것만 반영해 늦게 도착한 이전 응답이 새 상태를 덮지 못하게 한다. 내용이 같으면 기존
+참조를 유지해 무변화 폴링의 리렌더를 피한다.
 
-`refreshRoom` 결과 `room.status`가 `settled`/`closed`면 결과 페이지로 라우팅한다. 별도의
-"재연결 후 로컬 큐 재전송" 로직은 없다 — 클라이언트는 액션을 큐잉하지 않는다. Server Action 자체가
-요청/응답이므로 실패하면 그 자리에서 사용자에게 보이고, 성공은 이미 Postgres에 반영된 뒤다.
+액션 멱등키와 realtime envelope id는 별개다. 베팅의 `actionId`는 DB PK라 요청 재전송을
+흡수하고, envelope id는 중복 피드백만 막는다. 전역 이벤트 순서는 보장하지 않으며, 판·액션 순번은
+서버 커밋과 다음 스냅샷이 확정한다.
 
-### 이벤트별 재조회 정책
+### 연결 복구와 실패 표면
 
-버킷은 `src/lib/realtime/event-sync-policy.ts`가 `Record<EventName, SyncAction>`으로 소유한다
-(이벤트를 추가하면 정책을 안 넣는 순간 타입 에러 — 기본값 추측이 없다).
+`useRoomSync`가 전송 종류와 무관하게 연결 수명을 소유한다.
 
-| 버킷 | 이벤트 | 수신 측 동작 |
-|------|--------|--------------|
-| `immediate` | `round.started`, `round.ended`, `round.voided` | 즉시 refetch. 판 전이는 판당 한 번뿐이라 폭주하지 않고, 새 판 데이터가 최대 1초 디바운스를 기다리던 공백을 없앤다 |
-| `coalesced` | 나머지 전부 | 디바운스 refetch. `state.snapshot`도 여기 속한다 — 힌트로 즉시 칠하는 값(잔액·팟, `state-snapshot-hint.ts`) 외의 나머지(액션 로그·페어니스 단계·참가자)를 확정하는 것이 이 refetch다 |
+- `CHANNEL_ERROR`, `TIMED_OUT`, `CLOSED`는 지수 백오프로 connection을 새로 만든다. 성공하면
+  시도 횟수를 초기화한다.
+- 수동 재연결, 온라인 복귀, 탭 복귀는 백오프를 초기화하고 즉시 새 연결을 시도한다.
+- 교체된 이전 connection의 늦은 콜백은 effect의 `disposed` 상태로 무시한다.
+- 최초 연결이 10초 안에 성공하지 않으면 `connectTimedOut`을 켜고, 스냅샷 재조회가 연속 두 번
+  실패하면 `syncFailed`를 켠다. 인증·멤버십 오류는 `authError`로 분리한다.
 
-**불변식: 어떤 이벤트도 다른 이벤트의 동반 전송에 기대지 않는다.** 2026-08-02 이전에는 세 번째
-버킷 `passive`가 있었다 — `afterMutation`이 보내는 `bet.placed`/`approved`/`rejected`/
-`reverted`·`member.role_changed`는 "항상 `state.snapshot`이 함께 오니까" 피드백(토스트·소리)만
-하고 재조회를 안 걸었다. 그 전제가 틀렸다: 위 발신 모델대로 `state.snapshot`은 발신자 자신의
-refetch가 성공해야만 나간다. 회선이 나쁘면 되돌리기는 커밋됐는데 `bet.reverted`만 날아가고,
-다른 참가자 화면은 20초 폴링까지 낡은 팟을 들고 있었다(그 팟으로 액션바의 팟·하프 레이즈
-프리셋이 계산된다 — `shared.ts`의 `raisePresets`). 전송을 무조건으로 바꾸는 선택지는 없다.
-payload 자체가 실패한 refetch 결과로 만들어지므로 실을 진실이 없고, 뮤테이션 이전 값을 보내면
-수신 측이 그 팟을 그대로 칠해서 침묵보다 나쁘다. 그래서 버킷을 없애고 전부 `coalesced`로 뒀다.
-중복 걱정은 coalescer가 이미 흡수한다 — 이벤트와 동반 `state.snapshot`은 같은 버스트에 들어와
-refetch 한 번을 공유하고, 상한은 `MIN_EVENT_INTERVAL_MS`다.
+연결 배너는 `connected`, `everConnected`, `connectTimedOut`을 함께 사용한다. 실시간 연결 실패와
+서버 스냅샷 실패는 다른 상태이며, 어느 쪽도 조용히 정상처럼 보이면 안 된다.
 
-### 멱등성
+### Presence
 
-`actionId` UUID를 클라이언트가 만들고 `bet_actions.id` PK로 쓴다. Realtime envelope UUID는 별도로
-생성한다. 같은 Server Action 요청이 재전송돼도 두 번째 INSERT는 actionId PK 충돌로 흡수한다.
+Presence는 접속 표시만 소유하고 게임 상태는 싣지 않는다. Supabase 모드는 채널 presence key
+집합을 쓰고, self 모드는 `room_connections`의 만료형 lease를 쓴다. self 연결은 15초마다
+lease를 갱신하며 45초가 지나면 오프라인으로 본다. 프로세스가 비정상 종료돼도 만료된 행은
+온라인 판정에서 제외하고 이후 연결 등록·조회 때 정리한다. 알려진 참가자의 일시적인 연결 변화는
+재조회를 만들지 않고, 스냅샷에 없는 사용자 id가 나타날 때만 참가자 목록을 다시 읽는다.
 
-### 순서
+### 보안 경계
 
-Broadcast는 전역 순서를 보장하지 않는다. 순서가 의미를 갖는 판·액션 순번은 서버가 커밋 시점에
-확정하며, 클라이언트가 이벤트에 실어 보내는 `seq`는 표시용 추정치일 뿐이다. 어긋남은 방치한다 —
-다음 refetch가 서버 값으로 덮어쓴다.
+- 이벤트 payload는 화면 갱신 힌트와 피드백에만 쓴다. 권한·잔액·차례·정산은 Server Action과
+  PostgreSQL 스냅샷이 결정한다.
+- 개인 정보와 비공개 손패는 두 전송 모드 모두 이벤트에 넣지 않는다.
+- Supabase 공개 채널의 발신자와 self POST의 payload를 신뢰하지 않는다. self 서버가 확정하는
+  값은 인증된 `actorId`, 방 id, envelope id와 시각뿐이다.
+- 파싱 실패·위조·유실·중복이 있어도 다음 재조회가 최종 상태를 복구해야 한다.
 
-### 스냅샷 반영 규칙
+### 데이터베이스 연결 조건
 
-`useRoomSync`(`src/features/game/components/use-room-sync.ts`)가 두 가지 가드를 건다.
+`DATABASE_POOL_MODE`는 `session` 또는 `transaction`이다. `LISTEN/NOTIFY` listener는 반드시
+session-capable 연결을 사용한다.
 
-- **단조 순번 가드**: refetch는 시작 시 순번을 올리고, 응답 반영 시점에 **이미 반영된 순번보다
-  클 때만** 스냅샷을 교체한다(`src/lib/realtime/snapshot-order.ts`) — 늦게 도착한 이전 응답이 더
-  새 스냅샷을 덮어쓰지 않는다. 비교 대상은 "마지막으로 **발행된** 순번"이 아니다(2026-08-06 수정):
-  refetch 왕복이 이벤트 간격(`MIN_EVENT_INTERVAL_MS`, 1초)보다 길어지는 회선에서는 응답이 돌아올
-  때마다 이미 더 새 요청이 나가 있어 전부 버려졌고, 베팅이 몰릴수록 refetch만 갱신하는 값(액션
-  로그, 그리고 그것으로 계산하는 차례 표시)이 버스트 내내 멈춰 있었다.
-- **동일 내용 참조 유지**: 새 스냅샷이 기존과 내용이 같으면(JSON 직렬화 비교) 기존 참조를
-  유지한다 — 무변화 폴링이 리렌더를 일으키지 않는다.
+- `REALTIME_MODE=self`이고 기본 DB 연결이 `session`이면 `DATABASE_LISTENER_URL`을 생략할 수
+  있다. 이때 listener는 기본 DB 연결과 분리된 장기 session을 연다.
+- `REALTIME_MODE=self`이고 `DATABASE_POOL_MODE=transaction`이면 `DATABASE_LISTENER_URL`이
+  필수다. 이 URL은 direct 또는 session pool endpoint여야 하며 transaction endpoint여서는 안 된다.
+- `REALTIME_MODE=supabase`에서는 listener URL이 필요하지 않다.
 
-## 연결 복구와 실패 표면화
+TLS 설정은 `DATABASE_TLS_MODE=disable | verify-system | verify-ca`로 제한한다. `verify-ca`는
+`DATABASE_CA_CERT_BASE64`를 요구하며, 다른 TLS 모드에서 이 CA 값을 요구하지 않는다.
+`disable`은 신뢰할 수 있는 로컬 네트워크처럼 TLS가 별도 계층에서 보장되는 환경에만 사용한다.
 
-연결 수명 관리는 전부 `useRoomSync`가 소유한다. 소비자(RoomClient·MonitorClient)는 반환값만 본다.
+## Boundary
 
-### 재접속 정책
+방 상태의 스키마·권한·원장 불변식은 `02-data-model.md`가 소유한다. 컨테이너 실행 환경과 변수
+주입 경계는 `11-container-build-contract.md`가 소유한다. 실제 DB migration의 작성·적용·복구 절차는
+`../runbooks/01-database-migrations.md`가 소유한다.
 
-- **CLOSED 자동 재구독**: 채널이 `CLOSED`로 전이하면 지수 백오프 1s → 2s → 5s → 10s → 20s →
-  30s(상한)로 채널을 처음부터 다시 구독한다. `SUBSCRIBED` 성공 시 백오프 카운터가 리셋된다.
-- **수동 재접속(`reconnect`)**: 백오프 없이 즉시. `resetRealtimeSocket()`(`client.ts`,
-  `realtime.disconnect()`)으로 웹소켓을 먼저 끊고 새 소켓으로 재구독한다 — 절전 복귀처럼 소켓은
-  죽었는데 라이브러리는 살아있다고 믿는 상태를 뚫는다. 자동 재구독 시도 횟수(`MAX_RECONNECT_ATTEMPTS`)
-  도 함께 0으로 되돌린다 — 수동 버튼·`online`·탭 복귀는 "조건이 달라졌다"는 신호인데, 카운터를
-  그대로 두면 상한을 쓴 방이 재연결 한 번 더 실패하는 순간 다시 영영 자동 복구를 안 한다.
-- **생명주기 트리거**: `pageshow`(bfcache 복원, `persisted`) → reconnect. `online` → refetch +
-  미연결이면 reconnect. `offline` → connected=false. `visibilitychange` 복귀 → refetch +
-  미연결이면 reconnect.
-- **늦은 콜백 차단**: epoch 교체로 버려진 이전 채널의 상태 콜백은 무시한다(effect 스코프
-  `disposed` 플래그) — 재접속 직후 이전 채널의 `CLOSED`가 새 연결 상태를 덮어써 "연결 끊김"
-  오탐을 내는 것을 막는다.
+## Verification
 
-### 실패 표면화
+코드와 `0022_wakeful_swarm` 마이그레이션 파일은 구현돼 있다. 대상 DB에는 아직 적용하지 않았으므로
+`self`의 실제 연결 검증은 마이그레이션 적용 뒤 수행한다.
 
-| 반환값 | 조건 | 의미 |
-|--------|------|------|
-| `connected=false` | 채널 오류·끊김·`offline` | 기존 배너 조건(`everConnected && !connected`) |
-| `connectTimedOut` | **방에 들어온 시점부터** 10초 내 `SUBSCRIBED` 미도달 | 최초 연결 실패 — `everConnected`가 아직 false라 기존 배너 조건에 안 걸리는 구간을 메운다. 배너 조건에 `연결끊김 OR connectTimedOut`으로 더해 쓴다. 타이머는 채널 effect 밖(마운트 기준)에 있다 — 안에 두면 재구독 시도마다 초기화돼서, 백오프 초반 간격(1·2·5초)이 10초를 못 넘기는 동안 배너가 20~40초까지 밀린다 |
-| `syncFailed` | refetch 연속 2회 실패 (Server Action reject 포함) | 채널과 무관하게 스냅샷 동기화 자체가 죽음. 성공 1회로 해제 |
-| `authError` | `refreshRoom`이 `errors.loginRequired` 또는 `errors.notMember` 오류 키 반환 | 재시도로 복구 불가 — 재로그인·재입장 안내 필요. null이면 정상 |
-
-## Presence
-
-접속자 표시에만 쓴다. 게임 상태는 Presence에 싣지 않는다.
-
-```ts
-channel.track({ userId, displayName })
-```
-
-`sync` 이벤트에서 `presenceState()`의 키 집합을 온라인 사용자 셋으로 교체하고, 동시에
-`debouncedRefetch()`를 호출한다(새 참가자 입장 감지 용도). `join`/`leave` 개별 이벤트는 구독하지
-않는다. 딜러 이탈 시 자동 재위임 로직은 없다.
-
-## 보안 경계
-
-- 채널이 공개이므로 payload의 `actorId`를 포함해 **클라이언트가 보낸 값은 아무것도 신뢰하지
-  않는다.** 화면 표시(토스트 문구 등)에만 쓰고, 권한·잔액 판단에는 절대 쓰지 않는다.
-- 칩 증감은 Broadcast로 확정되지 않는다. 쓰기는 Server Action → `kkeutbal_app` 롤 경로만 원장에
-  반영한다 (`02-data-model.md`).
-- Broadcast로 확정되지 않는 값이 궁극적으로 화면에 반영되는 유일한 경로는 refetch다. 따라서 payload
-  검증 실패·위조·유실 어느 쪽이든 최종 상태는 다음 refetch에서 정합된다.
-
-## 미채택 대안
-
-- **`private: true` 채널 + `realtime.messages` RLS 정책**: 현재는 Supabase JWT 브리지가 없어
-  구현하지 않는다. 공개 채널을 유지하며, 쓰기 경로(Server Action)만 신뢰하는 모델을 택했다.
-- **서버 발신 이벤트(`member.joined`, `chips.updated`)**: 스키마는 남아 있으나 발신 주체가 없다.
-  Postgres 트리거나 Edge Function으로 서버발 브로드캐스트를 추가하지 않는 한 죽은 스키마다.
-- **`state.request`/유실 감지 후 명시적 재요청**: 스키마만 있고 send하는 코드가 없다. 실제로는
-  모든 이벤트가 정밀한 재요청 대신 "일단 refetch"로 뭉뚱그려 처리된다.
-
-## Open Questions
-
-- [ ] `member.joined`/`chips.updated`/`state.request` 스키마를 실사용에 맞춰 제거할지, 향후 서버
-      발신 경로(Edge Function) 도입 시까지 유지할지.
-- [ ] 20초 폴링 + 250ms 디바운스 조합의 실사용 지연 측정 — 별도 계측 없음, p95 목표치 미설정.
+- `supabase`와 `self`가 각각 유효하지 않은 다른 전송 경로를 열지 않는지 확인한다.
+- SSE와 POST가 인증되지 않았거나 방 멤버가 아닌 요청을 거부하는지 확인한다.
+- DB listener 연결이 session-capable endpoint만 쓰는지 확인한다.
+- 이벤트 유실·중복·순서 역전 뒤에도 폴링 또는 재조회로 서버 스냅샷에 수렴하는지 확인한다.
+- lease 만료 뒤 접속 표시가 정리되고, 만료 전에는 일시적인 전송 단절만으로 사용자를 이탈로
+  확정하지 않는지 확인한다.

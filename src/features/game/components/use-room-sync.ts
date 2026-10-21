@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { RealtimeChannel } from '@supabase/supabase-js'
-import { createRoomChannel, onRoomEvent, resetRealtimeSocket } from '@/lib/realtime/client'
+import { createRoomConnection, resetRealtimeSocket } from '@/lib/realtime/client'
+import type { RoomRealtimeConnection } from '@/lib/realtime/transport'
 import { nextReconnectDelayMs, shouldRetryConnect } from '@/lib/realtime/reconnect-backoff'
 import { SeenEventIds } from '@/lib/realtime/seen-events'
 import { SnapshotOrderGuard } from '@/lib/realtime/snapshot-order'
@@ -16,7 +16,6 @@ import {
   noteCoalescedRefetchRan,
   type CoalescerState,
 } from '@/lib/realtime/refetch-coalescer'
-import { getSupabaseBrowser } from '@/lib/supabase/client'
 import { withTimeout } from '@/lib/with-timeout'
 import { refreshRoom } from '../actions'
 import type { RoomSnapshot } from '../types'
@@ -64,7 +63,7 @@ export function useRoomSync({
   const [authError, setAuthError] = useState<string | null>(null)
 
   const [epoch, setEpoch] = useState(0)
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const connectionRef = useRef<RoomRealtimeConnection | null>(null)
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const coalescerStateRef = useRef<CoalescerState>(INITIAL_COALESCER_STATE)
@@ -165,105 +164,120 @@ export function useRoomSync({
   useEffect(() => {
     let disposed = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let connection: RoomRealtimeConnection | null = null
     const self = snapshotRef.current.members.find((member) => member.userId === selfId)
-    const channel = createRoomChannel(roomId, selfId)
-    channelRef.current = channel
 
-    onRoomEvent(channel, roomId, (event, envelope) => {
-      // Reconnects can replay an event the client already reacted to. The
-      // refetch decided below always runs (truth comes from there
-      // regardless), but a duplicate delivery skips feedback (toast/sound)
-      // so it doesn't fire twice for the same envelope id.
-      const isFirstDelivery = seenEventIdsRef.current?.record(envelope.id) ?? true
-      if (isFirstDelivery) onEventRef.current?.(event, snapshotRef.current)
-
-      // state.snapshot carries values `refreshRoom` already computed
-      // server-side for the sender (room-client.tsx's afterMutation) — safe
-      // to paint immediately instead of waiting on our own confirming
-      // refetch. Scope is deliberately narrow (see state-snapshot-hint.ts);
-      // the confirming refetch below still runs and is what reconciles
-      // everything else (actions log, fairness, membership).
-      //
-      // Gated on first delivery for the same reason feedback is, but with a
-      // worse failure mode than a double toast: `sendWithRetry` re-sends the
-      // *same envelope id* up to 3 times (300ms/800ms apart, client.ts), so a
-      // send whose ack was lost after actually landing gets redelivered ~1.1s
-      // later carrying the pot/balances from before whatever happened in
-      // between. Re-applying it drags the pot backwards until the next
-      // coalesced refetch. A hint is worth painting exactly once.
-      if (event.name === 'state.snapshot' && isFirstDelivery) {
-        setSnapshot((prev) => applyStateSnapshotHint(prev, event.payload))
+    const scheduleReconnect = () => {
+      if (shouldRetryConnect(retryAttemptRef.current)) {
+        const delay = nextReconnectDelayMs(retryAttemptRef.current)
+        retryAttemptRef.current += 1
+        if (retryTimer) clearTimeout(retryTimer)
+        retryTimer = setTimeout(() => {
+          if (!disposed) setEpoch((current) => current + 1)
+        }, delay)
       }
+    }
 
-      // event-sync-policy.ts decides the bucket: structural round
-      // transitions refetch immediately (rare, never bursty), everything else
-      // schedules its own debounced refetch. No event is allowed to skip the
-      // refetch on the grounds that an accompanying state.snapshot will do it
-      // — that send is conditional on the sender's own refetch succeeding
-      // (see the policy comment), so it can silently not happen.
-      switch (syncActionFor(event.name)) {
-        case 'immediate':
-          void refetch()
-          break
-        case 'coalesced':
-          debouncedRefetch()
-          break
-      }
-    })
-
-    channel.on('presence', { event: 'sync' }, () => {
-      const presenceState = channel.presenceState()
-      const onlineIds = new Set(Object.keys(presenceState))
-      setOnline(onlineIds)
-
-      // Reconnect flicker among members we already know about (common on
-      // mobile networks) shouldn't cost a refetch — only a genuinely new
-      // presence id (a join whose row we haven't fetched yet) does.
-      const knownMemberIds = new Set(snapshotRef.current.members.map((member) => member.userId))
-      if (presenceRevealsUnknownMember(onlineIds, knownMemberIds)) debouncedRefetch()
-    })
-
-    channel.subscribe((status) => {
-      if (disposed) return
-      if (status === 'SUBSCRIBED') {
-        setConnectTimedOut(false)
-        retryAttemptRef.current = 0
-        setConnectedBoth(true)
-        setEverConnected(true)
-
-        if (!spectator) {
-          void channel.track({ userId: selfId, displayName: self?.displayName ?? '' })
+    const startConnection = async () => {
+      try {
+        const nextConnection = await createRoomConnection(roomId, selfId, {
+          includePresence: !spectator,
+        })
+        if (disposed) {
+          await nextConnection.close()
+          return
         }
-        void refetch()
-        return
-      }
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        connection = nextConnection
+        connectionRef.current = nextConnection
+
+        nextConnection.onEvent((event, envelope) => {
+          // Reconnects can replay an event the client already reacted to. The
+          // refetch decided below always runs (truth comes from there
+          // regardless), but a duplicate delivery skips feedback (toast/sound)
+          // so it doesn't fire twice for the same envelope id.
+          const isFirstDelivery = seenEventIdsRef.current?.record(envelope.id) ?? true
+          if (isFirstDelivery) onEventRef.current?.(event, snapshotRef.current)
+
+          // state.snapshot carries values `refreshRoom` already computed
+          // server-side for the sender (room-client.tsx's afterMutation) — safe
+          // to paint immediately instead of waiting on our own confirming
+          // refetch. Scope is deliberately narrow (see state-snapshot-hint.ts);
+          // the confirming refetch below still runs and is what reconciles
+          // everything else (actions log, fairness, membership).
+          //
+          // Gated on first delivery for the same reason feedback is, but with a
+          // worse failure mode than a double toast: the Supabase transport retries
+          // the *same envelope id* up to 3 times, so a send whose ack was lost
+          // after actually landing gets redelivered later carrying the
+          // pot/balances from before whatever happened in between. Re-applying it
+          // drags the pot backwards until the next coalesced refetch. A hint is
+          // worth painting exactly once.
+          if (event.name === 'state.snapshot' && isFirstDelivery) {
+            setSnapshot((prev) => applyStateSnapshotHint(prev, event.payload))
+          }
+
+          // event-sync-policy.ts decides the bucket: structural round
+          // transitions refetch immediately (rare, never bursty), everything else
+          // schedules its own debounced refetch. No event is allowed to skip the
+          // refetch on the grounds that an accompanying state.snapshot will do it
+          // — that send is conditional on the sender's own refetch succeeding
+          // (see the policy comment), so it can silently not happen.
+          switch (syncActionFor(event.name)) {
+            case 'immediate':
+              void refetch()
+              break
+            case 'coalesced':
+              debouncedRefetch()
+              break
+          }
+        })
+
+        nextConnection.onPresence((onlineIds) => {
+          setOnline(onlineIds)
+
+          // Reconnect flicker among members we already know about (common on
+          // mobile networks) shouldn't cost a refetch — only a genuinely new
+          // presence id (a join whose row we haven't fetched yet) does.
+          const knownMemberIds = new Set(snapshotRef.current.members.map((member) => member.userId))
+          if (presenceRevealsUnknownMember(onlineIds, knownMemberIds)) debouncedRefetch()
+        })
+
+        nextConnection.onStatus((status) => {
+          if (disposed) return
+          if (status === 'SUBSCRIBED') {
+            setConnectTimedOut(false)
+            retryAttemptRef.current = 0
+            setConnectedBoth(true)
+            setEverConnected(true)
+
+            if (!spectator) {
+              void nextConnection.track({ userId: selfId, displayName: self?.displayName ?? '' })
+            }
+            void refetch()
+            return
+          }
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            setConnectedBoth(false)
+            scheduleReconnect()
+          }
+        })
+        nextConnection.start()
+      } catch (error) {
+        if (disposed) return
+        console.error('realtime connection setup failed:', error)
         setConnectedBoth(false)
-        // Previously only 'CLOSED' rescheduled a resubscribe, so a channel
-        // stuck flapping between CHANNEL_ERROR/TIMED_OUT sat disconnected
-        // until visibilitychange/online happened to fire. All three failure
-        // statuses now share the same jittered backoff, capped so a
-        // still-visible, still-online tab doesn't retry forever against a
-        // channel that keeps failing — past the cap, recovery falls to the
-        // visibilitychange/online handlers below (which reconnect()
-        // immediately, uncounted) or the manual "다시 연결" button.
-        if (shouldRetryConnect(retryAttemptRef.current)) {
-          const delay = nextReconnectDelayMs(retryAttemptRef.current)
-          retryAttemptRef.current += 1
-          if (retryTimer) clearTimeout(retryTimer)
-          retryTimer = setTimeout(() => {
-            if (!disposed) setEpoch((current) => current + 1)
-          }, delay)
-        }
+        scheduleReconnect()
       }
-    })
+    }
+
+    void startConnection()
 
     return () => {
       disposed = true
       if (retryTimer) clearTimeout(retryTimer)
 
-      void getSupabaseBrowser().removeChannel(channel)
-      channelRef.current = null
+      if (connection) void connection.close()
+      if (connectionRef.current === connection) connectionRef.current = null
     }
   }, [roomId, selfId, spectator, debouncedRefetch, refetch, setConnectedBoth, epoch])
 
@@ -319,6 +333,6 @@ export function useRoomSync({
     authError,
     refetch,
     reconnect,
-    channelRef,
+    connectionRef,
   }
 }

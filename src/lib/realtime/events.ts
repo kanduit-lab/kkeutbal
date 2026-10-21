@@ -106,10 +106,22 @@ export type RoomEvent = {
   [K in EventName]: { name: K; payload: z.infer<(typeof eventPayloads)[K]> }
 }[EventName]
 
+export function parseRoomEvent(raw: unknown): RoomEvent | null {
+  const input = z.object({ name: z.string(), payload: z.unknown() }).safeParse(raw)
+  if (!input.success || !Object.hasOwn(eventPayloads, input.data.name)) return null
+
+  const name = input.data.name as EventName
+  const payload = eventPayloads[name].safeParse(input.data.payload)
+  if (!payload.success) return null
+
+  return { name, payload: payload.data } as RoomEvent
+}
+
 export function parseEvent<K extends EventName>(
   name: K,
   raw: unknown,
 ): { envelope: Envelope; payload: z.infer<(typeof eventPayloads)[K]> } | null {
+  if (!Object.hasOwn(eventPayloads, name)) return null
   const schema = envelopeSchema.extend({ payload: eventPayloads[name] })
   const result = schema.safeParse(raw)
   if (!result.success) return null

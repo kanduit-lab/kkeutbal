@@ -21,7 +21,7 @@
 | Audience        | maintainers                                                           |
 | Status          | active                                                                |
 | Source of truth | 코드(`src/`, `database/`, `.env.example`) — 설계 근거는 `docs/`로 링크 |
-| Last reviewed   | 2026-07-29                                                            |
+| Last reviewed   | 2026-10-21                                                            |
 
 MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 남지 않습니다. 끗발은 카드와 칩을
 실물 그대로 쓰면서 베팅·승패·정산만 각자 폰으로 기록합니다.
@@ -51,8 +51,8 @@ MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 �
 | 레이어 | 선택                                                                                                                                     |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | 앱     | Next.js 16 App Router · TypeScript strict · RSC + Server Actions · `output: 'standalone'`                                                |
-| 실시간 | Supabase Realtime **Broadcast** 공개 채널 + 스냅샷 refetch — [`docs/spec/03-realtime-protocol.md`](docs/spec/03-realtime-protocol.md)              |
-| DB     | PostgreSQL(Supabase) · Drizzle ORM · 전용 롤 `kkeutbal_app` — [`docs/spec/02-data-model.md`](docs/spec/02-data-model.md)                           |
+| 실시간 | Supabase Broadcast 또는 자체 SSE + PostgreSQL `LISTEN/NOTIFY` · 스냅샷 재조회 — [`docs/spec/03-realtime-protocol.md`](docs/spec/03-realtime-protocol.md) |
+| DB     | PostgreSQL · Drizzle ORM · 전용 롤 `kkeutbal_app` — [`docs/spec/02-data-model.md`](docs/spec/02-data-model.md)                                      |
 | 인증   | Auth.js v5 — 내부 계정(bcrypt) · Authentik OIDC 자동 연동 · 게스트 토큰 — [`docs/spec/07-auth-and-security.md`](docs/spec/07-auth-and-security.md) |
 | Vision | `@anthropic-ai/sdk` + `@google/genai`, 환경변수 API key 준비 상태를 관리자 콘솔에 표시하고 공급자·모델·활성화 관리                       |
 | 배포   | Docker standalone 이미지. 자동 배포 경로는 없음                                                                                         |
@@ -72,18 +72,24 @@ pnpm dev                     # http://localhost:3000
 
 `src/lib/env.ts`가 검증 단일 지점입니다.
 
-| 변수                                                                | 필수 | 비고                                                                                          |
-| ------------------------------------------------------------------- | :--: | --------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_APP_URL`                                               |  ✅  |                                                                                               |
-| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` |  ✅  | Realtime 공개 채널 구독                                                                       |
-| `DATABASE_URL`                                                      |  ✅  | `kkeutbal_app` 롤. 5432(session) 또는 6543(transaction) pooler — 포트별 연결 옵션은 자동 적용 |
-| `DATABASE_CA_CERT_BASE64`                                           |  ✅  | Supabase 대시보드의 CA 인증서를 base64로 인코딩한 값                                          |
-| `AUTH_SECRET`                                                       |  ✅  | `openssl rand -base64 32`; SSO secret·초기 관리자 코드 보호의 루트 키                         |
-| `AUTH_TRUST_HOST`                                                   |  ✅  | 프록시 환경의 Auth.js 호스트 검증                                                             |
-| `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`                              |  —   | 사진 인식 공급자 키. `/admin`은 설정 여부를 표시하고 공급자·모델·활성화를 관리                |
+| 변수                                           | 필수 | 비고                                                                                     |
+| ---------------------------------------------- | :--: | ---------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`                          |  ✅  | 공개 앱 URL                                                                              |
+| `REALTIME_MODE`                                |  ✅  | `supabase` 또는 `self`                                                                   |
+| `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`    | 조건 | `REALTIME_MODE=supabase`일 때 필수                                                       |
+| `DATABASE_URL`                                 |  ✅  | PostgreSQL 연결 문자열                                                                   |
+| `DATABASE_TLS_MODE`                            |  ✅  | `disable`, `verify-system`, `verify-ca`                                                  |
+| `DATABASE_CA_CERT_BASE64`                      | 조건 | `DATABASE_TLS_MODE=verify-ca`일 때만 필수                                                |
+| `DATABASE_POOL_MODE`                           |  ✅  | `session` 또는 `transaction`                                                             |
+| `DATABASE_LISTENER_URL`                        | 조건 | `self`와 `transaction`을 함께 쓸 때 필요한 session-capable 연결                         |
+| `AUTH_SECRET`                                  |  ✅  | `openssl rand -base64 32`; SSO secret과 초기 관리자 코드 보호의 루트 키                 |
+| `AUTH_TRUST_HOST`                              |  ✅  | 프록시 환경의 Auth.js 호스트 검증                                                        |
+| `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`         |  —   | 사진 인식 공급자 키. `/admin`에서 공급자, 모델, 활성화 상태를 관리                      |
 
-Supabase 대시보드의 **Database Settings → SSL Configuration**에서 CA 인증서를 내려받아 base64로
-인코딩한 값을 `DATABASE_CA_CERT_BASE64`에 넣습니다.
+사용자 지정 CA가 필요한 PostgreSQL은 `DATABASE_TLS_MODE=verify-ca`로 두고 CA 인증서를 base64로
+인코딩해 `DATABASE_CA_CERT_BASE64`에 넣습니다. 운영체제 신뢰 저장소로 검증할 수 있으면
+`verify-system`을 사용합니다. `disable`은 신뢰할 수 있는 로컬 네트워크처럼 TLS가 별도 계층에서
+보장되는 환경에만 사용합니다.
 
 ```powershell
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\path\to\prod-supabase.cer'))
@@ -101,7 +107,7 @@ Authentik SSO도 `/admin`의 SSO 설정에서 연결합니다.
 src/
 ├── app/                # 라우트 — (home), rooms/new, rooms/[code](monitor·settings·result·fairness),
 │   │                   #   advisor, ranking(+player/[id]), guide, admin, wallet, about, login, register
-│   │                   #   api/auth, api/health, api/ready
+│   │                   #   api/auth, api/health, api/ready, api/realtime
 ├── features/           # 도메인 모듈 (경계 = 폴더)
 │   ├── hwatu/ seotda/ gostop/ poker/   # 카드 모델·순수 함수 엔진·게임별 카드 UI
 │   ├── game/           # 방·판 상태머신 + 테이블·로비·모니터 UI

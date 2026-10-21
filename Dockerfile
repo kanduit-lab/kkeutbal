@@ -19,8 +19,6 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ARG NEXT_PUBLIC_APP_URL
-ARG NEXT_PUBLIC_SUPABASE_URL
-ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 
 ENV SKIP_ENV_VALIDATION=1
 
@@ -28,8 +26,6 @@ ENV SKIP_ENV_VALIDATION=1
 # that do not ship crawler metadata yet. Sitemaps need canonical domain URLs, so
 # they must be supplied by the app instead of guessed by this template.
 RUN [ -n "$NEXT_PUBLIC_APP_URL" ] || unset NEXT_PUBLIC_APP_URL; \
-    [ -n "$NEXT_PUBLIC_SUPABASE_URL" ] || unset NEXT_PUBLIC_SUPABASE_URL; \
-    [ -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" ] || unset NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY; \
     mkdir -p public \
  && if [ ! -f public/robots.txt ]; then printf 'User-agent: *\nAllow: /\n' > public/robots.txt; fi \
  && pnpm build
