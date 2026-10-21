@@ -15,8 +15,7 @@
 - 참가자는 전부 모바일 브라우저. 설치 없이 링크/QR로 들어온다.
 - 사용자는 내부 계정·관리자 발급 게스트 토큰으로 로그인하며, Authentik SSO는 관리자가 연결할 수 있다.
 - 동시 사용 규모는 방당 2~10명, 동시 방 수 한 자릿수. 부하가 아니라 지연이 품질을 좌우한다.
-- 배포 대상은 Vercel이 아니라 사용자가 운영하는 `kanduit-lab/docker-deploy-control-hub` 기반
-  self-hosted docker 인프라다.
+- 배포 자동화는 없으며, standalone Docker 이미지는 운영자가 선택한 환경에서 직접 실행한다.
 
 ## Goals
 
@@ -51,8 +50,7 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
         ▼
  ┌────────────────────────────────────────┐
  │  Next.js 16 (standalone) 컨테이너       │
- │  docker-deploy-control-hub 로 배포      │
- │  도메인: kkeutbal.kanduit.app           │
+ │  운영 환경에서 수동으로 기동             │
  └──────┬───────────────────────────────┬──┘
         │ postgres-js (kkeutbal_app)    │ publishable key (브라우저 직결)
         ▼                               ▼
@@ -65,8 +63,7 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
  └──────────────────────────────────────────┘
 ```
 
-전용 게임 서버를 두지 않는다는 원제약은 유지하되, 실행 위치는 Vercel이 아니라 사용자 소유
-docker 호스트다. Next.js는 `output: 'standalone'`으로 빌드해 `dockerfiles/Dockerfile.nextjs`가
+전용 게임 서버를 두지 않는다는 원제약은 유지한다. Next.js는 `output: 'standalone'`으로 빌드해 `Dockerfile`이
 `.next/standalone` + `node server.js`를 그대로 컨테이너에 담는다(`next.config.ts`).
 
 ### DB 접근 — 전용 앱 롤, service role key 안 씀
@@ -213,7 +210,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 | DB 접근       | Drizzle ORM + postgres-js, 전용 롤(bypassrls)      | 스키마를 타입 소스로. service role key/JWT 브리지 없이 커넥션 문자열 하나로 통제           |
 | 인증          | Auth.js v5, Authentik 선택적 + 게스트 로그인       | Authentik 미등록 상태에서도 개발·현장 운영 가능                                            |
 | 검증          | zod                                                | realtime payload·env·폼 입력 단일 검증 수단                                                |
-| 배포          | Docker, `kanduit-lab/docker-deploy-control-hub` v2 | 사용자 소유 self-hosted 인프라. Vercel 미사용                                              |
+| 배포          | Docker standalone 이미지                           | 자동 배포 경로 없이 운영자가 이미지를 직접 실행                                             |
 | Vision        | Anthropic Claude 또는 Gemini(`vision_settings`)    | API key는 환경변수에만 두고, 관리자 콘솔에서 공급자·모델·활성화와 키의 준비 상태를 관리 |
 
 ## Alternatives Considered
@@ -252,17 +249,14 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 ## Migration And Rollout
 
-1. [`08-database-migrations.md`](08-database-migrations.md) 순서로 `pnpm db:migrate`와
+1. [`../runbooks/01-database-migrations.md`](../runbooks/01-database-migrations.md) 순서로 `pnpm db:migrate`와
    Supabase 보안 SQL을 적용한다. `db:push`는 운영 반영 경로로 사용하지 않는다.
 2. `supabase/migrations/0007_database_hardening.sql`은 새 DB의 현재 RLS baseline이고,
    `0008_rate_limit_buckets_rls.sql`은 기존 DB에 신규 내부 테이블 권한을 보강한다.
 3. Authentik 애플리케이션에 `{APP_URL}/api/auth/callback/authentik`을 Redirect URI로 등록하고,
    초기 관리자 계정으로 `/admin`의 SSO 설정을 저장·활성화.
-4. **자동 배포 경로가 없다.** `docker-deploy-control-hub` 기반 워크플로(`.github/workflows/deploy.yml`,
-   `.deploy.yml`)는 푸시마다 0초에 실패해 한 번도 배포한 적이 없어서 2026-08-09에 제거했다.
-   지금 남은 것은 패키징 방법(`dockerfiles/Dockerfile.nextjs`, `output: 'standalone'`)과
-   health check(`/api/health`)뿐이다 — 이미지를 만들어 올리는 일은 수동이다.
-   도메인은 `kkeutbal.kanduit.app`을 쓸 예정이다.
+4. **자동 배포 경로가 없다.** `Dockerfile`로 이미지를 만들고 운영 환경에 실행한다. 런타임 비밀값은
+   프로세스 환경에서 제공하며, 상태 점검은 `/api/health`와 `/api/ready`를 사용한다.
 5. 실제 MT 전에 2대 이상 기기로 리허설 1회 — 동기화·재접속·정산 확인.
 
 롤백: 이전 docker 이미지 태그로 재배포(수동). 스키마는
@@ -274,7 +268,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 | ---------------- | ----------------------------------------------------------------------------------------- |
 | 게임 엔진 정확성 | Vitest 단위 테스트(`*.test.ts`). 섯다는 20장 조합 대조                                    |
 | 칩 보존 불변식   | `chip_ledger` 기반 잔액 = delta 합. 세션 정산 시 순손익 합계 0 검증                       |
-| 실시간 지연      | 2개 브라우저 컨텍스트에서 액션→반영 타임스탬프 측정(Playwright) — 현재 자동화 스위트 없음 |
+| 실시간 지연      | 2개 브라우저에서 액션 뒤 화면 반영 시간을 수동으로 확인 |
 | 재접속 복원      | 소켓 강제 종료 후 `refreshRoom` 스냅샷 일치 확인                                          |
 | 권한 격리        | 비참가자 세션으로 Server Action 호출 시 거부 확인(RLS는 anon 직접 조회 차단만 검증)       |
 | 타입·린트        | `pnpm typecheck`, `pnpm lint`                                                             |
@@ -296,5 +290,4 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 - [ ] 공개 Broadcast + 스냅샷 재검증을 유지할지, private 채널(Supabase JWT 브리지와 새 RLS 정책 포함)로
       전환할지 결정.
-- [ ] `preview`/`staging` 배포(`enabled: false`)를 켤 시점과 `ENV_FILE_BASE64` 시크릿 구성 주체.
 - [ ] Authentik 실등록 일정 — 그 전에도 내부 계정과 게스트 토큰 로그인은 사용 가능.

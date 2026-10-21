@@ -51,11 +51,11 @@ MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 �
 | 레이어 | 선택                                                                                                                                     |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | 앱     | Next.js 16 App Router · TypeScript strict · RSC + Server Actions · `output: 'standalone'`                                                |
-| 실시간 | Supabase Realtime **Broadcast** 공개 채널 + 스냅샷 refetch — [`docs/03-realtime-protocol.md`](docs/03-realtime-protocol.md)              |
-| DB     | PostgreSQL(Supabase) · Drizzle ORM · 전용 롤 `kkeutbal_app` — [`docs/02-data-model.md`](docs/02-data-model.md)                           |
-| 인증   | Auth.js v5 — 내부 계정(bcrypt) · Authentik OIDC 자동 연동 · 게스트 토큰 — [`docs/07-auth-and-security.md`](docs/07-auth-and-security.md) |
+| 실시간 | Supabase Realtime **Broadcast** 공개 채널 + 스냅샷 refetch — [`docs/spec/03-realtime-protocol.md`](docs/spec/03-realtime-protocol.md)              |
+| DB     | PostgreSQL(Supabase) · Drizzle ORM · 전용 롤 `kkeutbal_app` — [`docs/spec/02-data-model.md`](docs/spec/02-data-model.md)                           |
+| 인증   | Auth.js v5 — 내부 계정(bcrypt) · Authentik OIDC 자동 연동 · 게스트 토큰 — [`docs/spec/07-auth-and-security.md`](docs/spec/07-auth-and-security.md) |
 | Vision | `@anthropic-ai/sdk` + `@google/genai`, 환경변수 API key 준비 상태를 관리자 콘솔에 표시하고 공급자·모델·활성화 관리                       |
-| 배포   | Docker + kanduit-lab docker-deploy-control-hub v2                                                                                        |
+| 배포   | Docker standalone 이미지. 자동 배포 경로는 없음                                                                                         |
 
 모든 DB 쓰기는 Server Action이 권한 검사 후 수행합니다. RLS는 방어층입니다.
 
@@ -63,7 +63,7 @@ MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 �
 
 ```bash
 pnpm install
-cp .env.example .env.local   # 아래 환경변수 표 참고
+cp .env.example .env         # 아래 환경변수 표 참고
 pnpm db:migrate              # 생성된 drizzle 마이그레이션 순차 적용
 pnpm dev                     # http://localhost:3000
 ```
@@ -103,7 +103,7 @@ src/
 │   │                   #   advisor, ranking(+player/[id]), guide, admin, wallet, about, login, register
 │   │                   #   api/auth, api/health, api/ready
 ├── features/           # 도메인 모듈 (경계 = 폴더)
-│   ├── hwatu/ seotda/ gostop/ poker/   # 카드 모델·순수 함수 엔진
+│   ├── hwatu/ seotda/ gostop/ poker/   # 카드 모델·순수 함수 엔진·게임별 카드 UI
 │   ├── game/           # 방·판 상태머신 + 테이블·로비·모니터 UI
 │   ├── betting/ budget/ ranking/       # 베팅·바이인·랭킹·정산
 │   ├── wallet/                         # 계정 귀속 가상 크레딧·관리자 조정·거래 이력
@@ -112,12 +112,12 @@ src/
 │   ├── jokbo-advisor/  # 수동 피커 + vision
 │   └── auth/           # 계정·역할·관리자
 ├── lib/                # env·db·auth·i18n·realtime·supabase
-└── components/         # ui/ 프리미티브 + 화투·포커 카드·QR·로케일 스위처
+└── components/         # ui/ 프리미티브 + QR·로케일 스위처
 
 drizzle/schema.ts       # 스키마 (typed source of truth)
 drizzle/migrations/     # 테이블·인덱스·제약
 supabase/migrations/    # RLS·grant·트리거·함수
-dockerfiles/            # Dockerfile.nextjs
+Dockerfile              # standalone 이미지 빌드 정의
 ```
 
 ## 🛠️ 명령어
@@ -133,30 +133,17 @@ pnpm db:migrate     # 생성된 마이그레이션 순차 적용
 
 ## 📦 배포
 
-자동 배포는 없습니다. 배포 워크플로는 한 번도 성공한 적이 없어 2026-08-09에 제거했고,
-지금 남은 것은 패키징 방법([dockerfiles/Dockerfile.nextjs](dockerfiles/Dockerfile.nextjs),
-`output: 'standalone'`)뿐입니다 — 이미지 빌드·기동은 수동입니다.
+자동 배포 경로는 없습니다. [`Dockerfile`](Dockerfile)은 `output: 'standalone'` 산출물을
+이미지로 묶고, 이미지 빌드와 기동은 운영자가 직접 수행합니다.
 
 품질 게이트는 [ci.yml](.github/workflows/ci.yml)이 모든 push에서 돕니다:
 typecheck · lint · 단위 테스트 · 프로덕션 빌드.
 
 ## 📚 문서
 
-| 문서                                                                                 | 내용                                 |
-| ------------------------------------------------------------------------------------ | ------------------------------------ |
-| [`docs/01-architecture.md`](docs/01-architecture.md)                                 | 스택·배포 토폴로지·모듈 경계         |
-| [`docs/02-data-model.md`](docs/02-data-model.md)                                     | Postgres 스키마·불변식·RLS           |
-| [`docs/03-realtime-protocol.md`](docs/03-realtime-protocol.md)                       | 채널·이벤트 스키마·상태 동기화       |
-| [`docs/04-game-engines.md`](docs/04-game-engines.md)                                 | 화투 카드 모델·섯다 끗·고스톱 점수   |
-| [`docs/07-auth-and-security.md`](docs/07-auth-and-security.md)                       | 인증·역할·보안 경계                  |
-| [`docs/08-database-migrations.md`](docs/08-database-migrations.md)                   | DB 적용·검증·복구 런북               |
-| [`docs/09-roadmap.md`](docs/09-roadmap.md)                                           | 우선순위·마일스톤                    |
-| [`docs/10-virtual-credit-and-fair-play.md`](docs/10-virtual-credit-and-fair-play.md) | 전역 가상 크레딧·공정 셔플 확장 설계 |
-| [`docs/11-container-build-contract.md`](docs/11-container-build-contract.md)         | 빌드 인자·시크릿 경계·런타임 계약    |
-| [`docs/12-handoff.md`](docs/12-handoff.md)                                           | 인수인계 — 남은 문제의 조사 근거, 미확정 설계 질문, 다시 밟기 쉬운 함정 |
-| [`docs/design-decisions/`](docs/design-decisions/000_design_timeline.md)             | 확정된 설계 결정 기록과 타임라인       |
+기술 계약과 운영 절차의 정본은 [`docs/README.md`](docs/README.md)에 정리했습니다.
 
-실행 잔여 작업: [`TODO.md`](TODO.md) · 에이전트 가이드: [`CLAUDE.md`](CLAUDE.md)
+실행 잔여 작업: [`TODO.md`](TODO.md) · 에이전트 가이드: [`AGENTS.md`](AGENTS.md)
 
 ## 📄 라이선스
 

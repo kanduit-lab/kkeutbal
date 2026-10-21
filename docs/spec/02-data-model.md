@@ -10,7 +10,7 @@
 
 구현 스키마는 `drizzle/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
 `supabase/migrations/0007_database_hardening.sql`과 신규 테이블 보강용 `0008`·`0016`이 소유한다.
-적용 순서는 [`08-database-migrations.md`](08-database-migrations.md)가 소유한다. 실제 상태는
+적용 순서는 [`../runbooks/01-database-migrations.md`](../runbooks/01-database-migrations.md)가 소유한다. 실제 상태는
 `pg_policies`, `information_schema.role_table_grants`, `pg_class.relrowsecurity`로 확인한다.
 
 ## Context

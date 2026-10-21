@@ -17,10 +17,8 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 - 대상 Supabase 프로젝트와 백업 시점을 확인한다.
 - DDL 권한이 있는 관리자 연결 문자열을 준비한다. 앱 런타임 롤 `kkeutbal_app`은 DDL 용도가 아니다.
-  `.env.local`의 `DATABASE_URL`은 **앱 롤**이라 `pnpm db:migrate`가
-  `permission denied for database postgres`로 죽는다 — 관리자 문자열을 셸에 따로 주입한다.
-- `drizzle-kit`은 `.env.local`을 읽지 않는다. `DATABASE_URL`과 `DATABASE_CA_CERT_BASE64`를
-  명령 앞에 붙여 넘긴다. CA는 Supabase pooler가 SSL을 요구하기 때문에 필요하다
+  관리자 문자열은 저장소 파일에 쓰지 않고 대상 셸 환경에만 제공한다.
+- `drizzle-kit`은 `DATABASE_URL`과 `DATABASE_CA_CERT_BASE64`를 실행 환경에서 읽는다. CA는 Supabase pooler가 SSL을 요구하기 때문에 필요하다
   (`drizzle.config.ts`가 앱과 같은 검증 TLS를 쓴다).
 - 런타임 앱을 중지하거나 쓰기 트래픽이 없는 유지보수 창을 잡는다.
 - 저장소의 `drizzle/migrations/meta/_journal.json`과 SQL 파일이 함께 배포 대상에 포함됐는지 확인한다.

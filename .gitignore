@@ -20,6 +20,7 @@ next-env.d.ts
 # 개별 이름을 나열하면 새 파일(.env.production 등)이 조용히 추적돼 비밀값이 커밋된다.
 .env
 .env.*
+.envrc
 !.env.example
 
 # vercel
@@ -50,8 +51,8 @@ pnpm-debug.log*
 # Local Codex project settings (never commit)
 /.codex/
 
-# Design decision records — portfolio / local only, git-untracked by rule
-docs/design-decisions/
+# Design rationale records are local-only decision assets.
+docs/design-rationale/
 
 # 테스트 도구 산출물
 /.playwright-mcp/

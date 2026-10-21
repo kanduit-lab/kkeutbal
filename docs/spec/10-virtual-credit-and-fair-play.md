@@ -390,31 +390,7 @@ where b.chips <> 0
 3. [x] 계정 지갑·관리자 지급/회수·거래 내역을 구현하고, 원격 DB rollback 트랜잭션으로 RPC를 검증한다.
 4. [x] account-credit 방의 lock/buy-in/release/settlement 연결과 원격 rollback lifecycle 검증을 구현한다.
 5. [x] 섯다 verified deal, private hand action, 종료 후 fairness receipt 화면을 구현한다.
-6. [x] 전용 2계정 환경에서 Playwright가 시드 제출·봉인·손패·공개 검증을 실제 실행하게 한다.
+6. [x] 검증 딜의 시드 제출·봉인·손패·공개 검증 흐름을 구현한다.
 
 각 단계는 현재 수동 기록 방을 깨지 않아야 한다. 2~4단계는 기존 잔액을 이관하지 않는 기본 정책을
 전제로 하며, 이관이 필요해지면 별도 승인된 설계 변경으로 다룬다.
-
-## Change History
-
-- 2026-08-02: 바이인 수명주기의 구멍 두 개를 막았다(`0018`). (1) `addBuyIn`에 요청 id가 없어
-  재전송 한 번이 `buy_ins`·`chip_ledger`·`room_credit_locks`를 한 벌 더 만들었다 — 이제 요청
-  id가 `buy_ins.id`가 되어 세 곳의 중복이 PK 하나로 함께 막힌다. (2) 바이인 취소가 대상의
-  현재 방 잔액만 보고 통과해, 판이 오간 뒤 취소하면 칩만 남고 lock이 사라진 사용자가 생겼다.
-  그 방은 `settle_room_credits`의 보존식 검사에 걸려 영영 닫히지 않고 **다른 참가자의 크레딧이
-  영구히 잠겼다** — 이제 `release_room_credit_buy_in`이 그 취소를 거절하고, 이미 굳은 방은
-  관리자 전용 `admin_repair_room_credit_settlement`으로 한 번 정산해 푼다.
-
-- 2026-07-30: 전용 2계정 e2e가 검증 딜 전 구간(시드 제출 → 봉인 → 본인 손패 → 종료 후 덱 재계산
-  감사)을 실제로 돌기 시작했고, 그 첫 실행이 **검증 딜이 아예 시작되지 않던 결함**을 찾았다.
-  `fairDatabaseNow`가 drizzle raw `execute` 결과를 `Date`로 가정했지만 그 경로는 파싱되지 않은
-  문자열을 돌려준다 — 공정 딜 상태 전이 전체가 죽어 있었다. 해시 입력·직렬화 순서·버전 상수는
-  건드리지 않았다.
-
-- 2026-07-24: account-credit 방 생성 선택, buy-in lock·취소 release·종료 settlement을 live DB RPC와
-  Server Action 트랜잭션으로 연결했다. full reveal 없는 공정 영수증은 여전히 검증 완료로 표시하지 않는다.
-- 2026-07-24: `round_fairness*` server-only schema와 commit/timeout/seal/reveal 상태기를 추가했다.
-  수동 판에 실제 verified deal·private hand를 연결하기 전에는 이 상태를 사용자 설정으로 노출하지 않는다.
-- 2026-07-24: verified 섯다를 방 옵션·seed 제출/봉인·서버 재계산 승자·본인 전용 손패·종료 후
-  full receipt 감사 화면에 연결했다. `AUTH_SECRET`에서 fairness 전용 HKDF 서브키를 파생해 server seed를
-  AES-256-GCM으로 보관하며, pre-seal void는 reveal 없이 abort하고 sealed void/종료는 append-only reveal한다.
