@@ -2,7 +2,7 @@
 
 import { clsx } from 'clsx'
 import { useMemo } from 'react'
-import { HwatuCardView } from '@/components/hwatu-card'
+import { HwatuCardView } from '@/features/hwatu/components/hwatu-card'
 import { useToast } from '@/components/ui'
 import { deckFor } from '@/features/hwatu/cards'
 import type { CardId, GameType, HwatuCard } from '@/features/hwatu/types'

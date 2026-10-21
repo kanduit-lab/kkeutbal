@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { findCard } from '@/features/hwatu/cards'
-import { HwatuCardView } from '@/components/hwatu-card'
+import { HwatuCardView } from '@/features/hwatu/components/hwatu-card'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { ButtonLink, PageShell, Panel } from '@/components/ui'
 import type { Metadata } from 'next'

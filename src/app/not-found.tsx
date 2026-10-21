@@ -1,7 +1,7 @@
 import { SEOTDA_DECK } from '@/features/hwatu/cards'
 import type { HwatuCard } from '@/features/hwatu/types'
 import { evaluateSeotdaHand } from '@/features/seotda/engine'
-import { HwatuCardView } from '@/components/hwatu-card'
+import { HwatuCardView } from '@/features/hwatu/components/hwatu-card'
 import { ButtonLink, PageShell, Panel } from '@/components/ui'
 import { getDict } from '@/lib/i18n/server'
 

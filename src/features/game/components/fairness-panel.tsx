@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
-import { HwatuCardView } from '@/components/hwatu-card'
+import { HwatuCardView } from '@/features/hwatu/components/hwatu-card'
 import { Button, Panel, useToast } from '@/components/ui'
 import { findCard } from '@/features/hwatu/cards'
 import {

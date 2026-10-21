@@ -1,4 +1,4 @@
-import { PokerCardView, type PokerCardSize } from '@/components/poker-card'
+import { PokerCardView, type PokerCardSize } from '@/features/poker/components/poker-card'
 import { findPokerCard } from '@/features/poker/cards'
 
 export function PokerCardChip({ id, size = 'xs' }: { id: string; size?: PokerCardSize }) {

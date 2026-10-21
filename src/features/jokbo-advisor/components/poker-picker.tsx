@@ -2,7 +2,7 @@
 
 import { clsx } from 'clsx'
 import { useMemo } from 'react'
-import { isRedPokerSuit, PokerCardView } from '@/components/poker-card'
+import { isRedPokerSuit, PokerCardView } from '@/features/poker/components/poker-card'
 import { useToast } from '@/components/ui'
 import { POKER_DECK, SUIT_LABELS } from '@/features/poker/cards'
 import type { PokerCard, PokerSuit } from '@/features/poker/cards'

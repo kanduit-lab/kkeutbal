@@ -1,4 +1,4 @@
-import { HwatuCardView } from '@/components/hwatu-card'
+import { HwatuCardView } from '@/features/hwatu/components/hwatu-card'
 import { findCard } from '@/features/hwatu/cards'
 import type { HwatuCard } from '@/features/hwatu/types'
 

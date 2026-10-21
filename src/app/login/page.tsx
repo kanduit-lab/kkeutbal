@@ -4,7 +4,7 @@ import { LoginFormSwitcher } from '@/features/auth/components/login-form-switche
 import { isFirstAccount } from '@/features/auth/bootstrap'
 import { prepareInitialAdminSetup } from '@/features/auth/initial-admin-setup'
 import { findCard } from '@/features/hwatu/cards'
-import { HwatuCardView } from '@/components/hwatu-card'
+import { HwatuCardView } from '@/features/hwatu/components/hwatu-card'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { Alert, Button } from '@/components/ui'
 import { format, getDict, type Dictionary } from '@/lib/i18n/server'

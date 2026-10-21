@@ -3,7 +3,7 @@
 import { clsx } from 'clsx'
 import { findCard } from '@/features/hwatu/cards'
 import type { HwatuCard } from '@/features/hwatu/types'
-import { HwatuCardView } from '@/components/hwatu-card'
+import { HwatuCardView } from '@/features/hwatu/components/hwatu-card'
 import { Alert, Badge, Button, Spinner } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import type { RecognizedCard } from '../vision/actions'
