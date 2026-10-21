@@ -35,7 +35,7 @@
 
 런타임 구현 진행 중. 도메인 엔진(`hwatu`/`seotda`/`gostop`), 방·베팅·예산·랭킹 Server Action,
 realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한다. Drizzle은 테이블 DDL을,
-`supabase/migrations/0007_database_hardening.sql`은 현 스키마의 RLS·권한·원장 트리거를 소유한다.
+`database/migrations/supabase/0007_database_hardening.sql`은 현 스키마의 RLS·권한·원장 트리거를 소유한다.
 
 ## Proposed Design
 
@@ -77,7 +77,7 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
 - 전용 롤 `kkeutbal_app`, 속성 `bypassrls`.
 
 즉 Supabase `service_role` 키도, Auth.js 세션을 Supabase JWT로 바꿔 넘기는 브리지도 쓰지 않는다.
-서버 프로세스가 DB에 접속하는 통로는 이 롤 하나뿐이고, RLS(`supabase/migrations/0007_database_hardening.sql`)는
+서버 프로세스가 DB에 접속하는 통로는 이 롤 하나뿐이고, RLS(`database/migrations/supabase/0007_database_hardening.sql`)는
 `anon`/`authenticated`의 Data API 접근을 차단한다 — 실제 권한 판정(방 참가자인지, 딜러인지, 잔액이
 충분한지)은 각 도메인 `actions.ts`의 Server Action이 수행한다. RLS를 우회하는 롤이 유일한 쓰기
 경로이므로, **Server Action의 권한 검사를 건너뛰면 DB 레벨 방어가 없다**는 점이 이 설계의 핵심
@@ -240,8 +240,8 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 ## Data / API / Permission Changes
 
-- 스키마 소유: `02-data-model.md` (drizzle `drizzle/schema.ts`가 source of truth, SQL은
-  `drizzle/migrations/` + `supabase/migrations/`).
+- 스키마 소유: `02-data-model.md` (drizzle `database/schema.ts`가 source of truth, SQL은
+  `database/migrations/drizzle/` + `database/migrations/supabase/`).
 - RLS는 `anon`/`authenticated` 대상 방어층. 실질적 권한 판정은 Server Action.
 - `kkeutbal_app`은 RLS를 우회하지만 DML과 시퀀스 사용 권한만 가진다. 정책·권한 기준은
   `0007_database_hardening.sql`이다.
@@ -251,7 +251,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 
 1. [`../runbooks/01-database-migrations.md`](../runbooks/01-database-migrations.md) 순서로 `pnpm db:migrate`와
    Supabase 보안 SQL을 적용한다. `db:push`는 운영 반영 경로로 사용하지 않는다.
-2. `supabase/migrations/0007_database_hardening.sql`은 새 DB의 현재 RLS baseline이고,
+2. `database/migrations/supabase/0007_database_hardening.sql`은 새 DB의 현재 RLS baseline이고,
    `0008_rate_limit_buckets_rls.sql`은 기존 DB에 신규 내부 테이블 권한을 보강한다.
 3. Authentik 애플리케이션에 `{APP_URL}/api/auth/callback/authentik`을 Redirect URI로 등록하고,
    초기 관리자 계정으로 `/admin`의 SSO 설정을 저장·활성화.

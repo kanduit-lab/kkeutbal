@@ -9,7 +9,7 @@
 -- `drizzle_migration_ledger_*_sync` 선례(0012·0013·0014·0015·0017)와 같은 성격의 파일이다.
 --
 -- 값 근거:
--- - hash        drizzle이 기록하는 값 = `drizzle/migrations/0020_lying_leader.sql` 원문의 sha256.
+-- - hash        drizzle이 기록하는 값 = `database/migrations/drizzle/0020_lying_leader.sql` 원문의 sha256.
 --               디스크 0000~0019 파일 20개의 sha256이 원장 20행(id 1~20)과 순서까지 그대로
 --               일치하는 것을 확인했다. `.gitattributes`가 이 경로를 `eol=lf`로 고정하므로
 --               체크아웃 환경이 달라도 바이트가 같다.

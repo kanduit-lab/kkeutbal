@@ -11,7 +11,7 @@
 ## Purpose
 
 Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유하는 RLS·권한·원장 트리거를
-새 DB와 기존 DB에 같은 순서로 적용한다. 스키마 정본은 `drizzle/schema.ts`다.
+새 DB와 기존 DB에 같은 순서로 적용한다. 스키마 정본은 `database/schema.ts`다.
 
 ## Preconditions
 
@@ -21,7 +21,7 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 - `drizzle-kit`은 `DATABASE_URL`과 `DATABASE_CA_CERT_BASE64`를 실행 환경에서 읽는다. CA는 Supabase pooler가 SSL을 요구하기 때문에 필요하다
   (`drizzle.config.ts`가 앱과 같은 검증 TLS를 쓴다).
 - 런타임 앱을 중지하거나 쓰기 트래픽이 없는 유지보수 창을 잡는다.
-- 저장소의 `drizzle/migrations/meta/_journal.json`과 SQL 파일이 함께 배포 대상에 포함됐는지 확인한다.
+- 저장소의 `database/migrations/drizzle/meta/_journal.json`과 SQL 파일이 함께 배포 대상에 포함됐는지 확인한다.
 
 ## Inputs And Access
 
@@ -54,7 +54,7 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    "users" already exists`로 죽는다. 아래 3단계의 `0019_drizzle_ledger_sync_0020.sql`을
    **먼저** 적용한 뒤 이 단계를 실행한다.
 
-3. Supabase SQL Editor에서 `supabase/migrations/0008_rate_limit_buckets_rls.sql`,
+3. Supabase SQL Editor에서 `database/migrations/supabase/0008_rate_limit_buckets_rls.sql`,
    `0009_virtual_credits_security.sql`, `0010_credit_posting_hardening.sql`,
    `0011_room_credit_lifecycle.sql`, `0012_room_credit_reversals.sql`,
    `0013_admin_room_credit_settlement.sql`, `0014_fair_round_security.sql`,
@@ -67,7 +67,7 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    테이블을 server-only로 잠그고, 0015는 종료 뒤 full reveal 행의 수정·삭제를 막는다. 0016은
    Vision 설정 테이블의 브라우저 역할 접근을 회수한다.
 
-   `supabase/migrations/0019_drizzle_ledger_sync_0020.sql`은 DDL이 아니라 **원장 동기화 전용**
+   `database/migrations/supabase/0019_drizzle_ledger_sync_0020.sql`은 DDL이 아니라 **원장 동기화 전용**
    파일이라 순서 규칙이 다르다. Drizzle `0020`의 결과가 이미 있는 DB에서 `drizzle.__drizzle_migrations`에
    빠진 행 하나를 채우므로 2단계 `pnpm db:migrate`보다 **먼저** 실행해야 한다. 재실행해도 중복 삽입되지
    않고, `users.is_managed`가 없는 DB에서는 아무것도 넣지 않는다. 이런 원장 동기화가 필요한 이유는
@@ -82,11 +82,11 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 1. 관리자 SQL로 `kkeutbal_app` 로그인 롤을 만들고 `BYPASSRLS`를 부여한다. 비밀번호는 운영
    시크릿 저장소에서 주입한다.
 2. 관리자 `DATABASE_URL`로 `pnpm db:migrate`를 실행한다.
-3. `supabase/migrations/0007_database_hardening.sql`을 적용한다. 이 파일이 현재 스키마의
+3. `database/migrations/supabase/0007_database_hardening.sql`을 적용한다. 이 파일이 현재 스키마의
    RLS·최소 DML 권한·append-only 트리거 baseline이다.
 4. 아래 Verification을 수행한다.
 
-`supabase/migrations/0001`~`0006`은 이미 적용된 과거 변화 기록이다. 제거된 옛 테이블을
+`database/migrations/supabase/0001`~`0006`은 이미 적용된 과거 변화 기록이다. 제거된 옛 테이블을
 참조하므로 최신 Drizzle 스키마 위에 전부 재생하지 않는다.
 
 ### 원장 동기화 (Ledger Sync)
@@ -99,9 +99,9 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 - 선례: `drizzle_migration_ledger_baseline`, `..._0012_sync`, `..._game_indexes_0013_sync`,
   `..._credit_safety_0014_sync`, `..._credit_indexes_0015_sync`,
   `drizzle_session_chip_integer_boundary_0017`, `0019_drizzle_ledger_sync_0020.sql`.
-- `hash` = 해당 `drizzle/migrations/{tag}.sql` **원문의 sha256**.
+- `hash` = 해당 `database/migrations/drizzle/{tag}.sql` **원문의 sha256**.
   `.gitattributes`가 `eol=lf`를 고정하므로 체크아웃 환경이 달라도 값이 같다.
-- `created_at` = `drizzle/migrations/meta/_journal.json`에서 같은 tag 항목의 `when`.
+- `created_at` = `database/migrations/drizzle/meta/_journal.json`에서 같은 tag 항목의 `when`.
   Drizzle은 원장 마지막 행의 `created_at`만 보고 적용 여부를 정하므로 이 값이 실제 키다.
 - 반드시 재실행 안전하게 쓴다. `__drizzle_migrations`에는 `hash` unique 제약이 없어
   `on conflict`가 듣지 않으므로 `where not exists`로 막는다.
@@ -159,10 +159,10 @@ from drizzle.__drizzle_migrations;
 
 ```powershell
 # hash: 각 마이그레이션 파일 원문의 sha256
-Get-FileHash -Algorithm SHA256 drizzle/migrations/*.sql | Format-Table Hash, Path
+Get-FileHash -Algorithm SHA256 database/migrations/drizzle/*.sql | Format-Table Hash, Path
 
 # created_at: 같은 tag의 journal `when`
-Get-Content drizzle/migrations/meta/_journal.json | ConvertFrom-Json |
+Get-Content database/migrations/drizzle/meta/_journal.json | ConvertFrom-Json |
   Select-Object -ExpandProperty entries | Select-Object idx, tag, when
 ```
 

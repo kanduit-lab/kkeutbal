@@ -1,6 +1,6 @@
 -- 끗발 — RLS 정책 · realtime 권한 · 원장 불변성
 --
--- 테이블 정의는 drizzle 이 소유한다 (drizzle/schema.ts). 이 파일은 그 위에 얹는
+-- 테이블 정의는 drizzle 이 소유한다 (database/schema.ts). 이 파일은 그 위에 얹는
 -- 보안·무결성 계층만 담당한다. 설계 근거: docs/02-data-model.md, docs/07-auth-and-security.md
 --
 -- 적용 순서: pnpm db:push  →  이 파일 실행

@@ -6,7 +6,7 @@ import { ResizeObserverStub } from './setup'
 
 /**
  * `usePagedRows`/`useFitCount`(src/components/ui/paged.tsx)를 실제로 렌더링해 검증한다.
- * 이전 `test/unit/paged-pagination.test.ts`는 훅을 렌더링 컨텍스트 밖에서 부를 수 없어서
+ * 이전 `tests/unit/paged-pagination.test.ts`는 훅을 렌더링 컨텍스트 밖에서 부를 수 없어서
  * 계산 로직을 복사해 재현했다 — 제품 코드가 바뀌어도 조용히 어긋나지 않는 이 파일로 대체한다.
  *
  * ## clientHeight를 고정하는 방법

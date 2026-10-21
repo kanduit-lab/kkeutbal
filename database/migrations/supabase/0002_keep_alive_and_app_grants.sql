@@ -1,5 +1,5 @@
 -- 적용됨 (supabase MCP, 2026-07-22, migration name: keep_alive_and_app_grants)
--- 앞선 적용분: init_schema(drizzle/migrations/0000_perpetual_karma.sql), init_rls(0001_init_rls.sql)
+-- 앞선 적용분: init_schema(database/migrations/drizzle/0000_perpetual_karma.sql), init_rls(0001_init_rls.sql)
 --
 -- 전제: 앱 전용 롤. 비밀번호는 배포 환경에서 치환한다.
 --   create role kkeutbal_app login password '<비밀번호>' bypassrls;

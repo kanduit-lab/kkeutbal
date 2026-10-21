@@ -29,10 +29,6 @@ next-env.d.ts
 # typescript
 *.tsbuildinfo
 
-# supabase local dev
-/supabase/.branches
-/supabase/.temp
-
 # os / editor noise
 .DS_Store
 Thumbs.db

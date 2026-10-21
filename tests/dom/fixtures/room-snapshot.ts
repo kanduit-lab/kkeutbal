@@ -7,7 +7,7 @@ import type {
 } from '@/features/game/types'
 
 /**
- * 역할별 렌더링 검증(`test/dom/game-role-rendering.test.tsx`)이 쓰는 `RoomSnapshot` 픽스처
+ * 역할별 렌더링 검증(`tests/dom/game-role-rendering.test.tsx`)이 쓰는 `RoomSnapshot` 픽스처
  * 빌더. 실제 서버 스냅샷 형태(`src/features/game/types.ts`)를 그대로 따르되, 테스트에
  * 필요한 최소 필드만 조합한다.
  */

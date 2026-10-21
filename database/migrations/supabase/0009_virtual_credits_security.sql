@@ -1,5 +1,5 @@
 -- 전역 가상 크레딧 보안·원장 posting 경로.
--- 전제: drizzle/migrations/0012_damp_tiger_shark.sql 적용 뒤 실행한다.
+-- 전제: database/migrations/drizzle/0012_damp_tiger_shark.sql 적용 뒤 실행한다.
 -- 브라우저는 어떤 credit 테이블도 직접 접근하지 않으며, 앱 롤도 posting 함수 외 직접 쓰기는 금지한다.
 
 begin;

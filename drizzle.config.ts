@@ -36,8 +36,8 @@ function credentials() {
 }
 
 export default defineConfig({
-  schema: './drizzle/schema.ts',
-  out: './drizzle/migrations',
+  schema: './database/schema.ts',
+  out: './database/migrations/drizzle',
   dialect: 'postgresql',
   dbCredentials: credentials(),
 

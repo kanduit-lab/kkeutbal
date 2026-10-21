@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
-import type * as schema from '../../../drizzle/schema'
+import type * as schema from '../../../database/schema'
 import { getOptionalDatabase } from '@/lib/optional-database'
 import { PUBLIC_READ_TIMEOUT_MS, withTimeout } from '@/lib/with-timeout'
 import {

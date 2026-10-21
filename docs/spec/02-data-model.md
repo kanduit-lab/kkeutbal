@@ -5,11 +5,11 @@
 | Type            | technical-design                                                  |
 | Audience        | engineering / reviewers                                           |
 | Status          | active                                                            |
-| Source of truth | 구현 스키마는 `drizzle/schema.ts`, 이 문서는 관계·불변식·RLS 경계 |
+| Source of truth | 구현 스키마는 `database/schema.ts`, 이 문서는 관계·불변식·RLS 경계 |
 | Last reviewed   | 2026-07-28                                                        |
 
-구현 스키마는 `drizzle/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
-`supabase/migrations/0007_database_hardening.sql`과 신규 테이블 보강용 `0008`·`0016`이 소유한다.
+구현 스키마는 `database/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
+`database/migrations/supabase/0007_database_hardening.sql`과 신규 테이블 보강용 `0008`·`0016`이 소유한다.
 적용 순서는 [`../runbooks/01-database-migrations.md`](../runbooks/01-database-migrations.md)가 소유한다. 실제 상태는
 `pg_policies`, `information_schema.role_table_grants`, `pg_class.relrowsecurity`로 확인한다.
 
@@ -293,7 +293,7 @@ append-only. UPDATE·DELETE는 트리거로 원천 차단한다(아래 "원장 �
 ### 제거된 테이블 — `groups` / `group_members` / `hand_records` (2026-07-23)
 
 세 테이블 모두 스키마에만 존재하고 어떤 코드도 읽거나 쓰지 않아 제거했다
-(`drizzle/migrations/0001_silent_moondragon.sql` — `rooms.group_id` 컬럼과 `hand_source`
+(`database/migrations/drizzle/0001_silent_moondragon.sql` — `rooms.group_id` 컬럼과 `hand_source`
 enum 포함). 이 결정으로 누적 랭킹은 **전역 사용자 단위로 확정**됐고, Advisor 판독 결과는
 **저장하지 않는 것이 확정 동작**이다. 분기 근거·재검토 트리거는 `docs/design-decisions/`
 001이 소유한다.

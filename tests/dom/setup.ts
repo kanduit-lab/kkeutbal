@@ -1,5 +1,5 @@
 /**
- * `test/dom/**`(jsdom 환경) 전용 전역 설정. `vitest.config.ts`의 `setupFiles`에 등록돼
+ * `tests/dom/**`(jsdom 환경) 전용 전역 설정. `vitest.config.ts`의 `setupFiles`에 등록돼
  * 모든 테스트 파일 로드 전에 한 번 실행된다 — node 환경 테스트(`src/**`의 순수 함수 26개)는
  * `typeof window === 'undefined'`라 아래 스텁이 아무 영향을 주지 않는다.
  *

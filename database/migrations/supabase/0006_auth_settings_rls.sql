@@ -1,6 +1,6 @@
 -- 적용됨 (supabase MCP, 2026-07-24, migration name: auth_settings)
 -- auth_settings: 인스턴스 단위 인증 설정 (관리자 화면에서 저장하는 SSO 설정).
--- drizzle schema.ts `authSettings` / drizzle/migrations/0005_nasty_kat_farrell.sql 과 같은 DDL.
+-- drizzle schema.ts `authSettings` / database/migrations/drizzle/0005_nasty_kat_farrell.sql 과 같은 DDL.
 --
 -- 이 DB 는 drizzle-kit migrate 를 쓴 적이 없다(`drizzle.__drizzle_migrations` 부재) —
 -- 스키마는 db:push 또는 여기 SQL 로 반영해 왔다. 그래서 테이블 생성까지 이 파일이 갖는다.

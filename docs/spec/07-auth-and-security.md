@@ -234,7 +234,7 @@ async function requireRole(tx, roomId, userId, roles): Promise<boolean> {
 
 ### RLS는 방어층이지 인가 경로가 아니다
 
-`supabase/migrations/0007_database_hardening.sql`은 현재 앱 테이블의 RLS를 켜고, `anon`·
+`database/migrations/supabase/0007_database_hardening.sql`은 현재 앱 테이블의 RLS를 켜고, `anon`·
 `authenticated`의 테이블·시퀀스·함수 권한을 모두 회수한다. 이 정책은 다음 상황에서 방어한다:
 
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`가 유출되어 누군가 PostgREST를 직접 두드리는 경우

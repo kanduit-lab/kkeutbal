@@ -14,7 +14,7 @@ Kkeutbal records live Seotda, Go-Stop, and poker games without handling real-mon
 - `src/app/` owns routes, layouts, and route handlers.
 - `src/features/` owns product domains. Keep game engines pure and keep UI data access in feature hooks, actions, or queries.
 - `src/lib/` owns cross-cutting infrastructure such as environment validation, database access, authentication, i18n, and Realtime.
-- `drizzle/schema.ts` owns the typed schema; `drizzle/migrations/` and `supabase/migrations/` are migration history and must not be reorganized.
+- `database/schema.ts` owns the typed schema; `database/migrations/` owns ordered Drizzle DDL and Supabase policy history. Preserve migration order and executable content.
 - `docs/spec/` owns current technical contracts; `docs/runbooks/` owns operating procedures; `docs/README.md` is the document index.
 
 ## Local Commands

@@ -14,7 +14,7 @@ import {
  * (React 렌더 컨텍스트 밖에서 훅을 부르면 "Invalid hook call"이 난다) — 그쪽은
  * `paged-pagination.test.ts`에서 순수 계산만 재현해 검증한다.
  *
- * `test/dom/**`에 jsdom + `@testing-library/react`(`renderHook`)가 준비되면, 이 파일이
+ * `tests/dom/**`에 jsdom + `@testing-library/react`(`renderHook`)가 준비되면, 이 파일이
  * 검증하는 트리 구조를 실제 렌더링 스냅샷으로 대체하는 편이 더 강한 보증이다.
  */
 

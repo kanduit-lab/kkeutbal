@@ -5,7 +5,7 @@
 | Type | technical-design |
 | Audience | engineering / reviewers / operators |
 | Status | in-progress |
-| Source of truth | credit·fair round 스키마는 `drizzle/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`supabase/migrations/0011`~`0013`·`0018`, verified 섯다 실행은 `src/features/fairness/`·`src/features/game/round-fairness-ops.ts` |
+| Source of truth | credit·fair round 스키마는 `database/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`database/migrations/supabase/0011`~`0013`·`0018`, verified 섯다 실행은 `src/features/fairness/`·`src/features/game/round-fairness-ops.ts` |
 | Last reviewed | 2026-08-02 |
 
 ## 목적과 경계

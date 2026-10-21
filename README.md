@@ -20,7 +20,7 @@
 | Type            | README                                                                |
 | Audience        | maintainers                                                           |
 | Status          | active                                                                |
-| Source of truth | 코드(`src/`, `drizzle/`, `.env.example`) — 설계 근거는 `docs/`로 링크 |
+| Source of truth | 코드(`src/`, `database/`, `.env.example`) — 설계 근거는 `docs/`로 링크 |
 | Last reviewed   | 2026-07-29                                                            |
 
 MT·모임에서 공용 칩으로 화투나 포커를 치면 승패 기록이 남지 않습니다. 끗발은 카드와 칩을
@@ -114,9 +114,12 @@ src/
 ├── lib/                # env·db·auth·i18n·realtime·supabase
 └── components/         # ui/ 프리미티브 + QR·로케일 스위처
 
-drizzle/schema.ts       # 스키마 (typed source of truth)
-drizzle/migrations/     # 테이블·인덱스·제약
-supabase/migrations/    # RLS·grant·트리거·함수
+database/
+├── schema.ts           # 스키마 (typed source of truth)
+└── migrations/
+    ├── drizzle/        # 테이블·인덱스·제약
+    └── supabase/       # RLS·grant·트리거·함수
+tests/                  # 단위·jsdom 컴포넌트 테스트
 Dockerfile              # standalone 이미지 빌드 정의
 ```
 

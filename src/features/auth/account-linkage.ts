@@ -1,7 +1,7 @@
 /**
  * 내부 계정과 Authentik sub의 연결 상태 판정 — **한 곳에만 둔다.**
  *
- * `users.authentik_sub`는 `NOT NULL`이다(`drizzle/schema.ts`). 그래서 "아직 SSO에 연결되지
+ * `users.authentik_sub`는 `NOT NULL`이다(`database/schema.ts`). 그래서 "아직 SSO에 연결되지
  * 않은 내부 계정"은 SQL NULL이 아니라 `local:{username}` 센티널을 갖는다. 이걸 모르고
  * `IS NULL`로 미연결을 찾으면 조건이 **항상 거짓**이 되어 코드가 조용히 죽는다 — 실제로
  * 그런 상태였고, SSO 연결 흐름을 만들다가 드러났다.

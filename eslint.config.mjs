@@ -21,7 +21,7 @@ const config = [
       // 여기 안에 git worktree 가 생기면 저장소 전체 사본이 통째로 lint 대상이 돼서,
       // 소스가 멀쩡한데도 수천 건 에러가 쏟아지고 진짜 문제가 묻힌다.
       '.claude/**',
-      'drizzle/migrations/**',
+      'database/migrations/**',
       'next-env.d.ts',
     ],
   },
