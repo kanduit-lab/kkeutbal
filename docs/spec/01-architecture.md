@@ -6,7 +6,7 @@
 | Audience        | engineering / reviewers / operators                        |
 | Status          | active                                                     |
 | Source of truth | 구현은 코드·스키마, 이 문서는 스택·배포 토폴로지·모듈 경계 |
-| Last reviewed   | 2026-10-21                                                 |
+| Last reviewed   | 2026-10-22                                                 |
 
 ## Context
 
@@ -166,7 +166,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 ```
 
 현재 도메인: `hwatu`(카드 모델, 최하위 공용), `seotda`(끗/족보 엔진), `gostop`(점수 엔진),
-`poker`(52장 카드 모델·족보 엔진), `game`(방·세션·라운드, room-code 발급, 컴포넌트 다수),
+`game`(방·세션·라운드, room-code 발급, 컴포넌트 다수),
 `betting`(베팅 액션·규칙), `fairness`(commit-reveal 시드·영수증·덱 재계산), `budget`(예산),
 `wallet`(계정 귀속 가상 크레딧), `ranking`(랭킹 조회), `promotions`(공지 배너·팝업),
 `jokbo-advisor`(vision + 수동 피커), `auth`(세션·역할·관리자).
@@ -178,7 +178,7 @@ src/features/<domain>/       도메인별 폴더가 경계
 규칙:
 
 - `features/hwatu`는 다른 feature를 import하지 않는다.
-- `features/seotda`, `features/gostop`, `features/poker`는 카드 모델만 의존한다. 서로 의존 금지.
+- `features/seotda`, `features/gostop`은 카드 모델만 의존한다. 서로 의존 금지.
 - 엔진(순수 함수)은 `lib/`, `app/`, DB, fetch를 import하지 않는다.
 - DB 접근은 `lib/db`와 각 도메인 `actions.ts`/`queries.ts`에서만 한다. 컴포넌트에서 직접
   쿼리 금지.

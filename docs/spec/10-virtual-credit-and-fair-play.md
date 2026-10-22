@@ -6,7 +6,7 @@
 | Audience | engineering / reviewers / operators |
 | Status | in-progress |
 | Source of truth | credit·fair round 스키마는 `database/schema.ts`, account-credit 방 수명주기는 `src/features/game/`·`src/features/budget/`·`database/migrations/supabase/0011`~`0013`·`0018`, verified 섯다 실행은 `src/features/fairness/`·`src/features/game/round-fairness-ops.ts` |
-| Last reviewed | 2026-08-02 |
+| Last reviewed | 2026-10-22 |
 
 ## 목적과 경계
 
@@ -294,7 +294,7 @@ preset을 `session`으로 해석하므로 기존 방이 우연히 전역 잔액�
 }
 ```
 
-- `verified`의 라이브 지원은 **섯다만**이다. 포커·고스톱은 private-card/turn 모델이 완성되기 전
+- `verified`의 라이브 지원은 **섯다만**이다. 고스톱은 private-card/turn 모델이 완성되기 전
   `manual`로 안전하게 폴백한다. 한 번 판이 시작되면 dealing·seed timeout은 바꾸지 못한다.
 - seed collection 마감은 DB `statement_timestamp()` 기준이다. 전원 제출 전에도 마감 후에는
   미제출자를 명시적으로 timeout 기록하고, 참가자 누구나 봉인을 진행할 수 있다. 서버는 임의
@@ -302,9 +302,8 @@ preset을 `session`으로 해석하므로 기존 방이 우연히 전역 잔액�
 - `turnTimeoutSeconds`는 preset 호환을 위한 예약 필드다. 현재 수동 베팅 흐름에는 server-authoritative
   차례 상태가 없으므로 개별 턴 타이머로 노출하거나 자동 fold/check하지 않는다.
 
-실제 카드 배분 지원 순서는 섯다(2장 비공개) → 포커(2장 비공개+보드) → 고스톱(게임 규칙·턴
-상태를 서버 authoritative로 확장한 뒤)이다. 현재 수동 결과 기록 흐름에 비밀 카드를 섞어
-부분 구현하지 않는다.
+실제 카드 배분은 섯다의 2장 비공개만 지원한다. 고스톱은 게임 규칙·턴 상태를 서버 authoritative로
+확장한 뒤 검토한다. 현재 수동 결과 기록 흐름에 비밀 카드를 섞어 부분 구현하지 않는다.
 
 ## API·화면 경계
 

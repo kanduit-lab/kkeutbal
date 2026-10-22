@@ -6,7 +6,7 @@
 | Audience | operators / maintainers |
 | Status | active |
 | Source of truth | this document (DB 적용 순서·검증·복구) |
-| Last reviewed | 2026-10-21 |
+| Last reviewed | 2026-10-22 |
 
 ## Purpose
 
@@ -15,6 +15,9 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 `REALTIME_MODE=self`에 필요한 DB lease presence는 Drizzle `0022_wakeful_swarm`에 작성돼 있다.
 사용자가 설계와 migration 파일 생성을 승인했지만 대상 DB에는 아직 적용하지 않았다.
+
+포커 기능 제거는 Drizzle `0023_smooth_silver_surfer`에 작성돼 있다. 이 마이그레이션은 기존 포커
+방과 종속 기록을 지우고 `game_type` enum에서 `poker`를 제거한다. 대상 DB에는 아직 적용하지 않았다.
 
 ## Preconditions
 
@@ -28,6 +31,9 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 - `REALTIME_MODE=self` 전환은 long-running Node 실행 환경과 session-capable listener 연결이 준비된
   뒤에만 검토한다. `DATABASE_POOL_MODE=transaction`이면 transaction endpoint가 아닌
   `DATABASE_LISTENER_URL`도 준비한다.
+- 포커 제거 전 대상 DB 백업을 복원 가능한 상태로 확인한다. 기존 포커 방에 account-credit lock이
+  있으면 먼저 `settle_room_credits`로 정산하므로, 이전 credit lifecycle SQL과 정산 권한을 가진
+  방장 또는 관리자가 있어야 한다.
 
 ## Inputs And Access
 
@@ -51,6 +57,17 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 현재는 migration 파일만 준비된 상태다. 이 작업에서는 `pnpm db:migrate`를 실행하지 않는다.
 
+### Poker removal migration (적용 보류)
+
+1. 대상 DB가 이전 Drizzle·Supabase migration을 모두 적용한 상태인지 확인한다. 특히 account-credit
+   방을 정산하는 `settle_room_credits`가 실행 가능해야 한다.
+2. 백업 복원 절차를 확인하고, 포커 방·판·칩 원장·크레딧 거래 이력이 지워지는 영향을 승인한다.
+3. 기존 DB 업그레이드 절차의 `pnpm db:migrate`를 한 번 실행한다. `0023_smooth_silver_surfer`는
+   포커 방을 먼저 정산한 뒤 관련 기록을 제거하고 `game_type`을 `seotda`·`gostop`만 허용하도록 바꾼다.
+4. 적용 뒤 아래 Verification으로 포커 방과 `poker` enum 값이 남지 않았는지 확인한다.
+
+이 마이그레이션은 되돌릴 수 없다. 개별 SQL을 따로 실행하거나 과거 migration을 고치지 않는다.
+
 ### 기존 DB 업그레이드
 
 1. 대상 DB를 백업하고 현재 Drizzle 이력을 조회한다.
@@ -66,7 +83,7 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    ```
 
    live DB의 DDL은 2026-08-07 기준 `0000`~`0021`이 전부 반영돼 있다. `0022`는
-   `room_connections` lease 테이블이며 아직 적용하지 않았다.
+   `room_connections` lease 테이블이고, `0023`은 포커 제거 migration이며 둘 다 아직 적용하지 않았다.
    같은 커밋에서 재실행하면 새 마이그레이션만 적용된다.
 
    단, `0020`은 supabase `add_users_is_managed`로 먼저 들어가서 원장에 기록되지 않았다.
@@ -177,6 +194,17 @@ order by p.proname;
 -- 23, 1792593674767(= 0022_wakeful_swarm)이다.
 select count(*) as ledger_rows, max(created_at) as last_created_at
 from drizzle.__drizzle_migrations;
+```
+
+```sql
+select count(*) as poker_rooms
+from public.rooms
+where game_type::text = 'poker';
+
+select enumlabel
+from pg_enum
+where enumtypid = 'public.game_type'::regtype
+order by enumsortorder;
 ```
 
 원장 행 수가 journal entries 개수보다 적으면 그 차이만큼 `pnpm db:migrate`가 이미 반영된 DDL을

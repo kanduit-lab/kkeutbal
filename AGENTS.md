@@ -1,6 +1,6 @@
 # Kkeutbal
 
-Kkeutbal records live Seotda, Go-Stop, and poker games without handling real-money payments. It is a Next.js application backed by Supabase PostgreSQL and Realtime.
+Kkeutbal records live Seotda and Go-Stop games without handling real-money payments. It is a Next.js application backed by PostgreSQL and selectable Supabase or self-hosted Realtime transport.
 
 ## Read Order
 

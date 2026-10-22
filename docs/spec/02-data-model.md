@@ -6,7 +6,7 @@
 | Audience        | engineering / reviewers                                           |
 | Status          | active                                                            |
 | Source of truth | 구현 스키마는 `database/schema.ts`, 이 문서는 관계·불변식·RLS 경계 |
-| Last reviewed   | 2026-10-21                                                        |
+| Last reviewed   | 2026-10-22                                                        |
 
 구현 스키마는 `database/schema.ts`가 소유한다. 현 스키마의 RLS·원장 트리거·권한 baseline은
 `database/migrations/supabase/0007_database_hardening.sql`과 신규 테이블 보강용
@@ -241,7 +241,8 @@ scope와 식별자를 `AUTH_SECRET`으로 HMAC한 `key_hash`만 저장하고 만
 
 - `code` — 6자 대문자+숫자 입장 코드.
 - `name` — 방 표시 이름.
-- `game_type` — `seotda` | `gostop` | `poker`.
+- `game_type` — `seotda` | `gostop`. 포커 코드는 제거됐다. 기존 포커 방과 종속 기록을 삭제하고
+  enum에서 `poker` 값을 제거하는 마이그레이션은 아직 운영 데이터베이스에 적용하지 않았다.
 - `status` — `waiting` | `playing` | `settled` | `closed`.
 - `input_mode` — `trust`(즉시 반영) | `approval`(딜러 승인 필요). `host`/대리 입력하는
   `dealer`는 `approval` 모드에서도 자기 자신의 액션은 즉시 확정된다(`placeBet`의
