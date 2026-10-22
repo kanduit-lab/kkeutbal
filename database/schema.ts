@@ -18,7 +18,7 @@ import {
 } from 'drizzle-orm/pg-core'
 import type { AnyPgColumn } from 'drizzle-orm/pg-core'
 
-export const gameType = pgEnum('game_type', ['seotda', 'gostop', 'poker'])
+export const gameType = pgEnum('game_type', ['seotda', 'gostop'])
 export const roomStatus = pgEnum('room_status', ['waiting', 'playing', 'settled', 'closed'])
 export const inputMode = pgEnum('input_mode', ['trust', 'approval'])
 export const memberRole = pgEnum('member_role', ['host', 'dealer', 'player', 'observer'])

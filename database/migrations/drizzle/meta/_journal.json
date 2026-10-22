@@ -162,6 +162,13 @@
       "when": 1792593674767,
       "tag": "0022_wakeful_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792647619509,
+      "tag": "0023_smooth_silver_surfer",
+      "breakpoints": true
     }
   ]
 }
