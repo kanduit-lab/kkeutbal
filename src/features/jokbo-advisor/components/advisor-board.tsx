@@ -31,6 +31,8 @@ const POKER_MIN_HAND = 5
 
 const GOSTOP_MAX_SELECT = 30
 
+const GOSTOP_MIN_RESULT_CARDS = 3
+
 /**
  * 판독기 본문. 페이지 껍데기(`/advisor`)와 방 안 시트가 같은 화면을 쓰기 때문에
  * 여기에는 헤더·뒤로가기 같은 라우트 소유물을 두지 않는다. 높이는 부모가 정한다 —
@@ -75,16 +77,15 @@ export function AdvisorBoard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTab])
 
-  /**
-   * 판정에 필요한 장수가 채워지는 순간 결과 패널로 넘어간다. 세로 화면은 픽커와 결과가
-   * 탭으로 갈려 있어서, 두 장을 고르고도 손으로 탭을 눌러야 족보가 보였다 — 고르는 이유가
-   * 곧 판정을 보는 것인데 그 마지막 한 걸음이 늘 수동이었다.
-   *
-   * 고스톱은 대상이 아니다. 획득한 패를 계속 담는 방식이라 "다 골랐다"는 시점 자체가 없고,
-   * 중간에 화면이 넘어가면 오히려 다음 장을 못 고른다.
-   */
   function revealIfComplete(count: number) {
-    const needed = tab === 'poker' ? POKER_MIN_HAND : tab === 'seotda' ? maxSelect : null
+    const needed =
+      tab === 'poker'
+        ? POKER_MIN_HAND
+        : tab === 'seotda'
+          ? maxSelect
+          : tab === 'gostop'
+            ? GOSTOP_MIN_RESULT_CARDS
+            : null
     if (needed !== null && count === needed) setPane('result')
   }
 
