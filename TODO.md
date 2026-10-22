@@ -3,11 +3,6 @@
 ## Priority
 
 ### Operations
-
-- [ ] **B-01 포커 데이터 삭제 마이그레이션 적용**: 기존 포커 방과 종속 기록을 지우고 `game_type`에서 `poker` 값을 제거한다.
-  - 변경 범위: 운영 DB와 `database/migrations/`
-  - 완료 기준: 적용한 DB에 포커 방·종속 기록이 남지 않고 `game_type`은 `seotda`와 `gostop`만 허용한다.
-  - 차단 요인: 운영 DB 적용 시점은 사용자가 결정한다.
 - [ ] **테스트 관리자 계정 정리**: 실제 운영 DB의 `testadmin1`, `testadmin2`, `testadmin3`을 삭제하거나 관리자 권한을 회수한다.
   - 변경 범위: 운영 DB의 `users`
   - 완료 기준: 운영 DB에 테스트용 관리자 계정이 남아 있지 않다.

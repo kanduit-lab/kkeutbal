@@ -13,11 +13,12 @@
 Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유하는 RLS·권한·원장 트리거를
 새 DB와 기존 DB에 같은 순서로 적용한다. 스키마 정본은 `database/schema.ts`다.
 
-`REALTIME_MODE=self`에 필요한 DB lease presence는 Drizzle `0022_wakeful_swarm`에 작성돼 있다.
-사용자가 설계와 migration 파일 생성을 승인했지만 대상 DB에는 아직 적용하지 않았다.
+`REALTIME_MODE=self`에 필요한 DB lease presence는 Drizzle `0022_wakeful_swarm`에 작성돼 있고,
+대상 Supabase DB에 적용됐다.
 
 포커 기능 제거는 Drizzle `0023_smooth_silver_surfer`에 작성돼 있다. 이 마이그레이션은 기존 포커
-방과 종속 기록을 지우고 `game_type` enum에서 `poker`를 제거한다. 대상 DB에는 아직 적용하지 않았다.
+방과 종속 기록을 지우고 `game_type` enum에서 `poker`를 제거한다. 대상 DB에는 포커 방이 없는 상태에서
+적용됐다.
 
 ## Preconditions
 
@@ -43,7 +44,7 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 ## Procedure
 
-### Self realtime migration (적용 보류)
+### Self realtime migration
 
 1. `database/migrations/drizzle/0022_wakeful_swarm.sql`과 journal의 idx 22가 함께 있는지 확인한다.
    migration은 `room_connections` 테이블과 방·만료, 사용자 인덱스를 만든다.
@@ -55,9 +56,9 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    Supabase 배포라면 `database/migrations/supabase/0020_room_connections_security.sql`로
    브라우저 역할 권한을 회수하고 앱 롤 DML을 부여한 뒤 `REALTIME_MODE=self`로 전환한다.
 
-현재는 migration 파일만 준비된 상태다. 이 작업에서는 `pnpm db:migrate`를 실행하지 않는다.
+대상 Supabase DB에는 2026-10-22에 적용됐다. 다른 DB에 적용할 때는 위 절차와 권한 SQL을 함께 따른다.
 
-### Poker removal migration (적용 보류)
+### Poker removal migration
 
 1. 대상 DB가 이전 Drizzle·Supabase migration을 모두 적용한 상태인지 확인한다. 특히 account-credit
    방을 정산하는 `settle_room_credits`가 실행 가능해야 한다.
@@ -66,7 +67,8 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    포커 방을 먼저 정산한 뒤 관련 기록을 제거하고 `game_type`을 `seotda`·`gostop`만 허용하도록 바꾼다.
 4. 적용 뒤 아래 Verification으로 포커 방과 `poker` enum 값이 남지 않았는지 확인한다.
 
-이 마이그레이션은 되돌릴 수 없다. 개별 SQL을 따로 실행하거나 과거 migration을 고치지 않는다.
+이 마이그레이션은 되돌릴 수 없다. 대상 Supabase DB에는 2026-10-22에 적용됐으며, 개별 SQL을 따로
+실행하거나 과거 migration을 고치지 않는다.
 
 ### 기존 DB 업그레이드
 
@@ -82,9 +84,8 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
    pnpm db:migrate
    ```
 
-   live DB의 DDL은 2026-08-07 기준 `0000`~`0021`이 전부 반영돼 있다. `0022`는
-   `room_connections` lease 테이블이고, `0023`은 포커 제거 migration이며 둘 다 아직 적용하지 않았다.
-   같은 커밋에서 재실행하면 새 마이그레이션만 적용된다.
+   대상 Supabase DB에는 `0000`~`0023`이 반영돼 있다. `0022`는 `room_connections` lease 테이블이고,
+   `0023`은 포커 제거 migration이다. 적용된 DB에서 재실행하면 새 migration이 없으면 아무 DDL도 실행하지 않는다.
 
    단, `0020`은 supabase `add_users_is_managed`로 먼저 들어가서 원장에 기록되지 않았다.
    원장을 먼저 맞추지 않고 `pnpm db:migrate`를 돌리면 `column "is_managed" of relation
@@ -190,8 +191,8 @@ where p.pronamespace = 'public'::regnamespace
 order by p.proname;
 
 -- 원장 행 수와 마지막 created_at. 디스크 `_journal.json`의 entries 개수·마지막 `when`과
--- 같아야 한다. 0022 적용 뒤 기대값은
--- 23, 1792593674767(= 0022_wakeful_swarm)이다.
+-- 같아야 한다. 0023 적용 뒤 기대값은
+-- 24, 1792647619509(= 0023_smooth_silver_surfer)이다.
 select count(*) as ledger_rows, max(created_at) as last_created_at
 from drizzle.__drizzle_migrations;
 ```
@@ -302,3 +303,6 @@ Get-Content database/migrations/drizzle/meta/_journal.json | ConvertFrom-Json |
   아직 적용하지 않았다.
 - 2026-10-21: Supabase `0020_room_connections_security.sql`로 새 lease 테이블의 브라우저 역할
   접근을 회수하고 `kkeutbal_app`에 필요한 DML만 부여했다. 대상 DB에는 아직 적용하지 않았다.
+- 2026-10-22: 대상 Supabase DB에 Drizzle `0022`와 `0023`, `room_connections` 권한 SQL을 적용했다.
+  적용 전 포커 방과 active credit lock은 모두 0건이었다. 적용 뒤 Drizzle 원장은 24건이고,
+  `game_type`은 `seotda`와 `gostop`만 허용하며 `room_connections`는 RLS와 앱 롤 권한을 사용한다.
