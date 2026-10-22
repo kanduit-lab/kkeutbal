@@ -1,4 +1,4 @@
-export type RoomGameType = 'seotda' | 'gostop' | 'poker'
+export type RoomGameType = 'seotda' | 'gostop'
 export type RoomStatus = 'waiting' | 'playing' | 'settled' | 'closed'
 export type InputMode = 'trust' | 'approval'
 

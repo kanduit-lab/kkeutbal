@@ -10,7 +10,7 @@ import './globals.css'
 
 const FALLBACK_METADATA = {
   title: '끗발',
-  description: '섯다·고스톱·포커 판돈 기록장. 누가 얼마 땄는지 끝까지 남는다.',
+  description: '섯다·고스톱 판돈 기록장. 누가 얼마 땄는지 끝까지 남는다.',
 } as const
 
 function siteUrl(): URL | undefined {

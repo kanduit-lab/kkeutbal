@@ -48,17 +48,19 @@ export function isKnownVoidReason(reason: string): reason is VoidReason {
   return VOID_REASON_VALUES.has(reason)
 }
 
-export const BET_LABELS_BY_GAME: Record<'seotda' | 'poker', Record<BetActionKind, string>> = {
-  seotda: { check: '체크', call: '콜', raise: '올려', fold: '다이', allin: '올인' },
-  poker: { check: '체크', call: '콜', raise: '레이즈', fold: '폴드', allin: '올인' },
+export const BET_LABELS: Record<BetActionKind, string> = {
+  check: '체크',
+  call: '콜',
+  raise: '올려',
+  fold: '다이',
+  allin: '올인',
 }
 
 export function betLabelsFor(
-  gameType: RoomGameType,
+  _gameType: RoomGameType,
   d?: Pick<Dictionary, 'bet'>,
 ): Record<BetActionKind, string> {
-  const key = gameType === 'poker' ? 'poker' : 'seotda'
-  return d ? d.bet[key] : BET_LABELS_BY_GAME[key]
+  return d ? d.bet.seotda : BET_LABELS
 }
 
 export function formatChips(n: number, locale: 'ko' | 'en' = 'ko'): string {
@@ -115,22 +117,14 @@ const PRESET_LABELS_FALLBACK: Dictionary['presets'] = {
 }
 
 export function raisePresets(
-  gameType: 'seotda' | 'poker',
   { lastBet, pot, base }: { lastBet: number; pot: number; base: number },
   labels: Dictionary['presets'] = PRESET_LABELS_FALLBACK,
 ): readonly { label: string; amount: number }[] {
   const half = Math.ceil(pot / 2)
-  if (gameType === 'seotda') {
-    return [
-      { label: labels.pping, amount: base },
-      { label: labels.ttadang, amount: lastBet * 2 },
-      { label: labels.half, amount: half },
-      { label: labels.full, amount: pot },
-    ].filter((preset) => preset.amount >= 1)
-  }
   return [
-    { label: labels.double, amount: lastBet * 2 },
+    { label: labels.pping, amount: base },
+    { label: labels.ttadang, amount: lastBet * 2 },
     { label: labels.half, amount: half },
-    { label: labels.pot, amount: pot },
+    { label: labels.full, amount: pot },
   ].filter((preset) => preset.amount >= 1)
 }

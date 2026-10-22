@@ -1,6 +1,6 @@
 export const meta = {
   title: '끗발',
-  description: '판돈 없이 즐기는 섯다·고스톱·포커 판 기록',
+  description: '판돈 없이 즐기는 섯다·고스톱 판 기록',
 } as const
 
 export const common = {
@@ -39,7 +39,6 @@ export const common = {
 export const games = {
   seotda: '섯다',
   gostop: '고스톱',
-  poker: '포커',
 } as const
 
 export const roles = {
@@ -56,13 +55,6 @@ export const bet = {
     call: '콜',
     raise: '레이즈',
     fold: '다이',
-    allin: '올인',
-  },
-  poker: {
-    check: '체크',
-    call: '콜',
-    raise: '레이즈',
-    fold: '폴드',
     allin: '올인',
   },
 } as const

@@ -4,7 +4,7 @@ import { Alert } from '@/components/ui'
 import { useDict } from '@/lib/i18n/client'
 
 /**
- * 고스톱 비딜러용 대기 표면. 섯다·포커의 `actionBar.noRound`처럼 "지금 누가
+ * 고스톱 비딜러용 대기 표면. 섯다의 `actionBar.noRound`처럼 "지금 누가
  * 무엇을 하는 중인지"를 알려준다. 고스톱은 베팅이 없어 ActionBar가 아예 뜨지
  * 않으므로(room-client.tsx의 `canBet`이 항상 false) 이 패널이 유일한 안내다.
  *

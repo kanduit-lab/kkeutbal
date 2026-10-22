@@ -14,7 +14,7 @@ export const guide: Dictionary['guide'] = {
 } as const
 
 export const about: Dictionary['about'] = {
-  tagline: 'Records bets and results for Seotda, Go-Stop, and Poker.',
+  tagline: 'Records bets and results for Seotda and Go-Stop.',
   featureRealtimeTitle: 'Realtime table',
   featureRealtimeBody: 'Players record bets on their phones, and room screens stay in sync.',
   featureSettleTitle: 'Automatic settlement',

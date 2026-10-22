@@ -67,7 +67,7 @@ describe('RoundLog', () => {
     expect(within(items[1]!).getByText(ko.bet.seotda.call)).toBeTruthy()
   })
 
-  it('포커는 폴드 라벨을 쓰고, 대리 입력이면 대리 표시가 붙는다', () => {
+  it('대리 입력이면 대리 표시가 붙는다', () => {
     renderWithProviders(
       <RoundLog
         actions={[
@@ -85,10 +85,10 @@ describe('RoundLog', () => {
           },
         ]}
         members={MEMBERS}
-        gameType="poker"
+        gameType="seotda"
       />,
     )
-    expect(screen.getByText(ko.bet.poker.fold)).toBeTruthy()
+    expect(screen.getByText(ko.bet.seotda.fold)).toBeTruthy()
     expect(screen.getByText(`(대리: 방장)`)).toBeTruthy()
   })
 

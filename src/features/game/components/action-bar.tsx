@@ -32,7 +32,6 @@ export function ActionBar({
   dealerSlot?: ReactNode
 }) {
   const { d, locale } = useDict()
-  const gameType = snapshot.room.gameType === 'poker' ? 'poker' : 'seotda'
   const labels = betLabelsFor(snapshot.room.gameType, d)
   const { toast } = useToast()
 
@@ -64,7 +63,6 @@ export function ActionBar({
     runAction,
     staleReason,
     inline,
-    gameType,
     labels,
     d,
     toast,

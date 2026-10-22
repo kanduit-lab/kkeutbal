@@ -41,7 +41,7 @@ afterEach(() => cleanup())
 
 const noopRunAction: RunAction = async () => true
 
-const GAME_TYPES: readonly RoomGameType[] = ['seotda', 'gostop', 'poker']
+const GAME_TYPES: readonly RoomGameType[] = ['seotda', 'gostop']
 const ROLES: readonly MemberRole[] = ['host', 'dealer', 'player', 'observer']
 
 /** room-client.tsx:202-206의 게이팅 조건을 그대로 재현한다 — 대상 밖(room-client.tsx) 로직을
@@ -130,14 +130,6 @@ describe('역할별 렌더링 검증 — 구체적 내용', () => {
     expect(screen.getByText(ko.bet.seotda.raise)).toBeTruthy()
     expect(screen.getByText(ko.bet.seotda.fold)).toBeTruthy()
     expect(screen.queryByText(ko.dealer.endRound)).toBeNull()
-  })
-
-  it('포커: 딜러는 베팅 버튼과 딜러 컨트롤을 함께 본다', () => {
-    renderPrimarySurface('poker', 'dealer')
-    expect(screen.getByText(ko.bet.poker.raise)).toBeTruthy()
-    // "🏁 판 종료"처럼 이모지와 같은 텍스트 노드에 있어 정확히 일치하지 않는다 — exact:false로 부분 일치.
-    expect(screen.getByText(ko.dealer.endRound, { exact: false })).toBeTruthy()
-    expect(screen.getByText(ko.dealer.voidRound)).toBeTruthy()
   })
 
   it('고스톱: 방장은 딜러 컨트롤만 보이고 베팅 버튼은 없다', () => {

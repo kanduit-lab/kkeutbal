@@ -228,7 +228,6 @@ export const dealer: Dictionary['dealer'] = {
   notePlaceholder: 'Hand note · {example}',
   noteExampleSeotda: 'e.g. 38광땡',
   noteExampleGostop: 'e.g. 3-point 스톱',
-  noteExamplePoker: 'e.g. full house',
   pickWinnerFirst: 'Pick a winner',
   foldWinHint: 'Everyone else folded. {winner} has been preselected as the winner.',
   confirmWinner: 'Confirm winner',

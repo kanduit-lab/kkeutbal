@@ -25,7 +25,7 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfile | 
 }
 
 export interface PlayerGameStats {
-  readonly gameType: 'seotda' | 'gostop' | 'poker'
+  readonly gameType: 'seotda' | 'gostop'
   readonly sessions: number
 
   readonly rounds: number
@@ -43,7 +43,7 @@ export interface PlayerStats {
   }
 }
 
-const GAME_ORDER: ReadonlyArray<PlayerGameStats['gameType']> = ['seotda', 'gostop', 'poker']
+const GAME_ORDER: ReadonlyArray<PlayerGameStats['gameType']> = ['seotda', 'gostop']
 
 export async function getPlayerStats(userId: string): Promise<PlayerStats> {
   const memberRoomIds = db

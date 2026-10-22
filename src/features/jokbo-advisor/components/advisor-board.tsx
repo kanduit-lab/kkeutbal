@@ -5,29 +5,19 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { findCard } from '@/features/hwatu/cards'
 import type { CardId, GameType, HwatuCard } from '@/features/hwatu/types'
-import { findPokerCard } from '@/features/poker/cards'
-import type { PokerCard } from '@/features/poker/cards'
 import { Button, PaneGroup, Panel, ScrollPane, Segmented, useToast } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { CardPicker } from './card-picker'
-import { PokerPicker } from './poker-picker'
-import { GostopResult, PokerResult, SeotdaResult, type VisionSource } from './advisor-results'
-import { PokerRankingPanel } from './poker-ranking-panel'
+import { GostopResult, SeotdaResult, type VisionSource } from './advisor-results'
 import { SeotdaRankingPanel } from './seotda-ranking-panel'
 import { VisionCapture } from './vision-capture'
 
-export type AdvisorTab = 'seotda' | 'gostop' | 'poker'
+export type AdvisorTab = 'seotda' | 'gostop'
 
 const TAB_EMOJI: Record<AdvisorTab, string> = {
   seotda: '🎴',
   gostop: '🌸',
-  poker: '♠',
 }
-
-const POKER_MAX_SELECT = 7
-
-/** 포커 족보가 성립하는 최소 장수. 이보다 적으면 판정할 게 없다. */
-const POKER_MIN_HAND = 5
 
 const GOSTOP_MAX_SELECT = 30
 
@@ -49,7 +39,6 @@ export function AdvisorBoard({
 }) {
   const [tab, setTab] = useState<AdvisorTab>(initialTab)
   const [selected, setSelected] = useState<ReadonlySet<CardId>>(new Set())
-  const [pokerSelected, setPokerSelected] = useState<ReadonlySet<string>>(new Set())
 
   const [vision, setVision] = useState<VisionSource | null>(null)
   // 모바일 탭을 부모가 들고 있는 이유: 사진 인식이 끝나면 결과 패널로 데려가야 한다.
@@ -61,7 +50,7 @@ export function AdvisorBoard({
   const maxSelect = hwatuGameType === 'seotda' ? 2 : GOSTOP_MAX_SELECT
 
   function switchTab(next: AdvisorTab) {
-    if (next !== 'poker' && tab !== next) {
+    if (tab !== next) {
       setSelected(new Set())
       setVision(null)
     }
@@ -78,15 +67,8 @@ export function AdvisorBoard({
   }, [initialTab])
 
   function revealIfComplete(count: number) {
-    const needed =
-      tab === 'poker'
-        ? POKER_MIN_HAND
-        : tab === 'seotda'
-          ? maxSelect
-          : tab === 'gostop'
-            ? GOSTOP_MIN_RESULT_CARDS
-            : null
-    if (needed !== null && count === needed) setPane('result')
+    const needed = tab === 'seotda' ? maxSelect : GOSTOP_MIN_RESULT_CARDS
+    if (count === needed) setPane('result')
   }
 
   function toggle(id: CardId) {
@@ -95,14 +77,6 @@ export function AdvisorBoard({
     else if (next.size < maxSelect) next.add(id)
     setVision(null)
     setSelected(next)
-    revealIfComplete(next.size)
-  }
-
-  function togglePoker(id: string) {
-    const next = new Set(pokerSelected)
-    if (next.has(id)) next.delete(id)
-    else if (next.size < POKER_MAX_SELECT) next.add(id)
-    setPokerSelected(next)
     revealIfComplete(next.size)
   }
 
@@ -144,22 +118,12 @@ export function AdvisorBoard({
     [selected],
   )
 
-  const pokerCards = useMemo(
-    () =>
-      [...pokerSelected]
-        .map((id) => findPokerCard(id))
-        .filter((card): card is PokerCard => card !== undefined),
-    [pokerSelected],
-  )
-
-  const isPoker = tab === 'poker'
-
   return (
     <div className={clsx('flex min-h-0 flex-1 flex-col gap-4', className)}>
       <Segmented
         value={tab}
         onChange={switchTab}
-        options={(['seotda', 'gostop', 'poker'] as const).map((type) => ({
+        options={(['seotda', 'gostop'] as const).map((type) => ({
           value: type,
           label: (
             <>
@@ -168,7 +132,7 @@ export function AdvisorBoard({
           ),
         }))}
         ariaLabel={d.home.advisor}
-        className="rise-in rise-in-1 max-w-xl shrink-0 grid-cols-3"
+        className="rise-in rise-in-1 max-w-xl shrink-0 grid-cols-2"
       />
       <PaneGroup
         ariaLabel={d.advisor.paneNavLabel}
@@ -179,19 +143,7 @@ export function AdvisorBoard({
           {
             key: 'picker',
             label: d.advisor.pickerTab,
-            node: isPoker ? (
-              <PickerPane
-                selectedCount={pokerSelected.size}
-                max={POKER_MAX_SELECT}
-                onClear={pokerSelected.size > 0 ? () => setPokerSelected(new Set()) : undefined}
-              >
-                <PokerPicker
-                  selected={pokerSelected}
-                  maxSelect={POKER_MAX_SELECT}
-                  onToggle={togglePoker}
-                />
-              </PickerPane>
-            ) : (
+            node: (
               <PickerPane
                 selectedCount={selected.size}
                 max={maxSelect}
@@ -203,9 +155,6 @@ export function AdvisorBoard({
                       }
                     : undefined
                 }
-                // 사진 인식은 "직접 고르기"의 대안이므로 고르는 화면 바로 아래 둔다.
-                // 결과 패널에 있을 때는 판정을 보러 넘어간 뒤에야 보여서, 손으로 고르기
-                // 시작한 사람에게는 있는 줄도 몰랐던 기능이었다.
                 footer={
                   <VisionCapture
                     gameType={hwatuGameType}
@@ -226,7 +175,7 @@ export function AdvisorBoard({
           {
             key: 'result',
             label: d.advisor.resultTab,
-            node: <ResultPane tab={tab} cards={cards} pokerCards={pokerCards} vision={vision} />,
+            node: <ResultPane tab={tab} cards={cards} vision={vision} />,
           },
         ]}
       />
@@ -284,12 +233,10 @@ function PickerPane({
 function ResultPane({
   tab,
   cards,
-  pokerCards,
   vision,
 }: {
   tab: AdvisorTab
   cards: readonly HwatuCard[]
-  pokerCards: readonly PokerCard[]
   vision: VisionSource | null
 }) {
   const { d } = useDict()
@@ -301,10 +248,8 @@ function ResultPane({
       <div className="shrink-0 space-y-4">
         {tab === 'seotda' ? <SeotdaResult cards={cards} vision={vision} /> : null}
         {tab === 'gostop' ? <GostopResult cards={cards} vision={vision} /> : null}
-        {tab === 'poker' ? <PokerResult cards={pokerCards} /> : null}
       </div>
       {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
-      {tab === 'poker' ? <PokerRankingPanel cards={pokerCards} /> : null}
     </ScrollPane>
   )
 }

@@ -4,7 +4,7 @@
 import type { Dictionary } from '../ko'
 
 export const auth: Dictionary['auth'] = {
-  tagline: 'Seotda, Go-Stop, and Poker score tracking',
+  tagline: 'Seotda and Go-Stop score tracking',
   aboutLink: 'About this app',
   passwordLoginTitle: 'Sign in with username',
   usernamePlaceholder: 'Username',

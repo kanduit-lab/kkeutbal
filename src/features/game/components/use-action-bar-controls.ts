@@ -24,7 +24,6 @@ interface UseActionBarControlsParams {
   runAction: RunAction
   staleReason: string | null
   inline: boolean
-  gameType: 'seotda' | 'poker'
   labels: Record<BetActionKind, string>
   d: Dictionary
   toast: (message: string, tone?: 'info' | 'error' | 'success') => void
@@ -45,7 +44,6 @@ export function useActionBarControls({
   runAction,
   staleReason,
   inline,
-  gameType,
   labels,
   d,
   toast,
@@ -157,12 +155,11 @@ export function useActionBarControls({
   const presets = useMemo(
     () =>
       buildRaisePresetOptions(
-        gameType,
         { lastBet, pot, base, contribution, minRaise, balance },
         labels.allin,
         d.presets,
       ),
-    [gameType, lastBet, pot, base, balance, labels.allin, minRaise, contribution, d.presets],
+    [lastBet, pot, base, balance, labels.allin, minRaise, contribution, d.presets],
   )
 
   function fire(action: BetActionKind, amount: number, slot: ActionSlot) {

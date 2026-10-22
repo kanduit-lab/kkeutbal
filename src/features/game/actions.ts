@@ -32,7 +32,7 @@ const { rooms, roomMembers, rounds, buyIns, chipLedger, roomCreditLocks } = sche
 
 const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(30),
-  gameType: z.enum(['seotda', 'gostop', 'poker']),
+  gameType: z.enum(['seotda', 'gostop']),
   inputMode: z.enum(['trust', 'approval']),
   startingChips: z.number().int().min(1).max(1_000_000),
   pointValue: z.number().int().min(1).max(100_000).optional(),

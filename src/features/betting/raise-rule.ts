@@ -1,5 +1,5 @@
 /**
- * 섯다·포커 공용 레이즈 규칙. `rooms.rulePreset` JSON의 `raiseRule` 필드로 저장한다
+ * 섯다 레이즈 규칙. `rooms.rulePreset` JSON의 `raiseRule` 필드로 저장한다
  * (마이그레이션 없음 — `game/action-helpers.ts`의 `readRaiseRule`이 읽는다).
  *
  * - `free`(기본값): 기존 동작 그대로 — 최소 레이즈 하한만 강제, 상한 없음. `raiseRule`을

@@ -64,24 +64,6 @@ describe('TurnRailBar — 노선도', () => {
     expect(screen.getByText(ko.rail.yourTurn)).toBeTruthy()
   })
 
-  it('포커 방에서는 포커 라벨을 쓴다 — 섯다 라벨이 새면 안 된다', () => {
-    const actions = [buildBetAction({ userId: 'host-1', action: 'fold', seq: 1 })]
-
-    renderWithProviders(
-      <TurnRailBar
-        rail={railFor(actions)}
-        members={buildStandardTable()}
-        selfId="player-1"
-        gameType="poker"
-        historyCount={1}
-        onOpenHistory={vi.fn()}
-      />,
-    )
-
-    expect(screen.getByText(ko.bet.poker.fold)).toBeTruthy()
-    expect(screen.queryByText(ko.bet.seotda.fold)).toBeFalsy()
-  })
-
   it('판이 없으면 대기 상태를 알린다', () => {
     renderWithProviders(
       <TurnRailBar

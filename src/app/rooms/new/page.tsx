@@ -31,7 +31,7 @@ import {
 } from '@/components/ui'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 
-const GAME_TYPES: readonly RoomGameType[] = ['seotda', 'gostop', 'poker']
+const GAME_TYPES: readonly RoomGameType[] = ['seotda', 'gostop']
 
 export default function NewRoomPage() {
   const router = useRouter()
@@ -105,7 +105,7 @@ export default function NewRoomPage() {
               </div>
               <div className="lg:col-span-2">
                 <Field label={d.roomForm.gameLabel} group>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {GAME_TYPES.map((type) => (
                       <Button
                         key={type}

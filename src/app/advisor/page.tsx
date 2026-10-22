@@ -5,7 +5,7 @@ import { AdvisorClient } from '@/features/jokbo-advisor/components/advisor-clien
 import { getVisionSettings } from '@/features/jokbo-advisor/vision/settings'
 
 const searchParamsSchema = z.object({
-  game: z.enum(['seotda', 'gostop', 'poker']).catch('seotda'),
+  game: z.enum(['seotda', 'gostop']).catch('seotda'),
 })
 
 export default async function AdvisorPage({

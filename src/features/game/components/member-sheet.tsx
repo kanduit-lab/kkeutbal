@@ -52,7 +52,7 @@ export function MemberSheet({
   const isDealer = isHost || self?.role === 'dealer'
   const isSelf = member.userId === selfId
   const isBettingGame = snapshot.room.gameType !== 'gostop'
-  const labels = d.bet[snapshot.room.gameType === 'poker' ? 'poker' : 'seotda']
+  const labels = d.bet.seotda
   const round = snapshot.currentRound
   const hasRound = Boolean(round)
   const net = member.balance - member.buyInTotal

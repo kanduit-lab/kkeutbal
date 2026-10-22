@@ -32,12 +32,6 @@ function guideEntries(d: Dictionary): readonly GuideEntry[] {
       description: '광·열끗·띠·피 모아 점수 내기. 고/스톱과 배수 규칙 정리',
     },
     {
-      href: '/guide/poker',
-      emoji: GAME_LABELS.poker.emoji,
-      title: d.games.poker,
-      description: '텍사스 홀덤 족보 10가지 서열표와 예시 카드',
-    },
-    {
       href: '/guide/usage',
       emoji: '📱',
       title: d.guide.usageTitle,
@@ -66,7 +60,7 @@ export default async function GuidePage() {
         backLabel={d.common.home}
         actions={<LocaleSwitcher />}
       />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {guideEntries(d).map((entry, index) => (
           <Link
             key={entry.href}

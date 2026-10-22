@@ -3,7 +3,6 @@ import type { HwatuCard } from '@/features/hwatu/types'
 import { evaluateSeotdaHand, resolveSeotdaShowdown } from '@/features/seotda/engine'
 import { SEOTDA_RULES_STANDARD, type SeotdaHand, type SeotdaTrait } from '@/features/seotda/types'
 import { catcherTraitAgainst, seotdaAdvice, type SeotdaAdviceCode } from '@/features/seotda/advice'
-import type { PokerCategory } from '@/features/poker/engine'
 
 const ALL_SEOTDA_HANDS: readonly SeotdaHand[] = (() => {
   const hands: SeotdaHand[] = []
@@ -36,7 +35,6 @@ export interface SeotdaStats {
 
   readonly catcherRate: number
 }
-
 export function seotdaStats(hand: SeotdaHand): SeotdaStats {
   const tierPosition = SEOTDA_TIERS.indexOf(hand.rank) + 1
   const sameTierCount = ALL_SEOTDA_HANDS.filter((other) => other.rank === hand.rank).length
@@ -77,20 +75,4 @@ export function seotdaStats(hand: SeotdaHand): SeotdaStats {
     catcherTrait,
     catcherRate: catcherTrait ? catchers / total : 0,
   }
-}
-
-export const POKER_CATEGORY_STATS: Record<
-  PokerCategory,
-  { readonly position: number; readonly probability: number }
-> = {
-  'royal-flush': { position: 1, probability: 0.000154 },
-  'straight-flush': { position: 2, probability: 0.00139 },
-  'four-of-a-kind': { position: 3, probability: 0.024 },
-  'full-house': { position: 4, probability: 0.1441 },
-  flush: { position: 5, probability: 0.1965 },
-  straight: { position: 6, probability: 0.3925 },
-  'three-of-a-kind': { position: 7, probability: 2.1128 },
-  'two-pair': { position: 8, probability: 4.7539 },
-  'one-pair': { position: 9, probability: 42.2569 },
-  'high-card': { position: 10, probability: 50.1177 },
 }

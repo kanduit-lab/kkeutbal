@@ -224,7 +224,6 @@ export const dealer = {
   notePlaceholder: '족보 메모 · {example}',
   noteExampleSeotda: '예: 38광땡',
   noteExampleGostop: '예: 3점 스톱',
-  noteExamplePoker: '예: 풀하우스',
   pickWinnerFirst: '승자를 선택하세요',
   foldWinHint: '다른 참가자가 모두 다이했어요. {winner} 님을 승자로 미리 선택했어요.',
   confirmWinner: '승자 확정',

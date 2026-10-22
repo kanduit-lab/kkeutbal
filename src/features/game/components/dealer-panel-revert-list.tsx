@@ -29,7 +29,7 @@ export function RevertList({
   if (accepted.length === 0) return null
   const latestAcceptedId = accepted[accepted.length - 1]?.id
 
-  const betLabels = d.bet[snapshot.room.gameType === 'poker' ? 'poker' : 'seotda']
+  const betLabels = d.bet.seotda
   const nameOf = (userId: string) =>
     snapshot.members.find((member) => member.userId === userId)?.displayName ?? '?'
 

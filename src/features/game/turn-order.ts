@@ -6,7 +6,7 @@ import type { BetActionKind, BetStatus } from './types'
  *
  * ## 좌석 순서 기준 (선행 확인 결과)
  * `participantIds`는 seatNo 오름차순으로 이미 정렬된 배열로 받는다(`roomMembers.seatNo asc` —
- * `getMembers`/`startRound`가 참가자를 조회하는 순서와 동일). 이 순서가 실제 섯다·포커의
+ * `getMembers`/`startRound`가 참가자를 조회하는 순서와 동일). 이 순서가 실제 섯다의
  * 시계방향 베팅 순서와 일치하는지는 다음 근거로 확인했다: `round-actions.ts`의 `startRound`가
  * `round_fairness_participants.dealOrder`("선" = index 0, 카드를 나눠주는 순서)를 바로 이
  * seatNo asc 참가자 배열의 인덱스로 채운다. 카드를 나눠준 순서와 베팅을 받는 순서가 서로 다른

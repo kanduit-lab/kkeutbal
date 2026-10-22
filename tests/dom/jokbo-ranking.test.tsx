@@ -1,9 +1,7 @@
 import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SeotdaRankingPanel } from '@/features/jokbo-advisor/components/seotda-ranking-panel'
-import { PokerRankingPanel } from '@/features/jokbo-advisor/components/poker-ranking-panel'
 import { SEOTDA_RANK_TABLE } from '@/features/jokbo-advisor/components/seotda-rank-table'
-import { POKER_RANK_TABLE } from '@/features/jokbo-advisor/components/poker-rank-table'
 import { findCard } from '@/features/hwatu/cards'
 import type { HwatuCard } from '@/features/hwatu/types'
 import { ko, renderWithProviders } from './render-helpers'
@@ -70,16 +68,5 @@ describe('SeotdaRankingPanel', () => {
     // hover 로만 열리는 표면을 만들지 않는다 — 같은 버튼으로 닫힌다.
     fireEvent.click(screen.getByRole('button', { name: ko.advisor.ranking.caveatsToggleHide }))
     expect(screen.queryByText(ko.advisor.ranking.caveats.ttaengjabi.title)).toBeNull()
-  })
-})
-
-describe('PokerRankingPanel', () => {
-  it('renders every tier, not a sliced window', () => {
-    renderWithProviders(<PokerRankingPanel cards={[]} />)
-
-    for (const tier of POKER_RANK_TABLE) {
-      expect(screen.getAllByText(tier.label).length).toBeGreaterThan(0)
-    }
-    expect(screen.getAllByText(/^\d+위$/)).toHaveLength(POKER_RANK_TABLE.length)
   })
 })

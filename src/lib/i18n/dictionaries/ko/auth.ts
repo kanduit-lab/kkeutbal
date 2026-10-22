@@ -1,5 +1,5 @@
 export const auth = {
-  tagline: '섯다·고스톱·포커 판 기록',
+  tagline: '섯다·고스톱 판 기록',
   aboutLink: '이 앱 소개',
   passwordLoginTitle: '아이디 로그인',
   usernamePlaceholder: '아이디',

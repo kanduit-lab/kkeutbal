@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: '끗발',
     short_name: '끗발',
-    description: '판돈 없이 즐기는 섯다·고스톱·포커 판 기록',
+    description: '판돈 없이 즐기는 섯다·고스톱 판 기록',
     start_url: '/',
     scope: '/',
     display: 'standalone',

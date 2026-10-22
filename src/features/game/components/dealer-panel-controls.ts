@@ -84,11 +84,7 @@ export function useDealerPanelControls({
     isGostop && winnerId ? players.filter((member) => member.userId !== winnerId) : []
   const betLabels = betLabelsFor(snapshot.room.gameType, d)
   const noteExample =
-    snapshot.room.gameType === 'seotda'
-      ? d.dealer.noteExampleSeotda
-      : isGostop
-        ? d.dealer.noteExampleGostop
-        : d.dealer.noteExamplePoker
+    snapshot.room.gameType === 'gostop' ? d.dealer.noteExampleGostop : d.dealer.noteExampleSeotda
 
   const run = (slot: DealerSlot, task: () => Promise<unknown>) => {
     if (isPending) return

@@ -5,7 +5,7 @@ import type { Dictionary } from '../ko'
 
 export const meta: Dictionary['meta'] = {
   title: 'Kkeutbal',
-  description: 'No-stakes score tracking for Seotda, Go-Stop, and Poker',
+  description: 'No-stakes score tracking for Seotda and Go-Stop',
 } as const
 
 export const common: Dictionary['common'] = {
@@ -44,7 +44,6 @@ export const common: Dictionary['common'] = {
 export const games: Dictionary['games'] = {
   seotda: 'Seotda',
   gostop: 'Go-Stop',
-  poker: 'Poker',
 } as const
 
 export const roles: Dictionary['roles'] = {
@@ -61,13 +60,6 @@ export const bet: Dictionary['bet'] = {
     call: 'Call',
     raise: 'Raise',
     fold: '다이',
-    allin: 'All-in',
-  },
-  poker: {
-    check: 'Check',
-    call: 'Call',
-    raise: 'Raise',
-    fold: 'Fold',
     allin: 'All-in',
   },
 } as const

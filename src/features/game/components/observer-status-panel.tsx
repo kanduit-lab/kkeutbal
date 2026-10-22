@@ -6,7 +6,7 @@ import { nextActorId } from '../turn-order'
 import type { RoomSnapshot } from '../types'
 
 /**
- * 섯다·포커 관전자용 상태 표면.
+ * 섯다 관전자용 상태 표면.
  *
  * 관전자는 `canBet`이 false라 `ActionBar`가 안 뜨고, 딜러가 아니라 `DealerQuickBar`도 없다.
  * 그래서 판이 도는 동안 화면에서 "지금 누가 무엇을 하는 중인지" 알려주는 게 하나도 없었다

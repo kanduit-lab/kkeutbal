@@ -9,7 +9,7 @@ export const guide = {
 } as const
 
 export const about = {
-  tagline: '섯다·고스톱·포커의 베팅과 결과를 기록합니다.',
+  tagline: '섯다·고스톱의 베팅과 결과를 기록합니다.',
   featureRealtimeTitle: '실시간 테이블',
   featureRealtimeBody: '각자 휴대폰으로 베팅을 기록하고, 방 참여자의 화면을 동기화합니다.',
   featureSettleTitle: '자동 정산',

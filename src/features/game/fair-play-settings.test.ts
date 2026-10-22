@@ -14,9 +14,8 @@ const verifiedSettings = {
 }
 
 describe('fair-play room settings', () => {
-  it('accepts complete verified settings only for Seotda until other card engines have private hands', () => {
+  it('accepts complete verified settings only for Seotda', () => {
     expect(parseFairPlaySettings('seotda', verifiedSettings)).toEqual(verifiedSettings)
-    expect(supportsVerifiedDealing('poker')).toBe(false)
     expect(supportsVerifiedDealing('gostop')).toBe(false)
   })
 
@@ -31,9 +30,6 @@ describe('fair-play room settings', () => {
     expect(() => parseFairPlaySettings('gostop', verifiedSettings)).toThrow(
       'Verified dealing is not supported',
     )
-    expect(() => parseFairPlaySettings('poker', verifiedSettings)).toThrow(
-      'Verified dealing is not supported',
-    )
   })
 
   it('reads only a valid stored fair_play object', () => {
@@ -41,13 +37,13 @@ describe('fair-play room settings', () => {
       verifiedSettings,
     )
     expect(
-      readFairPlaySettings('poker', { fair_play: { ...verifiedSettings, extra: true } }),
+      readFairPlaySettings('seotda', { fair_play: { ...verifiedSettings, extra: true } }),
     ).toEqual(defaultFairPlaySettings)
   })
 
   it('falls back to a fresh conservative default for untrusted or incompatible presets', () => {
     const fromMissing = readFairPlaySettings('seotda', null)
-    const fromMalformed = readFairPlaySettings('poker', { fair_play: ['verified'] })
+    const fromMalformed = readFairPlaySettings('seotda', { fair_play: ['verified'] })
     const fromGoStop = readFairPlaySettings('gostop', { fair_play: verifiedSettings })
 
     expect(fromMissing).toEqual(defaultFairPlaySettings)

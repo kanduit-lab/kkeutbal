@@ -22,14 +22,13 @@ export interface RaisePresetInputs {
 }
 
 export function buildRaisePresetOptions(
-  gameType: 'seotda' | 'poker',
   inputs: RaisePresetInputs,
   allinLabel: string,
   presetLabels?: Dictionary['presets'],
 ): readonly { label: string; amount: number }[] {
   const { lastBet, pot, base, contribution, minRaise, balance } = inputs
 
-  const standard = raisePresets(gameType, { lastBet, pot, base }, presetLabels)
+  const standard = raisePresets({ lastBet, pot, base }, presetLabels)
     .filter((preset) => preset.amount > lastBet)
     .map((preset) => ({ ...preset, amount: preset.amount - contribution }))
     .filter((preset) => preset.amount >= minRaise)

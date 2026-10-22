@@ -56,9 +56,8 @@ describe('formatChips', () => {
 })
 
 describe('베팅 UI 파생 규칙', () => {
-  it('게임별 기본 라벨을 고르고 고스톱은 섯다 라벨로 폴백한다', () => {
+  it('베팅 라벨은 섯다를 쓰고 고스톱도 동일한 폴백을 쓴다', () => {
     expect(betLabelsFor('seotda').fold).toBe('다이')
-    expect(betLabelsFor('poker').fold).toBe('폴드')
     expect(betLabelsFor('gostop').raise).toBe('올려')
   })
 
@@ -98,14 +97,10 @@ describe('베팅 UI 파생 규칙', () => {
     expect(nonFoldedParticipantIds(['u1', 'u2', 'u3'], actions)).toEqual(['u1', 'u3'])
   })
 
-  it('섯다·포커 프리셋을 팟과 직전 베팅에서 계산하고 0원 항목은 버린다', () => {
+  it('섯다 프리셋을 팟과 직전 베팅에서 계산하고 0원 항목은 버린다', () => {
     expect(
-      raisePresets('seotda', { lastBet: 100, pot: 450, base: 50 }).map((x) => x.amount),
+      raisePresets({ lastBet: 100, pot: 450, base: 50 }).map((x) => x.amount),
     ).toEqual([50, 200, 225, 450])
-    expect(
-      raisePresets('poker', { lastBet: 100, pot: 450, base: 50 }).map((x) => x.amount),
-    ).toEqual([200, 225, 450])
-    expect(raisePresets('poker', { lastBet: 0, pot: 0, base: 50 })).toEqual([])
   })
 })
 

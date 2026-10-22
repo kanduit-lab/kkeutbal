@@ -125,7 +125,7 @@ export function RoomClient({
   const isBettingGame = snapshot.room.gameType !== 'gostop'
   const canBet = Boolean(self && self.role !== 'observer') && isBettingGame && !isLobby
   // 판이 없을 때도 띄운다. 고스톱 비딜러는 판과 판 사이에 화면이 비어서
-  // 다음 동작 주체를 알 수 없었다 — 섯다·포커의 actionBar.noRound와 같은 역할.
+  // 다음 동작 주체를 알 수 없었다 — 섯다의 actionBar.noRound와 같은 역할.
   const showGostopWait = !isBettingGame && !isLobby && !isDealer
   // 베팅 게임 관전자는 ActionBar도 DealerQuickBar도 안 뜬다 — 판이 도는 동안 화면에서
   // 아무것도 알려주지 않던 조합이라 전용 상태 표면을 준다.
@@ -346,8 +346,6 @@ export function RoomClient({
                   ) : null}
 
                   <div className="rise-in rise-in-3">
-                    {/* gameType 을 안 넘기면 기본값 'seotda' 라벨이 박혀 포커 방에서 '폴드'가
-                        '다이'로 보였다 — 모바일 시트도 같은 값을 받는다. */}
                     <RoundLog
                       actions={snapshot.actions}
                       members={snapshot.members}

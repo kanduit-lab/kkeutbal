@@ -5,14 +5,11 @@ import type { HwatuCard } from '@/features/hwatu/types'
 import { evaluateSeotdaHand, describeSeotdaHand } from '@/features/seotda/engine'
 import { GOSTOP_RULES_STANDARD } from '@/features/gostop/types'
 import { captureOf, hasChongtong, scoreGostop } from '@/features/gostop/scoring'
-import type { PokerCard } from '@/features/poker/cards'
-import { describePokerHand, evaluatePokerHand, POKER_CATEGORY_LABEL } from '@/features/poker/engine'
 import type { SeotdaAdviceCode } from '@/features/seotda/advice'
 import type { ReactNode } from 'react'
 import { Badge, Panel, Stepper } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
-import { previewPokerHand, type PokerHandPreview } from '../poker-preview'
-import { POKER_CATEGORY_STATS, seotdaStats } from '../stats'
+import { seotdaStats } from '../stats'
 
 export interface VisionSource {
   readonly confidence: number
@@ -220,87 +217,6 @@ export function GostopResult({
       </div>
     </ResultRegion>
   )
-}
-
-export function PokerResult({ cards }: { cards: readonly PokerCard[] }) {
-  const { d } = useDict()
-  const result = useMemo(() => {
-    if (cards.length < 5) return null
-    try {
-      return evaluatePokerHand(cards)
-    } catch {
-      return null
-    }
-  }, [cards])
-
-  const preview = useMemo(
-    () => (cards.length >= 3 && cards.length < 5 ? previewPokerHand(cards) : null),
-    [cards],
-  )
-
-  const stats = result ? POKER_CATEGORY_STATS[result.category] : null
-
-  return (
-    <ResultRegion className="space-y-3 text-center">
-      {result && stats ? (
-        <>
-          <p className="font-brush gilt text-5xl font-black">{result.label}</p>
-          <p className="text-sm text-muted">{describePokerHand(result)}</p>
-          <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-bold">
-            <span className="rounded-full bg-accent/20 px-2.5 py-1 text-accent">
-              {format(d.advisor.pokerRankPosition, { position: stats.position })}
-            </span>
-            <span className="rounded-full bg-white/10 px-2.5 py-1 text-muted">
-              {format(d.advisor.pokerProbability, {
-                probability: formatProbability(stats.probability),
-              })}
-            </span>
-          </div>
-        </>
-      ) : preview?.computed ? (
-        <PokerPreviewList preview={preview} />
-      ) : (
-        <p className="text-sm text-muted">
-          {cards.length >= 5
-            ? d.advisor.invalidCombination
-            : preview && !preview.computed && preview.reason === 'tooManyCombinations'
-              ? d.advisor.pokerPreviewUnavailable
-              : format(d.advisor.pokerMoreCards, { n: 5 - cards.length })}
-        </p>
-      )}
-    </ResultRegion>
-  )
-}
-
-function PokerPreviewList({ preview }: { preview: Extract<PokerHandPreview, { computed: true }> }) {
-  const { d } = useDict()
-  const completable = preview.categories.filter((entry) => entry.probability > 0)
-  return (
-    <div className="space-y-2 text-left">
-      <p className="text-center text-xs text-muted">
-        {format(d.advisor.pokerPreviewIntro, { n: preview.totalCombinations })}
-      </p>
-      <ul className="space-y-1">
-        {completable.map((entry) => (
-          <li
-            key={entry.category}
-            className="flex items-center justify-between gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs"
-          >
-            <span className="font-bold">{POKER_CATEGORY_LABEL[entry.category]}</span>
-            <span className="tabular-nums text-muted">
-              {formatProbability(entry.probability * 100)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function formatProbability(percent: number): string {
-  if (percent >= 1) return `${percent.toFixed(1)}%`
-  if (percent >= 0.01) return `${percent.toFixed(2)}%`
-  return `${percent.toFixed(4)}%`
 }
 
 function CountStepper({

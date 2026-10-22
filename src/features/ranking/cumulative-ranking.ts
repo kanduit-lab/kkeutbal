@@ -15,7 +15,7 @@ export interface CumulativeRow {
 }
 
 export interface CumulativeRankingFilter {
-  readonly gameType?: 'seotda' | 'gostop' | 'poker'
+  readonly gameType?: 'seotda' | 'gostop'
 
   readonly since?: Date
 }

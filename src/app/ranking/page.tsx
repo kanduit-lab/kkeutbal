@@ -10,7 +10,7 @@ import { getDict, format } from '@/lib/i18n/server'
 import type { Dictionary } from '@/lib/i18n/server'
 
 const filterSchema = z.object({
-  game: z.enum(['all', 'seotda', 'gostop', 'poker']).catch('all'),
+  game: z.enum(['all', 'seotda', 'gostop']).catch('all'),
   period: z.enum(['all', '7d', '30d']).catch('all'),
 })
 
@@ -24,7 +24,6 @@ function gameChips(d: Dictionary): ReadonlyArray<{ value: GameFilter; label: str
     { value: 'all', label: d.ranking.filterGameAll },
     { value: 'seotda', label: d.games.seotda },
     { value: 'gostop', label: d.games.gostop },
-    { value: 'poker', label: d.games.poker },
   ]
 }
 
