@@ -74,7 +74,8 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 3장 섯다는 Drizzle `0024_nappy_talkback`과 Supabase `0021_round_hand_choices_security.sql`이 함께
 있어야 동작한다. 앱 코드가 `rounds.street`·`rounds.choose_deadline`·`bet_actions.street`를 읽으므로,
-이 코드를 띄우기 전에 대상 DB에 적용한다. 2026-10-23 기준 대상 Supabase DB에는 적용되지 않았다.
+이 코드를 띄우기 전에 대상 DB에 적용한다. 대상 Supabase DB에는 2026-10-23에 두 파일을 한 트랜잭션으로
+적용했고 Drizzle 원장에 idx 24를 기록했다.
 
 1. 대상 DB 백업 시점을 확인한다. 이 migration은 컬럼과 테이블을 더하기만 하고 기존 행은 기본값
    `street = 1`을 받는다.

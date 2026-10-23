@@ -4,7 +4,7 @@
 |-------|-------|
 | Type | technical-design |
 | Audience | maintainers / reviewers |
-| Status | active — 코드 구현됨. DB migration `0024`는 대상 DB에 아직 적용하지 않았다 |
+| Status | active |
 | Source of truth | this document |
 | Last reviewed | 2026-10-23 |
 
