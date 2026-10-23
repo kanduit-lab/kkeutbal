@@ -12,7 +12,6 @@ import { VisionSettingsPanel } from './admin/vision-settings-panel'
 import { PromotionsAdmin } from '@/features/promotions/components/promotions-admin'
 import {
   Alert,
-  Badge,
   Button,
   ButtonLink,
   PaneGroup,
@@ -51,7 +50,8 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
   const [states, setStates] = useState<Partial<Record<AdminSection, SectionLoadState>>>({})
   const requestIds = useRef<Record<AdminSection, number>>({
     settings: 0,
-    access: 0,
+    registrationCodes: 0,
+    guestTokens: 0,
     people: 0,
     operations: 0,
   })
@@ -158,11 +158,21 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
             ]}
           />
         )
-      case 'access':
+      case 'registrationCodes':
         return (
           <AccessPanel
-            tokens={data.tokens}
-            registrationCodes={data.registrationCodes}
+            kind="registrationCodes"
+            items={data.registrationCodes}
+            total={data.registrationCodeTotal}
+            onDataChanged={reload}
+          />
+        )
+      case 'guestTokens':
+        return (
+          <AccessPanel
+            kind="guestTokens"
+            items={data.tokens}
+            total={data.guestTokenTotal}
             onDataChanged={reload}
           />
         )
@@ -204,27 +214,25 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <SectionNav
-        activeSection={activeSection}
-        loadedSections={loadedSections}
-        onSelect={setActiveSection}
-      />
+    <div className="flex min-h-0 flex-1 flex-col gap-4 lg:grid lg:grid-cols-[13rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+      <aside className="shrink-0 lg:self-start">
+        <SectionNav
+          activeSection={activeSection}
+          loadedSections={loadedSections}
+          onSelect={setActiveSection}
+        />
+      </aside>
       <section
         aria-labelledby={`admin-${activeSection}-title`}
-        className="flex min-h-0 flex-1 flex-col"
+        className="flex min-h-0 min-w-0 flex-1 flex-col"
       >
-        <div className="mb-3 flex shrink-0 items-baseline gap-3">
-          <h2
-            id={`admin-${activeSection}-title`}
-            className="shrink-0 text-lg font-black lg:text-xl"
-          >
+        <div className="mb-4 shrink-0 border-b border-gold/15 pb-4">
+          <h2 id={`admin-${activeSection}-title`} className="text-xl font-black lg:text-2xl">
             {d.adminDashboard.sections[activeSection].label}
           </h2>
-          <p className="hidden min-w-0 flex-1 truncate text-sm text-muted sm:block">
+          <p className="mt-1 text-sm text-muted">
             {d.adminDashboard.sections[activeSection].description}
           </p>
-          <Badge tone="muted">{d.adminDashboard.onDemand}</Badge>
         </div>
         {ADMIN_SECTIONS.map((section) => {
           const state = states[section]

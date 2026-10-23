@@ -5,7 +5,6 @@ export const adminDashboard = {
   deniedBody: '가입코드와 게스트 토큰 발급, 연결 설정, 관리자 지정은 관리자만 할 수 있습니다.',
   sectionNavLabel: '관리자 콘솔 영역',
   paneNavLabel: '패널 선택',
-  onDemand: '필요할 때 로드',
   refreshing: '최신 정보를 불러오는 중…',
   slowTitle: '서버 응답을 기다리는 중입니다',
   slowBody: '다른 영역은 계속 열 수 있습니다. 응답이 오면 자동으로 표시됩니다.',
@@ -17,10 +16,15 @@ export const adminDashboard = {
       short: 'SSO · 사진 인식',
       description: '외부 로그인과 AI 사진 인식 연결을 관리합니다.',
     },
-    access: {
-      label: '접근 관리',
-      short: '가입코드 · 게스트',
-      description: '회원가입 코드와 게스트 입장 토큰을 발급하고 회수합니다.',
+    registrationCodes: {
+      label: '가입코드',
+      short: '회원가입 전용',
+      description: '회원가입 코드를 발급하고 회수합니다.',
+    },
+    guestTokens: {
+      label: '게스트 토큰',
+      short: '게스트 입장 전용',
+      description: '게스트 입장 토큰을 발급하고 회수합니다.',
     },
     people: {
       label: '회원 · 크레딧',

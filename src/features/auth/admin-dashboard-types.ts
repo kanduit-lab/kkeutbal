@@ -8,7 +8,13 @@ import type { SsoSettingsView } from './sso-settings'
 import type { VisionSettingsView } from '@/features/jokbo-advisor/vision/settings'
 import type { AdminPromotionView } from '@/features/promotions/types'
 
-export const ADMIN_SECTIONS = ['settings', 'access', 'people', 'operations'] as const
+export const ADMIN_SECTIONS = [
+  'settings',
+  'registrationCodes',
+  'guestTokens',
+  'people',
+  'operations',
+] as const
 export type AdminSection = (typeof ADMIN_SECTIONS)[number]
 
 export type AdminSectionData =
@@ -18,9 +24,14 @@ export type AdminSectionData =
       readonly visionSettings: VisionSettingsView
     }
   | {
-      readonly section: 'access'
-      readonly tokens: readonly GuestTokenView[]
+      readonly section: 'registrationCodes'
       readonly registrationCodes: readonly RegistrationCodeView[]
+      readonly registrationCodeTotal: number
+    }
+  | {
+      readonly section: 'guestTokens'
+      readonly tokens: readonly GuestTokenView[]
+      readonly guestTokenTotal: number
     }
   | {
       readonly section: 'people'

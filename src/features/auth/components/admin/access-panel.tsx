@@ -1,7 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { ConfirmDialog, PaneGroup, useToast } from '@/components/ui'
+import { useEffect, useState, useTransition } from 'react'
+import {
+  ConfirmDialog,
+  DATA_TABLE_HEADER_H,
+  DATA_TABLE_ROW_H,
+  useFitCount,
+  useIsDesktop,
+  useToast,
+} from '@/components/ui'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import {
   createGuestToken,
@@ -9,49 +16,104 @@ import {
   revokeGuestToken,
   revokeRegistrationCode,
 } from '../../admin-actions'
-import type { GuestTokenView, RegistrationCodeView } from '../../admin-queries'
+import { loadAdminAccessPage } from '../../admin-dashboard-actions'
 import { IssueSecretPanel } from './issue-secret-panel'
-import { RevocableList } from './revocable-list'
+import { RevocableList, type RevocableItem } from './revocable-list'
+
+type AccessKind = 'registrationCodes' | 'guestTokens'
+
+/** 모바일 한 줄 높이(px) — `h-14` + `space-y-2` 간격 */
+const ROW_H = 64
 
 export function AccessPanel({
-  tokens,
-  registrationCodes,
+  kind,
+  items,
+  total,
   onDataChanged,
 }: {
-  tokens: readonly GuestTokenView[]
-  registrationCodes: readonly RegistrationCodeView[]
+  kind: AccessKind
+  items: readonly RevocableItem[]
+  total: number
   onDataChanged: () => void
 }) {
   const { d } = useDict()
   const { toast } = useToast()
   const [isPending, startTransition] = useTransition()
-  const [latestCode, setLatestCode] = useState<string | null>(null)
-  const [latestToken, setLatestToken] = useState<string | null>(null)
-  const [revokeCodeTarget, setRevokeCodeTarget] = useState<RegistrationCodeView | null>(null)
-  const [revokeTokenTarget, setRevokeTokenTarget] = useState<GuestTokenView | null>(null)
+  const [latestValue, setLatestValue] = useState<string | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<RevocableItem | null>(null)
+  const [page, setPage] = useState(0)
+  const isDesktop = useIsDesktop()
+  const { areaRef, count: pageSize } = useFitCount({
+    rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
+    reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
+  })
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [pageState, setPageState] = useState({ items, total, loading: false })
+  const copy = kind === 'registrationCodes' ? d.adminConsole.registrationCodes : d.adminConsole.guestTokens
 
-  function issueCode(input: { label: string; expiresInHours: number }) {
+  useEffect(() => {
+    let cancelled = false
+    setPageState((current) => ({ ...current, loading: true }))
+    void (async () => {
+      try {
+        const result = await loadAdminAccessPage({ kind, page, pageSize })
+        if (cancelled) return
+        if (result.success) {
+          const pageCount = Math.max(1, Math.ceil(result.data.total / pageSize))
+          if (page >= pageCount) {
+            setPage(pageCount - 1)
+            return
+          }
+          setPageState({ items: result.data.items, total: result.data.total, loading: false })
+          return
+        }
+        toast(translateError(d, result.error), 'error')
+      } catch (error) {
+        console.error('load admin access page failed:', error)
+        if (!cancelled) toast(translateError(d, 'errors.adminDashboardLoadFailed'), 'error')
+      }
+      if (!cancelled) setPageState((current) => ({ ...current, loading: false }))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [d, kind, page, pageSize, refreshKey, toast])
+
+  function refresh() {
+    setPage(0)
+    setRefreshKey((current) => current + 1)
+    onDataChanged()
+  }
+
+  function issue(input: { label: string; expiresInHours: number }) {
     if (isPending) return
     startTransition(async () => {
-      const result = await createRegistrationCode(input)
+      const result =
+        kind === 'registrationCodes'
+          ? await createRegistrationCode(input)
+          : await createGuestToken(input)
       if (result.success) {
-        setLatestCode(result.data.code)
-        toast(d.adminConsole.registrationCodes.issued, 'success')
-        onDataChanged()
+        setLatestValue(result.data.code)
+        toast(copy.issued, 'success')
+        refresh()
       } else {
         toast(translateError(d, result.error), 'error')
       }
     })
   }
 
-  function issueToken(input: { label: string; expiresInHours: number }) {
-    if (isPending) return
+  function revoke() {
+    const target = revokeTarget
+    setRevokeTarget(null)
+    if (!target) return
     startTransition(async () => {
-      const result = await createGuestToken(input)
+      const result =
+        kind === 'registrationCodes'
+          ? await revokeRegistrationCode({ codeId: target.id })
+          : await revokeGuestToken({ tokenId: target.id })
       if (result.success) {
-        setLatestToken(result.data.code)
-        toast(d.adminConsole.guestTokens.issued, 'success')
-        onDataChanged()
+        toast(copy.revokedToast, 'success')
+        refresh()
       } else {
         toast(translateError(d, result.error), 'error')
       }
@@ -60,116 +122,43 @@ export function AccessPanel({
 
   return (
     <>
-      <PaneGroup
-        ariaLabel={d.adminDashboard.paneNavLabel}
-        panes={[
-          {
-            key: 'codes',
-            label: d.adminConsole.registrationCodes.paneLabel,
-            node: (
-              <div className="flex min-h-0 flex-1 flex-col gap-3">
-                <div className="shrink-0">
-                  <IssueSecretPanel
-                    title={d.adminConsole.registrationCodes.issueTitle}
-                    description={d.adminConsole.registrationCodes.issueDescription}
-                    issueLabel={d.adminConsole.registrationCodes.issue}
-                    latestLabel={d.adminConsole.registrationCodes.latest}
-                    copiedMessage={d.adminConsole.registrationCodes.copied}
-                    latestValue={latestCode}
-                    isPending={isPending}
-                    onIssue={issueCode}
-                    onAcknowledge={() => setLatestCode(null)}
-                  />
-                </div>
-                <RevocableList
-                  heading={d.adminConsole.registrationCodes.listTitle}
-                  items={registrationCodes}
-                  emptyTitle={d.adminConsole.registrationCodes.empty}
-                  emptyHint={d.adminConsole.registrationCodes.emptyHint}
-                  disabled={isPending}
-                  onRevoke={setRevokeCodeTarget}
-                />
-              </div>
-            ),
-          },
-          {
-            key: 'tokens',
-            label: d.adminConsole.guestTokens.paneLabel,
-            node: (
-              <div className="flex min-h-0 flex-1 flex-col gap-3">
-                <div className="shrink-0">
-                  <IssueSecretPanel
-                    title={d.adminConsole.guestTokens.issueTitle}
-                    description={d.adminConsole.guestTokens.issueDescription}
-                    issueLabel={d.adminConsole.guestTokens.issue}
-                    latestLabel={d.adminConsole.guestTokens.latest}
-                    copiedMessage={d.adminConsole.guestTokens.copied}
-                    latestValue={latestToken}
-                    isPending={isPending}
-                    onIssue={issueToken}
-                    onAcknowledge={() => setLatestToken(null)}
-                  />
-                </div>
-                <RevocableList
-                  heading={d.adminConsole.guestTokens.listTitle}
-                  items={tokens}
-                  emptyTitle={d.adminConsole.guestTokens.empty}
-                  emptyHint={d.adminConsole.guestTokens.emptyHint}
-                  disabled={isPending}
-                  onRevoke={setRevokeTokenTarget}
-                />
-              </div>
-            ),
-          },
-        ]}
-      />
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="shrink-0">
+          <IssueSecretPanel
+            title={copy.issueTitle}
+            description={copy.issueDescription}
+            issueLabel={copy.issue}
+            latestLabel={copy.latest}
+            copiedMessage={copy.copied}
+            latestValue={latestValue}
+            isPending={isPending}
+            onIssue={issue}
+            onAcknowledge={() => setLatestValue(null)}
+          />
+        </div>
+        <RevocableList
+          heading={copy.listTitle}
+          items={pageState.items}
+          total={pageState.total}
+          emptyTitle={copy.empty}
+          emptyHint={copy.emptyHint}
+          disabled={isPending}
+          loading={pageState.loading}
+          page={page}
+          pageSize={pageSize}
+          areaRef={areaRef}
+          onPage={setPage}
+          onRevoke={setRevokeTarget}
+        />
+      </div>
       <ConfirmDialog
-        open={revokeCodeTarget !== null}
-        title={format(d.adminConsole.registrationCodes.revokeTitle, {
-          label: revokeCodeTarget?.label ?? '',
-        })}
-        body={d.adminConsole.registrationCodes.revokeBody}
+        open={revokeTarget !== null}
+        title={format(copy.revokeTitle, { label: revokeTarget?.label ?? '' })}
+        body={copy.revokeBody}
         confirmLabel={d.adminConsole.revoke}
         tone="danger"
-        onConfirm={() => {
-          const target = revokeCodeTarget
-          setRevokeCodeTarget(null)
-          if (!target) return
-          startTransition(async () => {
-            const result = await revokeRegistrationCode({ codeId: target.id })
-            if (result.success) {
-              toast(d.adminConsole.registrationCodes.revokedToast, 'success')
-              onDataChanged()
-            } else {
-              toast(translateError(d, result.error), 'error')
-            }
-          })
-        }}
-        onClose={() => setRevokeCodeTarget(null)}
-      />
-      <ConfirmDialog
-        open={revokeTokenTarget !== null}
-        title={format(d.adminConsole.guestTokens.revokeTitle, {
-          label: revokeTokenTarget?.label ?? '',
-        })}
-        body={d.adminConsole.guestTokens.revokeBody}
-        confirmLabel={d.adminConsole.revoke}
-        tone="danger"
-        onConfirm={() => {
-          const target = revokeTokenTarget
-          setRevokeTokenTarget(null)
-          if (!target) return
-          startTransition(async () => {
-            const result = await revokeGuestToken({ tokenId: target.id })
-            if (result.success) {
-              toast(d.adminConsole.guestTokens.revokedToast, 'success')
-              onDataChanged()
-            } else {
-              toast(translateError(d, result.error), 'error')
-            }
-          })
-        }}
-        onClose={() => setRevokeTokenTarget(null)}
+        onConfirm={revoke}
+        onClose={() => setRevokeTarget(null)}
       />
     </>
   )

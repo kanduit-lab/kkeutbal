@@ -1,4 +1,4 @@
-import { desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import type { RoomGameType } from '@/features/game/types'
 import type { MemberStatus } from './member-types'
@@ -21,50 +21,78 @@ export interface RegistrationCodeView {
   readonly revokedAt: string | null
 }
 
-export async function listRegistrationCodes(): Promise<RegistrationCodeView[]> {
-  const rows = await db
-    .select({
-      id: schema.registrationCodes.id,
-      label: schema.registrationCodes.label,
-      createdByName: schema.users.displayName,
-      createdAt: schema.registrationCodes.createdAt,
-      expiresAt: schema.registrationCodes.expiresAt,
-      revokedAt: schema.registrationCodes.revokedAt,
-    })
-    .from(schema.registrationCodes)
-    .innerJoin(schema.users, eq(schema.users.id, schema.registrationCodes.createdBy))
-    .orderBy(desc(schema.registrationCodes.createdAt))
-    .limit(100)
-
-  return rows.map((row) => ({
-    ...row,
-    createdAt: row.createdAt.toISOString(),
-    expiresAt: row.expiresAt?.toISOString() ?? null,
-    revokedAt: row.revokedAt?.toISOString() ?? null,
-  }))
+export interface AdminAccessPage<T> {
+  readonly items: readonly T[]
+  readonly total: number
 }
 
-export async function listGuestTokens(): Promise<GuestTokenView[]> {
-  const rows = await db
-    .select({
-      id: schema.guestTokens.id,
-      label: schema.guestTokens.label,
-      createdByName: schema.users.displayName,
-      createdAt: schema.guestTokens.createdAt,
-      expiresAt: schema.guestTokens.expiresAt,
-      revokedAt: schema.guestTokens.revokedAt,
-    })
-    .from(schema.guestTokens)
-    .innerJoin(schema.users, eq(schema.users.id, schema.guestTokens.createdBy))
-    .orderBy(desc(schema.guestTokens.createdAt))
-    .limit(100)
+export interface AdminAccessPageQuery {
+  readonly page: number
+  readonly pageSize: number
+}
 
-  return rows.map((row) => ({
-    ...row,
-    createdAt: row.createdAt.toISOString(),
-    expiresAt: row.expiresAt?.toISOString() ?? null,
-    revokedAt: row.revokedAt?.toISOString() ?? null,
-  }))
+export async function listRegistrationCodesPage(
+  query: AdminAccessPageQuery,
+): Promise<AdminAccessPage<RegistrationCodeView>> {
+  const [rows, counts] = await Promise.all([
+    db
+      .select({
+        id: schema.registrationCodes.id,
+        label: schema.registrationCodes.label,
+        createdByName: schema.users.displayName,
+        createdAt: schema.registrationCodes.createdAt,
+        expiresAt: schema.registrationCodes.expiresAt,
+        revokedAt: schema.registrationCodes.revokedAt,
+      })
+      .from(schema.registrationCodes)
+      .innerJoin(schema.users, eq(schema.users.id, schema.registrationCodes.createdBy))
+      .orderBy(desc(schema.registrationCodes.createdAt))
+      .limit(query.pageSize)
+      .offset(query.page * query.pageSize),
+    db.select({ count: sql<number>`count(*)::int` }).from(schema.registrationCodes),
+  ])
+
+  return {
+    total: counts[0]?.count ?? 0,
+    items: rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      expiresAt: row.expiresAt?.toISOString() ?? null,
+      revokedAt: row.revokedAt?.toISOString() ?? null,
+    })),
+  }
+}
+
+export async function listGuestTokensPage(
+  query: AdminAccessPageQuery,
+): Promise<AdminAccessPage<GuestTokenView>> {
+  const [rows, counts] = await Promise.all([
+    db
+      .select({
+        id: schema.guestTokens.id,
+        label: schema.guestTokens.label,
+        createdByName: schema.users.displayName,
+        createdAt: schema.guestTokens.createdAt,
+        expiresAt: schema.guestTokens.expiresAt,
+        revokedAt: schema.guestTokens.revokedAt,
+      })
+      .from(schema.guestTokens)
+      .innerJoin(schema.users, eq(schema.users.id, schema.guestTokens.createdBy))
+      .orderBy(desc(schema.guestTokens.createdAt))
+      .limit(query.pageSize)
+      .offset(query.page * query.pageSize),
+    db.select({ count: sql<number>`count(*)::int` }).from(schema.guestTokens),
+  ])
+
+  return {
+    total: counts[0]?.count ?? 0,
+    items: rows.map((row) => ({
+      ...row,
+      createdAt: row.createdAt.toISOString(),
+      expiresAt: row.expiresAt?.toISOString() ?? null,
+      revokedAt: row.revokedAt?.toISOString() ?? null,
+    })),
+  }
 }
 
 export interface AdminRoomView {
@@ -77,6 +105,43 @@ export interface AdminRoomView {
 
   readonly memberCount: number
   readonly hostName: string
+}
+
+export interface AdminRoomPage {
+  readonly rooms: readonly AdminRoomView[]
+  readonly total: number
+}
+
+export interface AdminRoomPageQuery {
+  readonly text: string
+  readonly status: 'all' | 'waiting' | 'playing'
+  readonly page: number
+  readonly pageSize: number
+}
+
+function likePattern(text: string): string {
+  return `%${text.trim().replace(/[\\%_]/g, '\\$&')}%`
+}
+
+function roomFilters(query: Pick<AdminRoomPageQuery, 'text' | 'status'>) {
+  const filters = []
+  const text = query.text.trim()
+  if (text) {
+    const pattern = likePattern(text)
+    filters.push(
+      or(
+        ilike(schema.rooms.code, pattern),
+        ilike(schema.rooms.name, pattern),
+        ilike(schema.users.displayName, pattern),
+      ),
+    )
+  }
+  filters.push(
+    query.status === 'all'
+      ? inArray(schema.rooms.status, ['waiting', 'playing'])
+      : eq(schema.rooms.status, query.status),
+  )
+  return and(...filters)
 }
 
 /**
@@ -104,6 +169,20 @@ export async function countActiveRooms(): Promise<number> {
 }
 
 export async function listActiveRooms(): Promise<AdminRoomView[]> {
+  const page = await listActiveRoomsPage({
+    text: '',
+    status: 'all',
+    page: 0,
+    pageSize: ACTIVE_ROOMS_LIMIT,
+  })
+  return [...page.rooms]
+}
+
+export async function listActiveRoomsPage(
+  query: AdminRoomPageQuery,
+): Promise<AdminRoomPage> {
+  const offset = query.page * query.pageSize
+  const filters = roomFilters(query)
   const rows = await db
     .select({
       id: schema.rooms.id,
@@ -121,11 +200,20 @@ export async function listActiveRooms(): Promise<AdminRoomView[]> {
     })
     .from(schema.rooms)
     .innerJoin(schema.users, eq(schema.users.id, schema.rooms.hostId))
-    .where(inArray(schema.rooms.status, ['waiting', 'playing']))
+    .where(filters)
     .orderBy(desc(schema.rooms.createdAt))
-    .limit(ACTIVE_ROOMS_LIMIT)
+    .limit(query.pageSize)
+    .offset(offset)
 
-  return rows.flatMap((row) =>
+  const [count] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.rooms)
+    .innerJoin(schema.users, eq(schema.users.id, schema.rooms.hostId))
+    .where(filters)
+
+  return {
+    total: count?.count ?? 0,
+    rooms: rows.flatMap((row) =>
     row.status === 'waiting' || row.status === 'playing'
       ? [
           {
@@ -140,7 +228,8 @@ export async function listActiveRooms(): Promise<AdminRoomView[]> {
           },
         ]
       : [],
-  )
+    ),
+  }
 }
 
 export interface AdminUserView {

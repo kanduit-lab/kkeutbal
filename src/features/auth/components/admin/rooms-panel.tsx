@@ -1,33 +1,32 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import {
   Badge,
   Button,
   ConfirmDialog,
   DataTable,
-  Input,
-  Select,
   DATA_TABLE_HEADER_H,
   DATA_TABLE_ROW_H,
+  Input,
+  Select,
   EmptyState,
   Pager,
   Panel,
   PanelHeader,
-  usePagedRows,
+  useFitCount,
   useIsDesktop,
   useToast,
 } from '@/components/ui'
 import { GAME_BADGE_TONE } from '@/features/game/components/shared'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import { adminCloseRoom, adminCloseRooms } from '../../admin-actions'
+import { loadAdminRoomsPage } from '../../admin-dashboard-actions'
 import type { AdminBulkFailure, AdminRoomView } from '../../admin-queries'
 import { formatAge } from './format'
 import {
   EMPTY_ROOM_QUERY,
-  filterRooms,
   isRoomQueryActive,
-  roomQueryKey,
   type RoomQuery,
   type RoomStatusFilter,
 } from './rooms-filter'
@@ -39,16 +38,6 @@ const STATUS_FILTERS: readonly RoomStatusFilter[] = ['all', 'waiting', 'playing'
 /** 모바일 한 줄 높이(px) — `h-16` + `space-y-2` 간격 */
 const ROW_H = 72
 
-
-/**
- * 검색 툴바 등 줄 영역 밖 높이. 데스크톱 실측 chrome은 200px이고 `paged.tsx`가 이미 140을
- * 잡으므로 순수 여유분은 60이면 맞다. 그보다 크게 두는 이유는 두 가지다 — 좁은 화면에서
- * 툴바가 세로로 쌓여 ~56px 더 커지고, 모자랄 때의 대가가 크다(상한이 줄을 깎으면
- * "전체 선택" 버튼이 나타나 chrome이 또 늘어 회원 3명이 3페이지가 된 적이 있다).
- * 남는 쪽은 마지막 줄 아래 여백으로 끝난다.
- */
-const TOOLBAR_H = 190
-
 export function RoomsPanel({
   rooms,
   total,
@@ -56,11 +45,6 @@ export function RoomsPanel({
 }: {
   rooms: readonly AdminRoomView[]
 
-  /**
-   * 진행 중인 방의 실제 전체 수. 목록은 100개에서 잘리므로 이 값이 더 클 수 있다 —
-   * 일괄 정산을 돌리고도 배지가 그대로면 아무 일도 안 일어난 것처럼 보이는데, 실제로는
-   * 상한 뒤에 밀려 있던 방이 그 자리를 채운 것이다.
-   */
   total: number
   onDataChanged: () => void
 }) {
@@ -72,24 +56,51 @@ export function RoomsPanel({
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [failures, setFailures] = useState<readonly AdminBulkFailure[]>([])
   const [query, setQuery] = useState<RoomQuery>(EMPTY_ROOM_QUERY)
+  const [page, setPage] = useState(0)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [pageState, setPageState] = useState({ rooms, total, loading: false })
   const isDesktop = useIsDesktop()
-
-  // 선택은 **거른 뒤의 목록**을 기준으로 산다. 검색을 좁히면 화면에서 사라진 방은 선택에서도
-  // 빠져야 한다 — 안 그러면 "E2E"로 좁혀 전체 선택한 줄 알았는데 앞서 고른 다른 방까지
-  // 같이 정산된다.
-  const filtered = useMemo(() => filterRooms(rooms, query), [rooms, query])
-  const selection = useRowSelection(filtered)
-  const paged = usePagedRows({
-    items: filtered,
+  const { areaRef, count: pageSize } = useFitCount({
     rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
     reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
-    resetKey: roomQueryKey(query),
-  chrome: TOOLBAR_H,
   })
 
-  // 헤더 체크박스의 범위는 **지금 보이는 페이지**다. 안 보이는 페이지까지 한 번에 고르면
-  // 무엇을 정산하는지 모른 채 확인을 누르게 된다. 페이지를 넘겨가며 고른 것은 그대로 쌓인다.
-  const pageState = selectionState(paged.rows, selection.selectedIds)
+  const visibleRooms = pageState.rooms
+  const selection = useRowSelection(visibleRooms)
+  const active = isRoomQueryActive(query)
+  const pageCount = Math.max(1, Math.ceil(pageState.total / pageSize))
+  const pageStart = pageState.total === 0 ? 0 : page * pageSize + 1
+  const pageEnd = page * pageSize + visibleRooms.length
+
+  useEffect(() => {
+    let cancelled = false
+    setPageState((current) => ({ ...current, loading: true }))
+    void (async () => {
+      try {
+        const result = await loadAdminRoomsPage({ ...query, page, pageSize })
+        if (cancelled) return
+        if (result.success) {
+          const nextPageCount = Math.max(1, Math.ceil(result.data.total / pageSize))
+          if (page >= nextPageCount) {
+            setPage(nextPageCount - 1)
+            return
+          }
+          setPageState({ rooms: result.data.rooms, total: result.data.total, loading: false })
+          return
+        }
+        toast(translateError(d, result.error), 'error')
+      } catch (error) {
+        console.error('load admin rooms page failed:', error)
+        if (!cancelled) toast(translateError(d, 'errors.adminDashboardLoadFailed'), 'error')
+      }
+      if (!cancelled) setPageState((current) => ({ ...current, loading: false }))
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [d, page, pageSize, query, refreshKey, toast])
+
+  const selectionStateForPage = selectionState(visibleRooms, selection.selectedIds)
 
   const codeOf = (roomId: string) => rooms.find((room) => room.id === roomId)?.code ?? roomId
 
@@ -118,6 +129,7 @@ export function RoomsPanel({
           'error',
         )
       }
+      setRefreshKey((current) => current + 1)
       onDataChanged()
     })
   }
@@ -137,22 +149,17 @@ export function RoomsPanel({
   }
 
   return (
-    <Panel
-      style={{ maxHeight: paged.maxPanelHeight }}
-      className="flex min-h-0 flex-1 flex-col gap-3"
-    >
+    <Panel className="flex min-h-0 flex-1 flex-col gap-3">
       <PanelHeader
         title={d.adminConsole.rooms.title}
         badge={
           <Badge tone="muted">
-            {isRoomQueryActive(query)
+            {active
               ? format(d.adminConsole.rooms.countFiltered, {
-                  shown: filtered.length,
-                  total: rooms.length,
+                  shown: pageState.total,
+                  total,
                 })
-              : total > rooms.length
-                ? format(d.adminConsole.rooms.countCapped, { shown: rooms.length, total })
-                : format(d.common.itemCount, { n: rooms.length })}
+              : format(d.common.itemCount, { n: pageState.total })}
           </Badge>
         }
       />
@@ -161,7 +168,10 @@ export function RoomsPanel({
         <Input
           aria-label={d.adminConsole.rooms.searchLabel}
           value={query.text}
-          onChange={(event) => setQuery({ ...query, text: event.target.value })}
+          onChange={(event) => {
+            setPage(0)
+            setQuery({ ...query, text: event.target.value })
+          }}
           placeholder={d.adminConsole.rooms.searchPlaceholder}
           maxLength={30}
           className="lg:min-w-0 lg:flex-1"
@@ -170,9 +180,10 @@ export function RoomsPanel({
           <Select
             aria-label={d.adminConsole.rooms.filterStatusLabel}
             value={query.status}
-            onChange={(event) =>
+            onChange={(event) => {
+              setPage(0)
               setQuery({ ...query, status: event.target.value as RoomStatusFilter })
-            }
+            }}
           >
             {STATUS_FILTERS.map((value) => (
               <option key={value} value={value}>
@@ -186,25 +197,6 @@ export function RoomsPanel({
           </Select>
         </div>
       </div>
-
-      {/*
-        페이지 단위 헤더 체크박스만으로는 100개를 20페이지에 걸쳐 눌러야 한다. 검색으로 좁힌
-        뒤 "결과 전체"를 한 번에 고르는 길을 따로 연다 — 숨은 동작이 아니라 개수를 적은
-        버튼이고, 확인 다이얼로그가 다시 개수를 묻는다.
-      */}
-      {filtered.length > paged.rows.length ? (
-        <Button
-          size="sm"
-          variant="surface"
-          className="shrink-0"
-          disabled={isPending}
-          onClick={() => selection.toggleAll(filtered)}
-        >
-          {selection.count >= filtered.length
-            ? d.adminConsole.rooms.clearSelection
-            : format(d.adminConsole.rooms.selectFiltered, { n: filtered.length })}
-        </Button>
-      ) : null}
 
       {selection.count > 0 ? (
         <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl bg-accent/10 px-3 py-2">
@@ -244,8 +236,8 @@ export function RoomsPanel({
         </div>
       ) : null}
 
-      <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
-        {filtered.length === 0 ? (
+      <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden" aria-busy={pageState.loading}>
+        {visibleRooms.length === 0 && !pageState.loading ? (
           <EmptyState
             title={d.adminConsole.rooms.empty}
             hint={
@@ -273,10 +265,10 @@ export function RoomsPanel({
                     noTruncate: true,
                     header: (
                       <SelectBox
-                        checked={pageState === 'all'}
-                        indeterminate={pageState === 'some'}
+                        checked={selectionStateForPage === 'all'}
+                        indeterminate={selectionStateForPage === 'some'}
                         disabled={isPending}
-                        onChange={() => selection.toggleAll(paged.rows)}
+                        onChange={() => selection.toggleAll(visibleRooms)}
                         label={d.adminConsole.rooms.selectAllAria}
                       />
                     ),
@@ -344,12 +336,12 @@ export function RoomsPanel({
                     cell: closeButton,
                   },
                 ]}
-                rows={paged.rows}
+                rows={visibleRooms}
                 rowKey={(room) => room.id}
               />
             </div>
             <ul className="space-y-2 lg:hidden">
-              {paged.rows.map((room) => (
+              {visibleRooms.map((room) => (
                 <li
                   key={room.id}
                   className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3"
@@ -382,26 +374,26 @@ export function RoomsPanel({
           </>
         )}
       </div>
-      {filtered.length > 0 ? (
+      {pageState.total > 0 ? (
         <div className="flex shrink-0 items-center justify-between gap-2">
           <Button
             size="sm"
             variant="surface"
-            disabled={isPending || paged.rows.length === 0}
-            onClick={() => selection.toggleAll(paged.rows)}
+            disabled={isPending || visibleRooms.length === 0}
+            onClick={() => selection.toggleAll(visibleRooms)}
             className="lg:invisible"
           >
-            {pageState === 'all'
+            {selectionStateForPage === 'all'
               ? d.adminConsole.rooms.clearSelection
               : d.adminConsole.rooms.selectPage}
           </Button>
           <Pager
-            page={paged.page}
-            pageCount={paged.pageCount}
-            from={paged.from}
-            to={paged.to}
-            total={paged.total}
-            onPage={paged.setPage}
+            page={page}
+            pageCount={pageCount}
+            from={pageStart}
+            to={pageEnd}
+            total={pageState.total}
+            onPage={setPage}
           />
         </div>
       ) : null}
@@ -425,6 +417,7 @@ export function RoomsPanel({
             setPendingId(null)
             if (result.success) {
               toast(d.adminConsole.rooms.closedToast, 'success')
+              setRefreshKey((current) => current + 1)
               onDataChanged()
             } else {
               toast(translateError(d, result.error), 'error')

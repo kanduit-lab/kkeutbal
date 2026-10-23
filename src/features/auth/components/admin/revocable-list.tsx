@@ -4,20 +4,13 @@ import {
   Badge,
   Button,
   DataTable,
-  DATA_TABLE_HEADER_H,
-  DATA_TABLE_ROW_H,
   EmptyState,
   Pager,
   Panel,
   PanelHeader,
-  usePagedRows,
-  useIsDesktop,
 } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { formatDate } from './format'
-
-/** 모바일 한 줄 높이(px) — `h-14` + `space-y-2` 간격 */
-const ROW_H = 64
 
 export interface RevocableItem {
   readonly id: string
@@ -34,6 +27,12 @@ export function RevocableList<T extends RevocableItem>({
   emptyTitle,
   emptyHint,
   disabled,
+  total,
+  page,
+  pageSize,
+  areaRef,
+  loading,
+  onPage,
   onRevoke,
 }: {
   heading: string
@@ -41,15 +40,18 @@ export function RevocableList<T extends RevocableItem>({
   emptyTitle: string
   emptyHint: string
   disabled: boolean
+  total: number
+  page: number
+  pageSize: number
+  areaRef: React.RefObject<HTMLDivElement | null>
+  loading: boolean
+  onPage: (page: number) => void
   onRevoke: (item: T) => void
 }) {
   const { d, locale } = useDict()
-  const isDesktop = useIsDesktop()
-  const paged = usePagedRows({
-    items,
-    rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
-    reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
-  })
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const from = total === 0 ? 0 : page * pageSize + 1
+  const to = page * pageSize + items.length
 
   function isExpired(item: T): boolean {
     return item.expiresAt !== null && Date.parse(item.expiresAt) < Date.now()
@@ -72,16 +74,13 @@ export function RevocableList<T extends RevocableItem>({
   }
 
   return (
-    <Panel
-      style={{ maxHeight: paged.maxPanelHeight }}
-      className="flex min-h-0 flex-1 flex-col gap-3"
-    >
+    <Panel className="flex min-h-0 flex-1 flex-col gap-3">
       <PanelHeader
         title={heading}
-        badge={<Badge tone="muted">{format(d.common.itemCount, { n: items.length })}</Badge>}
+        badge={<Badge tone="muted">{format(d.common.itemCount, { n: total })}</Badge>}
       />
-      <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
-        {items.length === 0 ? (
+      <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden" aria-busy={loading}>
+        {items.length === 0 && !loading ? (
           <EmptyState title={emptyTitle} hint={emptyHint} />
         ) : (
           <>
@@ -127,12 +126,12 @@ export function RevocableList<T extends RevocableItem>({
                     cell: statusCell,
                   },
                 ]}
-                rows={paged.rows}
+                rows={items}
                 rowKey={(item) => item.id}
               />
             </div>
             <ul className="space-y-2 lg:hidden">
-              {paged.rows.map((item) => (
+              {items.map((item) => (
                 <li
                   key={item.id}
                   className="flex h-14 items-center justify-between gap-3 rounded-xl bg-inset px-3"
@@ -157,14 +156,14 @@ export function RevocableList<T extends RevocableItem>({
           </>
         )}
       </div>
-      {items.length > 0 ? (
+      {total > 0 ? (
         <Pager
-          page={paged.page}
-          pageCount={paged.pageCount}
-          from={paged.from}
-          to={paged.to}
-          total={paged.total}
-          onPage={paged.setPage}
+          page={page}
+          pageCount={pageCount}
+          from={from}
+          to={to}
+          total={total}
+          onPage={onPage}
         />
       ) : null}
     </Panel>

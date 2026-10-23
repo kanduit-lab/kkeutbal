@@ -11,7 +11,6 @@ export const adminDashboard: Dictionary['adminDashboard'] = {
     'Only administrators can issue registration codes and guest tokens, change connection settings, and grant admin roles.',
   sectionNavLabel: 'Admin console sections',
   paneNavLabel: 'Select panel',
-  onDemand: 'On-demand',
   refreshing: 'Loading the latest data…',
   slowTitle: 'Waiting for the server',
   slowBody: 'Other areas stay available. Data appears once the server responds.',
@@ -23,10 +22,15 @@ export const adminDashboard: Dictionary['adminDashboard'] = {
       short: 'SSO · photo recognition',
       description: 'Manage external sign-in and AI photo-recognition connections.',
     },
-    access: {
-      label: 'Access',
-      short: 'Registration · guests',
-      description: 'Issue and revoke registration codes and guest access tokens.',
+    registrationCodes: {
+      label: 'Signup codes',
+      short: 'For new members',
+      description: 'Issue and revoke signup codes.',
+    },
+    guestTokens: {
+      label: 'Guest tokens',
+      short: 'For guest entry',
+      description: 'Issue and revoke guest-entry tokens.',
     },
     people: {
       label: 'People · credits',
