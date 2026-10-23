@@ -3,7 +3,6 @@
 import { clsx } from 'clsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HwatuCard } from '@/features/hwatu/types'
-import { evaluateSeotdaHand } from '@/features/seotda/engine'
 import type { SeotdaCategory, SeotdaTrait } from '@/features/seotda/types'
 import { Badge, Button, Panel } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
@@ -13,6 +12,7 @@ import {
   type SeotdaRankDetail,
   type SeotdaRankTier,
 } from './seotda-rank-table'
+import { readSeotdaCards } from './seotda-reading'
 
 type Dict = ReturnType<typeof useDict>['d']
 
@@ -50,14 +50,7 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
     kkeut: d.advisor.ranking.categoryKkeut,
   }
 
-  const hand = useMemo(() => {
-    if (cards.length !== 2) return null
-    try {
-      return evaluateSeotdaHand([cards[0] as HwatuCard, cards[1] as HwatuCard])
-    } catch {
-      return null
-    }
-  }, [cards])
+  const hand = useMemo(() => readSeotdaCards(cards)?.hand ?? null, [cards])
   const currentRank = hand?.rank ?? null
   // 내가 실제로 들고 있는 능력. 유의사항에서 이 항목을 맨 위로 끌어올려 강조한다 —
   // 4·7을 들고도 그게 광땡을 잡는 손인지 모르고 죽는 일이 이 화면이 막아야 할 일이다.
@@ -165,7 +158,7 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
                   position: (currentIndex ?? 0) + 1,
                   total: SEOTDA_RANK_TABLE.length,
                 })
-              : /* 바로 위 결과 패널이 이미 "카드 2장을 선택하세요"라고 말한다. 같은 지시를
+              : /* 바로 위 결과 패널이 이미 카드를 고르라고 말한다. 같은 지시를
                    두 번 쌓는 대신 이 표가 무엇인지를 적는다. */
                 format(d.advisor.ranking.totalTiers, { total: SEOTDA_RANK_TABLE.length })}
           </p>

@@ -12,7 +12,8 @@ import { SeotdaResult, type VisionSource } from './advisor-results'
 import { SeotdaRankingPanel } from './seotda-ranking-panel'
 import { VisionCapture } from './vision-capture'
 
-const MAX_SELECT = 2
+const MAX_SELECT = 3
+const MIN_HAND = 2
 
 /**
  * 판독기 본문. 페이지 껍데기(`/advisor`)와 방 안 시트가 같은 화면을 쓰기 때문에
@@ -40,7 +41,7 @@ export function AdvisorBoard({
     else if (next.size < MAX_SELECT) next.add(id)
     setVision(null)
     setSelected(next)
-    if (next.size === MAX_SELECT) setPane('result')
+    if (next.size >= MIN_HAND && next.size > selected.size) setPane('result')
   }
 
   function applyRecognized(ids: readonly CardId[], confidence: number) {

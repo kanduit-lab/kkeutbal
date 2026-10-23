@@ -176,9 +176,13 @@ export function CameraCapture({
 
 function GuideFrame() {
   return (
-    <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-4 p-10">
-      <div className="aspect-[103/168] h-full max-h-56 rounded-lg border-2 border-dashed border-white/80" />
-      <div className="aspect-[103/168] h-full max-h-56 rounded-lg border-2 border-dashed border-white/80" />
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-3 p-8">
+      {[0, 1, 2].map((slot) => (
+        <div
+          key={slot}
+          className="aspect-[103/168] w-[27%] max-w-28 rounded-lg border-2 border-dashed border-white/80"
+        />
+      ))}
     </div>
   )
 }

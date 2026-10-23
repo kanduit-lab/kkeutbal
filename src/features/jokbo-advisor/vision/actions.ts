@@ -124,7 +124,7 @@ export async function recognizeHand(
   const base64Data = match[2]
   if (base64Data.length * 0.75 > MAX_IMAGE_BYTES) return fail('errors.visionImageTooLarge')
 
-  const prompt = `이 사진에 보이는 화투 카드를 식별해라. 섯다 손패 사진이므로 카드는 보통 2장이고, 1~10월의 광/열끗/띠만 나온다 (피 없음).
+  const prompt = `이 사진에 보이는 화투 카드를 식별해라. 섯다 손패 사진이므로 카드는 보통 2장이나 3장이고, 1~10월의 광/열끗/띠만 나온다 (피 없음).
 각 카드를 월(1~12)과 종류(gwang=광, yeol=열끗, tti=띠, pi=피)로 판정하고,
 피가 쌍피(11월 오동 쌍피, 12월 비 쌍피)면 ssangpi=true 로 표시해라.
 가능하면 각 카드의 위치를 사진 기준 정규화 좌표(box: {x,y,w,h}, 좌상단이 0,0이고 우하단이 1,1)로 함께 달아라.

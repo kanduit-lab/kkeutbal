@@ -38,8 +38,8 @@ describe('SeotdaRankingPanel', () => {
   it('says what the table is instead of repeating the picker instruction', () => {
     renderWithProviders(<SeotdaRankingPanel cards={[]} />)
 
-    // 바로 위 결과 패널이 이미 "카드 2장을 선택하세요"라고 말한다.
-    expect(screen.queryByText(ko.advisor.selectTwoCards)).toBeNull()
+    // 바로 위 결과 패널이 이미 카드를 고르라고 말한다.
+    expect(screen.queryByText(ko.advisor.selectCards)).toBeNull()
     expect(
       screen.getByText(
         ko.advisor.ranking.totalTiers.replace('{total}', String(SEOTDA_RANK_TABLE.length)),
@@ -54,6 +54,15 @@ describe('SeotdaRankingPanel', () => {
     const current = screen.getAllByText(ko.advisor.ranking.current)
     expect(current.length).toBeGreaterThan(0)
     expect(screen.getAllByText(/망통/).length).toBeGreaterThan(0)
+  })
+
+  it('marks the best pair when three cards are held', () => {
+    renderWithProviders(
+      <SeotdaRankingPanel cards={seotdaCards('05-tti', '03-gwang', '08-gwang')} />,
+    )
+
+    const current = document.querySelector('[aria-current="true"]')
+    expect(current?.textContent).toContain('38광땡')
   })
 
   it('swaps the table for the caveats and back', () => {

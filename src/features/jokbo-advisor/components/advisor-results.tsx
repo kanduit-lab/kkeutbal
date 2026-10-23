@@ -1,13 +1,16 @@
 'use client'
 
-import { useMemo } from 'react'
+import { clsx } from 'clsx'
+import { useId, useMemo } from 'react'
 import type { HwatuCard } from '@/features/hwatu/types'
-import { evaluateSeotdaHand, describeSeotdaHand } from '@/features/seotda/engine'
+import { describeSeotdaHand } from '@/features/seotda/engine'
 import type { SeotdaAdviceCode } from '@/features/seotda/advice'
+import type { SeotdaHand } from '@/features/seotda/types'
 import type { ReactNode } from 'react'
 import { Badge, Panel } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { seotdaStats } from '../stats'
+import { readSeotdaCards } from './seotda-reading'
 
 export interface VisionSource {
   readonly confidence: number
@@ -51,13 +54,10 @@ export function SeotdaResult({
 }) {
   const { d } = useDict()
   const result = useMemo(() => {
-    if (cards.length !== 2) return null
-    try {
-      const hand = evaluateSeotdaHand([cards[0] as HwatuCard, cards[1] as HwatuCard])
-      return { hand, description: describeSeotdaHand(hand), stats: seotdaStats(hand) }
-    } catch {
-      return null
-    }
+    const reading = readSeotdaCards(cards)
+    if (!reading) return null
+    const { hand } = reading
+    return { ...reading, description: describeSeotdaHand(hand), stats: seotdaStats(hand) }
   }, [cards])
 
   return (
@@ -66,6 +66,9 @@ export function SeotdaResult({
         <>
           <p className="font-brush gilt text-6xl font-black">{result.hand.label}</p>
           <p className="text-sm text-muted">{result.description}</p>
+          {result.pairs ? (
+            <SeotdaPairList pairs={result.pairs} bestIndex={result.bestIndex} />
+          ) : null}
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-bold">
             <span className="rounded-full bg-accent/20 px-2.5 py-1 text-accent">
               {format(d.advisor.tierPosition, {
@@ -104,10 +107,47 @@ export function SeotdaResult({
         </>
       ) : (
         <p className="text-sm text-muted">
-          {cards.length < 2 ? d.advisor.selectTwoCards : d.advisor.invalidCombination}
+          {cards.length < 2 ? d.advisor.selectCards : d.advisor.invalidCombination}
         </p>
       )}
     </ResultRegion>
+  )
+}
+
+function SeotdaPairList({ pairs, bestIndex }: { pairs: readonly SeotdaHand[]; bestIndex: number }) {
+  const { d } = useDict()
+  const headingId = useId()
+  return (
+    <div className="space-y-1.5 text-left">
+      <p id={headingId} className="text-xs font-bold text-muted">
+        {d.advisor.pairsHeading}
+      </p>
+      <ul aria-labelledby={headingId} className="space-y-1">
+        {pairs.map((pair, index) => {
+          const isBest = index === bestIndex
+          return (
+            <li
+              key={`${pair.cards[0].id}-${pair.cards[1].id}`}
+              aria-current={isBest ? 'true' : undefined}
+              className={clsx(
+                'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs',
+                isBest ? 'bg-accent/20 ring-1 ring-inset ring-accent/50' : 'bg-white/5',
+              )}
+            >
+              <span className="min-w-0 truncate text-muted">
+                {format(d.advisor.pairCards, { a: pair.cards[0].label, b: pair.cards[1].label })}
+              </span>
+              <span className="flex shrink-0 items-center gap-1.5">
+                {isBest ? <Badge tone="accent">{d.advisor.bestPair}</Badge> : null}
+                <span className={clsx('text-sm font-bold', isBest && 'text-accent')}>
+                  {pair.label}
+                </span>
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+    </div>
   )
 }
 
