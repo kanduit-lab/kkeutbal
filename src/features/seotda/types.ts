@@ -4,6 +4,9 @@ export type SeotdaCategory = 'gwangttaeng' | 'ttaeng' | 'special' | 'kkeut'
 
 export type SeotdaTrait = 'amhaengeosa' | 'ttaengjabi' | 'gusa'
 
+/** 참가자 한 명이 받는 카드 수. 3장 섯다는 세 장 중 두 장을 골라 승부한다 */
+export type SeotdaCardCount = 2 | 3
+
 export interface SeotdaHand {
   readonly cards: readonly [HwatuCard, HwatuCard]
   readonly category: SeotdaCategory
