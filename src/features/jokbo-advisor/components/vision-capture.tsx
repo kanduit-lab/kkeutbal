@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
-import type { CardId, GameType } from '@/features/hwatu/types'
+import type { CardId } from '@/features/hwatu/types'
 import { Alert, Button, Sheet, useToast } from '@/components/ui'
 import { translateError, useDict } from '@/lib/i18n/client'
 import { recognizeHand } from '../vision/actions'
@@ -10,11 +10,9 @@ import { CameraCapture, type CameraFallbackReason } from './camera-capture'
 const MAX_FILE_BYTES = 15 * 1024 * 1024
 
 export function VisionCapture({
-  gameType,
   enabled,
   onRecognized,
 }: {
-  gameType: GameType
   enabled: boolean
   onRecognized: (ids: readonly CardId[], confidence: number) => void
 }) {
@@ -73,7 +71,7 @@ export function VisionCapture({
       }
 
       setPreview(dataUrl)
-      const result = await recognizeHand({ imageDataUrl: dataUrl, gameType })
+      const result = await recognizeHand({ imageDataUrl: dataUrl })
       if (!result.success) {
         toast(translateError(d, result.error), 'error')
         return
@@ -140,7 +138,6 @@ export function VisionCapture({
         ariaLabel={d.advisor.vision.cameraSheetAria}
       >
         <CameraCapture
-          gameType={gameType}
           onConfirm={handleCameraConfirm}
           onCancel={() => setSheetOpen(false)}
           onFallback={handleCameraFallback}

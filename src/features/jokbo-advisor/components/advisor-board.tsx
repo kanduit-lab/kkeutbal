@@ -1,27 +1,18 @@
 'use client'
 
 import { clsx } from 'clsx'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { findCard } from '@/features/hwatu/cards'
-import type { CardId, GameType, HwatuCard } from '@/features/hwatu/types'
-import { Button, PaneGroup, Panel, ScrollPane, Segmented, useToast } from '@/components/ui'
+import type { CardId, HwatuCard } from '@/features/hwatu/types'
+import { Button, PaneGroup, Panel, ScrollPane, useToast } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { CardPicker } from './card-picker'
-import { GostopResult, SeotdaResult, type VisionSource } from './advisor-results'
+import { SeotdaResult, type VisionSource } from './advisor-results'
 import { SeotdaRankingPanel } from './seotda-ranking-panel'
 import { VisionCapture } from './vision-capture'
 
-export type AdvisorTab = 'seotda' | 'gostop'
-
-const TAB_EMOJI: Record<AdvisorTab, string> = {
-  seotda: '🎴',
-  gostop: '🌸',
-}
-
-const GOSTOP_MAX_SELECT = 30
-
-const GOSTOP_MIN_RESULT_CARDS = 3
+const MAX_SELECT = 2
 
 /**
  * 판독기 본문. 페이지 껍데기(`/advisor`)와 방 안 시트가 같은 화면을 쓰기 때문에
@@ -30,14 +21,11 @@ const GOSTOP_MIN_RESULT_CARDS = 3
  */
 export function AdvisorBoard({
   visionEnabled,
-  initialTab = 'seotda',
   className,
 }: {
   visionEnabled: boolean
-  initialTab?: AdvisorTab
   className?: string
 }) {
-  const [tab, setTab] = useState<AdvisorTab>(initialTab)
   const [selected, setSelected] = useState<ReadonlySet<CardId>>(new Set())
 
   const [vision, setVision] = useState<VisionSource | null>(null)
@@ -46,42 +34,17 @@ export function AdvisorBoard({
   const { toast } = useToast()
   const { d } = useDict()
 
-  const hwatuGameType: GameType = tab === 'gostop' ? 'gostop' : 'seotda'
-  const maxSelect = hwatuGameType === 'seotda' ? 2 : GOSTOP_MAX_SELECT
-
-  function switchTab(next: AdvisorTab) {
-    if (tab !== next) {
-      setSelected(new Set())
-      setVision(null)
-    }
-    if (tab !== next) setPane('picker')
-    setTab(next)
-  }
-
-  // `?game=` 링크나 방의 게임 종류로 들어왔을 때 그 탭으로 연다.
-  useEffect(() => {
-    switchTab(initialTab)
-    // initialTab이 바뀔 때만 반응한다. switchTab은 매 렌더 새로 만들어지는 클로저라
-    // 의존성에 넣으면 매 렌더 실행돼버린다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialTab])
-
-  function revealIfComplete(count: number) {
-    const needed = tab === 'seotda' ? maxSelect : GOSTOP_MIN_RESULT_CARDS
-    if (count === needed) setPane('result')
-  }
-
   function toggle(id: CardId) {
     const next = new Set(selected)
     if (next.has(id)) next.delete(id)
-    else if (next.size < maxSelect) next.add(id)
+    else if (next.size < MAX_SELECT) next.add(id)
     setVision(null)
     setSelected(next)
-    revealIfComplete(next.size)
+    if (next.size === MAX_SELECT) setPane('result')
   }
 
   function applyRecognized(ids: readonly CardId[], confidence: number) {
-    const applied = ids.slice(0, maxSelect)
+    const applied = ids.slice(0, MAX_SELECT)
     const previous = selected
     setSelected(new Set(applied))
     setVision({ confidence })
@@ -120,20 +83,6 @@ export function AdvisorBoard({
 
   return (
     <div className={clsx('flex min-h-0 flex-1 flex-col gap-4', className)}>
-      <Segmented
-        value={tab}
-        onChange={switchTab}
-        options={(['seotda', 'gostop'] as const).map((type) => ({
-          value: type,
-          label: (
-            <>
-              <span aria-hidden="true">{TAB_EMOJI[type]}</span> {d.games[type]}
-            </>
-          ),
-        }))}
-        ariaLabel={d.home.advisor}
-        className="rise-in rise-in-1 max-w-xl shrink-0 grid-cols-2"
-      />
       <PaneGroup
         ariaLabel={d.advisor.paneNavLabel}
         columns="lg:grid-cols-[7fr_5fr]"
@@ -146,7 +95,7 @@ export function AdvisorBoard({
             node: (
               <PickerPane
                 selectedCount={selected.size}
-                max={maxSelect}
+                max={MAX_SELECT}
                 onClear={
                   selected.size > 0
                     ? () => {
@@ -157,16 +106,14 @@ export function AdvisorBoard({
                 }
                 footer={
                   <VisionCapture
-                    gameType={hwatuGameType}
                     enabled={visionEnabled}
                     onRecognized={applyRecognized}
                   />
                 }
               >
                 <CardPicker
-                  gameType={hwatuGameType}
                   selected={selected}
-                  maxSelect={maxSelect}
+                  maxSelect={MAX_SELECT}
                   onToggle={toggle}
                 />
               </PickerPane>
@@ -175,7 +122,7 @@ export function AdvisorBoard({
           {
             key: 'result',
             label: d.advisor.resultTab,
-            node: <ResultPane tab={tab} cards={cards} vision={vision} />,
+            node: <ResultPane cards={cards} vision={vision} />,
           },
         ]}
       />
@@ -231,11 +178,9 @@ function PickerPane({
 }
 
 function ResultPane({
-  tab,
   cards,
   vision,
 }: {
-  tab: AdvisorTab
   cards: readonly HwatuCard[]
   vision: VisionSource | null
 }) {
@@ -246,10 +191,9 @@ function ResultPane({
       className="rise-in rise-in-2 flex flex-col gap-4"
     >
       <div className="shrink-0 space-y-4">
-        {tab === 'seotda' ? <SeotdaResult cards={cards} vision={vision} /> : null}
-        {tab === 'gostop' ? <GostopResult cards={cards} vision={vision} /> : null}
+        <SeotdaResult cards={cards} vision={vision} />
       </div>
-      {tab === 'seotda' ? <SeotdaRankingPanel cards={cards} /> : null}
+      <SeotdaRankingPanel cards={cards} />
     </ScrollPane>
   )
 }

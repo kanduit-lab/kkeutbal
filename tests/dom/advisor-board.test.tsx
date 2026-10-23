@@ -10,12 +10,12 @@ import { ko, renderWithProviders } from './render-helpers'
 
 afterEach(cleanup)
 
-describe('AdvisorBoard GoStop', () => {
-  it('opens the score after the third selected card', () => {
-    renderWithProviders(<AdvisorBoard visionEnabled={false} initialTab="gostop" />)
+describe('AdvisorBoard', () => {
+  it('opens the result once the hand is complete', () => {
+    renderWithProviders(<AdvisorBoard visionEnabled={false} />)
 
     const cardButtons = screen.getAllByRole('button', { name: /선택$/ })
-    cardButtons.slice(0, 3).forEach((button) => fireEvent.click(button))
+    cardButtons.slice(0, 2).forEach((button) => fireEvent.click(button))
 
     expect(
       screen.getByRole('radio', { name: ko.advisor.resultTab }).getAttribute('aria-checked'),

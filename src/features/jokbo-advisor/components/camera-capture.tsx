@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useTransition } from 'react'
-import type { CardId, GameType } from '@/features/hwatu/types'
+import type { CardId } from '@/features/hwatu/types'
 import { Button, Spinner } from '@/components/ui'
 import { translateError, useDict } from '@/lib/i18n/client'
 import { recognizeHand, type VisionRecognition } from '../vision/actions'
@@ -23,12 +23,10 @@ type CapturePhase = 'starting' | 'live' | 'frozen'
  * continuous/live recognition loop.
  */
 export function CameraCapture({
-  gameType,
   onConfirm,
   onCancel,
   onFallback,
 }: {
-  gameType: GameType
   onConfirm: (ids: readonly CardId[], confidence: number) => void
   onCancel: () => void
   onFallback: (reason: CameraFallbackReason) => void
@@ -108,7 +106,7 @@ export function CameraCapture({
 
     startTransition(async () => {
       try {
-        const response = await recognizeHand({ imageDataUrl: dataUrl, gameType })
+        const response = await recognizeHand({ imageDataUrl: dataUrl })
         if (!response.success) {
           setErrorMessage(translateError(d, response.error))
           return
@@ -156,7 +154,7 @@ export function CameraCapture({
     <div className="space-y-3">
       <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black">
         <video ref={videoRef} autoPlay playsInline muted className="size-full object-cover" />
-        {phase === 'live' ? <GuideFrame gameType={gameType} /> : null}
+        {phase === 'live' ? <GuideFrame /> : null}
         {phase === 'starting' ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <Spinner label={d.advisor.vision.startingCamera} />
@@ -176,17 +174,12 @@ export function CameraCapture({
   )
 }
 
-function GuideFrame({ gameType }: { gameType: GameType }) {
-  if (gameType === 'seotda') {
-    return (
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-4 p-10">
-        <div className="aspect-[103/168] h-full max-h-56 rounded-lg border-2 border-dashed border-white/80" />
-        <div className="aspect-[103/168] h-full max-h-56 rounded-lg border-2 border-dashed border-white/80" />
-      </div>
-    )
-  }
+function GuideFrame() {
   return (
-    <div className="pointer-events-none absolute inset-6 rounded-2xl border-2 border-dashed border-white/80" />
+    <div className="pointer-events-none absolute inset-0 flex items-center justify-center gap-4 p-10">
+      <div className="aspect-[103/168] h-full max-h-56 rounded-lg border-2 border-dashed border-white/80" />
+      <div className="aspect-[103/168] h-full max-h-56 rounded-lg border-2 border-dashed border-white/80" />
+    </div>
   )
 }
 

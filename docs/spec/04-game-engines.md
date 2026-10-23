@@ -6,7 +6,7 @@
 | Audience | engineering / QA |
 | Status | active |
 | Source of truth | this document (카드 모델·족보 규칙, 짧은 올인 결정) + 구현 코드 (계산 순서·경계값) |
-| Last reviewed | 2026-10-22 |
+| Last reviewed | 2026-10-23 |
 
 구현: `src/features/hwatu/`, `src/features/seotda/`, `src/features/gostop/`.
 섯다·고스톱 순수 엔진 테스트는 각 기능 폴더의 `*.test.ts`에 있으며, 섯다는 20장 중
@@ -324,13 +324,13 @@ interface GostopScore {
 - `loserPenalties`의 userId가 이번 판 참가자이자 실제 패자가 아니면 판 종료 전체가 실패한다.
   중도 퇴장해도 `round_participants`에 남으므로 정산 대상에서 빠지지 않는다
 - **경계**: `gostop/scoring.ts` 순수 엔진은 이 정산에 관여하지 않는다(변경 없음).
-  `scoreGostop`의 multipliers는 점수 계산·Advisor 표시용이고, 칩 정산의 factor 적용은
+  `scoreGostop`의 multipliers는 점수 계산용이고, 칩 정산의 factor 적용은
   액션 레이어 소관이다
 
 ## 족보 Advisor 통계 (`src/features/jokbo-advisor/stats.ts`)
 
-Advisor 화면은 섯다와 고스톱 엔진을 소비해 판정과 파생 결과를 보여주며, 새 판정 규칙을 추가하지
-않는다.
+Advisor 화면은 섯다 엔진만 소비해 판정과 파생 결과를 보여주며, 새 판정 규칙을 추가하지 않는다.
+고스톱은 판독 대상이 아니라서 고스톱 방에서는 판독기 진입점을 숨긴다.
 
 ### 섯다 (`seotdaStats`)
 

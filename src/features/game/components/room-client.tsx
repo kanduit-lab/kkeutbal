@@ -156,7 +156,9 @@ export function RoomClient({
           isHost={isHost}
           muted={muted}
           onToggleMute={toggleMute}
-          onOpenAdvisor={() => setAdvisorOpen(true)}
+          onOpenAdvisor={
+            snapshot.room.gameType === 'seotda' ? () => setAdvisorOpen(true) : undefined
+          }
         />
         <RoomConnectionBar
           syncFailed={syncFailed}
@@ -421,7 +423,7 @@ export function RoomClient({
         ariaLabel={d.room.advisorAria}
         className="flex h-[88dvh] flex-col overflow-hidden sm:h-[82dvh] sm:max-w-4xl"
       >
-        <AdvisorBoard visionEnabled={visionEnabled} initialTab={snapshot.room.gameType} />
+        <AdvisorBoard visionEnabled={visionEnabled} />
       </Sheet>
     </main>
   )

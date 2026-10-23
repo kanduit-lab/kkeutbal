@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { consumeRateLimits } from '@/lib/rate-limit'
 import { cardsOfMonth } from '@/features/hwatu/cards'
-import type { CardId, GameType, Month } from '@/features/hwatu/types'
+import type { CardId, Month } from '@/features/hwatu/types'
 import { currentUserId } from '@/features/auth/session'
 import { getActiveVisionSettings } from './settings'
 
@@ -86,7 +86,6 @@ export interface VisionRecognition {
 
 const inputSchema = z.object({
   imageDataUrl: z.string().min(1),
-  gameType: z.enum(['seotda', 'gostop']),
 })
 
 export async function recognizeHand(
@@ -125,12 +124,7 @@ export async function recognizeHand(
   const base64Data = match[2]
   if (base64Data.length * 0.75 > MAX_IMAGE_BYTES) return fail('errors.visionImageTooLarge')
 
-  const gameHint =
-    parsed.data.gameType === 'seotda'
-      ? '섯다 손패 사진이므로 카드는 보통 2장이고, 1~10월의 광/열끗/띠만 나온다 (피 없음).'
-      : '고스톱 획득 패 사진이므로 카드가 여러 장일 수 있다.'
-
-  const prompt = `이 사진에 보이는 화투 카드를 식별해라. ${gameHint}
+  const prompt = `이 사진에 보이는 화투 카드를 식별해라. 섯다 손패 사진이므로 카드는 보통 2장이고, 1~10월의 광/열끗/띠만 나온다 (피 없음).
 각 카드를 월(1~12)과 종류(gwang=광, yeol=열끗, tti=띠, pi=피)로 판정하고,
 피가 쌍피(11월 오동 쌍피, 12월 비 쌍피)면 ssangpi=true 로 표시해라.
 가능하면 각 카드의 위치를 사진 기준 정규화 좌표(box: {x,y,w,h}, 좌상단이 0,0이고 우하단이 1,1)로 함께 달아라.
@@ -160,7 +154,7 @@ export async function recognizeHand(
     const result = visionSchema.safeParse(raw)
     if (!result.success) return fail('errors.visionInvalidResult')
 
-    const matched = matchCards(result.data.cards, parsed.data.gameType)
+    const matched = matchCards(result.data.cards)
     return ok({
       cardIds: matched.map((card) => card.cardId),
       cards: matched,
@@ -229,7 +223,6 @@ function matchCards(
     ssangpi?: boolean
     box?: RecognizedCardBox
   }>,
-  gameType: GameType,
 ): RecognizedCard[] {
   const used = new Set<CardId>()
   const matched: RecognizedCard[] = []
@@ -237,7 +230,7 @@ function matchCards(
   for (const item of detected) {
     const candidates = cardsOfMonth(item.month as Month).filter((card) => {
       if (card.kind !== item.kind) return false
-      if (gameType === 'seotda' && !card.seotda) return false
+      if (!card.seotda) return false
       if (item.kind === 'pi' && item.ssangpi !== undefined) {
         return item.ssangpi ? card.piValue === 2 : card.piValue === 1
       }

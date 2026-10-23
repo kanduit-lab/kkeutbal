@@ -1,13 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { HwatuCard } from '@/features/hwatu/types'
 import { evaluateSeotdaHand, describeSeotdaHand } from '@/features/seotda/engine'
-import { GOSTOP_RULES_STANDARD } from '@/features/gostop/types'
-import { captureOf, hasChongtong, scoreGostop } from '@/features/gostop/scoring'
 import type { SeotdaAdviceCode } from '@/features/seotda/advice'
 import type { ReactNode } from 'react'
-import { Badge, Panel, Stepper } from '@/components/ui'
+import { Badge, Panel } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { seotdaStats } from '../stats'
 
@@ -134,113 +132,5 @@ function SeotdaAdviceList({
         </li>
       ))}
     </ul>
-  )
-}
-
-export function GostopResult({
-  cards,
-  vision,
-}: {
-  cards: readonly HwatuCard[]
-  vision?: VisionSource | null
-}) {
-  const { d } = useDict()
-  const [goCount, setGoCount] = useState(0)
-  const [shakeCount, setShakeCount] = useState(0)
-  const [bombCount, setBombCount] = useState(0)
-
-  const result = useMemo(() => {
-    if (cards.length === 0) return null
-    try {
-      const capture = captureOf(cards, GOSTOP_RULES_STANDARD)
-      const score = scoreGostop(
-        capture,
-        { goCount, shakeCount, bombCount, opponents: [] },
-        GOSTOP_RULES_STANDARD,
-      )
-      return { capture, score, chongtong: hasChongtong(cards) }
-    } catch {
-      return null
-    }
-  }, [cards, goCount, shakeCount, bombCount])
-
-  return (
-    <ResultRegion className="space-y-4" vision={vision}>
-      {result ? (
-        <>
-          <div className="text-center">
-            <p className="text-5xl font-black text-warn">
-              {format(d.advisor.gostopScorePoints, { n: result.score.total })}
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              {format(d.advisor.gostopCaptureLine, {
-                gwang: result.capture.gwang.length,
-                yeol: result.capture.yeol.length,
-                tti: result.capture.tti.length,
-                pi: result.capture.piValue,
-              })}
-              {result.chongtong ? d.advisor.chongtongSuffix : ''}
-              {result.score.canStop ? d.advisor.canStopSuffix : ''}
-            </p>
-          </div>
-          {result.score.breakdown.length > 0 ? (
-            <ul className="space-y-0.5 text-sm">
-              {result.score.breakdown.map((line) => (
-                <li key={line.source} className="flex justify-between">
-                  <span className="text-muted">{line.source}</span>
-                  <span className="tabular-nums font-bold">+{line.points}</span>
-                </li>
-              ))}
-              {result.score.multipliers.map((multiplier) => (
-                <li key={multiplier.source} className="flex justify-between text-warn">
-                  <span>{multiplier.source}</span>
-                  <span className="tabular-nums font-bold">×{multiplier.factor}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-center text-sm text-muted">{d.advisor.noScoreYet}</p>
-          )}
-        </>
-      ) : (
-        <p className="py-7 text-center text-sm text-muted">{d.advisor.selectCapturedCards}</p>
-      )}
-
-      <div className="space-y-2">
-        <CountStepper label={d.advisor.goCountLabel} value={goCount} onChange={setGoCount} />
-        <CountStepper
-          label={d.advisor.shakeCountLabel}
-          value={shakeCount}
-          onChange={setShakeCount}
-        />
-        <CountStepper label={d.advisor.bombCountLabel} value={bombCount} onChange={setBombCount} />
-      </div>
-    </ResultRegion>
-  )
-}
-
-function CountStepper({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: number
-  onChange: (next: number) => void
-}) {
-  const { d } = useDict()
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl bg-bg px-3 py-2">
-      <span className="text-xs font-medium text-muted">{label}</span>
-      <Stepper
-        value={value}
-        onChange={onChange}
-        min={0}
-        max={9}
-        ariaLabel={label}
-        decreaseLabel={format(d.advisor.countDecreaseAria, { label })}
-        increaseLabel={format(d.advisor.countIncreaseAria, { label })}
-      />
-    </div>
   )
 }

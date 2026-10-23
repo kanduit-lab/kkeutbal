@@ -38,7 +38,7 @@ export function RoomMenuSheet({
   onClose: () => void
   code: string
   isHost: boolean
-  onOpenAdvisor: () => void
+  onOpenAdvisor?: () => void
 }) {
   const { d } = useDict()
 
@@ -50,14 +50,18 @@ export function RoomMenuSheet({
       hint: d.room.resultMenuHint,
       href: `/rooms/${code}/result` as Route,
     },
-    {
-      key: 'advisor',
-      icon: '🔮',
-      label: d.room.advisorAria,
-      hint: d.room.advisorMenuHint,
-      // 방을 떠나지 않고 시트로 연다. `/advisor`로 나가면 실시간 채널이 끊긴다.
-      onSelect: onOpenAdvisor,
-    },
+    ...(onOpenAdvisor
+      ? [
+          {
+            key: 'advisor',
+            icon: '🔮',
+            label: d.room.advisorAria,
+            hint: d.room.advisorMenuHint,
+            // 방을 떠나지 않고 시트로 연다. `/advisor`로 나가면 실시간 채널이 끊긴다.
+            onSelect: onOpenAdvisor,
+          },
+        ]
+      : []),
     {
       key: 'monitor',
       icon: '📺',
