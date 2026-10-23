@@ -79,12 +79,11 @@ pnpm dev                     # http://localhost:3000
 | ---------------------------------------------- | :--: | ---------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_APP_URL`                          |  ✅  | 공개 앱 URL                                                                              |
 | `REALTIME_MODE`                                |  ✅  | `self` 또는 `supabase`. `REALTIME_<MODE>_*` 키는 그 모드에서만 읽음                      |
-| `REALTIME_SELF_LISTENER_URL`                   | 조건 | `self`와 `transaction`을 함께 쓸 때 필요한 session-capable 연결                         |
 | `REALTIME_SUPABASE_URL` / `REALTIME_SUPABASE_PUBLISHABLE_KEY` | 조건 | `REALTIME_MODE=supabase`일 때만 읽고 그때 필수                                          |
-| `DATABASE_URL`                                 |  ✅  | PostgreSQL 연결 문자열                                                                   |
+| `DATABASE_SESSION_URL`                         |  ✅  | direct 또는 session pooler 연결. 마이그레이션과 self realtime listener가 씀             |
+| `DATABASE_POOLER_URL`                          |  —   | transaction pooler 연결. 있으면 앱 쿼리가 prepared statement 없이 이쪽을 씀              |
 | `DATABASE_TLS_MODE`                            |  ✅  | `disable`, `verify-system`, `verify-ca`                                                  |
 | `DATABASE_CA_CERT_BASE64`                      | 조건 | `DATABASE_TLS_MODE=verify-ca`일 때만 필수                                                |
-| `DATABASE_POOL_MODE`                           |  ✅  | `session` 또는 `transaction`                                                             |
 | `AUTH_SECRET`                                  |  ✅  | `openssl rand -base64 32`; SSO secret과 초기 관리자 코드 보호의 루트 키                 |
 | `AUTH_TRUST_HOST`                              |  ✅  | 프록시 환경의 Auth.js 호스트 검증                                                        |
 | `ANTHROPIC_API_KEY` / `GEMINI_API_KEY`         |  —   | 사진 인식 공급자 키. `/admin`에서 공급자, 모델, 활성화 상태를 관리                      |

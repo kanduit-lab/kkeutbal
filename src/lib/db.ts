@@ -37,10 +37,10 @@ function databaseConnectionOptions(
 function createSql() {
   const env = serverEnv()
   return postgres(
-    env.DATABASE_URL,
+    env.DATABASE_POOLER_URL ?? env.DATABASE_SESSION_URL,
     databaseConnectionOptions(env, {
       max: 5,
-      prepare: env.DATABASE_POOL_MODE !== 'transaction',
+      prepare: !env.DATABASE_POOLER_URL,
     }),
   )
 }
@@ -48,7 +48,7 @@ function createSql() {
 export function createListenerSql() {
   const env = serverEnv()
   return postgres(
-    (env.REALTIME_MODE === 'self' ? env.REALTIME_SELF_LISTENER_URL : undefined) ?? env.DATABASE_URL,
+    env.DATABASE_SESSION_URL,
     databaseConnectionOptions(env, { max: 1, prepare: false }),
   )
 }

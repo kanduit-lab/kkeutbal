@@ -175,14 +175,10 @@ lease를 갱신하며 45초가 지나면 오프라인으로 본다. 프로세스
 
 ### 데이터베이스 연결 조건
 
-`DATABASE_POOL_MODE`는 `session` 또는 `transaction`이다. `LISTEN/NOTIFY` listener는 반드시
-session-capable 연결을 사용한다.
-
-- `REALTIME_MODE=self`이고 기본 DB 연결이 `session`이면 `REALTIME_SELF_LISTENER_URL`을 생략할 수
-  있다. 이때 listener는 기본 DB 연결과 분리된 장기 session을 연다.
-- `REALTIME_MODE=self`이고 `DATABASE_POOL_MODE=transaction`이면 `REALTIME_SELF_LISTENER_URL`이
-  필수다. 이 URL은 direct 또는 session pool endpoint여야 하며 transaction endpoint여서는 안 된다.
-- `REALTIME_MODE=supabase`에서는 listener URL이 필요하지 않다.
+`LISTEN/NOTIFY` listener는 session-capable 연결이 필요하다. `REALTIME_MODE=self`의 listener는
+항상 `DATABASE_SESSION_URL`로 앱 쿼리 풀과 분리된 장기 session을 연다. `DATABASE_SESSION_URL`은
+direct 또는 session pool endpoint여야 하며 transaction endpoint여서는 안 된다. transaction pooler는
+선택값 `DATABASE_POOLER_URL`로만 받고 앱 쿼리에만 쓴다.
 
 TLS 설정은 `DATABASE_TLS_MODE=disable | verify-system | verify-ca`로 제한한다. `verify-ca`는
 `DATABASE_CA_CERT_BASE64`를 요구하며, 다른 TLS 모드에서 이 CA 값을 요구하지 않는다.

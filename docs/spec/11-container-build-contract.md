@@ -22,7 +22,7 @@
 |------|------|
 | `NEXT_PUBLIC_APP_URL` | 공개 앱 URL |
 
-`DATABASE_URL`, `DATABASE_CA_CERT_BASE64`, `AUTH_SECRET`, 관리형 Realtime 공개 연결 값과 Vision API 키는
+`DATABASE_SESSION_URL`, `DATABASE_POOLER_URL`, `DATABASE_CA_CERT_BASE64`, `AUTH_SECRET`, 관리형 Realtime 공개 연결 값과 Vision API 키는
 이미지 빌드 인자로 전달하지 않는다. 런타임 프로세스 환경에서만 제공하며, 파일 기반 주입과
 Doppler 주입 경로는 현재 구성하지 않는다.
 
@@ -35,8 +35,8 @@ Doppler 주입 경로는 현재 구성하지 않는다.
 | `REALTIME_SUPABASE_PUBLISHABLE_KEY` | `REALTIME_MODE=supabase`일 때만 읽고 그때 필수인 공개 키다. |
 | `DATABASE_TLS_MODE` | `disable`, `verify-system`, `verify-ca` 중 하나. |
 | `DATABASE_CA_CERT_BASE64` | `DATABASE_TLS_MODE=verify-ca`일 때 필수. 다른 TLS 모드에서는 요구하지 않는다. |
-| `DATABASE_POOL_MODE` | `session` 또는 `transaction`. |
-| `REALTIME_SELF_LISTENER_URL` | `REALTIME_MODE=self`일 때만 읽는다. `DATABASE_POOL_MODE=transaction`과 함께 쓰면 필수다. direct 또는 session pool endpoint여야 하며 transaction endpoint는 허용하지 않는다. 기본 DB 연결이 `session`이면 생략할 수 있다. |
+| `DATABASE_SESSION_URL` | 필수. direct 또는 session pool endpoint. self realtime listener가 항상 이 연결을 쓴다. transaction endpoint는 허용하지 않는다. |
+| `DATABASE_POOLER_URL` | 선택. transaction pool endpoint. 있으면 앱 쿼리가 prepared statement 없이 이 연결을 쓴다. |
 
 `REALTIME_MODE=self`는 같은 origin의 인증된 SSE 수신과 POST publish, PostgreSQL
 `LISTEN/NOTIFY`, DB lease presence를 모두 요구한다. listener 연결은 session-capable이어야 하며,
@@ -59,4 +59,3 @@ Doppler 주입 경로는 현재 구성하지 않는다.
 - 실행 컨테이너에는 선택한 실시간 모드와 DB 연결에 필요한 런타임 환경변수가 제공되어야 한다.
 - 기동 후 `/api/health`와 `/api/ready`를 각각 확인한다.
 - `self`를 활성화하기 전, long-running Node 실행 환경과 session-capable listener 연결이 함께 있는지 확인한다.
-- `DATABASE_POOL_MODE=transaction`에서 `self`를 활성화하면 session-capable `REALTIME_SELF_LISTENER_URL`이 없을 때 기동이 실패하는지 확인한다.

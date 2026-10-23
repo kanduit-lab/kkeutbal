@@ -25,7 +25,7 @@ function ssl(mode: DatabaseTlsMode) {
 }
 
 function credentials() {
-  const raw = process.env.DATABASE_URL
+  const raw = process.env.DATABASE_SESSION_URL
   if (!raw) return { url: '' }
 
   const url = new URL(raw)

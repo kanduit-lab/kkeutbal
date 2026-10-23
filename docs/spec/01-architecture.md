@@ -69,12 +69,12 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
 
 `src/lib/db.ts`가 서버 전용 Drizzle 클라이언트를 만든다.
 
-- `DATABASE_POOL_MODE=session|transaction`이 prepared statement 사용 여부를 정한다. 포트 번호로
-  연결 방식을 추론하지 않는다.
+- 연결 방식은 변수 이름이 정한다. `DATABASE_SESSION_URL`은 direct 또는 session pooler이고,
+  선택값 `DATABASE_POOLER_URL`이 있으면 앱 쿼리는 그 transaction pooler로 prepared statement 없이
+  간다. 포트 번호로 연결 방식을 추론하지 않는다.
 - `DATABASE_TLS_MODE=disable|verify-system|verify-ca`가 TLS 검증 방식을 정한다. 사용자 지정 CA는
   `verify-ca`에서만 필요하다.
-- self realtime listener는 세션 연결을 사용한다. 기본 연결이 transaction pool이면
-  `REALTIME_SELF_LISTENER_URL`로 별도 연결을 제공한다.
+- self realtime listener는 항상 `DATABASE_SESSION_URL`로 장기 세션을 연다.
 - 전용 롤 `kkeutbal_app`, 속성 `bypassrls`.
 
 즉 Supabase `service_role` 키도, Auth.js 세션을 Supabase JWT로 바꿔 넘기는 브리지도 쓰지 않는다.

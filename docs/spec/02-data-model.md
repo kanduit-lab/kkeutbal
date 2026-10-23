@@ -29,7 +29,7 @@
 쓰지 않는다. 두 개의 분리된 경로만 있다.
 
 1. **Server Action → `kkeutbal_app` 롤(`BYPASSRLS`)**. `src/lib/db.ts`가 Drizzle과
-   postgres-js로 PostgreSQL에 붙는다. `DATABASE_POOL_MODE`가 session/transaction 동작을,
+   postgres-js로 PostgreSQL에 붙는다. `DATABASE_SESSION_URL`과 선택값 `DATABASE_POOLER_URL`이 연결 경로를,
    `DATABASE_TLS_MODE`가 TLS 검증 방식을 명시한다.
    모든 읽기·쓰기가 이 경로를 지난다. 단, 전역 credit 테이블은 이 롤의 직접 DML을 막고 전용
    RPC(`ensure_credit_account`, `admin_adjust_credit`, `lock_room_credit_buy_in`,

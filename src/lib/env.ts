@@ -9,10 +9,10 @@ function optionalEnv<T extends z.ZodTypeAny>(schema: T) {
 
 const baseServerSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  DATABASE_URL: z.string().url(),
+  DATABASE_SESSION_URL: z.string().url(),
+  DATABASE_POOLER_URL: optionalEnv(z.string().url()),
   DATABASE_TLS_MODE: z.enum(['disable', 'verify-system', 'verify-ca']),
   DATABASE_CA_CERT_BASE64: optionalEnv(z.string().min(1)),
-  DATABASE_POOL_MODE: z.enum(['session', 'transaction']),
   AUTH_SECRET: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().url(),
   ANTHROPIC_API_KEY: optionalEnv(z.string().min(1)),
@@ -20,10 +20,7 @@ const baseServerSchema = z.object({
 })
 
 const realtimeSchema = z.discriminatedUnion('REALTIME_MODE', [
-  z.object({
-    REALTIME_MODE: z.literal('self'),
-    REALTIME_SELF_LISTENER_URL: optionalEnv(z.string().url()),
-  }),
+  z.object({ REALTIME_MODE: z.literal('self') }),
   z.object({
     REALTIME_MODE: z.literal('supabase'),
     REALTIME_SUPABASE_URL: z.string().url(),
@@ -37,18 +34,6 @@ const serverSchema = baseServerSchema.and(realtimeSchema).superRefine((environme
       code: z.ZodIssueCode.custom,
       path: ['DATABASE_CA_CERT_BASE64'],
       message: 'DATABASE_CA_CERT_BASE64 is required when DATABASE_TLS_MODE=verify-ca',
-    })
-  }
-
-  if (
-    environment.REALTIME_MODE === 'self' &&
-    environment.DATABASE_POOL_MODE === 'transaction' &&
-    !environment.REALTIME_SELF_LISTENER_URL
-  ) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['REALTIME_SELF_LISTENER_URL'],
-      message: 'REALTIME_SELF_LISTENER_URL is required when REALTIME_MODE=self and DATABASE_POOL_MODE=transaction',
     })
   }
 })

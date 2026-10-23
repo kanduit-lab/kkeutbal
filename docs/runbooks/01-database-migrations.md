@@ -25,20 +25,20 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 - 대상 Supabase 프로젝트와 백업 시점을 확인한다.
 - DDL 권한이 있는 관리자 연결 문자열을 준비한다. 앱 런타임 롤 `kkeutbal_app`은 DDL 용도가 아니다.
   관리자 문자열은 저장소 파일에 쓰지 않고 대상 셸 환경에만 제공한다.
-- `drizzle-kit`은 `DATABASE_URL`, `DATABASE_TLS_MODE`를 실행 환경에서 읽는다. `DATABASE_TLS_MODE=verify-ca`일 때만
+- `drizzle-kit`은 `DATABASE_SESSION_URL`, `DATABASE_TLS_MODE`를 실행 환경에서 읽는다. `DATABASE_TLS_MODE=verify-ca`일 때만
   `DATABASE_CA_CERT_BASE64`도 제공한다. 이 값들은 앱과 같은 TLS 검증 계약을 따른다.
 - 런타임 앱을 중지하거나 쓰기 트래픽이 없는 유지보수 창을 잡는다.
 - 저장소의 `database/migrations/drizzle/meta/_journal.json`과 SQL 파일이 함께 배포 대상에 포함됐는지 확인한다.
 - `REALTIME_MODE=self` 전환은 long-running Node 실행 환경과 session-capable listener 연결이 준비된
-  뒤에만 검토한다. `DATABASE_POOL_MODE=transaction`이면 transaction endpoint가 아닌
-  `REALTIME_SELF_LISTENER_URL`도 준비한다.
+  뒤에만 검토한다. listener는 `DATABASE_SESSION_URL`을 쓰므로 그 값이 transaction endpoint가 아닌지
+  확인한다.
 - 포커 제거 전 대상 DB 백업을 복원 가능한 상태로 확인한다. 기존 포커 방에 account-credit lock이
   있으면 먼저 `settle_room_credits`로 정산하므로, 이전 credit lifecycle SQL과 정산 권한을 가진
   방장 또는 관리자가 있어야 한다.
 
 ## Inputs And Access
 
-- 로컬 또는 운영 셸의 `DATABASE_URL`: 마이그레이션에만 쓰는 관리자 연결 문자열
+- 로컬 또는 운영 셸의 `DATABASE_SESSION_URL`: 마이그레이션에만 쓰는 관리자 연결 문자열
 - Supabase SQL Editor 또는 동등한 관리자 SQL 실행 경로
 - `kkeutbal_app` 롤 비밀번호: 저장소에 기록하지 않는다
 
@@ -48,9 +48,8 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 1. `database/migrations/drizzle/0022_wakeful_swarm.sql`과 journal의 idx 22가 함께 있는지 확인한다.
    migration은 `room_connections` 테이블과 방·만료, 사용자 인덱스를 만든다.
-2. 적용 전에는 대상 환경의 백업과 `REALTIME_MODE`, `DATABASE_POOL_MODE`, listener endpoint를 함께
-   확인한다. `DATABASE_POOL_MODE=transaction`에서 listener URL이 없거나 transaction endpoint를
-   가리키면 적용하지 않는다.
+2. 적용 전에는 대상 환경의 백업과 `REALTIME_MODE`, `DATABASE_SESSION_URL`을 함께 확인한다.
+   `DATABASE_SESSION_URL`이 transaction endpoint를 가리키면 적용하지 않는다.
 3. DB 적용은 별도 실행 지시 뒤에 이 런북의 기존 DB 업그레이드 절차와 같은 유지보수 창에서 수행한다.
 4. 적용 뒤 `room_connections`와 두 인덱스, Drizzle 원장 idx 22를 확인한 다음
    Supabase 배포라면 `database/migrations/supabase/0020_room_connections_security.sql`로
@@ -79,7 +78,7 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 1. 대상 DB 백업 시점을 확인한다. 이 migration은 컬럼과 테이블을 더하기만 하고 기존 행은 기본값
    `street = 1`을 받는다.
-2. 관리자 `DATABASE_URL`로 `pnpm db:migrate`를 한 번 실행한다. 새로 적용되는 것은 `0024` 하나다.
+2. 관리자 `DATABASE_SESSION_URL`로 `pnpm db:migrate`를 한 번 실행한다. 새로 적용되는 것은 `0024` 하나다.
 3. Supabase SQL Editor에서 `database/migrations/supabase/0021_round_hand_choices_security.sql`을
    실행해 `round_hand_choices`의 브라우저 역할 권한을 회수하고 앱 롤 DML만 허용한다.
 4. 아래 Verification에 더해 `round_hand_choices` RLS가 켜졌는지와 `rounds.street`가 있는지 확인한다.
@@ -135,7 +134,7 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 
 1. 관리자 SQL로 `kkeutbal_app` 로그인 롤을 만들고 `BYPASSRLS`를 부여한다. 비밀번호는 운영
    시크릿 저장소에서 주입한다.
-2. 관리자 `DATABASE_URL`로 `pnpm db:migrate`를 실행한다.
+2. 관리자 `DATABASE_SESSION_URL`로 `pnpm db:migrate`를 실행한다.
 3. `database/migrations/supabase/0007_database_hardening.sql`과 신규 테이블 보강 파일인
    `0008`·`0016`·`0020`을 적용한다. 0007은 기본 스키마의 RLS·최소 DML 권한·append-only
    트리거 baseline이고, 뒤 파일들은 이후 추가된 테이블의 권한을 닫는다.
