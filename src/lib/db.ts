@@ -48,7 +48,7 @@ function createSql() {
 export function createListenerSql() {
   const env = serverEnv()
   return postgres(
-    env.DATABASE_LISTENER_URL ?? env.DATABASE_URL,
+    (env.REALTIME_MODE === 'self' ? env.DATABASE_LISTENER_URL : undefined) ?? env.DATABASE_URL,
     databaseConnectionOptions(env, { max: 1, prepare: false }),
   )
 }

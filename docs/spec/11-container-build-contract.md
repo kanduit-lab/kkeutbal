@@ -30,13 +30,13 @@ Doppler 주입 경로는 현재 구성하지 않는다.
 
 | 변수 | 허용값 또는 조건 |
 |------|------------------|
-| `REALTIME_MODE` | `supabase` 또는 `self`. `self`는 long-running Node 프로세스에서만 허용한다. |
-| `REALTIME_PROVIDER_URL` | `REALTIME_MODE=supabase`일 때 필수. 런타임 설정 API가 브라우저에 공개한다. |
-| `REALTIME_PROVIDER_PUBLISHABLE_KEY` | `REALTIME_MODE=supabase`일 때 필수인 공개 키다. |
+| `REALTIME_MODE` | `self` 또는 `supabase`. 비우면 `self`다. `self`는 long-running Node 프로세스에서만 허용한다. |
+| `SUPABASE_URL` | `REALTIME_MODE=supabase`일 때만 읽고 그때 필수다. 런타임 설정 API가 브라우저에 공개한다. |
+| `SUPABASE_PUBLISHABLE_KEY` | `REALTIME_MODE=supabase`일 때만 읽고 그때 필수인 공개 키다. |
 | `DATABASE_TLS_MODE` | `disable`, `verify-system`, `verify-ca` 중 하나. |
 | `DATABASE_CA_CERT_BASE64` | `DATABASE_TLS_MODE=verify-ca`일 때 필수. 다른 TLS 모드에서는 요구하지 않는다. |
 | `DATABASE_POOL_MODE` | `session` 또는 `transaction`. |
-| `DATABASE_LISTENER_URL` | `REALTIME_MODE=self`와 `DATABASE_POOL_MODE=transaction`을 함께 쓸 때 필수다. direct 또는 session pool endpoint여야 하며 transaction endpoint는 허용하지 않는다. 기본 DB 연결이 `session`이면 생략할 수 있다. |
+| `DATABASE_LISTENER_URL` | `REALTIME_MODE=self`일 때만 읽는다. `DATABASE_POOL_MODE=transaction`과 함께 쓰면 필수다. direct 또는 session pool endpoint여야 하며 transaction endpoint는 허용하지 않는다. 기본 DB 연결이 `session`이면 생략할 수 있다. |
 
 `REALTIME_MODE=self`는 같은 origin의 인증된 SSE 수신과 POST publish, PostgreSQL
 `LISTEN/NOTIFY`, DB lease presence를 모두 요구한다. listener 연결은 session-capable이어야 하며,

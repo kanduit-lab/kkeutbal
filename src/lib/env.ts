@@ -7,50 +7,40 @@ function optionalEnv<T extends z.ZodTypeAny>(schema: T) {
   )
 }
 
-type RealtimeEnv = {
-  REALTIME_MODE: 'self' | 'supabase'
-  REALTIME_PROVIDER_URL?: string
-  REALTIME_PROVIDER_PUBLISHABLE_KEY?: string
-}
-
-function validateManagedRealtimeConfiguration(
-  environment: RealtimeEnv,
-  context: z.RefinementCtx,
-): void {
-  if (environment.REALTIME_MODE !== 'supabase') return
-
-  if (!environment.REALTIME_PROVIDER_URL) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['REALTIME_PROVIDER_URL'],
-      message: 'REALTIME_PROVIDER_URL is required when REALTIME_MODE=supabase',
-    })
-  }
-
-  if (!environment.REALTIME_PROVIDER_PUBLISHABLE_KEY) {
-    context.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['REALTIME_PROVIDER_PUBLISHABLE_KEY'],
-      message: 'REALTIME_PROVIDER_PUBLISHABLE_KEY is required when REALTIME_MODE=supabase',
-    })
-  }
-}
-
-const serverSchema = z.object({
+const baseServerSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().url(),
   DATABASE_TLS_MODE: z.enum(['disable', 'verify-system', 'verify-ca']),
   DATABASE_CA_CERT_BASE64: optionalEnv(z.string().min(1)),
   DATABASE_POOL_MODE: z.enum(['session', 'transaction']),
-  DATABASE_LISTENER_URL: optionalEnv(z.string().url()),
-  REALTIME_MODE: z.enum(['self', 'supabase']),
-  REALTIME_PROVIDER_URL: optionalEnv(z.string().url()),
-  REALTIME_PROVIDER_PUBLISHABLE_KEY: optionalEnv(z.string().min(1)),
   AUTH_SECRET: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().url(),
   ANTHROPIC_API_KEY: optionalEnv(z.string().min(1)),
   GEMINI_API_KEY: optionalEnv(z.string().min(1)),
-}).superRefine((environment, context) => {
+})
+
+const realtimeSchema = z.preprocess(
+  (input) => {
+    const environment = input as Record<string, unknown>
+    const mode = environment.REALTIME_MODE
+    return typeof mode === 'string' && mode.trim() !== ''
+      ? environment
+      : { ...environment, REALTIME_MODE: 'self' }
+  },
+  z.discriminatedUnion('REALTIME_MODE', [
+    z.object({
+      REALTIME_MODE: z.literal('self'),
+      DATABASE_LISTENER_URL: optionalEnv(z.string().url()),
+    }),
+    z.object({
+      REALTIME_MODE: z.literal('supabase'),
+      SUPABASE_URL: z.string().url(),
+      SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+    }),
+  ]),
+)
+
+const serverSchema = baseServerSchema.and(realtimeSchema).superRefine((environment, context) => {
   if (environment.DATABASE_TLS_MODE === 'verify-ca' && !environment.DATABASE_CA_CERT_BASE64) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
@@ -70,8 +60,6 @@ const serverSchema = z.object({
       message: 'DATABASE_LISTENER_URL is required when REALTIME_MODE=self and DATABASE_POOL_MODE=transaction',
     })
   }
-
-  validateManagedRealtimeConfiguration(environment, context)
 })
 
 export type ServerEnv = z.infer<typeof serverSchema>
