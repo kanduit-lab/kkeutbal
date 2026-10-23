@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import { startRound } from '../round-actions'
 import type { RoomSnapshot } from '../types'
-import { Avatar, Badge, Button, Panel, Segmented, useToast } from '@/components/ui'
+import { Avatar, Badge, Button, Panel, Segmented, useIsDesktop, useToast } from '@/components/ui'
 import { QrCode } from '@/components/qr-code'
 import { format, useDict } from '@/lib/i18n/client'
 import { AddLocalMemberForm } from './lobby-add-local-member'
@@ -36,6 +36,7 @@ export function LobbyPanel({
   const { d } = useDict()
   const [isPending, startTransition] = useTransition()
   const [inviteTarget, setInviteTarget] = useState<'member' | 'guest'>('member')
+  const isDesktop = useIsDesktop()
 
   const [origin, setOrigin] = useState<string | null>(null)
   useEffect(() => {
@@ -79,48 +80,49 @@ export function LobbyPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
-        <Panel className="space-y-3 text-center">
-          <p className="text-sm font-medium text-muted">{d.lobby.codeTitle}</p>
-          <p className="font-mono text-5xl font-black tracking-[0.3em] sm:text-6xl">
-            {snapshot.room.code}
-          </p>
-          <Segmented
-            value={inviteTarget}
-            onChange={setInviteTarget}
-            ariaLabel={d.lobby.inviteTargetAria}
-            size="sm"
-            className="grid-cols-2"
-            options={[
-              { value: 'member', label: d.lobby.inviteMember },
-              { value: 'guest', label: d.lobby.inviteGuest },
-            ]}
-          />
-          {origin ? (
-            <div className="flex justify-center">
-              <QrCode
-                value={inviteUrl(origin, snapshot.room.code, inviteTarget)}
-                alt={d.lobby.qrAlt}
-              />
+        <Panel className="grid gap-4 text-center sm:grid-cols-[minmax(0,1fr)_9rem] sm:text-left">
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm font-medium text-muted">{d.lobby.codeTitle}</p>
+              <p className="mt-1 font-mono text-4xl font-black tracking-[0.24em] sm:text-5xl">
+                {snapshot.room.code}
+              </p>
+            </div>
+            <Segmented
+              value={inviteTarget}
+              onChange={setInviteTarget}
+              ariaLabel={d.lobby.inviteTargetAria}
+              size="sm"
+              className="grid-cols-2"
+              options={[
+                { value: 'member', label: d.lobby.inviteMember },
+                { value: 'guest', label: d.lobby.inviteGuest },
+              ]}
+            />
+            <p className="text-xs text-muted">
+              {inviteTarget === 'guest' ? d.lobby.guestJoinHint : d.lobby.joinHint}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => copy(snapshot.room.code, d.lobby.codeCopied)}>
+                {d.lobby.copyCode}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={origin === null}
+                onClick={() => {
+                  if (!origin) return
+                  void copy(inviteUrl(origin, snapshot.room.code, inviteTarget), d.lobby.linkCopied)
+                }}
+              >
+                {d.lobby.copyLink}
+              </Button>
+            </div>
+          </div>
+          {origin && isDesktop ? (
+            <div className="flex items-center justify-center border-t border-gold/15 pt-4 sm:border-s-0 sm:border-t-0 sm:ps-4 sm:pt-0">
+              <QrCode value={inviteUrl(origin, snapshot.room.code, inviteTarget)} alt={d.lobby.qrAlt} />
             </div>
           ) : null}
-          <p className="text-xs text-muted">
-            {inviteTarget === 'guest' ? d.lobby.guestJoinHint : d.lobby.joinHint}
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" onClick={() => copy(snapshot.room.code, d.lobby.codeCopied)}>
-              {d.lobby.copyCode}
-            </Button>
-            <Button
-              variant="outline"
-              disabled={origin === null}
-              onClick={() => {
-                if (!origin) return
-                void copy(inviteUrl(origin, snapshot.room.code, inviteTarget), d.lobby.linkCopied)
-              }}
-            >
-              {d.lobby.copyLink}
-            </Button>
-          </div>
         </Panel>
         <Panel className="space-y-3">
           <h2 className="flex items-center justify-between text-sm font-bold text-muted">
