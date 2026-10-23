@@ -79,7 +79,7 @@ pnpm dev                     # http://localhost:3000
 | ---------------------------------------------- | :--: | ---------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_APP_URL`                          |  ✅  | 공개 앱 URL                                                                              |
 | `REALTIME_MODE`                                |  ✅  | `supabase` 또는 `self`                                                                   |
-| `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`    | 조건 | `REALTIME_MODE=supabase`일 때 필수                                                       |
+| `REALTIME_PROVIDER_URL` / `REALTIME_PROVIDER_PUBLISHABLE_KEY` | 조건 | `REALTIME_MODE=supabase`일 때 필수                                                       |
 | `DATABASE_URL`                                 |  ✅  | PostgreSQL 연결 문자열                                                                   |
 | `DATABASE_TLS_MODE`                            |  ✅  | `disable`, `verify-system`, `verify-ca`                                                  |
 | `DATABASE_CA_CERT_BASE64`                      | 조건 | `DATABASE_TLS_MODE=verify-ca`일 때만 필수                                                |

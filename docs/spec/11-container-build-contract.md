@@ -6,7 +6,7 @@
 | Audience | maintainers / operators |
 | Status | active |
 | Source of truth | 이 문서는 컨테이너 빌드와 런타임 환경 계약을 소유한다 |
-| Last reviewed | 2026-10-21 |
+| Last reviewed | 2026-10-23 |
 
 ## Requirement
 
@@ -22,7 +22,7 @@
 |------|------|
 | `NEXT_PUBLIC_APP_URL` | 공개 앱 URL |
 
-`DATABASE_URL`, `DATABASE_CA_CERT_BASE64`, `AUTH_SECRET`, Supabase 공개 연결 값과 Vision API 키는
+`DATABASE_URL`, `DATABASE_CA_CERT_BASE64`, `AUTH_SECRET`, 관리형 Realtime 공개 연결 값과 Vision API 키는
 이미지 빌드 인자로 전달하지 않는다. 런타임 프로세스 환경에서만 제공하며, 파일 기반 주입과
 Doppler 주입 경로는 현재 구성하지 않는다.
 
@@ -31,8 +31,8 @@ Doppler 주입 경로는 현재 구성하지 않는다.
 | 변수 | 허용값 또는 조건 |
 |------|------------------|
 | `REALTIME_MODE` | `supabase` 또는 `self`. `self`는 long-running Node 프로세스에서만 허용한다. |
-| `SUPABASE_URL` | `REALTIME_MODE=supabase`일 때 필수. 런타임 설정 API가 브라우저에 공개한다. |
-| `SUPABASE_PUBLISHABLE_KEY` | `REALTIME_MODE=supabase`일 때 필수인 공개 키다. |
+| `REALTIME_PROVIDER_URL` | `REALTIME_MODE=supabase`일 때 필수. 런타임 설정 API가 브라우저에 공개한다. |
+| `REALTIME_PROVIDER_PUBLISHABLE_KEY` | `REALTIME_MODE=supabase`일 때 필수인 공개 키다. |
 | `DATABASE_TLS_MODE` | `disable`, `verify-system`, `verify-ca` 중 하나. |
 | `DATABASE_CA_CERT_BASE64` | `DATABASE_TLS_MODE=verify-ca`일 때 필수. 다른 TLS 모드에서는 요구하지 않는다. |
 | `DATABASE_POOL_MODE` | `session` 또는 `transaction`. |

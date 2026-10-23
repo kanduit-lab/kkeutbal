@@ -11,8 +11,8 @@ export function GET(): NextResponse {
       ? {
           mode: 'supabase' as const,
           supabase: {
-            url: env.SUPABASE_URL,
-            publishableKey: env.SUPABASE_PUBLISHABLE_KEY,
+            url: env.REALTIME_PROVIDER_URL,
+            publishableKey: env.REALTIME_PROVIDER_PUBLISHABLE_KEY,
           },
         }
       : { mode: 'self' as const }

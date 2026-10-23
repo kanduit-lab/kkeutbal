@@ -15,8 +15,8 @@ describe('serverEnv', () => {
     vi.stubEnv('DATABASE_POOL_MODE', 'session')
     vi.stubEnv('DATABASE_LISTENER_URL', '')
     vi.stubEnv('REALTIME_MODE', 'self')
-    vi.stubEnv('SUPABASE_URL', '')
-    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', '')
+    vi.stubEnv('REALTIME_PROVIDER_URL', '')
+    vi.stubEnv('REALTIME_PROVIDER_PUBLISHABLE_KEY', '')
     vi.stubEnv('AUTH_SECRET', 'test-auth-secret')
     vi.stubEnv('ANTHROPIC_API_KEY', '')
     vi.stubEnv('GEMINI_API_KEY', '')
@@ -38,8 +38,8 @@ describe('serverEnv', () => {
     vi.stubEnv('DATABASE_POOL_MODE', 'session')
     vi.stubEnv('DATABASE_LISTENER_URL', '')
     vi.stubEnv('REALTIME_MODE', 'self')
-    vi.stubEnv('SUPABASE_URL', '')
-    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', '')
+    vi.stubEnv('REALTIME_PROVIDER_URL', '')
+    vi.stubEnv('REALTIME_PROVIDER_PUBLISHABLE_KEY', '')
     vi.stubEnv('AUTH_SECRET', 'test-auth-secret')
 
     expect(() => serverEnv()).toThrow('DATABASE_CA_CERT_BASE64')
@@ -54,14 +54,14 @@ describe('serverEnv', () => {
     vi.stubEnv('DATABASE_POOL_MODE', 'transaction')
     vi.stubEnv('DATABASE_LISTENER_URL', '')
     vi.stubEnv('REALTIME_MODE', 'self')
-    vi.stubEnv('SUPABASE_URL', '')
-    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', '')
+    vi.stubEnv('REALTIME_PROVIDER_URL', '')
+    vi.stubEnv('REALTIME_PROVIDER_PUBLISHABLE_KEY', '')
     vi.stubEnv('AUTH_SECRET', 'test-auth-secret')
 
     expect(() => serverEnv()).toThrow('DATABASE_LISTENER_URL')
   })
 
-  it('requires Supabase credentials only in supabase realtime mode', () => {
+  it('requires managed realtime credentials only in supabase realtime mode', () => {
     vi.stubEnv('NODE_ENV', 'production')
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.com')
     vi.stubEnv('DATABASE_URL', 'postgresql://app:password@example.com:5432/postgres')
@@ -70,11 +70,34 @@ describe('serverEnv', () => {
     vi.stubEnv('DATABASE_POOL_MODE', 'session')
     vi.stubEnv('DATABASE_LISTENER_URL', '')
     vi.stubEnv('REALTIME_MODE', 'supabase')
-    vi.stubEnv('SUPABASE_URL', '')
-    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', '')
+    vi.stubEnv('REALTIME_PROVIDER_URL', '')
+    vi.stubEnv('REALTIME_PROVIDER_PUBLISHABLE_KEY', '')
     vi.stubEnv('AUTH_SECRET', 'test-auth-secret')
 
-    expect(() => serverEnv()).toThrow('SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY')
+    expect(() =>
+      serverEnv(),
+    ).toThrow('REALTIME_PROVIDER_URL, REALTIME_PROVIDER_PUBLISHABLE_KEY')
+  })
+
+  it('normalizes legacy managed realtime keys during the local migration', () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.com')
+    vi.stubEnv('DATABASE_URL', 'postgresql://app:password@example.com:5432/postgres')
+    vi.stubEnv('DATABASE_TLS_MODE', 'disable')
+    vi.stubEnv('DATABASE_CA_CERT_BASE64', '')
+    vi.stubEnv('DATABASE_POOL_MODE', 'session')
+    vi.stubEnv('DATABASE_LISTENER_URL', '')
+    vi.stubEnv('REALTIME_MODE', 'supabase')
+    vi.stubEnv('REALTIME_PROVIDER_URL', '')
+    vi.stubEnv('REALTIME_PROVIDER_PUBLISHABLE_KEY', '')
+    vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co')
+    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', 'legacy-publishable-key')
+    vi.stubEnv('AUTH_SECRET', 'test-auth-secret')
+
+    expect(serverEnv()).toMatchObject({
+      REALTIME_PROVIDER_URL: 'https://example.supabase.co',
+      REALTIME_PROVIDER_PUBLISHABLE_KEY: 'legacy-publishable-key',
+    })
   })
 
   it('reports every missing runtime key before a request is served', () => {
@@ -85,8 +108,8 @@ describe('serverEnv', () => {
     vi.stubEnv('DATABASE_POOL_MODE', '')
     vi.stubEnv('DATABASE_LISTENER_URL', '')
     vi.stubEnv('REALTIME_MODE', '')
-    vi.stubEnv('SUPABASE_URL', '')
-    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', '')
+    vi.stubEnv('REALTIME_PROVIDER_URL', '')
+    vi.stubEnv('REALTIME_PROVIDER_PUBLISHABLE_KEY', '')
     vi.stubEnv('AUTH_SECRET', '')
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '')
 
