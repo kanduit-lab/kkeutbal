@@ -43,11 +43,17 @@ export interface TurnAction {
   readonly status: BetStatus
   readonly action: BetActionKind
   readonly seq: number
+  readonly street?: number
 }
 
+/**
+ * `street`가 2면 3장 섯다의 2차 베팅이다. 폴드·올인은 1차 것까지 그대로 효력이 있고, 차례는
+ * 2차 액션만 보고 선부터 다시 돈다.
+ */
 export function nextActorId(
   participantIds: readonly string[],
   actions: readonly TurnAction[],
+  street = 1,
 ): string | null {
   const n = participantIds.length
   if (n === 0) return null
@@ -58,6 +64,7 @@ export function nextActorId(
     if (action.status !== 'accepted') continue
     const current = lastAcceptedByUser.get(action.userId)
     if (!current || action.seq > current.seq) lastAcceptedByUser.set(action.userId, action)
+    if ((action.street ?? 1) !== street) continue
     if (!anchor || action.seq > anchor.seq) anchor = action
   }
 
@@ -91,6 +98,7 @@ export function isActorsTurn(
   participantIds: readonly string[],
   actions: readonly TurnAction[],
   userId: string,
+  street = 1,
 ): boolean {
-  return nextActorId(participantIds, actions) === userId
+  return nextActorId(participantIds, actions, street) === userId
 }

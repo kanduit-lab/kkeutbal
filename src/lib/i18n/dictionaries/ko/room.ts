@@ -106,6 +106,8 @@ export const actionBar = {
   myChips: '내 칩',
   toCall: '받을 금액',
   beforeFirstBet: '첫 베팅 전',
+  streetFirst: '1차 베팅',
+  streetSecond: '2차 베팅',
   waitingForCall: '상대 대응 대기 중',
   raiseAmount: '레이즈 금액',
   minRaise: '최소 {n}',
@@ -322,6 +324,12 @@ export const roomForm = {
   raiseRuleFreeHint: '최소 레이즈 하한만 지켜요. 나머지는 참가자끼리 정해요',
   raiseRuleTtadangHint: '재레이즈는 직전 최고 베팅액의 정확히 2배로만 낼 수 있어요',
   raiseRulePotLimitHint: '콜을 채운 뒤의 팟만큼까지 올릴 수 있어요',
+  seotdaCardsLabel: '카드 장수',
+  seotdaCards2: '2장',
+  seotdaCards3: '3장',
+  seotdaCards2Hint: '두 장으로 한 번 베팅하고 바로 승부해요. 최대 10명',
+  seotdaCards3Hint: '두 장으로 베팅한 뒤 한 장을 더 받아 다시 베팅하고, 세 장 중 두 장으로 승부해요. 최대 6명',
+  seotdaCardsLocked: '첫 판을 시작하면 카드 장수는 고정됩니다.',
 } as const
 
 export const settings = {

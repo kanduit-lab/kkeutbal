@@ -50,7 +50,7 @@ function latestWithStatus(actions: readonly RailAction[], status: BetStatus): Ra
 export function turnRail(
   participantIds: readonly string[],
   actions: readonly RailAction[],
-  { roundActive }: { roundActive: boolean },
+  { roundActive, street = 1 }: { roundActive: boolean; street?: number },
 ): TurnRail {
   if (!roundActive || participantIds.length === 0) return EMPTY
 
@@ -58,17 +58,18 @@ export function turnRail(
   const pending = latestWithStatus(actions, 'pending')
 
   const turnActions: readonly TurnAction[] = actions
-  const currentId = nextActorId(participantIds, turnActions)
+  const currentId = nextActorId(participantIds, turnActions, street)
   if (!currentId) return { previous, pending, currentId: null, nextId: null }
 
   // 현재 행동자가 방금 행동한 것처럼 한 칸 더 돌려 다음 좌석을 예고한다. `nextActorId`는
   // anchor(마지막 accepted 액션) 다음부터 찾으므로, 현재 행동자를 anchor 로 세운 가짜
   // 액션을 덧붙이면 같은 규칙(다이·올인 제외, 좌석 순환)이 그대로 적용된다.
   const maxSeq = actions.reduce((max, action) => Math.max(max, action.seq), 0)
-  const nextId = nextActorId(participantIds, [
-    ...turnActions,
-    { userId: currentId, status: 'accepted', action: 'check', seq: maxSeq + 1 },
-  ])
+  const nextId = nextActorId(
+    participantIds,
+    [...turnActions, { userId: currentId, status: 'accepted', action: 'check', seq: maxSeq + 1, street }],
+    street,
+  )
 
   return { previous, pending, currentId, nextId: nextId === currentId ? null : nextId }
 }

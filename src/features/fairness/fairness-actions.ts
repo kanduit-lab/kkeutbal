@@ -5,19 +5,27 @@ import { z } from 'zod'
 import { fail, ok, type ActionResult } from '@/lib/action-result'
 import { db, schema } from '@/lib/db'
 import { currentUserId } from '../auth/session'
-import { lockRoom } from '../game/action-helpers'
+import { lockRoom, readSeotdaCards } from '../game/action-helpers'
 import { hashClientSeed } from './protocol'
 import {
   fairDatabaseNow,
   loadFairRoundParticipants,
+  loadHandChoices,
   reconstructSealedFairRound,
   sealPersistedFairRound,
   type PersistedFairRound,
 } from './fair-round-service'
-import { privateSeotdaHand } from './verified-seotda'
+import { privateSeotdaHand, seotdaCardCountOf } from './verified-seotda'
+import type { SeotdaCardCount } from '../seotda/types'
 
-const { roomMembers, rounds, roundFairness, roundFairnessParticipants, roundFairnessReveals } =
-  schema
+const {
+  rooms,
+  roomMembers,
+  rounds,
+  roundFairness,
+  roundFairnessParticipants,
+  roundFairnessReveals,
+} = schema
 
 const roundIdSchema = z.string().uuid()
 const seedSchema = z.string().regex(/^[0-9a-f]{64}$/i)
@@ -148,8 +156,21 @@ export async function sealFairnessRound(
       }
       if (fairRound.phase !== 'collecting_seeds') return fail('errors.fairnessNotCollecting')
 
+      const [room] = await tx
+        .select({ rulePreset: rooms.rulePreset })
+        .from(rooms)
+        .where(eq(rooms.id, roomId))
+        .limit(1)
+      if (!room) return fail('errors.roomNotFound')
+
       const participants = await loadFairRoundParticipants(tx, roundId)
-      await sealPersistedFairRound(tx, fairRound, participants, await fairDatabaseNow(tx))
+      await sealPersistedFairRound(
+        tx,
+        fairRound,
+        participants,
+        await fairDatabaseNow(tx),
+        readSeotdaCards(room.rulePreset),
+      )
       return ok({ roundId, sealed: true })
     })
   } catch (error) {
@@ -161,7 +182,14 @@ export async function sealFairnessRound(
 export async function getMyVerifiedSeotdaHand(
   roomId: string,
   roundId: string,
-): Promise<ActionResult<{ cards: readonly { id: string; month: number; label: string }[] }>> {
+): Promise<
+  ActionResult<{
+    cards: readonly { id: string; month: number; label: string }[]
+    /** 이 판에서 받게 되는 카드 수. 3장 방의 1차 베팅 중에는 `cards`가 이보다 적다 */
+    cardCount: SeotdaCardCount
+    chosenCardIds: readonly string[] | null
+  }>
+> {
   const userId = await currentUserId()
   if (!userId) return fail('errors.loginRequired')
   if (!roundIdSchema.safeParse(roomId).success || !roundIdSchema.safeParse(roundId).success) {
@@ -172,7 +200,7 @@ export async function getMyVerifiedSeotdaHand(
     const result = await db.transaction(async (tx) => {
       await lockRoom(tx, roomId)
       const [round] = await tx
-        .select({ id: rounds.id, roomId: rounds.roomId })
+        .select({ id: rounds.id, roomId: rounds.roomId, street: rounds.street })
         .from(rounds)
         .where(and(eq(rounds.id, roundId), eq(rounds.roomId, roomId), eq(rounds.status, 'playing')))
         .limit(1)
@@ -186,17 +214,25 @@ export async function getMyVerifiedSeotdaHand(
       const participants = await loadFairRoundParticipants(tx, roundId)
       if (!participants.some((participant) => participant.userId === userId)) return undefined
       const deal = await reconstructSealedFairRound(fairRound, participants)
-      return privateSeotdaHand(deal.shuffle.shuffledDeckIds, deal.participants, userId).map(
-        (card) => ({
-          id: card.id,
-          month: card.month,
-          label: card.label,
-        }),
+      const cardCount = seotdaCardCountOf(deal.publicReceipt.game)
+      const hand = privateSeotdaHand(
+        deal.shuffle.shuffledDeckIds,
+        deal.participants,
+        userId,
+        cardCount,
       )
+      // 3번째 장은 2차 베팅이 시작되기 전까지 어떤 응답에도 실리지 않는다.
+      const visible = round.street === 1 ? hand.slice(0, 2) : hand
+      const choices = await loadHandChoices(tx, roundId)
+      return {
+        cards: visible.map((card) => ({ id: card.id, month: card.month, label: card.label })),
+        cardCount,
+        chosenCardIds: choices.get(userId) ?? null,
+      }
     })
     if (result === undefined) return fail('errors.fairnessNotParticipant')
     if (result === null) return fail('errors.fairnessDealNotReady')
-    return ok({ cards: result })
+    return ok(result)
   } catch (error) {
     console.error('getMyVerifiedSeotdaHand failed:', error)
     return fail('errors.fairnessHandFailed')

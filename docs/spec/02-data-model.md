@@ -132,6 +132,8 @@ erDiagram
         bigint pot
         uuid winner_id FK
         jsonb result
+        smallint street
+        timestamptz choose_deadline
         timestamptz started_at
         timestamptz ended_at
     }
@@ -147,6 +149,7 @@ erDiagram
         uuid approved_by FK
         text reason
         int seq
+        smallint street
         timestamptz created_at
     }
     chip_ledger {
@@ -262,6 +265,8 @@ scope와 식별자를 `AUTH_SECRET`으로 HMAC한 `key_hash`만 저장하고 만
 - `status` — `playing` | `ended` | `voided`.
 - `result` — 게임별 결과 상세 jsonb. `note` 필드를 `readResultNote`가 읽어 마지막 결과 요약에
   쓴다.
+- `street` — 3장 섯다의 베팅 단계. `1` 또는 `2`이고 기본값은 `1`이다. 2장 방은 항상 `1`이다.
+- `choose_deadline` — 3장 섯다 검증 딜 방에서 두 장을 고르는 마감. `street = 2`일 때만 값을 가진다.
 
 ### `round_participants`
 
@@ -281,6 +286,13 @@ scope와 식별자를 `AUTH_SECRET`으로 HMAC한 `key_hash`만 저장하고 만
 - `amount` — **이번 액션에서 실제로 이동한 칩** 단위 정수. 콜·레이즈 기준은 accepted 액션을
   사용자별로 합산한 누적 납입액이다. 따라서 재레이즈 뒤에도 기존 납입분을 다시 차감하지 않는다.
 - `seq` — 판 내 순번. 서버가 커밋 시 `max(seq)+1`로 확정한다.
+- `street` — 액션을 기록할 때의 `rounds.street`. `1` 또는 `2`다.
+
+### `round_hand_choices`
+
+3장 섯다 검증 딜 방에서 참가자가 승부에 쓰겠다고 고른 두 장이다. `(round_id, user_id)`가 PK이고
+`round_participants`를 복합 FK로 가리킨다. `card_ids`는 서로 다른 카드 ID 두 개다. 한 번 넣으면 바꾸지
+않는다. 판 참가자의 세 장 전체는 저장하지 않고 봉인된 덱에서 다시 계산한다.
 
 ### `chip_ledger`
 
@@ -346,8 +358,8 @@ Supabase 테이블 API를 직접 호출하는 가상의 경로다.** 실제 앱 
 실행할 수 없다. TRUNCATE·TRIGGER·REFERENCES 권한은 주지 않는다. `session_standings` 뷰도
 브라우저에는 열지 않으며, 현재 앱 기능은 이 뷰를 읽지 않는다.
 
-공정 딜 기반 테이블 `round_fairness`, `round_fairness_participants`, `round_fairness_reveals`도
-동일하게 RLS를 켠 server-only 표면이다. `anon`·`authenticated`에는 권한이 없고, 전용 Server
+공정 딜 기반 테이블 `round_fairness`, `round_fairness_participants`, `round_fairness_reveals`와
+`round_hand_choices`도 동일하게 RLS를 켠 server-only 표면이다. `anon`·`authenticated`에는 권한이 없고, 전용 Server
 Action만 상태 전이를 수행한다. 방 스냅샷은 `server_seed_ciphertext`·원문 seed·private hand를 제외한
 commitment·phase·마감·확정 참가자 ID·제출 여부·제출 수·sealed public receipt만 서버에서 선별해
 반환한다.

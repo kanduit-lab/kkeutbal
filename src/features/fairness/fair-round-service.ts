@@ -7,12 +7,13 @@ import {
   createVerifiedSeotdaDeal,
   fullVerifiedSeotdaReceipt,
   resolveVerifiedSeotdaShowdown,
+  seotdaCardCountOf,
   type VerifiedSeotdaDeal,
   type VerifiedSeotdaParticipant,
 } from './verified-seotda'
-import type { SeotdaRules } from '../seotda/types'
+import type { SeotdaCardCount, SeotdaRules } from '../seotda/types'
 
-const { roundFairness, roundFairnessParticipants, roundFairnessReveals } = schema
+const { roundFairness, roundFairnessParticipants, roundFairnessReveals, roundHandChoices } = schema
 
 export type PersistedFairRound = Pick<
   typeof roundFairness.$inferSelect,
@@ -74,6 +75,7 @@ export async function sealPersistedFairRound(
   fairRound: PersistedFairRound,
   participants: readonly PersistedFairParticipant[],
   now: Date,
+  cardCount: SeotdaCardCount,
 ): Promise<VerifiedSeotdaDeal> {
   if (fairRound.phase !== 'collecting_seeds') throw new Error('Fair round is not collecting seeds')
   const allSubmitted = participants.every((participant) => participant.clientSeedHash !== null)
@@ -85,6 +87,7 @@ export async function sealPersistedFairRound(
   const deal = await createVerifiedSeotdaDeal({
     roundId: fairRound.roundId,
     serverSeed,
+    cardCount,
     participants: participantSnapshot(participants),
     clientSeedHashes: participants.flatMap((participant) =>
       participant.clientSeedHash
@@ -139,6 +142,7 @@ export async function reconstructSealedFairRound(
   const deal = await createVerifiedSeotdaDeal({
     roundId: fairRound.roundId,
     serverSeed,
+    cardCount: seotdaCardCountOf(publicReceipt.game),
     participants: participantSnapshot(participants),
     clientSeedHashes: participants.flatMap((participant) =>
       participant.clientSeedHash
@@ -194,6 +198,7 @@ export async function resolvePersistedFairSeotdaShowdown(
   participants: readonly PersistedFairParticipant[],
   rules: SeotdaRules,
   eligibleUserIds: ReadonlySet<string>,
+  round: { readonly street: number; readonly choices: ReadonlyMap<string, readonly string[]> },
 ) {
   const deal = await reconstructSealedFairRound(fairRound, participants)
   return resolveVerifiedSeotdaShowdown(
@@ -201,7 +206,24 @@ export async function resolvePersistedFairSeotdaShowdown(
     deal.participants,
     rules,
     eligibleUserIds,
+    {
+      cardCount: seotdaCardCountOf(deal.publicReceipt.game),
+      street: round.street,
+      choices: round.choices,
+    },
   )
+}
+
+/** 3장 섯다에서 참가자가 고른 두 장. 2장 방이나 고른 사람이 없으면 빈 맵이다 */
+export async function loadHandChoices(
+  tx: Tx,
+  roundId: string,
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  const rows = await tx
+    .select({ userId: roundHandChoices.userId, cardIds: roundHandChoices.cardIds })
+    .from(roundHandChoices)
+    .where(eq(roundHandChoices.roundId, roundId))
+  return new Map(rows.map((row) => [row.userId, row.cardIds]))
 }
 
 function participantSnapshot(

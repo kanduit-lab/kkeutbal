@@ -54,6 +54,7 @@ export function GameTable({
   fit = false,
   participantUserIds,
   carriedPot = 0,
+  street = 1,
 }: {
   members: readonly MemberView[]
   online: ReadonlySet<string>
@@ -77,6 +78,9 @@ export function GameTable({
 
   /** 재경기로 무효화된 판에서 다음 판으로 넘어갈 판돈. 판이 없는 동안 팟 자리에 그린다. */
   carriedPot?: number
+
+  /** 3장 섯다의 베팅 단계. 차례 계산에 쓴다 */
+  street?: number
 }) {
   const { d, locale } = useDict()
   const [flights, setFlights] = useState<readonly Flight[]>([])
@@ -143,8 +147,8 @@ export function GameTable({
   const participantIds = participantUserIds ?? seatOrderIds
   const nextActorId = useMemo(() => {
     if (!roundActive) return null
-    return computeNextActorId(participantIds, actions)
-  }, [roundActive, participantIds, actions])
+    return computeNextActorId(participantIds, actions, street)
+  }, [roundActive, participantIds, actions, street])
 
   // 정리 타이머는 effect cleanup 이 아니라 언마운트에서만 걷는다. cleanup 에 걸어 두면
   // 700ms 안에 `actions` 가 한 번이라도 바뀌는 순간(팟·잔액 갱신, 20초 폴링, 다른 사람의

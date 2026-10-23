@@ -103,7 +103,7 @@ export function useActionBarControls({
   // "○○님 차례"로 잠기고 신규 입장자는 서버에서 `joinedAfterRoundStart`로 거부돼, 딜러가
   // 판을 끝낼 때까지 아무도 베팅할 수 없다.
   const currentActorId = useMemo(
-    () => (round ? nextActorId(round.participantUserIds, snapshot.actions) : null),
+    () => (round ? nextActorId(round.participantUserIds, snapshot.actions, round.street) : null),
     [round, snapshot.actions],
   )
   // currentActorId가 null이면(한 바퀴 완료·참가자 없음 등) 판단을 서버에 맡기고 UI는 막지 않는다.

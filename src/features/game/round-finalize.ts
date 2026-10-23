@@ -3,17 +3,21 @@ import { schema } from '@/lib/db'
 import {
   fairDatabaseNow,
   loadFairRoundParticipants,
+  loadHandChoices,
   revealPersistedFairRound,
   resolvePersistedFairSeotdaShowdown,
   type PersistedFairRound,
 } from '../fairness/fair-round-service'
 import { SEOTDA_RULES_STANDARD } from '../seotda/types'
 import { computeRoundCompletion } from '../betting/round-completion'
-import { activeRoundParticipantIds, type Tx } from './action-helpers'
+import { activeRoundParticipantIds, readSeotdaCards, type Tx } from './action-helpers'
 import { getRoundPot } from './queries'
 
 const { rounds, chipLedger, roundFairness, betActions } = schema
 type RoomRow = typeof schema.rooms.$inferSelect
+
+/** 3장 섯다 검증 딜 방에서 2차 베팅이 끝난 뒤 두 장을 고르는 시간 */
+export const HAND_CHOICE_SECONDS = 60
 
 /** 팟을 승자에게 지급한다(고스톱 점수 정산이 아닌 단순 팟 승리 경로). `pot <= 0`이면 아무것도 안 한다. */
 export async function creditPotToWinner(
@@ -85,6 +89,9 @@ export async function revealFairnessIfNeeded(
  *   정하지 않는다 — 딜러가 카드를 보고 확정해야 한다(`dealer-panel-controls.ts`가 폼을 자동으로
  *   연다).
  * - 승인 대기 중인 베팅이 남아 있으면 `endRound`와 같은 이유로 자동 종료를 미룬다.
+ * - 3장 섯다는 1차 베팅이 끝나면 정산하지 않고 2차 베팅(`street = 2`)으로 넘긴다. 검증 딜 방은
+ *   2차 베팅이 끝나면 두 장 선택 마감을 걸고, 전원이 골랐거나 마감이 지난 뒤 다시 불릴 때
+ *   고른 두 장으로 판정한다. 그 재호출은 `hand-choice-actions.ts`가 한다.
  *
  * 조건이 안 맞으면(아직 진행 중, 대기 베팅 존재, 공정 딜 미봉인, 동점/구사 등) `null`을 반환하고
  * 호출부는 아무 일도 없었던 것처럼 계속 진행한다 — 딜러의 수동 종료 경로(`endRound`)는 그대로
@@ -105,6 +112,20 @@ export async function autoSettleRoundIfComplete(
     .limit(1)
   const fairRound = fairRoundRow as PersistedFairRound | undefined
 
+  const [anyPending] = await tx
+    .select({ id: betActions.id })
+    .from(betActions)
+    .where(and(eq(betActions.roundId, round.id), eq(betActions.status, 'pending')))
+    .limit(1)
+  if (anyPending) return null
+
+  const [roundState] = await tx
+    .select({ street: rounds.street, chooseDeadline: rounds.chooseDeadline })
+    .from(rounds)
+    .where(eq(rounds.id, round.id))
+    .limit(1)
+  if (!roundState) return null
+
   const participantIds = await activeRoundParticipantIds(tx, room.id, round.id)
   const acceptedActions = await tx
     .select({
@@ -112,13 +133,23 @@ export async function autoSettleRoundIfComplete(
       action: betActions.action,
       amount: betActions.amount,
       status: betActions.status,
+      street: betActions.street,
     })
     .from(betActions)
     .where(and(eq(betActions.roundId, round.id), eq(betActions.status, 'accepted')))
     .orderBy(asc(betActions.seq))
 
-  const completion = computeRoundCompletion(participantIds, acceptedActions)
+  const threeCard = room.gameType === 'seotda' && readSeotdaCards(room.rulePreset) === 3
+  let street = roundState.street
+  let completion = computeRoundCompletion(participantIds, acceptedActions, street)
   if (completion.kind === 'active') return null
+
+  if (threeCard && completion.kind === 'showdown_ready' && street === 1) {
+    await tx.update(rounds).set({ street: 2 }).where(eq(rounds.id, round.id))
+    street = 2
+    completion = computeRoundCompletion(participantIds, acceptedActions, street)
+    if (completion.kind === 'active') return null
+  }
 
   let winnerId: string
   if (fairRound) {
@@ -126,12 +157,26 @@ export async function autoSettleRoundIfComplete(
     if (completion.kind === 'single_survivor') {
       winnerId = completion.winnerId
     } else {
+      const choices = await loadHandChoices(tx, round.id)
+      if (threeCard) {
+        const now = await fairDatabaseNow(tx)
+        if (!roundState.chooseDeadline) {
+          await tx
+            .update(rounds)
+            .set({ chooseDeadline: new Date(now.getTime() + HAND_CHOICE_SECONDS * 1_000) })
+            .where(eq(rounds.id, round.id))
+          return null
+        }
+        const allChosen = completion.contenderIds.every((userId) => choices.has(userId))
+        if (!allChosen && now.getTime() < roundState.chooseDeadline.getTime()) return null
+      }
       const fairParticipants = await loadFairRoundParticipants(tx, round.id)
       const showdown = await resolvePersistedFairSeotdaShowdown(
         fairRound,
         fairParticipants,
         SEOTDA_RULES_STANDARD,
         new Set(completion.contenderIds),
+        { street, choices },
       )
       if (showdown.outcome.kind !== 'win') return null
       const resolvedWinnerId = showdown.participants[showdown.outcome.winnerIndex]?.userId
@@ -142,13 +187,6 @@ export async function autoSettleRoundIfComplete(
     if (completion.kind !== 'single_survivor') return null
     winnerId = completion.winnerId
   }
-
-  const [anyPending] = await tx
-    .select({ id: betActions.id })
-    .from(betActions)
-    .where(and(eq(betActions.roundId, round.id), eq(betActions.status, 'pending')))
-    .limit(1)
-  if (anyPending) return null
 
   // `tx`를 넘겨야 한다. 이 경로는 `placeBet`/`approveBet`가 방금 INSERT한 베팅 행과 같은
   // 트랜잭션 안이라, 풀 커넥션으로 읽으면 그 행이 안 보여 판돈이 그만큼 비어 버린다.

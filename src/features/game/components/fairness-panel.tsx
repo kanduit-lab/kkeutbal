@@ -42,6 +42,7 @@ export function FairnessPanel({
   const [submitted, setSubmitted] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [handCardIds, setHandCardIds] = useState<readonly string[] | null>(null)
+  const [handCardCount, setHandCardCount] = useState(2)
   const [isPending, startTransition] = useTransition()
 
   const [firingSlot, setFiringSlot] = useState<FairnessSlot | null>(null)
@@ -50,6 +51,8 @@ export function FairnessPanel({
   const fairness = round?.fairness
   const roundId = round?.id
   const fairPhase = fairness?.phase
+  const street = round?.street ?? 1
+  const handShown = handCardIds !== null
   const isParticipant = fairness?.participantUserIds.includes(selfId) ?? false
   const hasSubmittedSeed = fairness?.submittedParticipantUserIds.includes(selfId) ?? false
 
@@ -78,6 +81,18 @@ export function FairnessPanel({
     setSubmitted(false)
     setHandCardIds(null)
   }, [roundId, fairPhase, hasSubmittedSeed, isParticipant])
+
+  // 2차 베팅이 시작되면 펼쳐 둔 패에 세 번째 장을 채운다.
+  useEffect(() => {
+    if (!handShown || !roundId || street !== 2) return
+    let cancelled = false
+    void getMyVerifiedSeotdaHand(snapshot.room.id, roundId).then((result) => {
+      if (!cancelled && result.success) setHandCardIds(result.data.cards.map((card) => card.id))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [handShown, roundId, street, snapshot.room.id])
 
   useEffect(() => {
     if (fairPhase !== 'collecting_seeds') return
@@ -142,6 +157,7 @@ export function FairnessPanel({
         return
       }
       setHandCardIds(result.data.cards.map((card) => card.id))
+      setHandCardCount(result.data.cardCount)
     })
   }
 
@@ -246,13 +262,21 @@ export function FairnessPanel({
           >
             {handCardIds ? d.fairness.hideMyHand : d.fairness.showMyHand}
           </Button>
-          {handCards.length === 2 ? (
+          {handCards.length >= 2 ? (
             <div>
               <p className="mb-1 text-xs font-bold text-muted">{d.fairness.handTitle}</p>
               <div className="flex gap-2">
                 {handCards.map((card) => (
                   <HwatuCardView key={card.id} card={card} size="sm" />
                 ))}
+                {handCards.length < handCardCount ? (
+                  <div
+                    className="flex aspect-[103/168] w-full max-w-24 items-center justify-center rounded-md border-2 border-dashed border-white/20 p-1 text-center text-[10px] text-muted"
+                    title={d.fairness.thirdCardLocked}
+                  >
+                    {d.fairness.thirdCardLocked}
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}

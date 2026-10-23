@@ -5,6 +5,7 @@ import {
   readBaseBet,
   readJoinAsObserver,
   readMaxMembers,
+  readSeotdaCards,
   readPointValue,
 } from './action-helpers'
 import { readFundingMode } from './funding-mode'
@@ -35,6 +36,7 @@ export function toRoomView(room: typeof rooms.$inferSelect): RoomView {
     joinAsObserver: readJoinAsObserver(room.rulePreset),
     fundingMode: readFundingMode(room.rulePreset),
     fairPlay: readFairPlaySettings(room.gameType, room.rulePreset),
+    seotdaCards: room.gameType === 'seotda' ? readSeotdaCards(room.rulePreset) : 2,
   }
 }
 

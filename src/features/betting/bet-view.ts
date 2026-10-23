@@ -24,6 +24,7 @@ export function toView(action: typeof schema.betActions.$inferSelect): BetAction
     status: action.status,
     reason: action.reason,
     seq: action.seq,
+    street: action.street,
     createdAt: action.createdAt.toISOString(),
   }
 }

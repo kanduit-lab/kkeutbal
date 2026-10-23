@@ -1,14 +1,19 @@
 import { SEOTDA_DECK, findCard } from '../hwatu/cards'
 import type { HwatuCard } from '../hwatu/types'
 import { evaluateSeotdaHand, resolveSeotdaShowdown } from '../seotda/engine'
-import type { SeotdaOutcome, SeotdaRules } from '../seotda/types'
+import { bestSeotdaPair, chosenSeotdaPair, toThreeCardHand } from '../seotda/three-card'
+import type { SeotdaCardCount, SeotdaHand, SeotdaOutcome, SeotdaRules } from '../seotda/types'
 import {
   shuffleFairDeck,
   type ClientSeedHash,
   type FairShuffleReceipt,
   type FairShuffleResult,
 } from './protocol'
-import { createPublicFairnessReceipt, type PublicFairnessReceipt } from './receipt'
+import {
+  createPublicFairnessReceipt,
+  type FairnessAuditedGame,
+  type PublicFairnessReceipt,
+} from './receipt'
 
 export interface VerifiedSeotdaParticipant {
   readonly userId: string
@@ -31,15 +36,38 @@ export interface VerifiedSeotdaShowdown {
   }[]
 }
 
-const CARDS_PER_PARTICIPANT = 2
+export interface VerifiedSeotdaShowdownOptions {
+  readonly cardCount: SeotdaCardCount
+  /** 3장 섯다에서 1차 베팅 중이면 앞 두 장만으로 판정한다 */
+  readonly street: number
+  /** 참가자가 고른 두 장. 없거나 무효면 세 장에서 가장 높은 쌍으로 판정한다 */
+  readonly choices: ReadonlyMap<string, readonly string[]>
+}
+
+const TWO_CARD_SHOWDOWN: VerifiedSeotdaShowdownOptions = {
+  cardCount: 2,
+  street: 1,
+  choices: new Map(),
+}
+
+export function seotdaFairnessGame(cardCount: SeotdaCardCount): 'seotda' | 'seotda3' {
+  return cardCount === 3 ? 'seotda3' : 'seotda'
+}
+
+export function seotdaCardCountOf(game: FairnessAuditedGame): SeotdaCardCount {
+  if (game === 'seotda3') return 3
+  if (game === 'seotda') return 2
+  throw new Error('Fair round receipt is not a Seotda deal')
+}
 
 export async function createVerifiedSeotdaDeal(input: {
   readonly roundId: string
   readonly serverSeed: string
   readonly participants: readonly VerifiedSeotdaParticipant[]
   readonly clientSeedHashes: readonly ClientSeedHash[]
+  readonly cardCount: SeotdaCardCount
 }): Promise<VerifiedSeotdaDeal> {
-  const participants = normalizeParticipants(input.participants)
+  const participants = normalizeParticipants(input.participants, input.cardCount)
   const participantIds = new Set(participants.map((participant) => participant.userId))
   if (input.clientSeedHashes.some((entry) => !participantIds.has(entry.userId))) {
     throw new Error('Verified Seotda seed contributors must match the seat snapshot')
@@ -59,7 +87,7 @@ export async function createVerifiedSeotdaDeal(input: {
   })
   const publicReceipt = await createPublicFairnessReceipt({
     roundId: input.roundId,
-    game: 'seotda',
+    game: seotdaFairnessGame(input.cardCount),
     participantCount: participants.length,
     shuffle,
   })
@@ -77,17 +105,34 @@ export function privateSeotdaHand(
   shuffledDeckIds: readonly string[],
   participants: readonly VerifiedSeotdaParticipant[],
   userId: string,
-): readonly [HwatuCard, HwatuCard] {
-  const ordered = normalizeParticipants(participants)
+  cardCount: SeotdaCardCount = 2,
+): readonly HwatuCard[] {
+  const ordered = normalizeParticipants(participants, cardCount)
   const participantIndex = ordered.findIndex((participant) => participant.userId === userId)
   if (participantIndex < 0) throw new Error('Verified Seotda hand requested by a non-participant')
   if (shuffledDeckIds.length !== SEOTDA_DECK.length) throw new Error('Invalid verified Seotda deck')
 
-  const offset = participantIndex * CARDS_PER_PARTICIPANT
-  const first = findSeotdaCard(shuffledDeckIds[offset])
-  const second = findSeotdaCard(shuffledDeckIds[offset + 1])
-  if (first.id === second.id) throw new Error('Invalid verified Seotda hand')
-  return Object.freeze([first, second])
+  const offset = participantIndex * cardCount
+  const cards = Array.from({ length: cardCount }, (_, index) =>
+    findSeotdaCard(shuffledDeckIds[offset + index]),
+  )
+  if (new Set(cards.map((card) => card.id)).size !== cards.length) {
+    throw new Error('Invalid verified Seotda hand')
+  }
+  return Object.freeze(cards)
+}
+
+function showdownHand(
+  cards: readonly HwatuCard[],
+  userId: string,
+  options: VerifiedSeotdaShowdownOptions,
+): SeotdaHand {
+  const [first, second] = cards
+  if (!first || !second) throw new Error('Invalid verified Seotda hand')
+  const hand = options.cardCount === 3 && options.street === 2 ? toThreeCardHand(cards) : null
+  if (!hand) return evaluateSeotdaHand([first, second])
+  const choice = options.choices.get(userId)
+  return (choice ? chosenSeotdaPair(hand, choice) : null) ?? bestSeotdaPair(hand)
 }
 
 export function resolveVerifiedSeotdaShowdown(
@@ -95,18 +140,24 @@ export function resolveVerifiedSeotdaShowdown(
   participants: readonly VerifiedSeotdaParticipant[],
   rules: SeotdaRules,
   eligibleUserIds?: ReadonlySet<string>,
+  options: VerifiedSeotdaShowdownOptions = TWO_CARD_SHOWDOWN,
 ): VerifiedSeotdaShowdown {
-  const ordered = normalizeParticipants(participants)
+  const ordered = normalizeParticipants(participants, options.cardCount)
   const contenders = eligibleUserIds
     ? ordered.filter((participant) => eligibleUserIds.has(participant.userId))
     : ordered
   if (contenders.length < 2) throw new Error('Verified Seotda showdown needs two active contenders')
-  const hands = contenders.map((participant) => ({
+  const evaluated = contenders.map((participant) => ({
     userId: participant.userId,
-    cards: privateSeotdaHand(shuffledDeckIds, ordered, participant.userId),
+    hand: showdownHand(
+      privateSeotdaHand(shuffledDeckIds, ordered, participant.userId, options.cardCount),
+      participant.userId,
+      options,
+    ),
   }))
+  const hands = evaluated.map((entry) => ({ userId: entry.userId, cards: entry.hand.cards }))
   const outcome = resolveSeotdaShowdown(
-    hands.map((hand) => evaluateSeotdaHand(hand.cards)),
+    evaluated.map((entry) => entry.hand),
     rules,
   )
 
@@ -140,9 +191,13 @@ export function fullVerifiedSeotdaReceipt(
 
 function normalizeParticipants(
   participants: readonly VerifiedSeotdaParticipant[],
+  cardCount: SeotdaCardCount,
 ): readonly VerifiedSeotdaParticipant[] {
-  if (participants.length < 2 || participants.length > SEOTDA_DECK.length / CARDS_PER_PARTICIPANT) {
-    throw new Error('Verified Seotda needs between two and ten participants')
+  if (
+    participants.length < 2 ||
+    participants.length > Math.floor(SEOTDA_DECK.length / cardCount)
+  ) {
+    throw new Error('Verified Seotda participant count does not fit the deck')
   }
   const ordered = [...participants].map((participant) => ({ ...participant }))
   ordered.sort((left, right) => left.dealOrder - right.dealOrder)

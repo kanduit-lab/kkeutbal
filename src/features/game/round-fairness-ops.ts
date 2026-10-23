@@ -10,6 +10,7 @@ import { encryptFairnessServerSeed } from '../fairness/seed-crypto'
 import {
   fairDatabaseNow,
   loadFairRoundParticipants,
+  loadHandChoices,
   revealPersistedFairRound,
   resolvePersistedFairSeotdaShowdown,
   type PersistedFairRound,
@@ -118,11 +119,17 @@ export async function resolveFairRoundWinner(
   if (contenderIds.size === 1) {
     winnerId = [...contenderIds][0]
   } else {
+    const [roundState] = await tx
+      .select({ street: schema.rounds.street })
+      .from(schema.rounds)
+      .where(eq(schema.rounds.id, round.id))
+      .limit(1)
     const showdown = await resolvePersistedFairSeotdaShowdown(
       fairRound,
       fairParticipants,
       SEOTDA_RULES_STANDARD,
       contenderIds,
+      { street: roundState?.street ?? 1, choices: await loadHandChoices(tx, round.id) },
     )
     if (showdown.outcome.kind !== 'win') return { ok: false, error: 'errors.fairnessReplayRequired' }
     winnerId = showdown.participants[showdown.outcome.winnerIndex]?.userId

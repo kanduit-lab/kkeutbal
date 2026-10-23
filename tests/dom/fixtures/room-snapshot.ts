@@ -62,6 +62,7 @@ export function buildBetAction(
     amount: 0,
     status: 'accepted',
     reason: null,
+    street: 1,
     createdAt: '2026-07-30T00:00:00.000Z',
     ...overrides,
   }
@@ -102,6 +103,7 @@ export function buildRoomSnapshot({
         turnTimeoutSeconds: 30,
         timeoutPolicy: 'pause',
       },
+      seotdaCards: 2,
     },
     members,
     currentRound: hasRound
@@ -110,6 +112,9 @@ export function buildRoomSnapshot({
           seq: 1,
           pot: 300,
           startedAt: '2026-07-30T00:00:00.000Z',
+          street: 1,
+          chooseDeadline: null,
+          choiceUserIds: [],
           // 서버 스냅샷과 같은 규칙 — 관전자는 판 참가자가 아니다
           participantUserIds: members
             .filter((member) => member.role !== 'observer')

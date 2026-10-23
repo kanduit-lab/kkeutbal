@@ -154,6 +154,12 @@ interface SeotdaRules {
 `describeSeotdaHand(hand)`가 Advisor UI에 노출되는 설명 문자열(카드 쌍 + 족보명 + trait 메모)을
 만든다.
 
+### 3장 섯다
+
+`rule_preset.seotdaCards`가 `3`인 방은 세 장 중 두 장으로 승부한다. `seotda/three-card.ts`가 세 쌍
+평가(`seotdaPairsOf`), 최고 쌍(`bestSeotdaPair`), 선택 검증(`chosenSeotdaPair`)을 갖고, 판정 자체는
+고른 두 장에 위의 2장 규칙을 그대로 적용한다. 판 단계와 선택 절차는 `12-three-card-seotda.md`가 소유한다.
+
 ### 재경기의 판돈 — 이월 (정본)
 
 엔진이 `{ kind: 'replay' }`를 내는 경우(구사 보유, 동률 `tieBreak: 'replay'`)와 고스톱 나가리는

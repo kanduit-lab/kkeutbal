@@ -105,3 +105,19 @@ describe('isActorsTurn', () => {
     expect(isActorsTurn(participants, [], 'b')).toBe(false)
   })
 })
+
+describe('nextActorId street 2', () => {
+  const at = (userId: string, action: 'call' | 'fold' | 'check', seq: number, street: number) => ({
+    userId,
+    action,
+    seq,
+    street,
+    status: 'accepted' as const,
+  })
+
+  it('restarts from the first seat and keeps first street folds', () => {
+    const actions = [at('a', 'fold', 1, 1), at('b', 'call', 2, 1), at('c', 'call', 3, 1)]
+    expect(nextActorId(['a', 'b', 'c'], actions, 2)).toBe('b')
+    expect(nextActorId(['a', 'b', 'c'], [...actions, at('b', 'check', 4, 2)], 2)).toBe('c')
+  })
+})

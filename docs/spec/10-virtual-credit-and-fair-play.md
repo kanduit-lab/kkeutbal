@@ -302,7 +302,9 @@ preset을 `session`으로 해석하므로 기존 방이 우연히 전역 잔액�
 - `turnTimeoutSeconds`는 preset 호환을 위한 예약 필드다. 현재 수동 베팅 흐름에는 server-authoritative
   차례 상태가 없으므로 개별 턴 타이머로 노출하거나 자동 fold/check하지 않는다.
 
-실제 카드 배분은 섯다의 2장 비공개만 지원한다. 고스톱은 게임 규칙·턴 상태를 서버 authoritative로
+실제 카드 배분은 섯다 비공개 패만 지원한다. 2장 방의 영수증 게임은 `seotda`, 3장 방은
+`seotda3`이고 참가자당 카드 수가 `dealPlan.privateCardsPerParticipant`에 묶인다. 3장 방의
+세 번째 장과 두 장 선택은 `12-three-card-seotda.md`가 소유한다. 고스톱은 게임 규칙·턴 상태를 서버 authoritative로
 확장한 뒤 검토한다. 현재 수동 결과 기록 흐름에 비밀 카드를 섞어 부분 구현하지 않는다.
 
 ## API·화면 경계

@@ -1,3 +1,5 @@
+import type { SeotdaCardCount } from '../seotda/types'
+
 export type RoomGameType = 'seotda' | 'gostop'
 export type RoomStatus = 'waiting' | 'playing' | 'settled' | 'closed'
 export type InputMode = 'trust' | 'approval'
@@ -39,6 +41,7 @@ export interface BetActionView {
   readonly status: BetStatus
   readonly reason: string | null
   readonly seq: number
+  readonly street: number
   readonly createdAt: string
 }
 
@@ -63,6 +66,9 @@ export interface RoomView {
   readonly fundingMode: FundingMode
 
   readonly fairPlay: FairPlayView
+
+  /** 섯다 방에서 한 사람이 받는 카드 수. 고스톱 방은 2로 둔다 */
+  readonly seotdaCards: SeotdaCardCount
 }
 
 export interface RoundView {
@@ -84,6 +90,15 @@ export interface RoundView {
   readonly participantUserIds: readonly string[]
 
   readonly fairness: FairnessRoundView | null
+
+  /** 3장 섯다의 베팅 단계. 2장 방은 항상 1이다 */
+  readonly street: number
+
+  /** 3장 섯다 검증 딜 방에서 두 장을 고르는 마감. 선택 단계가 아니면 null */
+  readonly chooseDeadline: string | null
+
+  /** 두 장을 이미 고른 참가자. 고른 카드는 싣지 않는다 */
+  readonly choiceUserIds: readonly string[]
 }
 
 export interface FairnessRoundView {

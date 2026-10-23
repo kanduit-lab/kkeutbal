@@ -97,7 +97,7 @@ export function MemberSheet({
     [snapshot.currentRound],
   )
   const isMembersTurn =
-    isBettingGame && hasRound && nextActorId(participantIds, snapshot.actions) === member.userId
+    isBettingGame && hasRound && nextActorId(participantIds, snapshot.actions, snapshot.currentRound?.street) === member.userId
 
   const statusLabel = !isBettingGame
     ? null

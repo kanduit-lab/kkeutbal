@@ -103,6 +103,7 @@ export async function placeBet(
         userId,
         action,
         amount,
+        street: round.street,
       })
       if (semanticError) return fail(semanticError)
 
@@ -127,6 +128,7 @@ export async function placeBet(
           status: autoAccept ? 'accepted' : 'pending',
           approvedBy: autoAccept && room.inputMode === 'approval' ? callerId : null,
           seq,
+          street: round.street,
         })
         .returning()
       if (!inserted) return fail('errors.placeBetRecordFailed')
@@ -206,6 +208,7 @@ export async function approveBet(
             userId: fresh.userId,
             action: fresh.action,
             amount: fresh.amount,
+            street: round.street,
             beforeSeq: fresh.seq,
           })
         : 'errors.targetNotMember'
@@ -322,6 +325,10 @@ export async function revertBet(
 
       const laterAccepted = await findLaterAcceptedBet(tx, target.roundId, target.seq)
       if (laterAccepted) return fail('errors.revertLatestFirst')
+      // 단계를 넘긴 뒤 앞 단계 액션을 되돌리면 이미 받은 3번째 장이나 선택을 무를 수 없다.
+      if (target.street !== round.street || round.chooseDeadline) {
+        return fail('errors.revertAfterStreetAdvanced')
+      }
 
       const [updated] = await tx
         .update(betActions)

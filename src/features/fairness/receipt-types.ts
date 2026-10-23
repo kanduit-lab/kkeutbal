@@ -10,7 +10,7 @@ export const FAIRNESS_PUBLIC_RECEIPT_VERSION = 'kkeutbal-public-fairness-receipt
 
 export const HASH_PATTERN = /^[0-9a-f]{64}$/
 
-export type FairnessAuditedGame = 'seotda' | 'holdem'
+export type FairnessAuditedGame = 'seotda' | 'seotda3' | 'holdem'
 
 export interface PublicFairnessDealPlan {
   readonly game: FairnessAuditedGame
@@ -67,7 +67,7 @@ export const clientSeedHashSchema = z
 
 export const publicDealPlanSchema = z
   .object({
-    game: z.enum(['seotda', 'holdem']),
+    game: z.enum(['seotda', 'seotda3', 'holdem']),
     participantCount: z.number().int().min(2),
     deckSize: z.number().int().positive(),
     privateCardsPerParticipant: z.number().int().positive(),
@@ -91,7 +91,7 @@ export const publicFairnessReceiptSchema = z
     receiptVersion: z.literal(FAIRNESS_PUBLIC_RECEIPT_VERSION),
     algorithmVersion: z.literal(FAIRNESS_ALGORITHM_VERSION),
     roundId: idSchema,
-    game: z.enum(['seotda', 'holdem']),
+    game: z.enum(['seotda', 'seotda3', 'holdem']),
     seedAudit: publicSeedAuditSchema,
     dealPlan: publicDealPlanSchema,
     shuffledDeckCommitment: hashSchema,
@@ -109,6 +109,7 @@ export const GAME_DEAL_RULES: Readonly<
   >
 > = Object.freeze({
   seotda: Object.freeze({ deckSize: 20, privateCardsPerParticipant: 2, publicBoardStages: [] }),
+  seotda3: Object.freeze({ deckSize: 20, privateCardsPerParticipant: 3, publicBoardStages: [] }),
   holdem: Object.freeze({
     deckSize: 52,
     privateCardsPerParticipant: 2,

@@ -19,7 +19,7 @@
 | [`spec/07-auth-and-security.md`](spec/07-auth-and-security.md) | 인증, 역할, 보안 경계 |
 | [`spec/10-virtual-credit-and-fair-play.md`](spec/10-virtual-credit-and-fair-play.md) | 가상 크레딧과 검증 가능한 섯다 딜 |
 | [`spec/11-container-build-contract.md`](spec/11-container-build-contract.md) | 컨테이너 빌드, 실시간 모드, DB 런타임 환경 계약 |
-| [`spec/12-three-card-seotda.md`](spec/12-three-card-seotda.md) | 3장 섯다의 방 설정, 판 단계, 딜, 두 장 선택 (draft, 미구현) |
+| [`spec/12-three-card-seotda.md`](spec/12-three-card-seotda.md) | 3장 섯다의 방 설정, 판 단계, 딜, 두 장 선택 |
 
 ## 운영 절차
 

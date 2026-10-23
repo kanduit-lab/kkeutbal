@@ -5,6 +5,8 @@ export interface AcceptedBetAction {
   readonly action: BetActionKind
   readonly amount: number
   readonly status: BetStatus
+  /** 3장 섯다의 베팅 단계. 없으면 1차 베팅이다 */
+  readonly street?: number
 }
 
 export interface RoundBetState {

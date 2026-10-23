@@ -10,6 +10,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   unique,
@@ -313,12 +314,19 @@ export const rounds = pgTable(
     pot: bigint('pot', { mode: 'number' }).notNull().default(0),
     winnerId: uuid('winner_id').references(() => users.id),
     result: jsonb('result'),
+    street: smallint('street').notNull().default(1),
+    chooseDeadline: timestamp('choose_deadline', { withTimezone: true }),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     endedAt: timestamp('ended_at', { withTimezone: true }),
   },
   (table) => [
     unique('rounds_room_seq_uq').on(table.roomId, table.seq),
     check('rounds_seq_positive_ck', sql`${table.seq} > 0`),
+    check('rounds_street_range_ck', sql`${table.street} in (1, 2)`),
+    check(
+      'rounds_choose_deadline_street_ck',
+      sql`${table.chooseDeadline} is null or ${table.street} = 2`,
+    ),
     check('rounds_pot_nonnegative_ck', sql`${table.pot} >= 0`),
     check('rounds_pot_number_safe_ck', sql`${table.pot} <= ${MAX_SAFE_INTEGER}`),
     uniqueIndex('rounds_one_playing_per_room_uq')
@@ -466,6 +474,29 @@ export const roundFairnessParticipants = pgTable(
   ],
 )
 
+export const roundHandChoices = pgTable(
+  'round_hand_choices',
+  {
+    roundId: uuid('round_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    cardIds: text('card_ids').array().notNull(),
+    chosenAt: timestamp('chosen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.roundId, table.userId] }),
+    index('round_hand_choices_user_idx').on(table.userId),
+    foreignKey({
+      columns: [table.roundId, table.userId],
+      foreignColumns: [roundParticipants.roundId, roundParticipants.userId],
+      name: 'round_hand_choices_round_participant_fk',
+    }).onDelete('cascade'),
+    check(
+      'round_hand_choices_two_distinct_cards_ck',
+      sql`cardinality(${table.cardIds}) = 2 and ${table.cardIds}[1] <> ${table.cardIds}[2]`,
+    ),
+  ],
+)
+
 export const roundFairnessReveals = pgTable(
   'round_fairness_reveals',
   {
@@ -574,10 +605,12 @@ export const betActions = pgTable(
     approvedBy: uuid('approved_by').references(() => users.id),
     reason: text('reason'),
     seq: integer('seq').notNull(),
+    street: smallint('street').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex('bet_actions_round_seq_uq').on(table.roundId, table.seq),
+    check('bet_actions_street_range_ck', sql`${table.street} in (1, 2)`),
     index('bet_actions_room_idx').on(table.roomId),
     index('bet_actions_user_idx').on(table.userId),
     index('bet_actions_entered_by_idx').on(table.enteredBy),

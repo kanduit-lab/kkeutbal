@@ -37,10 +37,12 @@ export async function validateBetSemantics(
     userId: string
     action: BetActionKind
     amount: number
+    /** 3장 섯다의 현재 베팅 단계 */
+    street: number
     beforeSeq?: number
   },
 ): Promise<string | null> {
-  const { room, roundId, userId, action, amount, beforeSeq } = input
+  const { room, roundId, userId, action, amount, street, beforeSeq } = input
   const before = beforeSeq === undefined ? undefined : lt(betActions.seq, beforeSeq)
 
   const [lastUserAction] = await tx
@@ -66,6 +68,7 @@ export async function validateBetSemantics(
       amount: betActions.amount,
       status: betActions.status,
       seq: betActions.seq,
+      street: betActions.street,
     })
     .from(betActions)
     .where(and(eq(betActions.roundId, roundId), eq(betActions.status, 'accepted'), before))
@@ -75,11 +78,11 @@ export async function validateBetSemantics(
   // 정상적으로는 그 직후 자동 종료(`autoSettleRoundIfComplete`)가 판을 끝내지만, 공정 딜
   // 봉인 대기처럼 자동 종료가 미뤄진 사이 낀 요청까지 막는 안전망이다.
   const participantIds = await activeRoundParticipantIds(tx, room.id, roundId)
-  const completion = computeRoundCompletion(participantIds, acceptedActions)
+  const completion = computeRoundCompletion(participantIds, acceptedActions, street)
   if (completion.kind !== 'active') return 'errors.roundAwaitingWinner'
 
   // 차례 강제. UI 하이라이트와 같은 순수 함수(`turn-order.ts`)로 판정한다.
-  if (!isActorsTurn(participantIds, acceptedActions, userId)) return 'errors.notYourTurn'
+  if (!isActorsTurn(participantIds, acceptedActions, userId, street)) return 'errors.notYourTurn'
 
   const state = roundBetState(acceptedActions)
   const balance = await balanceInRoom(tx, room.id, userId)

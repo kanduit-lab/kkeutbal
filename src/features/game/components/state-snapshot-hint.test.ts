@@ -24,6 +24,7 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
         turnTimeoutSeconds: 30,
         timeoutPolicy: 'pause',
       },
+      seotdaCards: 2,
     },
     members: [
       {
@@ -56,6 +57,9 @@ function makeSnapshot(overrides: Partial<RoomSnapshot> = {}): RoomSnapshot {
       startedAt: '2026-07-30T00:00:00.000Z',
       fairness: null,
       participantUserIds: ['user-1'],
+      street: 1,
+      chooseDeadline: null,
+      choiceUserIds: [],
     },
     actions: [],
     lastResult: null,

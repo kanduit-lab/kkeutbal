@@ -63,9 +63,18 @@ export async function findActiveRoundForRoom(
 export async function findRoundById(
   tx: Tx,
   roundId: string,
-): Promise<Pick<typeof rounds.$inferSelect, 'id' | 'seq' | 'status'> | undefined> {
+): Promise<
+  | Pick<typeof rounds.$inferSelect, 'id' | 'seq' | 'status' | 'street' | 'chooseDeadline'>
+  | undefined
+> {
   const [round] = await tx
-    .select({ id: rounds.id, seq: rounds.seq, status: rounds.status })
+    .select({
+      id: rounds.id,
+      seq: rounds.seq,
+      status: rounds.status,
+      street: rounds.street,
+      chooseDeadline: rounds.chooseDeadline,
+    })
     .from(rounds)
     .where(eq(rounds.id, roundId))
     .limit(1)

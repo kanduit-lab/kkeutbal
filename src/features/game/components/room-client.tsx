@@ -28,6 +28,7 @@ import { MemberSheet } from './member-sheet'
 import { MemberListSheet } from './member-list-sheet'
 import { RoundLog } from './round-log'
 import { FairnessPanel } from './fairness-panel'
+import { HandChoicePanel } from './hand-choice-panel'
 import { AdvisorBoard } from '@/features/jokbo-advisor/components/advisor-board'
 import { MATCH_SELF_BAR_HEIGHT_CLASS } from './button-recipes'
 import { useRoomActions } from './use-room-actions'
@@ -93,7 +94,10 @@ export function RoomClient({
   const participantIds = snapshot.currentRound?.participantUserIds ?? EMPTY_PARTICIPANTS
   const rail = useMemo(
     () =>
-      turnRail(participantIds, snapshot.actions, { roundActive: Boolean(snapshot.currentRound) }),
+      turnRail(participantIds, snapshot.actions, {
+        roundActive: Boolean(snapshot.currentRound),
+        street: snapshot.currentRound?.street,
+      }),
     [participantIds, snapshot.actions, snapshot.currentRound],
   )
   const myBet = useMemo(
@@ -192,6 +196,12 @@ export function RoomClient({
                   runAction={runAction}
                   staleReason={staleReason}
                 />
+                <HandChoicePanel
+                  snapshot={snapshot}
+                  selfId={selfId}
+                  runAction={runAction}
+                  staleReason={staleReason}
+                />
               </div>
               {snapshot.lastResult && !snapshot.currentRound ? (
                 <p className="rise-in rise-in-1 mb-3 shrink-0 text-center text-xs text-muted lg:text-sm">
@@ -260,6 +270,7 @@ export function RoomClient({
                     onSeatTap={(member) => setSeatUserId(member.userId)}
                     participantUserIds={snapshot.currentRound?.participantUserIds}
                     carriedPot={snapshot.carriedPot}
+                    street={snapshot.currentRound?.street}
                     fit
                   />
                 </div>

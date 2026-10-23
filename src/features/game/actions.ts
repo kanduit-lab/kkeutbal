@@ -12,8 +12,10 @@ import {
   isUniqueViolation,
   lockRoom,
   netTotalInRoom,
+  maxMembersCap,
   readJoinAsObserver,
   readMaxMembers,
+  readSeotdaCards,
   requireRole,
   type Tx,
 } from './action-helpers'
@@ -30,6 +32,8 @@ import type { RoomSnapshot } from './types'
 
 const { rooms, roomMembers, rounds, buyIns, chipLedger, roomCreditLocks } = schema
 
+const seotdaCardsSchema = z.union([z.literal(2), z.literal(3)])
+
 const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(30),
   gameType: z.enum(['seotda', 'gostop']),
@@ -39,6 +43,7 @@ const createRoomSchema = z.object({
   baseBet: z.number().int().min(1).max(1_000_000).optional(),
   fundingMode: fundingModeSchema.default('session'),
   raiseRule: z.enum(['free', 'ttadang', 'pot_limit']).default('free'),
+  seotdaCards: seotdaCardsSchema.default(2),
   fairPlay: fairPlaySettingsSchema.optional(),
 })
 
@@ -50,8 +55,17 @@ export async function createRoom(
 
   const parsed = createRoomSchema.safeParse(input)
   if (!parsed.success) return fail('errors.invalidInput')
-  const { name, gameType, inputMode, startingChips, pointValue, baseBet, fundingMode, raiseRule } =
-    parsed.data
+  const {
+    name,
+    gameType,
+    inputMode,
+    startingChips,
+    pointValue,
+    baseBet,
+    fundingMode,
+    raiseRule,
+    seotdaCards,
+  } = parsed.data
   let fairPlay: ReturnType<typeof parseFairPlaySettings> | undefined
   try {
     fairPlay = parsed.data.fairPlay
@@ -70,6 +84,7 @@ export async function createRoom(
     // 고스톱은 베팅이 없으니 레이즈 규칙도 의미가 없다 — free로 저장돼도 readRaiseRule
     // 기본값과 같아 무해하지만, 저장하지 않아 blob을 깔끔하게 유지한다.
     ...(gameType !== 'gostop' ? { raiseRule } : {}),
+    ...(gameType === 'seotda' && seotdaCards === 3 ? { seotdaCards } : {}),
     ...(fairPlay ? { fair_play: fairPlay } : {}),
   }
 
@@ -242,6 +257,7 @@ const updateSettingsSchema = z.object({
   maxMembers: z.number().int().min(2).max(10).optional(),
   joinAsObserver: z.boolean().optional(),
   startingChips: z.number().int().min(1).max(1_000_000).optional(),
+  seotdaCards: seotdaCardsSchema.optional(),
   fairPlay: fairPlaySettingsSchema.optional(),
 })
 
@@ -296,12 +312,32 @@ export async function updateRoomSettings(
         if (anyRound) return fail('errors.startingChipsHasRounds')
       }
 
-      if (maxMembers !== undefined) {
+      const currentCards = readSeotdaCards(room.rulePreset)
+      const seotdaCards =
+        room.gameType === 'seotda' && parsed.data.seotdaCards !== undefined
+          ? parsed.data.seotdaCards
+          : currentCards
+      if (seotdaCards !== currentCards) {
+        const [anyRound] = await tx
+          .select({ id: rounds.id })
+          .from(rounds)
+          .where(eq(rounds.roomId, roomId))
+          .limit(1)
+        if (anyRound) return fail('errors.seotdaCardsLocked')
+      }
+      const memberCap = maxMembersCap(seotdaCards)
+      if (maxMembers !== undefined && maxMembers > memberCap) {
+        return fail('errors.maxMembersAboveCardLimit')
+      }
+      const effectiveMaxMembers =
+        maxMembers ?? (readMaxMembers(room.rulePreset) > memberCap ? memberCap : undefined)
+
+      if (effectiveMaxMembers !== undefined) {
         const [activeMembers] = await tx
           .select({ count: sql<number>`count(*)::int` })
           .from(roomMembers)
           .where(and(eq(roomMembers.roomId, roomId), isNull(roomMembers.leftAt)))
-        if ((activeMembers?.count ?? 0) > maxMembers) {
+        if ((activeMembers?.count ?? 0) > effectiveMaxMembers) {
           return fail('errors.maxMembersBelowCurrent')
         }
       }
@@ -329,7 +365,8 @@ export async function updateRoomSettings(
         ...preset,
         ...(room.gameType === 'gostop' && pointValue ? { pointValue } : {}),
         ...(room.gameType !== 'gostop' && baseBet ? { baseBet } : {}),
-        ...(maxMembers !== undefined ? { maxMembers } : {}),
+        ...(effectiveMaxMembers !== undefined ? { maxMembers: effectiveMaxMembers } : {}),
+        ...(room.gameType === 'seotda' ? { seotdaCards } : {}),
         ...(joinAsObserver !== undefined ? { joinAsObserver } : {}),
         ...(fairPlay !== undefined ? { fair_play: fairPlay } : {}),
       }

@@ -38,6 +38,7 @@ describe('RoundLog', () => {
             status: 'accepted',
             reason: null,
             seq: 1,
+            street: 1,
             createdAt: '2026-07-30T00:00:00.000Z',
           },
           {
@@ -50,6 +51,7 @@ describe('RoundLog', () => {
             status: 'accepted',
             reason: null,
             seq: 2,
+            street: 1,
             createdAt: '2026-07-30T00:00:01.000Z',
           },
         ]}
@@ -81,6 +83,7 @@ describe('RoundLog', () => {
             status: 'accepted',
             reason: null,
             seq: 1,
+            street: 1,
             createdAt: '2026-07-30T00:00:00.000Z',
           },
         ]}
@@ -106,6 +109,7 @@ describe('RoundLog', () => {
             status: 'rejected',
             reason: 'insufficientBalance',
             seq: 1,
+            street: 1,
             createdAt: '2026-07-30T00:00:00.000Z',
           },
         ]}
@@ -127,7 +131,7 @@ describe('RoundLog', () => {
       amount: 10,
       status: 'accepted' as const,
       reason: null,
-      seq: i + 1,
+      seq: i + 1, street: 1,
       createdAt: '2026-07-30T00:00:00.000Z',
     }))
     renderWithProviders(<RoundLog actions={many} members={MEMBERS} scale="board" />)

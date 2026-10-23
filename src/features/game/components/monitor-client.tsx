@@ -156,6 +156,7 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
             gameType={snapshot.room.gameType}
             participantUserIds={snapshot.currentRound?.participantUserIds}
             carriedPot={snapshot.carriedPot}
+            street={snapshot.currentRound?.street}
             fit
           />
         </div>

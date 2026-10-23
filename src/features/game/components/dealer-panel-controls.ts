@@ -211,8 +211,10 @@ export function useDealerPanelControls({
     if (autoTriggeredForRound.current === round.id) return
 
     const participantIds = players.map((member) => member.userId)
-    const completion = computeRoundCompletion(participantIds, snapshot.actions)
+    const completion = computeRoundCompletion(participantIds, snapshot.actions, round.street)
     if (completion.kind !== 'showdown_ready') return
+    // 3장 섯다는 1차 베팅이 끝나도 판이 이어지고, 검증 딜 방의 승부는 서버가 두 장 선택 뒤에 낸다.
+    if (snapshot.room.seotdaCards === 3 && (round.street === 1 || verifiedFairness)) return
 
     if (verifiedFairness) {
       if (!verifiedDealReady) return
@@ -232,6 +234,7 @@ export function useDealerPanelControls({
     isPending,
     players,
     snapshot.actions,
+    snapshot.room.seotdaCards,
     verifiedFairness,
     verifiedDealReady,
     foldWinWinner,

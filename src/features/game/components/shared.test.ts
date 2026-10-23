@@ -67,6 +67,7 @@ describe('베팅 UI 파생 규칙', () => {
       enteredBy: null,
       amount: 0,
       reason: null,
+      street: 1,
       createdAt: new Date(0).toISOString(),
     }
     const actions: BetActionView[] = [
@@ -86,6 +87,7 @@ describe('베팅 UI 파생 규칙', () => {
       enteredBy: null,
       amount: 0,
       reason: null,
+      street: 1,
       createdAt: new Date(0).toISOString(),
     }
     const actions: BetActionView[] = [

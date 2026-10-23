@@ -25,6 +25,7 @@ const {
   roundFairness,
   roundFairnessParticipants,
   roundParticipants,
+  roundHandChoices,
 } = schema
 
 async function getMembers(roomId: string): Promise<MemberView[]> {
@@ -114,6 +115,7 @@ function toActionView(action: typeof betActions.$inferSelect): BetActionView {
     status: action.status,
     reason: action.reason,
     seq: action.seq,
+    street: action.street,
     createdAt: action.createdAt.toISOString(),
   }
 }
@@ -197,7 +199,14 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
 
   const [currentRoundRow] = currentRoundRows
 
-  const [pot, actionRows, fairnessRows, fairnessParticipantRows, roundParticipantRows]: [
+  const [
+    pot,
+    actionRows,
+    fairnessRows,
+    fairnessParticipantRows,
+    roundParticipantRows,
+    choiceRows,
+  ]: [
     number,
     Array<typeof betActions.$inferSelect>,
     Array<{
@@ -212,6 +221,7 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
       participantUserIds: string[]
       submittedParticipantUserIds: string[]
     }>,
+    Array<{ userId: string }>,
     Array<{ userId: string }>,
   ] = currentRoundRow
     ? await Promise.all([
@@ -261,8 +271,12 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
             ),
           )
           .orderBy(asc(roomMembers.seatNo)),
+        db
+          .select({ userId: roundHandChoices.userId })
+          .from(roundHandChoices)
+          .where(eq(roundHandChoices.roundId, currentRoundRow.id)),
       ])
-    : [0, [], [], [], []]
+    : [0, [], [], [], [], []]
 
   const [fairness] = fairnessRows
   const [fairnessParticipants] = fairnessParticipantRows
@@ -274,6 +288,9 @@ export async function getRoomSnapshot(roomId: string): Promise<RoomSnapshot | nu
         pot,
         startedAt: currentRoundRow.startedAt.toISOString(),
         participantUserIds: roundParticipantRows.map((row) => row.userId),
+        street: currentRoundRow.street,
+        chooseDeadline: currentRoundRow.chooseDeadline?.toISOString() ?? null,
+        choiceUserIds: choiceRows.map((row) => row.userId),
         fairness: fairness
           ? {
               phase: fairness.phase,

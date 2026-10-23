@@ -70,6 +70,19 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 이 마이그레이션은 되돌릴 수 없다. 대상 Supabase DB에는 2026-10-22에 적용됐으며, 개별 SQL을 따로
 실행하거나 과거 migration을 고치지 않는다.
 
+### Three-card Seotda migration
+
+3장 섯다는 Drizzle `0024_nappy_talkback`과 Supabase `0021_round_hand_choices_security.sql`이 함께
+있어야 동작한다. 앱 코드가 `rounds.street`·`rounds.choose_deadline`·`bet_actions.street`를 읽으므로,
+이 코드를 띄우기 전에 대상 DB에 적용한다. 2026-10-23 기준 대상 Supabase DB에는 적용되지 않았다.
+
+1. 대상 DB 백업 시점을 확인한다. 이 migration은 컬럼과 테이블을 더하기만 하고 기존 행은 기본값
+   `street = 1`을 받는다.
+2. 관리자 `DATABASE_URL`로 `pnpm db:migrate`를 한 번 실행한다. 새로 적용되는 것은 `0024` 하나다.
+3. Supabase SQL Editor에서 `database/migrations/supabase/0021_round_hand_choices_security.sql`을
+   실행해 `round_hand_choices`의 브라우저 역할 권한을 회수하고 앱 롤 DML만 허용한다.
+4. 아래 Verification에 더해 `round_hand_choices` RLS가 켜졌는지와 `rounds.street`가 있는지 확인한다.
+
 ### 기존 DB 업그레이드
 
 1. 대상 DB를 백업하고 현재 Drizzle 이력을 조회한다.

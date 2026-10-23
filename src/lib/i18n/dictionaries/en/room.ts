@@ -106,6 +106,8 @@ export const betHistory: Dictionary['betHistory'] = {
 export const actionBar: Dictionary['actionBar'] = {
   myChips: 'My chips',
   toCall: 'To call',
+  streetFirst: 'First betting round',
+  streetSecond: 'Second betting round',
   beforeFirstBet: 'No bets yet',
   waitingForCall: 'Waiting on others',
   raiseAmount: 'Raise amount',
@@ -329,6 +331,12 @@ export const roomForm: Dictionary['roomForm'] = {
   raiseRuleFreeHint: 'Only the minimum raise floor is enforced. Everything else is up to the table',
   raiseRuleTtadangHint: 'A re-raise must be exactly double the current highest bet',
   raiseRulePotLimitHint: 'You can raise up to the size of the pot after calling',
+  seotdaCardsLabel: 'Cards per player',
+  seotdaCards2: '2 cards',
+  seotdaCards3: '3 cards',
+  seotdaCards2Hint: 'One betting round with two cards, then the showdown. Up to 10 players',
+  seotdaCards3Hint: 'Bet on two cards, take a third and bet again, then play your best two of three. Up to 6 players',
+  seotdaCardsLocked: 'The card count is fixed once the first round starts.',
 } as const
 
 export const settings: Dictionary['settings'] = {

@@ -98,6 +98,13 @@ export function ActionBar({
           <>
             <div className="flex items-center justify-between text-sm font-medium text-muted">
               <span>
+                {snapshot.room.seotdaCards === 3 && snapshot.currentRound ? (
+                  <span className="me-2 rounded-md bg-gold/15 px-1.5 py-0.5 text-xs font-bold text-gold">
+                    {snapshot.currentRound.street === 2
+                      ? d.actionBar.streetSecond
+                      : d.actionBar.streetFirst}
+                  </span>
+                ) : null}
                 {d.actionBar.myChips}{' '}
                 <span className="gilt text-base font-black tabular-nums">
                   {formatChips(balance, locale)}

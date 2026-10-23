@@ -4,7 +4,7 @@
 |-------|-------|
 | Type | technical-design |
 | Audience | maintainers / reviewers |
-| Status | draft — 구현 전 검토용. 아래 계약은 아직 코드에 없다 |
+| Status | active — 코드 구현됨. DB migration `0024`는 대상 DB에 아직 적용하지 않았다 |
 | Source of truth | this document |
 | Last reviewed | 2026-10-23 |
 
@@ -54,14 +54,19 @@ street 1 베팅 ──showdown_ready──▶ street 2 베팅 ──showdown_rea
   그대로 이어받는다.
 - 남은 참가자 중 올인이 아닌 사람이 한 명 이하면 2차 베팅을 건너뛰고 바로 다음 단계로 간다.
 - 차례 순서는 street마다 선부터 다시 돈다. street 1의 액션은 street 2 차례 계산에 쓰지 않는다.
-- 딜러의 판 종료와 판 무효는 어느 단계에서든 지금처럼 동작한다.
+  폴드·올인은 street 1의 것도 그대로 효력이 있다.
+- 딜러의 판 종료와 판 무효는 어느 단계에서든 동작한다. 검증 딜 방에서 street 1 중에 판을 끝내면
+  앞 두 장으로 판정한다.
+- street가 올라간 뒤에는 앞 단계 액션을 정정할 수 없다. 선택 단계에 들어간 뒤에도 정정할 수 없다.
+  둘 다 `errors.revertAfterStreetAdvanced`다.
 
 ### 카드 딜
 
 검증 딜 방에만 해당한다. 수동 딜 방은 서버가 카드를 모르므로 이 절이 걸리지 않는다.
 
-- 3장 방의 딜 규칙은 `privateCardsPerParticipant: 3`, `publicBoardStages: []`다. 영수증의
-  `dealPlanCommitment`가 이 값을 담고, 영수증 검증은 방의 `seotdaCards`에 맞는 규칙과 대조한다.
+- 3장 방의 공개 영수증 `game`은 `seotda3`이고 딜 규칙은 `privateCardsPerParticipant: 3`,
+  `publicBoardStages: []`다. 영수증 버전은 2장 방과 같다. 봉인할 때는 방의 `seotdaCards`로,
+  다시 계산할 때는 영수증의 `game`으로 카드 수를 정한다.
 - 참가자 i의 카드는 셔플된 덱의 `[3i, 3i+1, 3i+2]`다. 2장 방의 `[2i, 2i+1]` 배치는 바뀌지 않는다.
 - 내 패 조회는 `street = 1`이면 앞 두 장만, `street = 2` 이후면 세 장을 돌려준다. 3번째 장은
   street 2가 되기 전에 어떤 응답에도 실리지 않는다.
@@ -81,27 +86,34 @@ street 1 베팅 ──showdown_ready──▶ street 2 베팅 ──showdown_rea
 | `card_ids` | text[] | 길이 2, 서로 다름, 그 참가자의 세 장 안에 있어야 한다 |
 | `chosen_at` | timestamptz | not null |
 
-- 선택은 한 번만 할 수 있다. 같은 참가자의 두 번째 제출은 `errors.choiceAlreadySubmitted`로 거부한다.
+- 선택은 `submitHandChoice` 서버 액션 하나로 하고 한 번만 할 수 있다. 같은 참가자의 두 번째
+  제출은 `errors.handChoiceAlreadySubmitted`, 손패 밖 카드는 `errors.handChoiceInvalid`,
+  선택 단계가 아니거나 마감이 지났으면 `errors.handChoiceClosed`다.
 - 폴드한 참가자는 선택하지 않는다.
 - 남은 참가자 전원이 선택했거나 `choose_deadline`이 지나면 승부를 판정한다. 선택하지 않은
   참가자는 세 장에서 나오는 세 조합 중 `rank`가 가장 높은 쌍으로 판정한다.
 - 판정은 고른 쌍들로 `resolveSeotdaShowdown`을 부른다. 구사·땡잡이·암행어사 trait도 고른 쌍
   기준이다. 세 장 안에 해당 월이 있어도 고르지 않았으면 성립하지 않는다.
 - 구사로 재경기가 되면 지금 2장 방의 재경기와 같은 경로를 탄다.
-- 마감 처리는 마감 뒤 처음 들어온 스냅샷 요청이나 선택 제출이 수행한다. 별도 스케줄러는 없다.
+- 마감 처리는 별도 스케줄러 없이 `settleDueHandChoices`가 한다. 방에 있는 클라이언트가 마감
+  시각에 이 액션을 부르고, 마감 전이거나 선택 단계가 아니면 아무것도 하지 않는다.
 
 ### 섯다 엔진
 
 - `evaluateSeotdaHand`는 지금처럼 두 장만 받는다.
 - `bestSeotdaPair(cards)`: 세 장을 받아 세 쌍 중 `rank`가 가장 높은 쌍을 돌려준다. 동률이면
-  덱 순서상 앞선 카드를 포함한 쌍을 고른다.
-- `seotdaPairsOf(cards)`: 세 장의 세 쌍과 각 평가 결과를 돌려준다. 판독기와 선택 화면이 쓴다.
+  손패 순서상 앞선 쌍을 고른다.
+- `seotdaPairsOf(cards)`: 세 장의 세 쌍을 `[0,1]`, `[0,2]`, `[1,2]` 순서로 평가해 돌려준다.
+  판독기와 선택 화면이 쓴다.
+- `chosenSeotdaPair(cards, ids)`: 고른 두 장이 손패 안의 서로 다른 두 장이면 그 쌍을, 아니면
+  null을 돌려준다.
 
 ### 실시간
 
-- 방 스냅샷의 현재 판에 `street`과 `chooseDeadline`을 싣는다.
-- `round.street_advanced`, `round.choice_submitted` 이벤트를 더한다. `round.choice_submitted`는
-  누가 골랐는지만 싣고 카드는 싣지 않는다.
+- 방 스냅샷의 현재 판에 `street`, `chooseDeadline`, 이미 고른 참가자 ID인 `choiceUserIds`를
+  싣는다. 고른 카드는 싣지 않는다. 방 정보에는 `seotdaCards`를 싣는다.
+- 새 이벤트는 없다. 단계 전환과 선택은 액션을 실행한 클라이언트가 보내는 `state.snapshot`으로
+  다른 클라이언트가 다시 받아 오고, 판이 끝나면 `round.ended`를 보낸다.
 
 ### 화면
 

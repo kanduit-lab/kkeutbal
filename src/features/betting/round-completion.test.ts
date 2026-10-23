@@ -124,3 +124,40 @@ describe('computeRoundCompletion', () => {
     expect(computeRoundCompletion(['a', 'b'], actions)).toEqual({ kind: 'active' })
   })
 })
+
+describe('computeRoundCompletion street 2', () => {
+  const at = (
+    userId: string,
+    action: 'call' | 'raise' | 'allin' | 'fold' | 'check',
+    amount: number,
+    street: number,
+  ) => ({ userId, action, amount, status: 'accepted' as const, street })
+
+  const firstStreet = [at('a', 'raise', 100, 1), at('b', 'call', 100, 1), at('c', 'call', 100, 1)]
+
+  it('stays active until every remaining player acts in the second street', () => {
+    const actions = [...firstStreet, at('a', 'check', 0, 2), at('b', 'check', 0, 2)]
+    expect(computeRoundCompletion(['a', 'b', 'c'], actions, 2)).toEqual({ kind: 'active' })
+  })
+
+  it('completes when the second street is called around', () => {
+    const actions = [
+      ...firstStreet,
+      at('a', 'raise', 50, 2),
+      at('b', 'call', 50, 2),
+      at('c', 'call', 50, 2),
+    ]
+    expect(computeRoundCompletion(['a', 'b', 'c'], actions, 2)).toEqual({
+      kind: 'showdown_ready',
+      contenderIds: ['a', 'b', 'c'],
+    })
+  })
+
+  it('skips the second street when at most one player can still act', () => {
+    const actions = [at('a', 'allin', 100, 1), at('b', 'call', 100, 1)]
+    expect(computeRoundCompletion(['a', 'b'], actions, 2)).toEqual({
+      kind: 'showdown_ready',
+      contenderIds: ['a', 'b'],
+    })
+  })
+})

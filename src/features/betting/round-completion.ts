@@ -34,9 +34,15 @@ export type RoundCompletion =
   | { readonly kind: 'single_survivor'; readonly winnerId: string }
   | { readonly kind: 'showdown_ready'; readonly contenderIds: readonly string[] }
 
+/**
+ * `street`가 2면 3장 섯다의 2차 베팅을 판정한다. 콜 금액은 1차 누적액을 이어받으므로 기여액
+ * 비교는 그대로이고, 올인이 아닌 남은 참가자 전원이 2차 액션을 하나 이상 가져야 끝난다. 그런
+ * 참가자가 한 명 이하면 더 겨룰 상대가 없어 바로 끝난 것으로 본다.
+ */
 export function computeRoundCompletion(
   participantIds: readonly string[],
   actions: readonly AcceptedBetAction[],
+  street = 1,
 ): RoundCompletion {
   const lastAcceptedByUser = new Map<string, AcceptedBetAction>()
   for (const action of actions) {
@@ -53,6 +59,24 @@ export function computeRoundCompletion(
   }
 
   const state = roundBetState(actions)
+  if (street === 2) {
+    const actedThisStreet = new Set(
+      actions
+        .filter((action) => action.status === 'accepted' && (action.street ?? 1) === 2)
+        .map((action) => action.userId),
+    )
+    const canAct = contenders.filter(
+      (userId) => lastAcceptedByUser.get(userId)?.action !== 'allin',
+    )
+    const settled =
+      canAct.length <= 1 ||
+      canAct.every(
+        (userId) =>
+          actedThisStreet.has(userId) && contributedBy(state, userId) === state.currentToCall,
+      )
+    return settled ? { kind: 'showdown_ready', contenderIds: contenders } : { kind: 'active' }
+  }
+
   const allSettled = contenders.every((userId) => {
     const last = lastAcceptedByUser.get(userId)
     if (!last) return false

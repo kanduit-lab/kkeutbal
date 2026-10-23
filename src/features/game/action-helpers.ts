@@ -2,6 +2,7 @@ import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm'
 import { db, schema } from '@/lib/db'
 import { isRaiseRule, type RaiseRule } from '../betting/raise-rule'
 import { toSafeChipInteger } from './chip-integers'
+import type { SeotdaCardCount } from '../seotda/types'
 
 const { roomMembers, chipLedger, buyIns, roundParticipants } = schema
 
@@ -66,9 +67,19 @@ export function readBaseBet(rulePreset: unknown): number | null {
   return readRuleNumber(rulePreset, 'baseBet')
 }
 
+export function readSeotdaCards(rulePreset: unknown): SeotdaCardCount {
+  return readRuleNumber(rulePreset, 'seotdaCards') === 3 ? 3 : 2
+}
+
+/** 섯다 덱 20장을 참가자 수만큼 나눠야 해서 3장 방은 6명까지다 */
+export function maxMembersCap(cards: SeotdaCardCount): number {
+  return cards === 3 ? 6 : 10
+}
+
 export function readMaxMembers(rulePreset: unknown): number {
+  const cap = maxMembersCap(readSeotdaCards(rulePreset))
   const value = readRuleNumber(rulePreset, 'maxMembers')
-  return value !== null && value >= 2 && value <= 10 ? value : 10
+  return value !== null && value >= 2 && value <= cap ? value : cap
 }
 
 export function readJoinAsObserver(rulePreset: unknown): boolean {

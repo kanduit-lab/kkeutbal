@@ -47,6 +47,7 @@ export default function NewRoomPage() {
   const [baseBet, setBaseBet] = useState<number>(DEFAULT_BASE_BET)
   const [fundingMode, setFundingMode] = useState<FundingMode>('session')
   const [raiseRule, setRaiseRule] = useState<RaiseRule>('free')
+  const [seotdaCards, setSeotdaCards] = useState<2 | 3>(2)
   const [accountCreditConfirmOpen, setAccountCreditConfirmOpen] = useState(false)
 
   function create() {
@@ -61,6 +62,7 @@ export default function NewRoomPage() {
         baseBet: gameType === 'gostop' ? undefined : baseBet,
         fundingMode,
         raiseRule: gameType === 'gostop' ? undefined : raiseRule,
+        seotdaCards: gameType === 'seotda' ? seotdaCards : undefined,
       })
       if (result.success) {
         setAccountCreditConfirmOpen(false)
@@ -211,6 +213,28 @@ export default function NewRoomPage() {
                   <p className="mt-1.5 text-xs text-muted">{d.roomForm.baseBetHint}</p>
                 </Field>
               )}
+
+              {gameType === 'seotda' ? (
+                <div className="lg:col-span-2">
+                  <Field label={d.roomForm.seotdaCardsLabel} group>
+                    <div className="grid grid-cols-2 gap-2">
+                      {([2, 3] as const).map((count) => (
+                        <Button
+                          key={count}
+                          type="button"
+                          selected={seotdaCards === count}
+                          onClick={() => setSeotdaCards(count)}
+                        >
+                          {count === 2 ? d.roomForm.seotdaCards2 : d.roomForm.seotdaCards3}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted">
+                      {seotdaCards === 2 ? d.roomForm.seotdaCards2Hint : d.roomForm.seotdaCards3Hint}
+                    </p>
+                  </Field>
+                </div>
+              ) : null}
 
               {gameType !== 'gostop' ? (
                 <div className="lg:col-span-2">

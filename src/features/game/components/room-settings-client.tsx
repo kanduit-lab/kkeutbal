@@ -27,6 +27,8 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
   const [baseBet, setBaseBet] = useState(room.baseBet)
   const [startingChips, setStartingChips] = useState(room.startingChips)
   const [maxMembers, setMaxMembers] = useState(room.maxMembers)
+  const [seotdaCards, setSeotdaCards] = useState(room.seotdaCards)
+  const memberCap = seotdaCards === 3 ? 6 : 10
   const [joinAsObserver, setJoinAsObserver] = useState(room.joinAsObserver)
   const [fairDealing, setFairDealing] = useState(room.fairPlay.dealing)
   const [seedCollectionSeconds, setSeedCollectionSeconds] = useState(
@@ -52,8 +54,9 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
         pointValue: isGostop ? pointValue : undefined,
         baseBet: isGostop ? undefined : baseBet,
         startingChips: canEditStartingChips ? startingChips : undefined,
-        maxMembers,
+        maxMembers: Math.min(maxMembers, memberCap),
         joinAsObserver,
+        seotdaCards: room.gameType === 'seotda' ? seotdaCards : undefined,
         fairPlay: supportsVerifiedFairDeal
           ? {
               dealing: fairDealing,
@@ -187,12 +190,35 @@ export function RoomSettingsClient({ room }: { room: RoomView }) {
             </>
           )}
         </Field>
+        {room.gameType === 'seotda' ? (
+          <Field label={d.roomForm.seotdaCardsLabel} group>
+            <div className="grid grid-cols-2 gap-2">
+              {([2, 3] as const).map((count) => (
+                <Button
+                  key={count}
+                  type="button"
+                  selected={seotdaCards === count}
+                  disabled={room.status !== 'waiting'}
+                  disabledReason={
+                    room.status !== 'waiting' ? d.roomForm.seotdaCardsLocked : undefined
+                  }
+                  onClick={() => setSeotdaCards(count)}
+                >
+                  {count === 2 ? d.roomForm.seotdaCards2 : d.roomForm.seotdaCards3}
+                </Button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-muted">
+              {seotdaCards === 2 ? d.roomForm.seotdaCards2Hint : d.roomForm.seotdaCards3Hint}
+            </p>
+          </Field>
+        ) : null}
         <Field label={d.settings.maxMembersLabel} group>
           <Stepper
-            value={maxMembers}
+            value={Math.min(maxMembers, memberCap)}
             onChange={setMaxMembers}
             min={2}
-            max={10}
+            max={memberCap}
             ariaLabel={d.settings.maxMembersLabel}
             decreaseLabel={d.ui.decrease}
             increaseLabel={d.ui.increase}
