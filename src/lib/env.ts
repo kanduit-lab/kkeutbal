@@ -19,26 +19,17 @@ const baseServerSchema = z.object({
   GEMINI_API_KEY: optionalEnv(z.string().min(1)),
 })
 
-const realtimeSchema = z.preprocess(
-  (input) => {
-    const environment = input as Record<string, unknown>
-    const mode = environment.REALTIME_MODE
-    return typeof mode === 'string' && mode.trim() !== ''
-      ? environment
-      : { ...environment, REALTIME_MODE: 'self' }
-  },
-  z.discriminatedUnion('REALTIME_MODE', [
-    z.object({
-      REALTIME_MODE: z.literal('self'),
-      DATABASE_LISTENER_URL: optionalEnv(z.string().url()),
-    }),
-    z.object({
-      REALTIME_MODE: z.literal('supabase'),
-      SUPABASE_URL: z.string().url(),
-      SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
-    }),
-  ]),
-)
+const realtimeSchema = z.discriminatedUnion('REALTIME_MODE', [
+  z.object({
+    REALTIME_MODE: z.literal('self'),
+    REALTIME_SELF_LISTENER_URL: optionalEnv(z.string().url()),
+  }),
+  z.object({
+    REALTIME_MODE: z.literal('supabase'),
+    REALTIME_SUPABASE_URL: z.string().url(),
+    REALTIME_SUPABASE_PUBLISHABLE_KEY: z.string().min(1),
+  }),
+])
 
 const serverSchema = baseServerSchema.and(realtimeSchema).superRefine((environment, context) => {
   if (environment.DATABASE_TLS_MODE === 'verify-ca' && !environment.DATABASE_CA_CERT_BASE64) {
@@ -52,12 +43,12 @@ const serverSchema = baseServerSchema.and(realtimeSchema).superRefine((environme
   if (
     environment.REALTIME_MODE === 'self' &&
     environment.DATABASE_POOL_MODE === 'transaction' &&
-    !environment.DATABASE_LISTENER_URL
+    !environment.REALTIME_SELF_LISTENER_URL
   ) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
-      path: ['DATABASE_LISTENER_URL'],
-      message: 'DATABASE_LISTENER_URL is required when REALTIME_MODE=self and DATABASE_POOL_MODE=transaction',
+      path: ['REALTIME_SELF_LISTENER_URL'],
+      message: 'REALTIME_SELF_LISTENER_URL is required when REALTIME_MODE=self and DATABASE_POOL_MODE=transaction',
     })
   }
 })

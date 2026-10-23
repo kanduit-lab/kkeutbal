@@ -74,7 +74,7 @@ realtime 클라이언트, auth, vision 어드바이저까지 코드가 존재한
 - `DATABASE_TLS_MODE=disable|verify-system|verify-ca`가 TLS 검증 방식을 정한다. 사용자 지정 CA는
   `verify-ca`에서만 필요하다.
 - self realtime listener는 세션 연결을 사용한다. 기본 연결이 transaction pool이면
-  `DATABASE_LISTENER_URL`로 별도 연결을 제공한다.
+  `REALTIME_SELF_LISTENER_URL`로 별도 연결을 제공한다.
 - 전용 롤 `kkeutbal_app`, 속성 `bypassrls`.
 
 즉 Supabase `service_role` 키도, Auth.js 세션을 Supabase JWT로 바꿔 넘기는 브리지도 쓰지 않는다.

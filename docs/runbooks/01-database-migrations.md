@@ -31,7 +31,7 @@ Drizzle이 소유하는 테이블·인덱스·제약과 Supabase SQL이 소유�
 - 저장소의 `database/migrations/drizzle/meta/_journal.json`과 SQL 파일이 함께 배포 대상에 포함됐는지 확인한다.
 - `REALTIME_MODE=self` 전환은 long-running Node 실행 환경과 session-capable listener 연결이 준비된
   뒤에만 검토한다. `DATABASE_POOL_MODE=transaction`이면 transaction endpoint가 아닌
-  `DATABASE_LISTENER_URL`도 준비한다.
+  `REALTIME_SELF_LISTENER_URL`도 준비한다.
 - 포커 제거 전 대상 DB 백업을 복원 가능한 상태로 확인한다. 기존 포커 방에 account-credit lock이
   있으면 먼저 `settle_room_credits`로 정산하므로, 이전 credit lifecycle SQL과 정산 권한을 가진
   방장 또는 관리자가 있어야 한다.
