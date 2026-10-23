@@ -6,7 +6,7 @@ import { getCumulativeRanking } from '@/features/ranking/queries'
 import { RankingBoard } from '@/features/ranking/components/ranking-board'
 import { LocaleSwitcher } from '@/components/locale-switcher'
 import { EmptyState, FixedBody, FixedPage, PageHeader, SegmentedLinks } from '@/components/ui'
-import { getDict, format } from '@/lib/i18n/server'
+import { getDict } from '@/lib/i18n/server'
 import type { Dictionary } from '@/lib/i18n/server'
 
 const filterSchema = z.object({
@@ -16,8 +16,6 @@ const filterSchema = z.object({
 
 type GameFilter = z.infer<typeof filterSchema>['game']
 type PeriodFilter = z.infer<typeof filterSchema>['period']
-
-const TOP_LIMIT = 50
 
 function gameChips(d: Dictionary): ReadonlyArray<{ value: GameFilter; label: string }> {
   return [
@@ -54,7 +52,10 @@ function filterHref(game: GameFilter, period: PeriodFilter): Route {
 export default async function RankingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ game?: string | string[]; period?: string | string[] }>
+  searchParams: Promise<{
+    game?: string | string[]
+    period?: string | string[]
+  }>
 }) {
   const session = await auth()
   if (!session?.user?.id) redirect('/login')
@@ -71,13 +72,10 @@ export default async function RankingPage({
   ])
 
   const myId = session.user.id
-  const visible = ranking.slice(0, TOP_LIMIT).map((row, index) => ({ ...row, rank: index + 1 }))
-  const myIndex = ranking.findIndex((row) => row.userId === myId)
-  const below = myIndex >= TOP_LIMIT ? ranking[myIndex] : undefined
-  const myRowBelowCut = below ? { ...below, rank: myIndex + 1 } : undefined
+  const rows = ranking.map((row, index) => ({ ...row, rank: index + 1 }))
 
   return (
-    <FixedPage width="content">
+    <FixedPage width="wide">
       <PageHeader
         className="mb-3 shrink-0"
         title={d.home.ranking}
@@ -86,26 +84,32 @@ export default async function RankingPage({
         backLabel={d.common.home}
         actions={<LocaleSwitcher />}
       />
-      <div className="mb-3 flex shrink-0 flex-wrap gap-2">
-        <SegmentedLinks
-          ariaLabel={d.ranking.filterNavAria}
-          size="sm"
-          items={gameChips(d).map((chip) => ({
-            href: filterHref(chip.value, period),
-            label: chip.label,
-            active: game === chip.value,
-          }))}
-        />
-        <SegmentedLinks
-          ariaLabel={d.ranking.filterPeriodNavAria}
-          size="sm"
-          items={periodChips(d).map((chip) => ({
-            href: filterHref(game, chip.value),
-            label: chip.label,
-            active: period === chip.value,
-          }))}
-        />
-      </div>
+      <section className="lacquer mb-3 shrink-0 space-y-3 rounded-2xl p-3 sm:flex sm:items-end sm:justify-between sm:gap-6 sm:space-y-0 sm:p-4">
+        <div className="space-y-1.5">
+          <p className="text-micro font-bold text-muted">{d.ranking.gameLabel}</p>
+          <SegmentedLinks
+            ariaLabel={d.ranking.filterNavAria}
+            size="sm"
+            items={gameChips(d).map((chip) => ({
+              href: filterHref(chip.value, period),
+              label: chip.label,
+              active: game === chip.value,
+            }))}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-micro font-bold text-muted">{d.ranking.periodLabel}</p>
+          <SegmentedLinks
+            ariaLabel={d.ranking.filterPeriodNavAria}
+            size="sm"
+            items={periodChips(d).map((chip) => ({
+              href: filterHref(game, chip.value),
+              label: chip.label,
+              active: period === chip.value,
+            }))}
+          />
+        </div>
+      </section>
       {ranking.length === 0 ? (
         filtered ? (
           <EmptyState title={d.ranking.emptyFilteredTitle} hint={d.ranking.emptyFilteredHint} />
@@ -113,13 +117,8 @@ export default async function RankingPage({
           <EmptyState title={d.ranking.emptyTitle} hint={d.ranking.emptyHint} />
         )
       ) : (
-        <FixedBody className="gap-2">
-          <RankingBoard rows={visible} myId={myId} myRowBelowCut={myRowBelowCut} />
-          {ranking.length > TOP_LIMIT ? (
-            <p className="shrink-0 text-center text-xs text-muted">
-              {format(d.ranking.topNNote, { n: TOP_LIMIT })}
-            </p>
-          ) : null}
+        <FixedBody>
+          <RankingBoard rows={rows} myId={myId} />
         </FixedBody>
       )}
     </FixedPage>
