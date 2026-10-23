@@ -33,7 +33,6 @@ export async function getMyActiveRooms(userId: string): Promise<
       ),
     )
     .orderBy(desc(rooms.createdAt))
-    .limit(10)
 
   const counts = roomRows.length
     ? await db
@@ -65,10 +64,7 @@ export async function getMyActiveRooms(userId: string): Promise<
   }))
 }
 
-export async function getMyRecentSessions(
-  userId: string,
-  limit = 10,
-): Promise<
+export async function getMyRecentSessions(userId: string, limit?: number): Promise<
   Array<{
     id: string
     code: string
@@ -78,7 +74,7 @@ export async function getMyRecentSessions(
     myNet: number
   }>
 > {
-  const roomRows = await db
+  const recentRooms = db
     .select({
       id: rooms.id,
       code: rooms.code,
@@ -96,7 +92,8 @@ export async function getMyRecentSessions(
       ),
     )
     .orderBy(desc(sql`coalesce(${rooms.closedAt}, ${rooms.createdAt})`))
-    .limit(limit)
+
+  const roomRows = limit === undefined ? await recentRooms : await recentRooms.limit(limit)
 
   if (roomRows.length === 0) return []
 

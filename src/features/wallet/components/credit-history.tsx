@@ -87,10 +87,7 @@ export function CreditHistory({ transactions }: { transactions: readonly Transac
   }
 
   return (
-    <Panel
-      style={{ maxHeight: paged.maxPanelHeight }}
-      className="flex min-h-0 flex-1 flex-col gap-3"
-    >
+    <Panel className="flex min-h-0 flex-1 flex-col gap-3">
       <PanelHeader title={d.wallet.historyTitle} description={d.wallet.historyHint} />
       <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
         {transactions.length === 0 ? (

@@ -87,9 +87,11 @@ export default async function HomePage({
         </Alert>
       ) : null}
 
-      <FixedBody className="gap-3 lg:grid lg:grid-cols-12 lg:gap-6">
-        {/* 넓어진 폭은 입장 폼이 아니라 방 목록이 가져간다 */}
-        <div className="shrink-0 space-y-3 lg:col-span-5 lg:space-y-6 xl:col-span-4">
+      <FixedBody className="gap-4 lg:grid lg:grid-cols-12 lg:grid-rows-[minmax(0,1fr)] lg:gap-6">
+        <div className="rise-in rise-in-3 flex min-h-0 flex-1 flex-col lg:order-1 lg:col-span-8 xl:col-span-9">
+          <HomeLists rooms={myRooms} sessions={recentSessions} />
+        </div>
+        <aside className="shrink-0 space-y-3 lg:order-2 lg:col-span-4 lg:space-y-4 xl:col-span-3">
           <Panel className="rise-in rise-in-1 space-y-4">
             <h2 className="text-lg font-bold">{d.home.joinTitle}</h2>
             <form action={joinRoomAndGo} className="flex gap-2">
@@ -115,7 +117,7 @@ export default async function HomePage({
               {d.home.newRoom}
             </ButtonLink>
           </Panel>
-          <div className="grid grid-cols-3 gap-2 lg:gap-3">
+          <div className="grid grid-cols-3 gap-2 lg:grid-cols-1 lg:gap-2">
             {(
               [
                 { href: '/advisor' as Route, emoji: '🔮', label: d.home.advisor },
@@ -124,7 +126,7 @@ export default async function HomePage({
               ] as const
             ).map((item) => (
               <Link key={item.href} href={item.href} className="rise-in rise-in-2 block">
-                <Panel className="flex h-full flex-col items-center justify-center px-2 py-3 text-center transition-transform hover:-translate-y-0.5 lg:py-5">
+                <Panel className="flex h-full flex-col items-center justify-center px-2 py-3 text-center transition-transform hover:-translate-y-0.5 lg:flex-row lg:justify-start lg:gap-3 lg:px-4 lg:py-3 lg:text-left">
                   <p aria-hidden className="text-2xl lg:text-3xl">
                     {item.emoji}
                   </p>
@@ -135,10 +137,7 @@ export default async function HomePage({
               </Link>
             ))}
           </div>
-        </div>
-        <div className="rise-in rise-in-3 flex min-h-0 flex-col lg:col-span-7 xl:col-span-8">
-          <HomeLists rooms={myRooms} sessions={recentSessions} />
-        </div>
+        </aside>
       </FixedBody>
     </FixedPage>
   )
