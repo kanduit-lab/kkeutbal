@@ -57,7 +57,7 @@ export const table = {
   balanceAria: '잔액 {n}',
   winner: '승리',
   waiting: '대기',
-  potLabel: 'pot',
+  potLabel: '판돈',
   potSubLabel: '누적 베팅',
   potCarriedLabel: '이월 판돈',
 } as const

@@ -37,6 +37,9 @@
   --color-warn: #e5b954;
 
   --color-card: #fbf3e3;
+  /* 화투장 바탕 위 글자와 인주색 숫자. 크림 카드 위에서만 쓴다 */
+  --color-ink: #1d1a17;
+  --color-seal: #9b2a24;
 
   --color-danger: #ff9a94;
   --color-danger-surface: #471a17;
@@ -251,10 +254,10 @@ body {
  *
  * 전략 1 — 폭을 실제로 넓게 쓴다: `fit` 모드의 기본 동작(`h-full w-auto` + aspect-ratio)은
  * height가 정해진 값이고 width가 auto라서, 브라우저가 `width = height × 비율`로 계산한다.
- * 즉 세로 높이가 150px면 16:10 비율에서도 폭은 240px밖에 안 돼 가로 화면의 남는 폭을
- * 전혀 못 쓴다. 그래서 여기서는 width도 정해진 값(100%, 상위 max-w-3xl이 여전히 상한)으로
- * 바꿔 aspect-ratio가 더 이상 폭을 계산하지 못하게 한다 — 그 결과 펠트가 컨테이너 폭을
- * 그대로 채우는 넓적한 타원이 되어 좌우로 퍼진 배치(docs 6번 참고 이미지)가 된다.
+ * 즉 세로 높이가 150px면 넓은 매트 비율에서도 폭은 240px밖에 안 돼 가로 화면의 남는 폭을
+ * 전혀 못 쓴다. 그래서 넓은 매트에만 width도 정해진 값(100%, 상위 max-w-3xl이 여전히
+ * 상한)으로 바꿔 컨테이너 폭을 쓰게 한다. 적은 인원의 정사각 매트는 비율을 지켜야 하므로
+ * 이 예외에서 뺀다.
  *
  * 전략 2 — 세로 압박에 맞춰 좌석 반지름·크기를 줄인다: --seat-half-w(가로 반지름 여유값)는
  * 그대로 둬 넓어진 폭을 좌석 간격으로 그대로 쓰게 하고, --seat-half-h만 줄여
@@ -271,7 +274,7 @@ body {
  * 추정이라 실기기 확인이 필요하다(보고 참고).
  */
 @media (orientation: landscape) and (max-height: 500px) {
-  .game-table-felt {
+  .game-table-felt[data-table-shape='wide'] {
     width: 100%;
     --seat-half-h: 2.25rem;
   }
@@ -287,6 +290,40 @@ body {
 
 .orientation-hint {
   display: none;
+}
+
+/*
+ * 옻칠 상. 자개 테두리(table-inlay)는 무지개빛 conic 그라디언트를 2px 링으로만 남긴 것이다.
+ */
+.table-lacquer {
+  background: radial-gradient(120% 140% at 50% 28%, #3c1511 0%, #1f0a07 55%, #130504 100%);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 0.08),
+    inset 0 0 0 1px rgb(0 0 0 / 0.6),
+    inset 0 -24px 48px -24px rgb(0 0 0 / 0.7),
+    0 24px 50px -20px rgb(0 0 0 / 0.9);
+}
+
+.table-inlay {
+  padding: 3px;
+  background: conic-gradient(
+    from 20deg,
+    #ffb3d4,
+    #8fe8dc,
+    #ffe9a8,
+    #b3a6ff,
+    #ffb3d4,
+    #8fe8dc,
+    #ffe9a8,
+    #b3a6ff,
+    #ffb3d4
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.8;
 }
 
 @keyframes overlay-in {

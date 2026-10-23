@@ -225,9 +225,9 @@ export function PotCore({
         )}
       >
         {/*
-          시안의 "펠트 메달" 3겹 구조. 바깥 얇은 금테 → 어두운 띠 → 안쪽 펠트 원반 순으로 겹쳐
-          평평한 원이 아니라 테이블에 박힌 판처럼 읽히게 한다. 바깥 테는 지름 전체(inset-0)를
-          쓰고 펠트를 4.5% 안으로 밀어 그 사이에 어두운 띠가 드러난다.
+          3겹 구조. 바깥 얇은 금테 → 어두운 띠 → 안쪽 옻칠 소반 순으로 겹쳐 평평한 원이 아니라
+          상에 박힌 판처럼 읽히게 한다. 바깥 테는 지름 전체(inset-0)를 쓰고 소반을 4.5% 안으로
+          밀어 그 사이에 어두운 띠가 드러난다.
         */}
         <div
           aria-hidden
@@ -235,19 +235,13 @@ export function PotCore({
         />
 
         {/*
-          펠트 원반. 그림자를 여기 두고 펄스 링은 따로 얹는다 — .pot-ring-pulse가 box-shadow를
+          옻칠 소반. 그림자를 여기 두고 펄스 링은 따로 얹는다 — .pot-ring-pulse가 box-shadow를
           통째로 덮어써서 같은 요소에 걸면 0.6s 동안 안쪽 그림자가 사라진다.
         */}
-        <div
-          aria-hidden
-          className="absolute inset-[4.5%] rounded-full border border-gold/30 bg-[radial-gradient(circle_at_50%_38%,#23533d_0%,#12301f_68%,#0b2015_100%)] shadow-[inset_0_2px_24px_rgb(0_0_0/0.55),0_20px_50px_-24px_rgb(0_0_0/0.95)]"
-        />
+        <div aria-hidden className="table-lacquer absolute inset-[4.5%] rounded-full" />
 
-        {/* 펠트 안쪽 헤어라인. 금테를 한 번 더 되울려 메달 느낌을 잡는다. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-[12%] rounded-full border border-gold/10"
-        />
+        {/* 데스크톱 테이블과 같은 자개 테두리를 소반 안쪽에 두른다. */}
+        <div aria-hidden className="table-inlay pointer-events-none absolute inset-[9%] rounded-full" />
 
         {/*
           key가 바뀌면 React가 노드를 갈아끼워 애니메이션이 처음부터 다시 돈다.

@@ -62,7 +62,7 @@ export const table: Dictionary['table'] = {
   balanceAria: 'Balance {n}',
   winner: 'Winner',
   waiting: 'Waiting',
-  potLabel: 'pot',
+  potLabel: 'Pot',
   potSubLabel: 'total bets',
   potCarriedLabel: 'carried over',
 } as const

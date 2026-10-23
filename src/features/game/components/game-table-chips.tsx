@@ -1,11 +1,11 @@
 'use client'
 
 const CHIP_COLORS: readonly { value: number; bg: string; rim: string }[] = [
-  { value: 500, bg: '#7c3aed', rim: '#a78bfa' },
-  { value: 100, bg: '#18181b', rim: '#52525b' },
-  { value: 25, bg: '#15803d', rim: '#4ade80' },
-  { value: 5, bg: '#b91c1c', rim: '#f87171' },
-  { value: 1, bg: '#e4e4e7', rim: '#a1a1aa' },
+  { value: 500, bg: '#c9962f', rim: '#f3d98a' },
+  { value: 100, bg: '#9b2a24', rim: '#e0776f' },
+  { value: 25, bg: '#1f6b4a', rim: '#6fc39a' },
+  { value: 5, bg: '#1d1a17', rim: '#7a6f64' },
+  { value: 1, bg: '#fbf3e3', rim: '#c9b98f' },
 ]
 
 export function chipBreakdown(
