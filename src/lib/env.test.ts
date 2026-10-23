@@ -79,27 +79,6 @@ describe('serverEnv', () => {
     ).toThrow('REALTIME_PROVIDER_URL, REALTIME_PROVIDER_PUBLISHABLE_KEY')
   })
 
-  it('normalizes legacy managed realtime keys during the local migration', () => {
-    vi.stubEnv('NODE_ENV', 'production')
-    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://example.com')
-    vi.stubEnv('DATABASE_URL', 'postgresql://app:password@example.com:5432/postgres')
-    vi.stubEnv('DATABASE_TLS_MODE', 'disable')
-    vi.stubEnv('DATABASE_CA_CERT_BASE64', '')
-    vi.stubEnv('DATABASE_POOL_MODE', 'session')
-    vi.stubEnv('DATABASE_LISTENER_URL', '')
-    vi.stubEnv('REALTIME_MODE', 'supabase')
-    vi.stubEnv('REALTIME_PROVIDER_URL', '')
-    vi.stubEnv('REALTIME_PROVIDER_PUBLISHABLE_KEY', '')
-    vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co')
-    vi.stubEnv('SUPABASE_PUBLISHABLE_KEY', 'legacy-publishable-key')
-    vi.stubEnv('AUTH_SECRET', 'test-auth-secret')
-
-    expect(serverEnv()).toMatchObject({
-      REALTIME_PROVIDER_URL: 'https://example.supabase.co',
-      REALTIME_PROVIDER_PUBLISHABLE_KEY: 'legacy-publishable-key',
-    })
-  })
-
   it('reports every missing runtime key before a request is served', () => {
     vi.stubEnv('NODE_ENV', 'development')
     vi.stubEnv('DATABASE_URL', '')

@@ -11,8 +11,6 @@ type RealtimeEnv = {
   REALTIME_MODE: 'self' | 'supabase'
   REALTIME_PROVIDER_URL?: string
   REALTIME_PROVIDER_PUBLISHABLE_KEY?: string
-  SUPABASE_URL?: string
-  SUPABASE_PUBLISHABLE_KEY?: string
 }
 
 function validateManagedRealtimeConfiguration(
@@ -21,7 +19,7 @@ function validateManagedRealtimeConfiguration(
 ): void {
   if (environment.REALTIME_MODE !== 'supabase') return
 
-  if (!realtimeProviderUrl(environment)) {
+  if (!environment.REALTIME_PROVIDER_URL) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['REALTIME_PROVIDER_URL'],
@@ -29,21 +27,13 @@ function validateManagedRealtimeConfiguration(
     })
   }
 
-  if (!realtimeProviderPublishableKey(environment)) {
+  if (!environment.REALTIME_PROVIDER_PUBLISHABLE_KEY) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['REALTIME_PROVIDER_PUBLISHABLE_KEY'],
       message: 'REALTIME_PROVIDER_PUBLISHABLE_KEY is required when REALTIME_MODE=supabase',
     })
   }
-}
-
-function realtimeProviderUrl(environment: RealtimeEnv): string | undefined {
-  return environment.REALTIME_PROVIDER_URL ?? environment.SUPABASE_URL
-}
-
-function realtimeProviderPublishableKey(environment: RealtimeEnv): string | undefined {
-  return environment.REALTIME_PROVIDER_PUBLISHABLE_KEY ?? environment.SUPABASE_PUBLISHABLE_KEY
 }
 
 const serverSchema = z.object({
@@ -56,8 +46,6 @@ const serverSchema = z.object({
   REALTIME_MODE: z.enum(['self', 'supabase']),
   REALTIME_PROVIDER_URL: optionalEnv(z.string().url()),
   REALTIME_PROVIDER_PUBLISHABLE_KEY: optionalEnv(z.string().min(1)),
-  SUPABASE_URL: optionalEnv(z.string().url()),
-  SUPABASE_PUBLISHABLE_KEY: optionalEnv(z.string().min(1)),
   AUTH_SECRET: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().url(),
   ANTHROPIC_API_KEY: optionalEnv(z.string().min(1)),
@@ -84,15 +72,6 @@ const serverSchema = z.object({
   }
 
   validateManagedRealtimeConfiguration(environment, context)
-}).transform((environment) => {
-  const rest = { ...environment }
-  delete rest.SUPABASE_URL
-  delete rest.SUPABASE_PUBLISHABLE_KEY
-  return {
-    ...rest,
-    REALTIME_PROVIDER_URL: realtimeProviderUrl(environment),
-    REALTIME_PROVIDER_PUBLISHABLE_KEY: realtimeProviderPublishableKey(environment),
-  }
 })
 
 export type ServerEnv = z.infer<typeof serverSchema>
