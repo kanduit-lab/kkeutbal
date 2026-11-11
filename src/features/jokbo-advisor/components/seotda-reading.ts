@@ -1,30 +1,32 @@
 import type { HwatuCard } from '@/features/hwatu/types'
 import { evaluateSeotdaHand } from '@/features/seotda/engine'
-import { bestSeotdaPair, seotdaPairsOf } from '@/features/seotda/three-card'
+import { bestSeotdaPair, seotdaPairsOf, toThreeCardHand } from '@/features/seotda/three-card'
 import type { SeotdaHand } from '@/features/seotda/types'
 
 export interface SeotdaReading {
+  /** 대표 패. 두 장이면 그 쌍, 세 장이면 승부에 낼 수 있는 쌍 중 가장 높은 쌍이다 */
   readonly hand: SeotdaHand
-  readonly pairs: readonly SeotdaHand[] | null
-  readonly bestIndex: number
+  /** 승부에 낼 수 있는 쌍 전부 (서열 높은 순). 두 장이면 1개, 세 장이면 3개 */
+  readonly choices: readonly SeotdaHand[]
 }
 
-function samePair(a: SeotdaHand, b: SeotdaHand): boolean {
+export function isSameSeotdaPair(a: SeotdaHand, b: SeotdaHand): boolean {
   return a.cards[0].id === b.cards[0].id && a.cards[1].id === b.cards[1].id
 }
 
 export function readSeotdaCards(cards: readonly HwatuCard[]): SeotdaReading | null {
   try {
-    const [first, second, third] = cards
+    const [first, second] = cards
     if (cards.length === 2 && first && second) {
-      return { hand: evaluateSeotdaHand([first, second]), pairs: null, bestIndex: -1 }
+      const hand = evaluateSeotdaHand([first, second])
+      return { hand, choices: [hand] }
     }
-    if (cards.length === 3 && first && second && third) {
-      const hand = bestSeotdaPair([first, second, third])
-      const pairs = seotdaPairsOf([first, second, third])
-      return { hand, pairs, bestIndex: pairs.findIndex((pair) => samePair(pair, hand)) }
-    }
-    return null
+    const three = toThreeCardHand(cards)
+    if (!three) return null
+    const pairs = seotdaPairsOf(three)
+    const hand = bestSeotdaPair(three)
+    const choices = [...pairs].sort((a, b) => b.rank - a.rank)
+    return { hand, choices }
   } catch {
     return null
   }

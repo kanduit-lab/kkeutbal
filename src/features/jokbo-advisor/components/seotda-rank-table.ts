@@ -91,3 +91,8 @@ export const SEOTDA_RANK_TABLE: readonly SeotdaRankTier[] = buildRankTable()
 
 /** 서열표 전체의 조합 수 합계 — 확률 문구의 분모(190). */
 export const SEOTDA_TOTAL_COMBOS = SEOTDA_RANK_TABLE.reduce((sum, tier) => sum + tier.combos, 0)
+
+/** rank가 서열표에서 몇 번째(1 = 최강)인지. 표에 없는 rank면 0. */
+export function seotdaTierPosition(rank: number): number {
+  return SEOTDA_RANK_TABLE.findIndex((tier) => tier.rank === rank) + 1
+}

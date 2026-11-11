@@ -46,12 +46,16 @@ describe('AdvisorBoard', () => {
     pick('08-gwang')
 
     const pairRows = within(
-      screen.getByRole('list', { name: ko.advisor.pairsHeading }),
+      screen.getByRole('list', { name: ko.advisor.pairsHeading.replace('{n}', '3') }),
     ).getAllByRole('listitem')
     expect(pairRows).toHaveLength(3)
     const best = pairRows.filter((row) => row.getAttribute('aria-current') === 'true')
     expect(best).toHaveLength(1)
     expect(best[0]?.textContent).toContain('38광땡')
+    // 서열이 낮은 두 쌍도 그대로 남는다 — 최고 패만 보여주면 선택할 여지가 사라진다.
+    expect(pairRows.map((row) => row.textContent ?? '')).toEqual(
+      expect.arrayContaining([expect.stringContaining('8끗'), expect.stringContaining('3끗')]),
+    )
 
     showPicker()
     pick('01-gwang')

@@ -6,7 +6,18 @@ import { Button, Panel, useToast } from '@/components/ui'
 import { findCard } from '@/features/hwatu/cards'
 import { HwatuCardView } from '@/features/hwatu/components/hwatu-card'
 import { getMyVerifiedSeotdaHand } from '@/features/fairness/fairness-actions'
+import {
+  readSeotdaCombined,
+  type SeotdaFlip,
+} from '@/features/jokbo-advisor/components/seotda-combined'
+import { seotdaTierPosition } from '@/features/jokbo-advisor/components/seotda-rank-table'
+import { readSeotdaCards } from '@/features/jokbo-advisor/components/seotda-reading'
 import { seotdaPairsOf, toThreeCardHand } from '@/features/seotda/three-card'
+import {
+  SEOTDA_RULES_STANDARD,
+  type SeotdaCategory,
+  type SeotdaHand,
+} from '@/features/seotda/types'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import { settleDueHandChoices, submitHandChoice } from '../hand-choice-actions'
 import type { RoomSnapshot } from '../types'
@@ -28,9 +39,39 @@ function roundEndedBroadcast(
   }
 }
 
+type Dict = ReturnType<typeof useDict>['d']
+
+function pairKey(pair: SeotdaHand): string {
+  return pair.cards.map((card) => card.id).join('+')
+}
+
+function flipCaught(flip: SeotdaFlip | undefined): SeotdaFlip | null {
+  return flip && flip.dir === 'caught' ? flip : null
+}
+
+function categoryLabel(category: SeotdaCategory, d: Dict): string {
+  return category === 'gwangttaeng'
+    ? d.fairness.chooseCategoryGwangttaeng
+    : d.fairness.chooseCategoryTtaeng
+}
+
+/** 서열과 무관하게 뒤집히는 관계를 한 줄로. 판독기(`flipText`)와 같은 내용을 적는다. */
+function flipText(flip: SeotdaFlip, d: Dict): string {
+  const trait =
+    flip.catcher === 'amhaengeosa'
+      ? d.fairness.chooseTraitAmhaengeosa
+      : d.fairness.chooseTraitTtaengjabi
+  if (flip.dir === 'catches') {
+    return format(d.fairness.chooseFlipCatches, {
+      trait,
+      category: categoryLabel(flip.category, d),
+    })
+  }
+  return format(d.fairness.chooseCaughtBy, { trait })
+}
+
 /** 3장 섯다 검증 딜 방에서 2차 베팅이 끝난 뒤 승부할 두 장을 고르는 단계 */
-export function HandChoicePanel({
-  snapshot,
+export function HandChoicePanel({  snapshot,
   selfId,
   runAction,
   staleReason = null,
@@ -82,15 +123,32 @@ export function HandChoicePanel({
     }
   }, [roundId, deadline, isContender, snapshot.room.id, d, toast])
 
-  const pairs = useMemo(() => {
-    const cards = toThreeCardHand(
+  const handCards = useMemo(
+    () =>
       (cardIds ?? []).flatMap((id) => {
         const card = findCard(id)
         return card ? [card] : []
       }),
+    [cardIds],
+  )
+
+  const pairs = useMemo(() => {
+    const three = toThreeCardHand(handCards)
+    return three ? seotdaPairsOf(three) : []
+  }, [handCards])
+
+  // 서열과 무관하게 뒤집히는 쌍을 골라야 하는 판이 있다. 순위만 보여주면 땡잡이·암행어사를
+  // 놓치고 가장 높은 끗을 내게 된다 — 판독기와 같은 규칙으로 읽어 선택지마다 함께 적는다.
+  const flipByPair = useMemo(() => {
+    const reading = readSeotdaCards(handCards)
+    if (!reading) return new Map<string, SeotdaFlip>()
+    return new Map(
+      readSeotdaCombined(reading, SEOTDA_RULES_STANDARD).choices.flatMap((choice) =>
+        choice.flips.map((flip): [string, SeotdaFlip] => [pairKey(choice.pair), flip]),
+      ),
     )
-    return cards ? seotdaPairsOf(cards) : []
-  }, [cardIds])
+  }, [handCards])
+
   const bestIndex = pairs.reduce(
     (best, pair, index) => (best < 0 || pair.rank > (pairs[best]?.rank ?? 0) ? index : best),
     -1,
@@ -114,6 +172,11 @@ export function HandChoicePanel({
   const chosenPair = chosenIds
     ? pairs.find((pair) => pair.cards.every((card) => chosenIds.includes(card.id)))
     : undefined
+  // 최고 패를 내려는데 그 패가 잡히는 경우는 고르기 전에 한 번 더 짚어 준다. 서열만 보고
+  // 내면 광땡이 암행어사에 뒤집히는 일이 생긴다.
+  const selectedFlip = flipCaught(
+    pairs[selectedIndex] ? flipByPair.get(pairKey(pairs[selectedIndex]!)) : undefined,
+  )
 
   const submit = () => {
     const pair = pairs[selectedIndex]
@@ -147,37 +210,65 @@ export function HandChoicePanel({
       {isContender && !chosenIds && pairs.length === 3 ? (
         <>
           <div role="radiogroup" aria-label={d.fairness.chooseTitle} className="grid gap-2">
-            {pairs.map((pair, index) => (
-              <button
-                key={pair.cards.map((card) => card.id).join('+')}
-                type="button"
-                role="radio"
-                aria-checked={index === selectedIndex}
-                aria-label={format(d.fairness.choosePairAria, {
-                  cards: pair.cards.map((card) => card.label).join(' + '),
-                  hand: pair.label,
-                })}
-                disabled={isPending}
-                onClick={() => setPicked(index)}
-                className={clsx(
-                  'flex items-center gap-3 rounded-xl px-3 py-2 text-left transition',
-                  index === selectedIndex ? 'bg-gold/15 ring-2 ring-gold' : 'bg-inset',
-                )}
-              >
-                <span className="flex w-20 shrink-0 gap-1">
-                  {pair.cards.map((card) => (
-                    <HwatuCardView key={card.id} card={card} size="sm" />
-                  ))}
-                </span>
-                <span className="min-w-0 flex-1 font-black">{pair.label}</span>
-                {index === bestIndex ? (
-                  <span className="rounded bg-gold/20 px-1.5 text-xs font-bold text-gold">
-                    {d.fairness.chooseBest}
+            {pairs.map((pair, index) => {
+              const flip = flipByPair.get(pairKey(pair))
+              const position = flip?.tierPosition ?? seotdaTierPosition(pair.rank)
+              return (
+                <button
+                  key={pairKey(pair)}
+                  type="button"
+                  role="radio"
+                  aria-checked={index === selectedIndex}
+                  aria-label={[
+                    format(d.fairness.choosePairAria, {
+                      cards: pair.cards.map((card) => card.label).join(' + '),
+                      hand: pair.label,
+                    }),
+                    format(d.fairness.choosePosition, { position }),
+                    ...(flip ? [flipText(flip, d)] : []),
+                  ].join(', ')}
+                  disabled={isPending}
+                  onClick={() => setPicked(index)}
+                  className={clsx(
+                    'flex items-center gap-3 rounded-xl px-3 py-2 text-left transition',
+                    index === selectedIndex ? 'bg-gold/15 ring-2 ring-gold' : 'bg-inset',
+                  )}
+                >
+                  <span className="flex w-20 shrink-0 gap-1">
+                    {pair.cards.map((card) => (
+                      <HwatuCardView key={card.id} card={card} size="sm" />
+                    ))}
                   </span>
-                ) : null}
-              </button>
-            ))}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-black">{pair.label}</span>
+                    <span className="block text-micro text-muted">
+                      {format(d.fairness.choosePosition, { position })}
+                    </span>
+                    {flip ? (
+                      <span
+                        className={clsx(
+                          'block text-micro font-bold',
+                          flip.dir === 'catches' ? 'text-win' : 'text-warn',
+                        )}
+                      >
+                        {flipText(flip, d)}
+                      </span>
+                    ) : null}
+                  </span>
+                  {index === bestIndex ? (
+                    <span className="shrink-0 rounded bg-gold/20 px-1.5 text-xs font-bold text-gold">
+                      {d.fairness.chooseBest}
+                    </span>
+                  ) : null}
+                </button>
+              )
+            })}
           </div>
+          {selectedFlip ? (
+            <p className="rounded-lg bg-warn/15 px-3 py-2 text-xs font-bold text-warn">
+              {flipText(selectedFlip, d)}
+            </p>
+          ) : null}
           <p className="text-xs text-muted">{d.fairness.chooseHint}</p>
           <Button
             type="button"

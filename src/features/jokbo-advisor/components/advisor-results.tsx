@@ -5,11 +5,13 @@ import { useId, useMemo } from 'react'
 import type { HwatuCard } from '@/features/hwatu/types'
 import { describeSeotdaHand } from '@/features/seotda/engine'
 import type { SeotdaAdviceCode } from '@/features/seotda/advice'
-import type { SeotdaHand } from '@/features/seotda/types'
+import { SEOTDA_RULES_STANDARD } from '@/features/seotda/types'
 import type { ReactNode } from 'react'
 import { Badge, Panel } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import { seotdaStats } from '../stats'
+import { readSeotdaCombined, type SeotdaChoiceReading, type SeotdaFlip } from './seotda-combined'
+import { seotdaTierPosition } from './seotda-rank-table'
 import { readSeotdaCards } from './seotda-reading'
 
 export interface VisionSource {
@@ -56,8 +58,13 @@ export function SeotdaResult({
   const result = useMemo(() => {
     const reading = readSeotdaCards(cards)
     if (!reading) return null
-    const { hand } = reading
-    return { ...reading, description: describeSeotdaHand(hand), stats: seotdaStats(hand) }
+    const combined = readSeotdaCombined(reading, SEOTDA_RULES_STANDARD, seotdaTierPosition)
+    return {
+      ...reading,
+      combined,
+      description: describeSeotdaHand(reading.hand),
+      stats: seotdaStats(reading.hand),
+    }
   }, [cards])
 
   return (
@@ -66,9 +73,11 @@ export function SeotdaResult({
         <>
           <p className="font-brush gilt text-6xl font-black">{result.hand.label}</p>
           <p className="text-sm text-muted">{result.description}</p>
-          {result.pairs ? (
-            <SeotdaPairList pairs={result.pairs} bestIndex={result.bestIndex} />
-          ) : null}
+          {result.combined.bestFlip ? <FlipNotice flip={result.combined.bestFlip} /> : null}
+          <SeotdaChoiceList
+            choices={result.combined.choices}
+            total={result.combined.choices.length}
+          />
           <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-bold">
             <span className="rounded-full bg-accent/20 px-2.5 py-1 text-accent">
               {format(d.advisor.tierPosition, {
@@ -114,41 +123,100 @@ export function SeotdaResult({
   )
 }
 
-function SeotdaPairList({ pairs, bestIndex }: { pairs: readonly SeotdaHand[]; bestIndex: number }) {
+/**
+ * 세 장에서 나오는 쌍 전부를 서열 순으로 보여 준다. 최고 쌍 하나만 세우면 4·7 열끗 열끗처럼
+ * 서열은 낮아도 합을 뒤집는 패가 화면에서 사라진다.
+ */
+function SeotdaChoiceList({
+  choices,
+  total,
+}: {
+  choices: readonly SeotdaChoiceReading[]
+  total: number
+}) {
   const { d } = useDict()
   const headingId = useId()
+  if (total < 2) return null
   return (
     <div className="space-y-1.5 text-left">
       <p id={headingId} className="text-xs font-bold text-muted">
-        {d.advisor.pairsHeading}
+        {format(d.advisor.pairsHeading, { n: total })}
       </p>
       <ul aria-labelledby={headingId} className="space-y-1">
-        {pairs.map((pair, index) => {
-          const isBest = index === bestIndex
-          return (
-            <li
-              key={`${pair.cards[0].id}-${pair.cards[1].id}`}
-              aria-current={isBest ? 'true' : undefined}
-              className={clsx(
-                'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs',
-                isBest ? 'bg-accent/20 ring-1 ring-inset ring-accent/50' : 'bg-white/5',
-              )}
-            >
-              <span className="min-w-0 truncate text-muted">
-                {format(d.advisor.pairCards, { a: pair.cards[0].label, b: pair.cards[1].label })}
+        {choices.map((choice) => (
+          <li
+            key={`${choice.pair.cards[0].id}-${choice.pair.cards[1].id}`}
+            aria-current={choice.isBest ? 'true' : undefined}
+            className={clsx(
+              'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs',
+              choice.isBest ? 'bg-accent/20 ring-1 ring-inset ring-accent/50' : 'bg-white/5',
+            )}
+          >
+            <span className="min-w-0 space-y-0.5">
+              <span className="block truncate text-muted">
+                {format(d.advisor.pairCards, {
+                  a: choice.pair.cards[0].label,
+                  b: choice.pair.cards[1].label,
+                })}
               </span>
-              <span className="flex shrink-0 items-center gap-1.5">
-                {isBest ? <Badge tone="accent">{d.advisor.bestPair}</Badge> : null}
-                <span className={clsx('text-sm font-bold', isBest && 'text-accent')}>
-                  {pair.label}
+              {choice.flips.map((flip) => (
+                <span
+                  key={flip.dir}
+                  className={clsx(
+                    'block text-[11px] font-bold',
+                    flip.dir === 'catches' ? 'text-win' : 'text-warn',
+                  )}
+                >
+                  {flipText(flip, d)}
                 </span>
+              ))}
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5">
+              {choice.isBest ? <Badge tone="accent">{d.advisor.bestPair}</Badge> : null}
+              <span className={clsx('text-sm font-bold', choice.isBest && 'text-accent')}>
+                {choice.pair.label}
               </span>
-            </li>
-          )
-        })}
+            </span>
+          </li>
+        ))}
       </ul>
     </div>
   )
+}
+
+/** 최고 패가 서열과 무관하게 뒤집히면, 서열 다음에 한 줄로 분명하게 적는다 */
+function FlipNotice({ flip }: { flip: SeotdaFlip }) {
+  const { d } = useDict()
+  return (
+    <p
+      className={clsx(
+        'rounded-lg px-3 py-2 text-xs font-bold leading-relaxed',
+        flip.dir === 'catches' ? 'bg-win/15 text-win' : 'bg-warn/15 text-warn',
+      )}
+    >
+      {flipText(flip, d)}
+    </p>
+  )
+}
+
+type Dict = ReturnType<typeof useDict>['d']
+
+function categoryLabel(category: SeotdaFlip['category'], d: Dict): string {
+  if (category === 'gwangttaeng') return d.advisor.ranking.categoryGwangttaeng
+  if (category === 'ttaeng') return d.advisor.ranking.categoryTtaeng
+  if (category === 'special') return d.advisor.ranking.categorySpecial
+  return d.advisor.ranking.categoryKkeut
+}
+
+function flipText(flip: SeotdaFlip, d: Dict): string {
+  const trait = flip.catcher === 'amhaengeosa' ? d.advisor.traitAmhaengeosa : d.advisor.traitTtaengjabi
+  const params = {
+    trait,
+    hand: flip.pair.label,
+    position: flip.tierPosition,
+    category: categoryLabel(flip.category, d),
+  }
+  return format(flip.dir === 'catches' ? d.advisor.flipCatches : d.advisor.flipCaught, params)
 }
 
 function SeotdaAdviceList({

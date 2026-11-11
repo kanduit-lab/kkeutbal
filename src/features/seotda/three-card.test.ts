@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { findCard } from '../hwatu/cards'
 import type { HwatuCard } from '../hwatu/types'
-import { bestSeotdaPair, chosenSeotdaPair, seotdaPairsOf, type ThreeCardHand } from './three-card'
+import {
+  bestSeotdaPair,
+  chosenSeotdaPair,
+  seotdaPairOrder,
+  seotdaPairsOf,
+  type ThreeCardHand,
+} from './three-card'
 
 function hand(...ids: [string, string, string]): ThreeCardHand {
   return ids.map((id) => {
@@ -23,6 +29,16 @@ describe('three card seotda', () => {
   it('picks the highest ranked pair', () => {
     expect(bestSeotdaPair(hand('05-tti', '03-gwang', '08-gwang')).label).toBe('38광땡')
     expect(bestSeotdaPair(hand('04-yeol', '07-yeol', '07-tti')).label).toBe('7땡')
+  })
+
+  it('orders the three pairs by rank without dropping the weak ones', () => {
+    // 03-gwang·07-yeol·02-tti → 망통(0·1) · 5끗(0·2) · 갑오(1·2)
+    expect(seotdaPairsOf(hand('03-gwang', '07-yeol', '02-tti')).map((p) => p.label)).toEqual([
+      '망통',
+      '5끗',
+      '갑오',
+    ])
+    expect(seotdaPairOrder(hand('03-gwang', '07-yeol', '02-tti'))).toEqual([2, 1, 0])
   })
 
   it('keeps the catcher trait only when that pair is chosen', () => {
