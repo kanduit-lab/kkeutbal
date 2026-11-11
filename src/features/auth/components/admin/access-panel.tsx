@@ -49,11 +49,14 @@ export function AccessPanel({
   })
   const [refreshKey, setRefreshKey] = useState(0)
   const [pageState, setPageState] = useState({ items, total, loading: false })
+  // 로딩은 effect 안에서 켰다 끄지 않는다. 지금 화면이 `이번 요청 결과인가`를 값으로 비교한다.
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const requestKey = `${page}:${pageSize}:${refreshKey}`
+  const loading = loadedKey !== requestKey
   const copy = kind === 'registrationCodes' ? d.adminConsole.registrationCodes : d.adminConsole.guestTokens
 
   useEffect(() => {
     let cancelled = false
-    setPageState((current) => ({ ...current, loading: true }))
     void (async () => {
       try {
         const result = await loadAdminAccessPage({ kind, page, pageSize })
@@ -65,6 +68,7 @@ export function AccessPanel({
             return
           }
           setPageState({ items: result.data.items, total: result.data.total, loading: false })
+          setLoadedKey(requestKey)
           return
         }
         toast(translateError(d, result.error), 'error')
@@ -72,12 +76,12 @@ export function AccessPanel({
         console.error('load admin access page failed:', error)
         if (!cancelled) toast(translateError(d, 'errors.adminDashboardLoadFailed'), 'error')
       }
-      if (!cancelled) setPageState((current) => ({ ...current, loading: false }))
+      if (!cancelled) setLoadedKey(requestKey)
     })()
     return () => {
       cancelled = true
     }
-  }, [d, kind, page, pageSize, refreshKey, toast])
+  }, [d, kind, page, pageSize, refreshKey, toast, requestKey])
 
   function refresh() {
     setPage(0)
@@ -143,7 +147,7 @@ export function AccessPanel({
           emptyTitle={copy.empty}
           emptyHint={copy.emptyHint}
           disabled={isPending}
-          loading={pageState.loading}
+          loading={loading}
           page={page}
           pageSize={pageSize}
           areaRef={areaRef}

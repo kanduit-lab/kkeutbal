@@ -56,30 +56,23 @@ export function FairnessPanel({
   const isParticipant = fairness?.participantUserIds.includes(selfId) ?? false
   const hasSubmittedSeed = fairness?.submittedParticipantUserIds.includes(selfId) ?? false
 
+  // 시드 상태는 이 effect가 실제로 바뀌는 세션 스토리지에서 읽어 온다. 그 값을 그대로 상태로
+  // 옮기면 effect 안 동기 setState가 되므로, 판·단계·제출 여부가 바뀔 때 한 번만 미룬다.
   useEffect(() => {
-    if (!roundId || fairPhase !== 'collecting_seeds') {
-      setClientSeed(null)
-      setSubmitted(false)
-      return
-    }
-    if (!isParticipant) {
-      setClientSeed(null)
-      setSubmitted(false)
-      return
-    }
+    if (!roundId || fairPhase !== 'collecting_seeds' || !isParticipant) return
     const key = clientSeedStorageKey(roundId)
     const saved = window.sessionStorage.getItem(key)
-    if (hasSubmittedSeed) {
-      setClientSeed(validSeed(saved) ? saved.toLowerCase() : null)
-      setSubmitted(true)
+    // 저장된 시드가 없으면 만들어서 남긴다 (서버에 제출할 값과 대조할 값이 같아야 한다).
+    const nextSeed =
+      hasSubmittedSeed || validSeed(saved) ? saved?.toLowerCase() : generateFairnessSeed()
+    if (nextSeed && !validSeed(saved)) window.sessionStorage.setItem(key, nextSeed)
+    // 이 effect가 읽은 값만 상태로 옮긴다. 상태를 effect 안에서 동기적으로 쓰지 않도록
+    // 마이크로태스크 뒤에 넘겨, effect 본문이 렌더를 즉시 한 번 더 돌리지 않게 한다.
+    queueMicrotask(() => {
+      setClientSeed(nextSeed && validSeed(nextSeed) ? nextSeed : null)
+      setSubmitted(hasSubmittedSeed)
       setHandCardIds(null)
-      return
-    }
-    const nextSeed = validSeed(saved) ? saved.toLowerCase() : generateFairnessSeed()
-    if (!validSeed(saved)) window.sessionStorage.setItem(key, nextSeed)
-    setClientSeed(nextSeed)
-    setSubmitted(false)
-    setHandCardIds(null)
+    })
   }, [roundId, fairPhase, hasSubmittedSeed, isParticipant])
 
   // 2차 베팅이 시작되면 펼쳐 둔 패에 세 번째 장을 채운다.

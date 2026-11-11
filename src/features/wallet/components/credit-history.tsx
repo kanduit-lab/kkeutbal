@@ -50,7 +50,7 @@ function formatDateTime(locale: Locale, value: string): string {
 export function CreditHistory({ transactions }: { transactions: readonly Transaction[] }) {
   const { d, locale } = useDict()
   const isDesktop = useIsDesktop()
-  const paged = usePagedRows({
+  const { areaRef, rows: pageRows, page, pageCount, from, to, total, setPage } = usePagedRows({
     items: transactions,
     rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
     reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
@@ -89,7 +89,7 @@ export function CreditHistory({ transactions }: { transactions: readonly Transac
   return (
     <Panel className="flex min-h-0 flex-1 flex-col gap-3">
       <PanelHeader title={d.wallet.historyTitle} description={d.wallet.historyHint} />
-      <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
+      <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
         {transactions.length === 0 ? (
           <EmptyState
             title={d.wallet.historyEmpty}
@@ -149,12 +149,12 @@ export function CreditHistory({ transactions }: { transactions: readonly Transac
                     cell: balanceText,
                   },
                 ]}
-                rows={paged.rows}
+                rows={pageRows}
                 rowKey={(transaction) => transaction.id}
               />
             </div>
             <ul className="space-y-2 lg:hidden">
-              {paged.rows.map((transaction) => (
+              {pageRows.map((transaction) => (
                 <li
                   key={transaction.id}
                   className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3"
@@ -179,12 +179,12 @@ export function CreditHistory({ transactions }: { transactions: readonly Transac
       </div>
       {transactions.length > 0 ? (
         <Pager
-          page={paged.page}
-          pageCount={paged.pageCount}
-          from={paged.from}
-          to={paged.to}
-          total={paged.total}
-          onPage={paged.setPage}
+          page={page}
+          pageCount={pageCount}
+          from={from}
+          to={to}
+          total={total}
+          onPage={setPage}
         />
       ) : null}
     </Panel>

@@ -1,34 +1,61 @@
 'use client'
 
 import { clsx } from 'clsx'
-import { useEffect, useState } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { Button, ModalPortal, useModalBehavior } from '@/components/ui'
 import { useDict, format } from '@/lib/i18n/client'
 import {
   isDismissed,
   readDismissals,
+  STORAGE_KEY,
   withDismissal,
   writeDismissals,
   type DismissMap,
 } from '../dismissal'
 import type { PromotionView } from '../types'
 
+const subscribeNever = () => () => {}
+
+/** localStorage는 클라이언트에만 있다. 여러 번 읽지 않도록 마지막 값을 기억한다. */
+let lastDismissalSnapshot: DismissMap | null = null
+let lastDismissalRaw: string | null = null
+
+function dismissalSnapshot(): DismissMap {
+  const raw = window.localStorage.getItem(STORAGE_KEY)
+  if (raw !== lastDismissalRaw) {
+    lastDismissalRaw = raw
+    lastDismissalSnapshot = readDismissals()
+  }
+  return lastDismissalSnapshot ?? {}
+}
+
+function applyDismissal(
+  promotion: PromotionView,
+  dismissals: DismissMap,
+  setOverride: (next: DismissMap) => void,
+) {
+  const next = withDismissal(dismissals, promotion.id, promotion.dismissHours, Date.now())
+  writeDismissals(next)
+  setOverride(next)
+}
+
 export function PromotionHost({ promotions }: { promotions: readonly PromotionView[] }) {
-  const [dismissals, setDismissals] = useState<DismissMap | null>(null)
+  // 닫기 기록은 localStorage에 있다. 서버 스냅숏(null)과 클라이언트 스냅숏을 나눠 hydration
+  // 뒤에 값을 읽으면, effect로 상태를 켜지 않아도 된다. "지금 시각"도 같은 방식으로 읽는다 —
+  // `Date.now()`를 렌더 중에 부르면 비순수라서 컴포넌트가 메모이제이션될 수 없다.
+  const stored = useSyncExternalStore(subscribeNever, dismissalSnapshot, () => null)
+  const now = useSyncExternalStore(subscribeNever, () => Date.now(), () => null)
+  const [override, setOverride] = useState<DismissMap | null>(null)
+  const dismissals = override ?? stored
 
-  useEffect(() => {
-    setDismissals(readDismissals())
-  }, [])
-
-  const dismiss = (promotion: PromotionView) => {
-    const next = withDismissal(dismissals ?? {}, promotion.id, promotion.dismissHours, Date.now())
-    writeDismissals(next)
-    setDismissals(next)
+  // 닫기 처리는 이벤트 핸들러다. 시각을 렌더 본문의 클로저가 아니라 핸들러에서 읽어야
+  // 렌더 경로에 비순수 호출이 남지 않는다.
+  const handleDismiss = (promotion: PromotionView) => {
+    applyDismissal(promotion, dismissals ?? {}, setOverride)
   }
 
-  if (!dismissals) return null
+  if (!dismissals || now === null) return null
 
-  const now = Date.now()
   const visible = promotions.filter((promotion) => !isDismissed(dismissals, promotion.id, now))
   const banners = visible.filter((promotion) => promotion.kind === 'banner')
   const popup = visible.find((promotion) => promotion.kind === 'popup') ?? null
@@ -36,9 +63,9 @@ export function PromotionHost({ promotions }: { promotions: readonly PromotionVi
   return (
     <>
       {banners.map((banner) => (
-        <PromotionBanner key={banner.id} promotion={banner} onDismiss={() => dismiss(banner)} />
+        <PromotionBanner key={banner.id} promotion={banner} onDismiss={() => handleDismiss(banner)} />
       ))}
-      {popup ? <PromotionPopup promotion={popup} onDismiss={() => dismiss(popup)} /> : null}
+      {popup ? <PromotionPopup promotion={popup} onDismiss={() => handleDismiss(popup)} /> : null}
     </>
   )
 }

@@ -72,14 +72,18 @@ export function useRoomSync({
   const failStreakRef = useRef(0)
 
   const retryAttemptRef = useRef(0)
+  // 이벤트 id 집합은 렌더 중에 만들지 않는다 — `if (!ref.current) ref.current = ...`는 렌더
+  // 중 ref 쓰기라 컴포넌트가 메모이제이션될 수 없게 만든다. 첫 사용(이벤트 처리) 시점에 만든다.
   const seenEventIdsRef = useRef<SeenEventIds | null>(null)
-  if (!seenEventIdsRef.current) seenEventIdsRef.current = new SeenEventIds()
 
   const connectedRef = useRef(false)
   const snapshotRef = useRef(snapshot)
-  snapshotRef.current = snapshot
   const onEventRef = useRef(onEvent)
-  onEventRef.current = onEvent
+  // 최신 값을 effect·핸들러에서 읽기 위한 미러링이다. 렌더 본문이 아니라 커밋 이후에 반영한다.
+  useEffect(() => {
+    snapshotRef.current = snapshot
+    onEventRef.current = onEvent
+  }, [snapshot, onEvent])
 
   const roomId = initial.room.id
 
@@ -195,7 +199,8 @@ export function useRoomSync({
           // refetch decided below always runs (truth comes from there
           // regardless), but a duplicate delivery skips feedback (toast/sound)
           // so it doesn't fire twice for the same envelope id.
-          const isFirstDelivery = seenEventIdsRef.current?.record(envelope.id) ?? true
+          const seen = (seenEventIdsRef.current ??= new SeenEventIds())
+  const isFirstDelivery = seen.record(envelope.id)
           if (isFirstDelivery) onEventRef.current?.(event, snapshotRef.current)
 
           // state.snapshot carries values `refreshRoom` already computed

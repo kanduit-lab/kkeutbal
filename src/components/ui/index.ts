@@ -23,7 +23,7 @@ export { PageShell, PageHeader, FixedPage, FixedBody, ScrollPane } from './page-
 export { DataTable, DATA_TABLE_HEADER_H, DATA_TABLE_ROW_H } from './data-table'
 export type { DataColumn } from './data-table'
 export { useFitCount, usePagedRows, Pager, listPanelMinHeight } from './paged'
-export type { PagedRows } from './paged'
+export type { Paging } from './paged'
 export { useMediaQuery, useIsDesktop, DESKTOP_QUERY } from './use-media-query'
 export { useToast, ToastProvider } from './toast'
 export type { ToastOptions } from './toast'

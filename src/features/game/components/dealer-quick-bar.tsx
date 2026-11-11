@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Badge, Button } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import type { BetActionView, RoomSnapshot } from '../types'
@@ -30,20 +30,13 @@ export function DealerQuickBar({
 }) {
   const { d } = useDict()
   const controls = useDealerPanelControls({ snapshot, selfId, runAction })
-  const [toolsOpen, setToolsOpen] = useState(false)
-  const openedForPickWinner = useRef(false)
-
-  useEffect(() => {
-    if (controls.mode === 'pickWinner') {
-      openedForPickWinner.current = true
-      setToolsOpen(true)
-      return
-    }
-    if (openedForPickWinner.current) {
-      openedForPickWinner.current = false
-      setToolsOpen(false)
-    }
-  }, [controls.mode])
+  // 승자 확정 모드로 들어가면 도구 시트를 자동으로 연다. 이전에는 effect에서 상태를 켰는데,
+  // 그러면 렌더가 한 번 더 돈다 — "지금 모드가 pickWinner인가"를 사용자가 연 상태와 합쳐
+  // 렌더 중에 판단하고, 닫기는 사용자 동작(핸들러)에서만 한다.
+  const [toolsOpenByUser, setToolsOpen] = useState(false)
+  const [toolsClosedFor, setToolsClosedFor] = useState(false)
+  const pickWinner = controls.mode === 'pickWinner'
+  const toolsOpen = toolsOpenByUser || (pickWinner && !toolsClosedFor)
 
   const round = controls.round
   const pendingCount = pendingActions.length
@@ -129,6 +122,7 @@ export function DealerQuickBar({
         open={toolsOpen}
         onClose={() => {
           setToolsOpen(false)
+          setToolsClosedFor(true)
           if (controls.mode === 'pickWinner') controls.cancelPickWinner()
         }}
         controls={controls}

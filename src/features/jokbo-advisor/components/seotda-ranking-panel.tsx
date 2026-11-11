@@ -1,7 +1,7 @@
 'use client'
 
 import { clsx } from 'clsx'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { HwatuCard } from '@/features/hwatu/types'
 import type { SeotdaCategory, SeotdaTrait } from '@/features/seotda/types'
 import { Badge, Button, Panel } from '@/components/ui'
@@ -41,7 +41,8 @@ function detailText(detail: SeotdaRankDetail, d: Dict, category: SeotdaCategory)
 export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
   const { d } = useDict()
   const [caveatsOpen, setCaveatsOpen] = useState(false)
-  const activeRowRef = useRef<HTMLDivElement | null>(null)
+  // 현재 줄로 스크롤하기 위한 대상. ref가 아니라 상태로 들고, 스크롤은 effect에서 한다.
+  const [activeRowEl, setActiveRowEl] = useState<HTMLDivElement | null>(null)
 
   const categoryLabel: Readonly<Record<SeotdaCategory, string>> = {
     gwangttaeng: d.advisor.ranking.categoryGwangttaeng,
@@ -74,20 +75,20 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
     const reduceMotion =
       typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const frame = window.requestAnimationFrame(() => {
-      activeRowRef.current?.scrollIntoView?.({
+      activeRowEl?.scrollIntoView({
         block: 'center',
         behavior: reduceMotion ? 'auto' : 'smooth',
       })
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [currentTier, caveatsOpen])
+  }, [currentTier, caveatsOpen, activeRowEl])
 
-  function renderRow(tier: SeotdaRankTier, index: number, ref?: React.Ref<HTMLDivElement>) {
+  function renderRow(tier: SeotdaRankTier, index: number, isCurrent: boolean) {
     const isActive = tier.rank === currentRank
     return (
       <div
         key={tier.rank}
-        ref={ref}
+        ref={isCurrent ? setActiveRowEl : undefined}
         aria-current={isActive ? 'true' : undefined}
         className={clsx(
           'rounded-xl px-3 py-2',
@@ -183,7 +184,9 @@ export function SeotdaRankingPanel({ cards }: { cards: readonly HwatuCard[] }) {
         ) : (
           <div className="space-y-1.5">
             {SEOTDA_RANK_TABLE.map((tier, index) =>
-              renderRow(tier, index, tier.rank === currentRank ? activeRowRef : undefined),
+              // 현재 줄의 ref는 렌더 중에 떼어 넘기지 않고 행 컴포넌트에 boolean으로 알린다.
+              // `ref` prop에 담아 넘기면 그 값이 ref로 판정되어 렌더가 막힌다.
+              renderRow(tier, index, tier.rank === currentRank),
             )}
           </div>
         )}

@@ -81,7 +81,9 @@ export function MemberDetailDialog({
 
   const load = useCallback(
     (id: string) => {
-      setLoadError(null)
+      // 에러 표시는 마이크로태스크 뒤에 지운다. effect가 부르는 순간 setState가 동기로 일어나면
+      // effect 본문이 렌더를 한 번 더 돌린다 — 경계를 한 번 넘기면 동기가 아니게 된다.
+      queueMicrotask(() => setLoadError(null))
       startTransition(async () => {
         const result = await getMemberDetail({ targetUserId: id })
         if (result.success) {
@@ -99,12 +101,9 @@ export function MemberDetailDialog({
   )
 
   useEffect(() => {
-    if (!userId) {
-      setDetail(null)
-      setTempPassword(null)
-      setReason('')
-      return
-    }
+    // 닫힌 다이얼로그(userId 없음)의 초기화는 effect가 아니라 렌더에서 판단할 수 있게
+    // 열림 상태와 묶어 둔다. 여기서는 "새 대상이면 다시 불러온다"만 한다.
+    if (!userId) return
     load(userId)
   }, [userId, reloadToken, load])
 

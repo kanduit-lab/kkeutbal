@@ -41,7 +41,7 @@ export function SettlementTransferList({
   const isDesktop = useIsDesktop()
   const rowHeight = isDesktop ? DATA_TABLE_ROW_H : ROW_H
   const reserve = isDesktop ? DATA_TABLE_HEADER_H : 0
-  const paged = usePagedRows({ items: transfers, rowHeight, reserve })
+  const { areaRef, rows: pageRows, page, pageCount, from, to, total, setPage } = usePagedRows({ items: transfers, rowHeight, reserve })
 
   const settled = imbalancedAmount === undefined
 
@@ -60,7 +60,7 @@ export function SettlementTransferList({
       className="flex min-h-0 flex-1 flex-col gap-2"
       style={{ minHeight: listPanelMinHeight(rowHeight, reserve) }}
     >
-      <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
+      <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
         {!settled ? (
           <Alert tone="error">
             {format(d.result.settlementImbalanced, { n: imbalancedAmount.toLocaleString() })}
@@ -88,12 +88,12 @@ export function SettlementTransferList({
                     cell: (transfer: SettlementTransferRow) => transfer.amount.toLocaleString(),
                   },
                 ]}
-                rows={paged.rows}
+                rows={pageRows}
                 rowKey={(transfer) => `${transfer.fromId}:${transfer.toId}`}
               />
             </div>
             <ul className="space-y-2 lg:hidden" aria-label={d.result.transfersAria}>
-              {paged.rows.map((transfer) => (
+              {pageRows.map((transfer) => (
                 <li
                   key={`${transfer.fromId}:${transfer.toId}`}
                   className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3"
@@ -110,12 +110,12 @@ export function SettlementTransferList({
       </div>
       {settled && transfers.length > 0 ? (
         <Pager
-          page={paged.page}
-          pageCount={paged.pageCount}
-          from={paged.from}
-          to={paged.to}
-          total={paged.total}
-          onPage={paged.setPage}
+          page={page}
+          pageCount={pageCount}
+          from={from}
+          to={to}
+          total={total}
+          onPage={setPage}
         />
       ) : null}
     </Panel>

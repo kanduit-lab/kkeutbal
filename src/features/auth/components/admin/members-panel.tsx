@@ -74,7 +74,7 @@ export function MembersPanel({
   const filtered = useMemo(() => filterMembers(users, query), [users, query])
   const active = isMemberQueryActive(query)
   const selection = useRowSelection(filtered)
-  const paged = usePagedRows({
+  const { areaRef, rows: pageRows, page, pageCount, from, to, total: pageTotal, setPage } = usePagedRows({
     items: filtered,
     rowHeight: isDesktop ? DATA_TABLE_ROW_H : MEMBER_ROW_H,
     reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
@@ -82,7 +82,7 @@ export function MembersPanel({
   })
 
   // 헤더 체크박스의 범위는 **지금 보이는 페이지**다. 페이지를 넘겨가며 고른 것은 그대로 쌓인다.
-  const pageState = selectionState(paged.rows, selection.selectedIds)
+  const pageState = selectionState(pageRows, selection.selectedIds)
   const nameOf = (userId: string) =>
     users.find((user) => user.id === userId)?.displayName ?? userId
 
@@ -161,7 +161,7 @@ export function MembersPanel({
         />
         <MembersToolbar query={query} onChange={setQuery} />
 
-        {filtered.length > paged.rows.length ? (
+        {filtered.length > pageRows.length ? (
           <Button
             size="sm"
             variant="surface"
@@ -228,7 +228,7 @@ export function MembersPanel({
           </div>
         ) : null}
 
-        <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
+        <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
           {filtered.length === 0 ? (
             <EmptyState
               title={copy.empty}
@@ -256,19 +256,19 @@ export function MembersPanel({
                         checked={pageState === 'all'}
                         indeterminate={pageState === 'some'}
                         disabled={isPending}
-                        onChange={() => selection.toggleAll(paged.rows)}
+                        onChange={() => selection.toggleAll(pageRows)}
                         label={copy.selectAllAria}
                       />
                     ),
                     action: manageButton,
                   })}
-                  rows={paged.rows}
+                  rows={pageRows}
                   rowKey={(user) => user.id}
                   rowHighlight={(user) => user.id === selfId}
                 />
               </div>
               <ul className="space-y-2 lg:hidden">
-                {paged.rows.map((user) => (
+                {pageRows.map((user) => (
                   <MemberCardRow
                     key={user.id}
                     user={user}
@@ -285,12 +285,12 @@ export function MembersPanel({
         </div>
         {filtered.length > 0 ? (
           <Pager
-            page={paged.page}
-            pageCount={paged.pageCount}
-            from={paged.from}
-            to={paged.to}
-            total={paged.total}
-            onPage={paged.setPage}
+            page={page}
+            pageCount={pageCount}
+            from={from}
+            to={to}
+            total={pageTotal}
+            onPage={setPage}
           />
         ) : null}
       </Panel>

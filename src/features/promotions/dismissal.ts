@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'kkeutbal:promo-dismissed'
+export const STORAGE_KEY = 'kkeutbal:promo-dismissed'
 
 export type DismissMap = Readonly<Record<string, number>>
 

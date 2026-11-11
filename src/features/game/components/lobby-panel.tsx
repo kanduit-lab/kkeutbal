@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
+import { useState, useSyncExternalStore, useTransition } from 'react'
 import { startRound } from '../round-actions'
 import type { RoomSnapshot } from '../types'
 import { Avatar, Badge, Button, Panel, Segmented, useIsDesktop, useToast } from '@/components/ui'
@@ -8,6 +8,8 @@ import { QrCode } from '@/components/qr-code'
 import { format, useDict } from '@/lib/i18n/client'
 import { AddLocalMemberForm } from './lobby-add-local-member'
 import type { RunAction } from './shared'
+
+const subscribeNever = () => () => {}
 
 function inviteUrl(origin: string, code: string, target: 'member' | 'guest'): string {
   const roomPath = `/rooms/${code}`
@@ -38,10 +40,13 @@ export function LobbyPanel({
   const [inviteTarget, setInviteTarget] = useState<'member' | 'guest'>('member')
   const isDesktop = useIsDesktop()
 
-  const [origin, setOrigin] = useState<string | null>(null)
-  useEffect(() => {
-    setOrigin(window.location.origin)
-  }, [])
+  // 초대 링크의 origin은 서버에 없다. 서버 스냅숏(null)과 클라이언트 스냅숏을 나눠 hydration
+  // 뒤에 값이 채워지게 하면, effect로 상태를 켜지 않아도 된다.
+  const origin = useSyncExternalStore(
+    subscribeNever,
+    () => window.location.origin,
+    () => null,
+  )
 
   const self = snapshot.members.find((member) => member.userId === selfId)
   const isHost = self?.role === 'host'

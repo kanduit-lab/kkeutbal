@@ -49,7 +49,10 @@ export function RankingBoard({
 }) {
   const { d } = useDict()
   const isDesktop = useIsDesktop()
-  const paged = usePagedRows({
+  // 훅 결과를 객체째로 들고 다니지 않고 한 번에 구조 분해한다. `usePagedRows`가 돌려주는
+  // 값 중 `areaRef`는 ref로 판정되는데, 훅 결과가 하나의 객체로 남아 있으면 그 객체의 다른
+  // 필드(`rows`, `page` …)를 렌더 중에 읽는 것까지 "렌더 중 ref 접근"으로 잡힌다.
+  const { areaRef, rows: pageRows, page, pageCount, from, to, total, setPage } = usePagedRows({
     items: rows,
     rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
     reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
@@ -57,7 +60,7 @@ export function RankingBoard({
   const leader = rows[0]
   const runnersUp = rows.slice(1, 3)
   const myRow = rows.find((row) => row.userId === myId)
-  const showMyPosition = myRow && !paged.rows.some((row) => row.userId === myId)
+  const showMyPosition = myRow && !pageRows.some((row) => row.userId === myId)
 
   if (!leader) return null
 
@@ -138,7 +141,7 @@ export function RankingBoard({
             {format(d.ranking.rankedPlayers, { n: rows.length })}
           </p>
         </div>
-        <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
+        <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
           <div className="hidden lg:block">
             <DataTable
               label={d.ranking.listAria}
@@ -188,13 +191,13 @@ export function RankingBoard({
                   ),
                 },
               ]}
-              rows={paged.rows}
+              rows={pageRows}
               rowKey={(row) => row.userId}
               rowHighlight={(row) => row.userId === myId}
             />
           </div>
           <ul className="space-y-2 lg:hidden" aria-label={d.ranking.listAria}>
-            {paged.rows.map((row) => (
+            {pageRows.map((row) => (
               <li key={row.userId}>
                 <Link href={`/ranking/player/${row.userId}` as Route} className="block">
                   <div
@@ -230,12 +233,12 @@ export function RankingBoard({
           </ul>
         </div>
         <Pager
-          page={paged.page}
-          pageCount={paged.pageCount}
-          from={paged.from}
-          to={paged.to}
-          total={paged.total}
-          onPage={paged.setPage}
+          page={page}
+          pageCount={pageCount}
+          from={from}
+          to={to}
+          total={total}
+          onPage={setPage}
         />
       </Panel>
       {showMyPosition ? (

@@ -10,8 +10,15 @@ const EXIT_MS = 180
 
 export function useModalBehavior(open: boolean, onClose: () => void) {
   const panelRef = useRef<HTMLDivElement | null>(null)
-  const [rendered, setRendered] = useState(open)
-  const [closing, setClosing] = useState(false)
+  // 열림 상태는 effect 없이 바로 계산한다 — 닫힐 때만 사라지는 애니메이션을 위해 exit 상태를 둔다.
+  const [exiting, setExiting] = useState(false)
+  const rendered = open || exiting
+  const [wasOpen, setWasOpen] = useState(open)
+  if (wasOpen !== open) {
+    setWasOpen(open)
+    if (!open) setExiting(true)
+    else setExiting(false)
+  }
 
   const pressedBackdrop = useRef(false)
 
@@ -21,19 +28,12 @@ export function useModalBehavior(open: boolean, onClose: () => void) {
   }, [onClose])
 
   useEffect(() => {
-    if (open) {
-      setRendered(true)
-      setClosing(false)
-      return
-    }
-    if (!rendered) return
-    setClosing(true)
-    const timer = window.setTimeout(() => {
-      setRendered(false)
-      setClosing(false)
-    }, EXIT_MS)
+    if (!exiting) return
+    const timer = window.setTimeout(() => setExiting(false), EXIT_MS)
     return () => window.clearTimeout(timer)
-  }, [open, rendered])
+  }, [exiting])
+
+  const closing = exiting
 
   useEffect(() => {
     if (!rendered || closing) return
@@ -93,8 +93,9 @@ export function useModalBehavior(open: boolean, onClose: () => void) {
 }
 
 export function ModalPortal({ children }: { children: ReactNode }) {
-  const [host, setHost] = useState<HTMLElement | null>(null)
-  useEffect(() => setHost(document.body), [])
+  // `document.body`는 렌더 중에 읽어도 되는 값이다 (SSR에는 없어서 렌더 단계에서 null).
+  // effect에서 setState로 넘기면 첫 프레임이 비었다가 다시 그려지므로 렌더 중에 바로 판단한다.
+  const host = typeof document === 'undefined' ? null : document.body
   return host ? createPortal(children, host) : null
 }
 

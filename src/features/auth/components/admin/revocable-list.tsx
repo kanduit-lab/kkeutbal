@@ -9,6 +9,7 @@ import {
   Panel,
   PanelHeader,
 } from '@/components/ui'
+import { useSyncExternalStore } from 'react'
 import { format, useDict } from '@/lib/i18n/client'
 import { formatDate } from './format'
 
@@ -20,6 +21,8 @@ export interface RevocableItem {
   readonly expiresAt: string | null
   readonly revokedAt: string | null
 }
+
+const subscribeNever = () => () => {}
 
 export function RevocableList<T extends RevocableItem>({
   heading,
@@ -52,9 +55,13 @@ export function RevocableList<T extends RevocableItem>({
   const pageCount = Math.max(1, Math.ceil(total / pageSize))
   const from = total === 0 ? 0 : page * pageSize + 1
   const to = page * pageSize + items.length
+  // 만료 판정의 기준 시각. `Date.now()`를 렌더 중에 직접 부르면 비순수라 이 목록이
+  // 메모이제이션될 수 없다 — 서버 스냅숏(null)과 클라이언트 스냅숏을 나눠 읽는다.
+  const now = useSyncExternalStore(subscribeNever, () => Date.now(), () => null)
+  // 만료 표시는 기준 시각을 확보한 뒤에만 판정한다 (첫 렌더/SSR에서는 아직 모른다).
 
   function isExpired(item: T): boolean {
-    return item.expiresAt !== null && Date.parse(item.expiresAt) < Date.now()
+    return now !== null && item.expiresAt !== null && Date.parse(item.expiresAt) < now
   }
 
   function validity(item: T): string {

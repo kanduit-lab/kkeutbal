@@ -56,10 +56,10 @@ export function HomeLists({
 }) {
   const { d, locale } = useDict()
   const isDesktop = useIsDesktop()
-  const pagedRooms = usePagedRows({ items: rooms, rowHeight: ROW_H })
-  const pagedSessions = usePagedRows({ items: sessions, rowHeight: ROW_H })
-  const fillRoomPane = isDesktop && rooms.length > 1 && pagedRooms.rows.length === rooms.length
-  const spreadMobileRoomRows = !isDesktop && pagedRooms.rows.length === 3
+  const { areaRef: roomsRef, rows: roomRows, page: roomPage, pageCount: roomPageCount, from: roomFrom, to: roomTo, total: roomTotal, setPage: setRoomPage } = usePagedRows({ items: rooms, rowHeight: ROW_H })
+  const { areaRef: sessionRef, rows: sessionRows, page: sessionPage, pageCount: sessionPageCount, from: sessionFrom, to: sessionTo, total: sessionTotal, setPage: setSessionPage } = usePagedRows({ items: sessions, rowHeight: ROW_H })
+  const fillRoomPane = isDesktop && rooms.length > 1 && roomRows.length === rooms.length
+  const spreadMobileRoomRows = !isDesktop && roomRows.length === 3
 
   const roomsPane = {
     key: 'rooms',
@@ -70,7 +70,7 @@ export function HomeLists({
           title={d.home.activeRooms}
           badge={<Badge tone="muted">{format(d.common.itemCount, { n: rooms.length })}</Badge>}
         />
-        <div ref={pagedRooms.areaRef} className="min-h-0 flex-1 overflow-hidden">
+        <div ref={roomsRef} className="min-h-0 flex-1 overflow-hidden">
           {rooms.length === 0 ? (
             <EmptyState title={d.home.emptyTitle} hint={d.home.emptyHint} />
           ) : (
@@ -82,7 +82,7 @@ export function HomeLists({
               )}
               aria-label={d.home.activeRooms}
             >
-              {pagedRooms.rows.map((room) => (
+              {roomRows.map((room) => (
                 <li key={room.code} className={fillRoomPane ? 'flex min-h-0 flex-1' : undefined}>
                   <Link
                     href={`/rooms/${room.code}` as Route}
@@ -118,12 +118,12 @@ export function HomeLists({
         </div>
         {rooms.length > 0 ? (
           <Pager
-            page={pagedRooms.page}
-            pageCount={pagedRooms.pageCount}
-            from={pagedRooms.from}
-            to={pagedRooms.to}
-            total={pagedRooms.total}
-            onPage={pagedRooms.setPage}
+            page={roomPage}
+            pageCount={roomPageCount}
+            from={roomFrom}
+            to={roomTo}
+            total={roomTotal}
+            onPage={setRoomPage}
           />
         ) : null}
       </Panel>
@@ -139,9 +139,9 @@ export function HomeLists({
           title={d.home.recentSessions}
           badge={<Badge tone="muted">{format(d.common.itemCount, { n: sessions.length })}</Badge>}
         />
-        <div ref={pagedSessions.areaRef} className="min-h-0 flex-1 overflow-hidden">
+        <div ref={sessionRef} className="min-h-0 flex-1 overflow-hidden">
           <ul className="space-y-2" aria-label={d.home.recentSessions}>
-            {pagedSessions.rows.map((past) => (
+            {sessionRows.map((past) => (
               <li key={past.id}>
                 <Link href={`/rooms/${past.code}/result` as Route} className="block">
                   <div className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3 transition-transform hover:-translate-y-0.5">
@@ -174,12 +174,12 @@ export function HomeLists({
           </ul>
         </div>
         <Pager
-          page={pagedSessions.page}
-          pageCount={pagedSessions.pageCount}
-          from={pagedSessions.from}
-          to={pagedSessions.to}
-          total={pagedSessions.total}
-          onPage={pagedSessions.setPage}
+          page={sessionPage}
+          pageCount={sessionPageCount}
+          from={sessionFrom}
+          to={sessionTo}
+          total={sessionTotal}
+          onPage={setSessionPage}
         />
       </Panel>
     ),

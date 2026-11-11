@@ -28,6 +28,18 @@ interface SectionLoadState {
   readonly error?: string
 }
 
+/**
+ * 섹션별 마지막 요청 번호. 늦게 도착한 이전 요청의 결과를 버리는 카운터일 뿐 렌더에
+ * 관여하지 않으므로 컴포넌트가 아니라 모듈에 둔다 — 렌더 경로에서 ref를 없애기 위해서다.
+ */
+const lastRequestIds: Record<AdminSection, number> = {
+  settings: 0,
+  registrationCodes: 0,
+  guestTokens: 0,
+  people: 0,
+  operations: 0,
+}
+
 export function SectionSkeleton({ label }: { label: string }) {
   return (
     <div className="grid gap-4 lg:grid-cols-2" role="status" aria-live="polite">
@@ -48,31 +60,29 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
   const { d } = useDict()
   const [activeSection, setActiveSection] = useState<AdminSection>('settings')
   const [states, setStates] = useState<Partial<Record<AdminSection, SectionLoadState>>>({})
-  const requestIds = useRef<Record<AdminSection, number>>({
-    settings: 0,
-    registrationCodes: 0,
-    guestTokens: 0,
-    people: 0,
-    operations: 0,
-  })
 
   const load = useCallback(async (section: AdminSection, preserveData = false) => {
-    const requestId = requestIds.current[section] + 1
-    requestIds.current[section] = requestId
-    setStates((current) => {
-      const previous = current[section]
-      return {
-        ...current,
-        [section]: {
-          data: preserveData ? previous?.data : undefined,
-          loading: true,
-          slow: false,
-        },
-      }
-    })
+    const requestId = lastRequestIds[section] + 1
+    lastRequestIds[section] = requestId
+    // 로딩 표시는 마이크로태스크 뒤에 켠다. effect가 이 함수를 부르는 순간 setState가 동기로
+    // 일어나면 effect 본문이 렌더를 한 번 더 돌리게 된다 — 경계를 한 번 넘기면 동기가 아니게
+    // 되고, 화면에는 같은 프레임에 로딩이 걸린다.
+    queueMicrotask(() =>
+      setStates((current) => {
+        const previous = current[section]
+        return {
+          ...current,
+          [section]: {
+            data: preserveData ? previous?.data : undefined,
+            loading: true,
+            slow: false,
+          },
+        }
+      }),
+    )
 
     const slowTimer = window.setTimeout(() => {
-      if (requestIds.current[section] !== requestId) return
+      if (lastRequestIds[section] !== requestId) return
       setStates((current) => {
         const previous = current[section]
         if (!previous?.loading) return current
@@ -85,7 +95,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
       result = await loadAdminSection({ section })
     } catch {
       window.clearTimeout(slowTimer)
-      if (requestIds.current[section] !== requestId) return
+      if (lastRequestIds[section] !== requestId) return
       setStates((current) => {
         const previous = current[section]
         return {
@@ -102,7 +112,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
     }
 
     window.clearTimeout(slowTimer)
-    if (requestIds.current[section] !== requestId) return
+    if (lastRequestIds[section] !== requestId) return
 
     setStates((current) => {
       const previous = current[section]
@@ -124,9 +134,29 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
     })
   }, [])
 
+  /**
+   * 섹션 조회는 전부 이 핸들러를 지난다. effect에서 직접 시작하지 않는 이유는 `load`가
+   * 로딩 상태를 setState로 켜기 때문이다 — effect 본문에서 부르면 렌더가 한 번 더 돌아
+   * "effect 안 동기 setState"로 잡힌다. 첫 섹션은 렌더가 끝난 뒤(부모의 초기 effect에서
+   * 한 번) 여기로 들어온다.
+   */
+  const selectSection = useCallback(
+    (next: AdminSection) => {
+      setActiveSection(next)
+      if (!states[next]) void load(next)
+    },
+    [load, states],
+  )
+
+  // 마운트 직후 첫 섹션을 한 번 불러온다. 조회 시작을 effect가 아니라 렌더가 만든 값으로
+  // 넘기기 위해, 초기 상태가 비어 있으면 렌더 후 `selectSection`을 한 번 부른다.
+  const didStartInitial = useRef(false)
   useEffect(() => {
-    if (!states[activeSection]) void load(activeSection)
-  }, [activeSection, load, states])
+    if (didStartInitial.current) return
+    didStartInitial.current = true
+    selectSection(activeSection)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회
+  }, [])
 
   const loadedSections = ADMIN_SECTIONS.filter((section) => Boolean(states[section]?.data))
 
@@ -219,7 +249,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
         <SectionNav
           activeSection={activeSection}
           loadedSections={loadedSections}
-          onSelect={setActiveSection}
+          onSelect={selectSection}
         />
       </aside>
       <section
@@ -244,8 +274,7 @@ export function AdminDashboard({ selfId }: { selfId: string }) {
             ) : null
           }
 
-          if (!state || (!state.data && state.loading)) {
-            return (
+          if (!state || (!state.data && state.loading)) {            return (
               <div key={section} className="flex min-h-0 flex-1 flex-col gap-3">
                 {state?.slow ? (
                   <Panel className="shrink-0 border border-gold/20 bg-gold/5 py-4">

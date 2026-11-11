@@ -75,7 +75,7 @@ export function PlayerRecentSessionsList({
   const isDesktop = useIsDesktop()
   const rowHeight = isDesktop ? DATA_TABLE_ROW_H : ROW_H
   const reserve = isDesktop ? DATA_TABLE_HEADER_H : 0
-  const paged = usePagedRows({ items: sessions, rowHeight, reserve })
+  const { areaRef, rows: pageRows, page, pageCount, from, to, total, setPage } = usePagedRows({ items: sessions, rowHeight, reserve })
 
   function roomCell(session: PlayerRecentSession) {
     const body = (
@@ -108,7 +108,7 @@ export function PlayerRecentSessionsList({
       className="flex min-h-0 flex-1 flex-col gap-2"
       style={{ minHeight: listPanelMinHeight(rowHeight, reserve) }}
     >
-      <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
+      <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
         <div className="hidden lg:block">
           <DataTable
             label={d.ranking.recentSessionsTitle}
@@ -133,12 +133,12 @@ export function PlayerRecentSessionsList({
                 ),
               },
             ]}
-            rows={paged.rows}
+            rows={pageRows}
             rowKey={(session) => session.id}
           />
         </div>
         <ul className="space-y-2 lg:hidden" aria-label={d.ranking.recentSessionsTitle}>
-          {paged.rows.map((session) => (
+          {pageRows.map((session) => (
             <li key={session.id}>
               <MaybeResultLink code={session.code} enabled={linkToResult}>
                 <div className="flex h-16 items-center justify-between gap-3 rounded-xl bg-inset px-3">
@@ -163,12 +163,12 @@ export function PlayerRecentSessionsList({
         </ul>
       </div>
       <Pager
-        page={paged.page}
-        pageCount={paged.pageCount}
-        from={paged.from}
-        to={paged.to}
-        total={paged.total}
-        onPage={paged.setPage}
+        page={page}
+        pageCount={pageCount}
+        from={from}
+        to={to}
+        total={total}
+        onPage={setPage}
       />
     </Panel>
   )

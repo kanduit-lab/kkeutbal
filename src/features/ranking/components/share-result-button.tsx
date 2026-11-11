@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore, useState } from 'react'
 import { Button, useToast } from '@/components/ui'
 import { format, useDict } from '@/lib/i18n/client'
 import type { Dictionary } from '@/lib/i18n/client'
@@ -92,6 +92,8 @@ async function writeClipboard(text: string): Promise<boolean> {
  * 데스크톱(share 미지원)에서는 "결과 공유"를 눌렀는데 공유 시트 대신 토스트만 떠서,
  * 무슨 일이 일어났는지 라벨만 봐서는 알 수 없었다. 두 동작을 각자의 라벨로 분리한다.
  */
+const subscribeNever = () => () => {}
+
 export function ShareResultButton({
   roomName,
   standings,
@@ -105,11 +107,13 @@ export function ShareResultButton({
   const { d } = useDict()
 
   const [busy, setBusy] = useState<'copy' | 'share' | null>(null)
-  // 서버 렌더에는 navigator가 없다. 첫 페인트 뒤에 확인해야 hydration 불일치가 없다.
-  const [canShare, setCanShare] = useState(false)
-  useEffect(() => {
-    setCanShare(typeof navigator !== 'undefined' && typeof navigator.share === 'function')
-  }, [])
+  // 서버 렌더에는 navigator가 없다. 서버 스냅숏(false)과 클라이언트 스냅숏을 나눠
+  // hydration 뒤에만 공유 버튼이 나타나게 한다 — effect에서 setState로 넘기면 렌더가 한 번 더 돈다.
+  const canShare = useSyncExternalStore(
+    subscribeNever,
+    () => typeof navigator.share === 'function',
+    () => false,
+  )
 
   function shareText(): { text: string; url: string } {
     const url = currentResultUrl()

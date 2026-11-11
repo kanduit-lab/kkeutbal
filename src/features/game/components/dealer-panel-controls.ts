@@ -36,6 +36,9 @@ const REPLAY_REQUIRED_ERROR = 'errors.fairnessReplayRequired'
  * `DealerPanel`(Panel 안 인라인)과 모바일 `DealerQuickBar`+`DealerToolsSheet`(하단 바 +
  * 시트)가 공유한다. 두 표면 모두 같은 판정 규칙을 쓰도록 로직은 여기 한 곳에만 둔다.
  */
+/** 자동 승자 확정을 시도한 판. effect 안에서만 쓰이므로 컴포넌트 밖에 둔다. */
+const autoTriggeredForRound = { current: null as string | null }
+
 export function useDealerPanelControls({
   snapshot,
   selfId,
@@ -192,11 +195,13 @@ export function useDealerPanelControls({
   //   `finishVerifiedRound()`를 그대로 자동 호출한다(새 판정 로직 아님, 기존 버튼 핸들러 재사용).
   // - 아니면 승자 확정 폼(`pickWinner`)을 자동으로 연다 — 카드는 딜러가 직접 봐야 한다.
   // 라운드당 한 번만 시도한다(ref) — 안 그러면 딜러가 폼을 취소해도 재렌더마다 다시 열린다.
-  const autoTriggeredForRound = useRef<string | null>(null)
   // 핸들러를 deps에 직접 넣으면 매 렌더마다 새 클로저라 effect가 매번 다시 돈다.
-  // use-room-sync.ts의 onEventRef와 같은 방식으로 최신 참조만 들고 있는다.
+  // use-room-sync.ts의 onEventRef와 같은 방식으로 최신 참조만 들고 있는데, 이 미러링은
+  // 렌더 본문이 아니라 커밋 이후에 한다 — 렌더 중 ref 쓰기는 메모이제이션을 막는다.
   const finishVerifiedRoundRef = useRef(finishVerifiedRound)
-  finishVerifiedRoundRef.current = finishVerifiedRound
+  useEffect(() => {
+    finishVerifiedRoundRef.current = finishVerifiedRound
+  }, [finishVerifiedRound])
   useEffect(() => {
     if (!round) {
       autoTriggeredForRound.current = null
@@ -204,7 +209,8 @@ export function useDealerPanelControls({
       // 패널은 `mode === 'idle'`일 때만 버튼 그리드를, `mode === 'pickWinner' && round`일 때만
       // 폼을 그리므로 둘 다 거짓인 상태가 된다. 판이 다른 경로로 끝났을 때(자동 종료·다른
       // 딜러의 종료·무효화) 실제로 그렇게 된다.
-      if (mode !== 'idle') setMode('idle')
+      // effect 본문에서 동기 setState를 피하려고 마이크로태스크 뒤로 넘긴다.
+      if (mode !== 'idle') queueMicrotask(() => setMode('idle'))
       return
     }
     if (mode !== 'idle' || isPending) return
@@ -224,10 +230,14 @@ export function useDealerPanelControls({
     }
 
     autoTriggeredForRound.current = round.id
-    setWinnerId(foldWinWinner?.userId ?? null)
-    setNote('')
-    setGostop((current) => ({ ...initialGostopScore, base: current.base }))
-    setMode('pickWinner')
+    // 폼 초기화는 마이크로태스크 뒤로 넘긴다 — effect 본문에서 동기 setState를 하지 않으려는
+    // 경계다. 순서는 그대로 유지되고(한 번에 커밋), 화면에는 같은 프레임에 반영된다.
+    queueMicrotask(() => {
+      setWinnerId(foldWinWinner?.userId ?? null)
+      setNote('')
+      setGostop((current) => ({ ...initialGostopScore, base: current.base }))
+      setMode('pickWinner')
+    })
   }, [
     round,
     mode,

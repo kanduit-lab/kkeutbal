@@ -58,7 +58,7 @@ export function BetHistoryClient({
       ]),
     [rounds],
   )
-  const paged = usePagedRows({ items: rows, rowHeight: ROW_H })
+  const { areaRef, rows: pageRows, page, pageCount, from, to, total, setPage } = usePagedRows({ items: rows, rowHeight: ROW_H })
 
   const statusBadge: Record<
     BetStatus,
@@ -150,9 +150,9 @@ export function BetHistoryClient({
           </Panel>
         ) : (
           <Panel className="flex min-h-0 flex-1 flex-col gap-2">
-            <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
+            <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
               <ul className="space-y-1" aria-label={d.betHistory.title}>
-                {paged.rows.map((row) =>
+                {pageRows.map((row) =>
                   row.kind === 'round'
                     ? roundItem(row.key, row.round)
                     : actionItem(row.key, row.action),
@@ -160,12 +160,12 @@ export function BetHistoryClient({
               </ul>
             </div>
             <Pager
-              page={paged.page}
-              pageCount={paged.pageCount}
-              from={paged.from}
-              to={paged.to}
-              total={paged.total}
-              onPage={paged.setPage}
+              page={page}
+              pageCount={pageCount}
+              from={from}
+              to={to}
+              total={total}
+              onPage={setPage}
             />
           </Panel>
         )}

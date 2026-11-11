@@ -41,7 +41,7 @@ export function RoomStandingsList({ rows }: { rows: readonly RoomStandingRow[] }
   const isDesktop = useIsDesktop()
   const rowHeight = isDesktop ? DATA_TABLE_ROW_H : ROW_H
   const reserve = isDesktop ? DATA_TABLE_HEADER_H : 0
-  const paged = usePagedRows({ items: rows, rowHeight, reserve })
+  const { areaRef, rows: pageRows, page, pageCount, from, to, total, setPage } = usePagedRows({ items: rows, rowHeight, reserve })
 
   function statLine(row: RoomStandingRow): string {
     return format(d.result.statLine, {
@@ -69,7 +69,7 @@ export function RoomStandingsList({ rows }: { rows: readonly RoomStandingRow[] }
       className="flex min-h-0 flex-1 flex-col gap-2"
       style={{ minHeight: listPanelMinHeight(rowHeight, reserve) }}
     >
-      <div ref={paged.areaRef} className="min-h-0 flex-1 overflow-hidden">
+      <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden">
         <div className="hidden lg:block">
           <DataTable
             label={d.result.standingsAria}
@@ -95,12 +95,12 @@ export function RoomStandingsList({ rows }: { rows: readonly RoomStandingRow[] }
                 ),
               },
             ]}
-            rows={paged.rows}
+            rows={pageRows}
             rowKey={(row) => row.userId}
           />
         </div>
         <ul className="space-y-2 lg:hidden" aria-label={d.result.standingsAria}>
-          {paged.rows.map((row) => (
+          {pageRows.map((row) => (
             <li
               key={row.userId}
               className="flex h-16 items-center gap-3 rounded-xl bg-inset px-3"
@@ -120,12 +120,12 @@ export function RoomStandingsList({ rows }: { rows: readonly RoomStandingRow[] }
         </ul>
       </div>
       <Pager
-        page={paged.page}
-        pageCount={paged.pageCount}
-        from={paged.from}
-        to={paged.to}
-        total={paged.total}
-        onPage={paged.setPage}
+        page={page}
+        pageCount={pageCount}
+        from={from}
+        to={to}
+        total={total}
+        onPage={setPage}
       />
     </Panel>
   )

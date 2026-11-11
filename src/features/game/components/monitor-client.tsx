@@ -4,7 +4,7 @@ import Link from 'next/link'
 import type { Route } from 'next'
 import { useRouter } from 'next/navigation'
 import { clsx } from 'clsx'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { format, translateError, useDict } from '@/lib/i18n/client'
 import type { RoomEvent } from '@/lib/realtime/events'
 import { playChip, playRoundStart, playWin } from '@/lib/sound'
@@ -238,16 +238,23 @@ export function MonitorClient({ initial, selfId }: { initial: RoomSnapshot; self
   )
 }
 
+const subscribeNever = () => () => {}
+
 function useFullscreen(): {
   fullscreenSupported: boolean
   isFullscreen: boolean
   toggleFullscreen: () => void
 } {
-  const [fullscreenSupported, setFullscreenSupported] = useState(false)
+  // 전체화면 지원 여부는 SSR에서 알 수 없다. 서버 스냅숏(false)과 클라이언트 스냅숏을 나눠
+  // hydration 뒤에 값이 바뀌게 하면, effect에서 setState로 렌더를 한 번 더 돌리지 않아도 된다.
+  const fullscreenSupported = useSyncExternalStore(
+    subscribeNever,
+    () => typeof document.documentElement.requestFullscreen === 'function',
+    () => false,
+  )
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
-    setFullscreenSupported(typeof document.documentElement.requestFullscreen === 'function')
     const onChange = () => setIsFullscreen(document.fullscreenElement !== null)
     document.addEventListener('fullscreenchange', onChange)
     return () => document.removeEventListener('fullscreenchange', onChange)

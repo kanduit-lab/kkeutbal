@@ -59,11 +59,17 @@ export function RoomsPanel({
   const [page, setPage] = useState(0)
   const [refreshKey, setRefreshKey] = useState(0)
   const [pageState, setPageState] = useState({ rooms, total, loading: false })
+  // 다시 불러올 때마다 로딩 상태로 보여주기 위해 읽을 때 낳는 번호. effect 안에서 동기
+  // `setState`로 켰다 끄면 렌더가 두 번 돌기 때문에, "지금 화면이이번 요청 결과인가"를
+  // 값으로 비교한다.
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
   const isDesktop = useIsDesktop()
   const { areaRef, count: pageSize } = useFitCount({
     rowHeight: isDesktop ? DATA_TABLE_ROW_H : ROW_H,
     reserve: isDesktop ? DATA_TABLE_HEADER_H : 0,
   })
+  const requestKey = `${page}:${pageSize}:${refreshKey}`
+  const loading = loadedKey !== requestKey
 
   const visibleRooms = pageState.rooms
   const selection = useRowSelection(visibleRooms)
@@ -74,7 +80,6 @@ export function RoomsPanel({
 
   useEffect(() => {
     let cancelled = false
-    setPageState((current) => ({ ...current, loading: true }))
     void (async () => {
       try {
         const result = await loadAdminRoomsPage({ ...query, page, pageSize })
@@ -86,6 +91,7 @@ export function RoomsPanel({
             return
           }
           setPageState({ rooms: result.data.rooms, total: result.data.total, loading: false })
+          setLoadedKey(requestKey)
           return
         }
         toast(translateError(d, result.error), 'error')
@@ -93,12 +99,13 @@ export function RoomsPanel({
         console.error('load admin rooms page failed:', error)
         if (!cancelled) toast(translateError(d, 'errors.adminDashboardLoadFailed'), 'error')
       }
-      if (!cancelled) setPageState((current) => ({ ...current, loading: false }))
+      // 실패해도 이 요청은 끝났다 — 다시 로딩 화면에 묶어 두지 않는다.
+      if (!cancelled) setLoadedKey(requestKey)
     })()
     return () => {
       cancelled = true
     }
-  }, [d, page, pageSize, query, refreshKey, toast])
+  }, [d, page, pageSize, query, refreshKey, toast, requestKey])
 
   const selectionStateForPage = selectionState(visibleRooms, selection.selectedIds)
 
@@ -236,8 +243,8 @@ export function RoomsPanel({
         </div>
       ) : null}
 
-      <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden" aria-busy={pageState.loading}>
-        {visibleRooms.length === 0 && !pageState.loading ? (
+      <div ref={areaRef} className="min-h-0 flex-1 overflow-hidden" aria-busy={loading}>
+        {visibleRooms.length === 0 && !loading ? (
           <EmptyState
             title={d.adminConsole.rooms.empty}
             hint={

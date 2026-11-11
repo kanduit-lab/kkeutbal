@@ -64,7 +64,7 @@ export function listPanelMinHeight(rowHeight: number, reserve = 0): number {
   return LIST_PANEL_CHROME_H + reserve + rowHeight
 }
 
-export interface PagedRows<T> {
+export interface Paging<T> {
   readonly areaRef: React.RefObject<HTMLDivElement | null>
   readonly rows: readonly T[]
   readonly page: number
@@ -92,7 +92,7 @@ export function usePagedRows<T>({
   reserve?: number
   minRows?: number
   resetKey?: string
-}): PagedRows<T> {
+}): Paging<T> {
   const { areaRef, count: perPage } = useFitCount({ rowHeight, reserve, min: minRows })
   const [state, setState] = useState({ page: 0, resetKey })
 

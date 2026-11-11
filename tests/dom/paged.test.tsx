@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { useFitCount, usePagedRows, type PagedRows } from '@/components/ui/paged'
+import { useFitCount, usePagedRows, type Paging } from '@/components/ui/paged'
 import { ResizeObserverStub } from './setup'
 
 /**
@@ -42,14 +42,14 @@ function FitCountHarness({
   useEffect(() => {
     onResult(result)
   })
-  return (
-    <div
-      ref={(node) => {
-        result.areaRef.current = node
-        if (node) Object.defineProperty(node, 'clientHeight', { value: height, configurable: true })
-      }}
-    />
+  const attach = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node) Object.defineProperty(node, 'clientHeight', { value: height, configurable: true })
+      Object.assign(result.areaRef, { current: node })
+    },
+    [height, result.areaRef],
   )
+  return <div ref={attach} />
 }
 
 describe('useFitCount 실제 렌더링', () => {
@@ -119,7 +119,7 @@ function PagedHarness({
   ...opts
 }: {
   height: number
-  onResult: (result: PagedRows<number>) => void
+  onResult: (result: Paging<number>) => void
   items: readonly number[]
   rowHeight: number
   reserve?: number
@@ -130,13 +130,17 @@ function PagedHarness({
   useEffect(() => {
     onResult(result)
   })
+  // ref 콜백에서 부모 DOM 노드를 hooks 섹션으로 옮겨 붙인다. 훅이 돌려준 ref 객체를 렌더
+  // 중에 직접 만지지 않기 위해서다 (React Compiler 규칙이 그 형태를 금지한다).
+  const attach = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node) Object.defineProperty(node, 'clientHeight', { value: height, configurable: true })
+      Object.assign(result.areaRef, { current: node })
+    },
+    [height, result.areaRef],
+  )
   return (
-    <div
-      ref={(node) => {
-        result.areaRef.current = node
-        if (node) Object.defineProperty(node, 'clientHeight', { value: height, configurable: true })
-      }}
-    >
+    <div ref={attach}>
       <button type="button" onClick={() => result.setPage(result.page + 1)}>
         next
       </button>
@@ -151,7 +155,7 @@ const RANGE_25 = Array.from({ length: 25 }, (_, i) => i)
 
 describe('usePagedRows 실제 렌더링', () => {
   it('아이템이 없으면 1페이지 취급하고 from은 0이다 (1-based가 아니라 빈 상태 표시)', () => {
-    let latest: PagedRows<number> | undefined
+    let latest: Paging<number> | undefined
     render(
       <PagedHarness items={[]} rowHeight={20} height={200} onResult={(r) => (latest = r)} />,
     )
@@ -159,7 +163,7 @@ describe('usePagedRows 실제 렌더링', () => {
   })
 
   it('요청한 페이지가 범위 안이면 1-based from/to로 잘라낸다', () => {
-    let latest: PagedRows<number> | undefined
+    let latest: Paging<number> | undefined
     render(
       <PagedHarness
         items={RANGE_25}
@@ -177,7 +181,7 @@ describe('usePagedRows 실제 렌더링', () => {
   })
 
   it('요청한 페이지가 넘치면 마지막 페이지로 클램프한다', () => {
-    let latest: PagedRows<number> | undefined
+    let latest: Paging<number> | undefined
     const { getByText } = render(
       <PagedHarness
         items={RANGE_25}
@@ -195,7 +199,7 @@ describe('usePagedRows 실제 렌더링', () => {
   })
 
   it('perPage로 나누어떨어지지 않아도 마지막 페이지가 잘리지 않는다', () => {
-    let latest: PagedRows<number> | undefined
+    let latest: Paging<number> | undefined
     const items = Array.from({ length: 22 }, (_, i) => i)
     const { getByText } = render(
       <PagedHarness items={items} rowHeight={20} height={200} onResult={(r) => (latest = r)} />,
@@ -209,7 +213,7 @@ describe('usePagedRows 실제 렌더링', () => {
   })
 
   it('resetKey가 바뀌면 1페이지로 되돌아간다', () => {
-    let latest: PagedRows<number> | undefined
+    let latest: Paging<number> | undefined
     const { getByText, rerender } = render(
       <PagedHarness
         items={RANGE_25}
@@ -235,7 +239,7 @@ describe('usePagedRows 실제 렌더링', () => {
   })
 
   it('아이템이 줄어들면 setPage 없이도 다음 렌더에서 마지막 페이지로 클램프된다', () => {
-    let latest: PagedRows<number> | undefined
+    let latest: Paging<number> | undefined
     const { getByText, rerender } = render(
       <PagedHarness
         items={RANGE_25}

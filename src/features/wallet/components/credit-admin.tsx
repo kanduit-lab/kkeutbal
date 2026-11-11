@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import type { AdminUserView } from '@/features/auth/admin-queries'
 import { adminAdjustCredits } from '../actions'
 import {
@@ -44,14 +44,18 @@ export function CreditAdminDialog({
   const [reason, setReason] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  // 다이얼로그가 닫힌 채로 살아 있다가 다른 회원으로 다시 열릴 수 있다.
-  // 열릴 때마다 대상과 입력을 초기화하지 않으면 앞사람 값이 그대로 남는다.
-  useEffect(() => {
-    if (!open) return
+  // 다이얼로그가 닫힌 채로 살아 있다가 다른 회원으로 다시 열릴 수 있다. 열릴 때마다 대상과
+  // 입력을 초기화하지 않으면 앞사람 값이 그대로 남는다 — 초기화는 effect가 아니라 렌더 중에
+  // "열린 횟수"가 바뀌었는지로 판단한다 (effect에서 setState하면 렌더가 한 번 더 돈다).
+  const [openCount, setOpenCount] = useState(open ? 1 : 0)
+  if (open && openCount === 0) {
+    setOpenCount(1)
     setTargetUserId(fixedUserId ?? users[0]?.id ?? '')
     setAmountText('')
     setReason('')
-  }, [open, fixedUserId, users])
+  } else if (!open && openCount === 1) {
+    setOpenCount(0)
+  }
 
   const amount = Number(amountText)
   const target = useMemo(
