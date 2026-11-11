@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { useDict } from '@/lib/i18n/client'
 import { computeRoundCompletion } from '@/features/betting/round-completion'
 import { closeRoom } from '../actions'
@@ -89,17 +89,20 @@ export function useDealerPanelControls({
   const noteExample =
     snapshot.room.gameType === 'gostop' ? d.dealer.noteExampleGostop : d.dealer.noteExampleSeotda
 
-  const run = (slot: DealerSlot, task: () => Promise<unknown>) => {
-    if (isPending) return
-    setFiringSlot(slot)
-    startTransition(async () => {
-      try {
-        await task()
-      } finally {
-        setFiringSlot(null)
-      }
-    })
-  }
+  const run = useCallback(
+    (slot: DealerSlot, task: () => Promise<unknown>) => {
+      if (isPending) return
+      setFiringSlot(slot)
+      startTransition(async () => {
+        try {
+          await task()
+        } finally {
+          setFiringSlot(null)
+        }
+      })
+    },
+    [isPending, startTransition],
+  )
 
   const nameOf = (userId: string) =>
     snapshot.members.find((member) => member.userId === userId)?.displayName ?? '?'
@@ -131,7 +134,7 @@ export function useDealerPanelControls({
     )
   }
 
-  const finishVerifiedRound = () => {
+  const finishVerifiedRound = useCallback(() => {
     if (!round || !verifiedDealReady) return
     run('end', () =>
       runAction(
@@ -159,7 +162,7 @@ export function useDealerPanelControls({
         }),
       ),
     )
-  }
+  }, [round, verifiedDealReady, run, runAction, roomId, setVoidTarget, setVoidReason])
 
   const startRoundNow = () => {
     run('start', () =>
