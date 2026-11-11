@@ -1,14 +1,11 @@
-import { dirname } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { FlatCompat } from '@eslint/eslintrc'
+import nextVitals from 'eslint-config-next/core-web-vitals'
+import nextTs from 'eslint-config-next/typescript'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-const compat = new FlatCompat({ baseDirectory: __dirname })
-
+// eslint-config-next 16은 flat config를 직접 export한다. 예전처럼 FlatCompat로 eslintrc
+// 형식을 감싸면 react 플러그인의 순환 참조에 걸려 lint가 아예 뜨지 않는다.
 const config = [
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  ...nextVitals,
+  ...nextTs,
   {
     ignores: [
       '.next/**',
