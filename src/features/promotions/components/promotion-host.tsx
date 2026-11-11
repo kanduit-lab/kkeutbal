@@ -3,6 +3,7 @@
 import { clsx } from 'clsx'
 import { useState, useSyncExternalStore } from 'react'
 import { Button, ModalPortal, useModalBehavior } from '@/components/ui'
+import { useNowSecond } from '@/lib/use-now-second'
 import { useDict, format } from '@/lib/i18n/client'
 import {
   isDismissed,
@@ -17,16 +18,24 @@ import type { PromotionView } from '../types'
 const subscribeNever = () => () => {}
 
 /** localStorage는 클라이언트에만 있다. 여러 번 읽지 않도록 마지막 값을 기억한다. */
-let lastDismissalSnapshot: DismissMap | null = null
+const EMPTY_DISMISSALS: DismissMap = {}
+let lastDismissalSnapshot: DismissMap = EMPTY_DISMISSALS
 let lastDismissalRaw: string | null = null
 
 function dismissalSnapshot(): DismissMap {
   const raw = window.localStorage.getItem(STORAGE_KEY)
+  // getSnapshot은 같은 입력에 같은 값을 돌려줘야 한다. `?? {}`로 매번 새 객체를 만들면
+  // 참조가 계속 달라져 React가 무한 렌더 루프에 빠진다 — 고정된 빈 객체를 돌려준다.
+  if (raw === null) {
+    lastDismissalRaw = null
+    lastDismissalSnapshot = EMPTY_DISMISSALS
+    return EMPTY_DISMISSALS
+  }
   if (raw !== lastDismissalRaw) {
     lastDismissalRaw = raw
     lastDismissalSnapshot = readDismissals()
   }
-  return lastDismissalSnapshot ?? {}
+  return lastDismissalSnapshot
 }
 
 function applyDismissal(
@@ -41,10 +50,12 @@ function applyDismissal(
 
 export function PromotionHost({ promotions }: { promotions: readonly PromotionView[] }) {
   // 닫기 기록은 localStorage에 있다. 서버 스냅숏(null)과 클라이언트 스냅숏을 나눠 hydration
-  // 뒤에 값을 읽으면, effect로 상태를 켜지 않아도 된다. "지금 시각"도 같은 방식으로 읽는다 —
-  // `Date.now()`를 렌더 중에 부르면 비순수라서 컴포넌트가 메모이제이션될 수 없다.
+  // 뒤에 값을 읽으면, effect로 상태를 켜지 않아도 된다.
+  //
+  // "지금 시각"은 초 단위로 캐시된 값을 쓴다 — `Date.now()`를 getSnapshot에 그대로 넣으면
+  // 호출마다 값이 달라져 React가 "Maximum update depth exceeded"로 렌더 루프에 빠진다.
   const stored = useSyncExternalStore(subscribeNever, dismissalSnapshot, () => null)
-  const now = useSyncExternalStore(subscribeNever, () => Date.now(), () => null)
+  const now = useNowSecond()
   const [override, setOverride] = useState<DismissMap | null>(null)
   const dismissals = override ?? stored
 
