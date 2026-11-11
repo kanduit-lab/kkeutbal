@@ -57,20 +57,31 @@ describe('evaluateSeotdaHand', () => {
     expect(hand(1, 'gwang', 8, 'gwang').label).toBe('18광땡')
     expect(hand(3, 'gwang', 8, 'gwang').label).toBe('38광땡')
     expect(ttaeng(10).label).toBe('장땡')
-    expect(hand(1, 'tti', 2, 'tti').label).toBe('알리')
+    expect(hand(1, 'tti', 2, 'yeol').label).toBe('알리')
     expect(hand(1, 'gwang', 8, 'yeol').label).toBe('갑오')
     expect(hand(2, 'tti', 8, 'yeol').label).toBe('망통')
   })
 
   it('20장 중 2장인 190조합이 독립 규칙표와 전부 일치한다', () => {
+    // 특수패의 카드 종류를 엔진과 따로 적는다. 엔진 쪽 표를 그대로 읽으면 표가 틀려도
+    // 테스트가 같이 틀린다.
+    const SPECIAL_CARDS: Readonly<Record<string, readonly [HwatuCard['kind'], HwatuCard['kind']]>> =
+      {
+        '1-2': ['tti', 'yeol'],
+        '1-4': ['gwang', 'yeol'],
+        '1-9': ['tti', 'tti'],
+        '1-10': ['tti', 'tti'],
+        '4-10': ['yeol', 'yeol'],
+        '4-6': ['yeol', 'yeol'],
+      }
     let count = 0
     for (let i = 0; i < SEOTDA_DECK.length; i += 1) {
       for (let j = i + 1; j < SEOTDA_DECK.length; j += 1) {
         const a = SEOTDA_DECK[i]!
         const b = SEOTDA_DECK[j]!
         const result = evaluateSeotdaHand([a, b])
-        const months = [a.month, b.month].sort((x, y) => x - y)
-        const key = `${months[0]}-${months[1]}`
+        const byMonth = [a, b].sort((x, y) => x.month - y.month)
+        const key = `${byMonth[0]!.month}-${byMonth[1]!.month}`
 
         if (a.kind === 'gwang' && b.kind === 'gwang') {
           const expected = new Map([
@@ -83,9 +94,12 @@ describe('evaluateSeotdaHand', () => {
           expect(result.category).toBe('ttaeng')
           expect(result.rank).toBe(SEOTDA_RANK.TTAENG_BASE + a.month * 10)
         } else {
-          const special = SEOTDA_SPECIALS.find((entry) => entry.months.join('-') === key)
-          if (special) {
-            expect([result.label, result.rank]).toEqual([special.label, special.rank])
+          const kinds = SPECIAL_CARDS[key]
+          const isSpecial =
+            kinds !== undefined && byMonth[0]!.kind === kinds[0] && byMonth[1]!.kind === kinds[1]
+          if (isSpecial) {
+            const special = SEOTDA_SPECIALS.find((entry) => entry.months.join('-') === key)
+            expect([result.label, result.rank]).toEqual([special!.label, special!.rank])
           } else {
             const kkeut = (a.month + b.month) % 10
             expect(result.rank).toBe(SEOTDA_RANK.KKEUT_BASE + kkeut)
@@ -102,6 +116,13 @@ describe('evaluateSeotdaHand', () => {
     expect(hand(4, 'tti', 7, 'yeol').traits).not.toContain('amhaengeosa')
     expect(hand(3, 'tti', 7, 'tti').traits).toContain('ttaengjabi')
     expect(hand(4, 'tti', 9, 'tti').traits).toContain('gusa')
+  })
+
+  it('특수패는 월 조합과 카드 종류가 함께 맞아야 성립한다', () => {
+    expect(hand(1, 'tti', 9, 'tti').label).toBe('구삥')
+    expect(hand(1, 'gwang', 9, 'tti')).toMatchObject({ label: '망통', category: 'kkeut' })
+    expect(hand(1, 'gwang', 2, 'yeol').label).toBe('3끗')
+    expect(hand(1, 'tti', 2, 'tti')).toMatchObject({ label: '3끗', category: 'kkeut' })
   })
 
   it('덱 밖 카드·같은 카드를 거부하고 정본 속성으로 다시 계산한다', () => {

@@ -1,4 +1,4 @@
-import type { HwatuCard } from '../hwatu/types'
+import type { CardKind, HwatuCard } from '../hwatu/types'
 
 export type SeotdaCategory = 'gwangttaeng' | 'ttaeng' | 'special' | 'kkeut'
 
@@ -48,17 +48,22 @@ export const SEOTDA_RANK = Object.freeze({
   KKEUT_BASE: 600,
 } as const)
 
+/**
+ * 특수패는 월 조합만으로 정해지지 않는다. `cards`는 그 달에서 필요한 카드 종류를
+ * 월이 낮은 쪽부터 적은 것이다 — 1·9가 광+청단이면 특수패가 아니라 0끗이다.
+ */
 export const SEOTDA_SPECIALS: ReadonlyArray<{
   readonly months: readonly [number, number]
+  readonly cards: readonly [CardKind, CardKind]
   readonly label: string
   readonly rank: number
 }> = Object.freeze([
-  { months: [1, 2], label: '알리', rank: SEOTDA_RANK.ALLI },
-  { months: [1, 4], label: '독사', rank: SEOTDA_RANK.DOKSA },
-  { months: [1, 9], label: '구삥', rank: SEOTDA_RANK.GUPPING },
-  { months: [1, 10], label: '장삥', rank: SEOTDA_RANK.JANGPPING },
-  { months: [4, 10], label: '장사', rank: SEOTDA_RANK.JANGSA },
-  { months: [4, 6], label: '세륙', rank: SEOTDA_RANK.SERYUK },
+  { months: [1, 2], cards: ['tti', 'yeol'], label: '알리', rank: SEOTDA_RANK.ALLI },
+  { months: [1, 4], cards: ['gwang', 'yeol'], label: '독사', rank: SEOTDA_RANK.DOKSA },
+  { months: [1, 9], cards: ['tti', 'tti'], label: '구삥', rank: SEOTDA_RANK.GUPPING },
+  { months: [1, 10], cards: ['tti', 'tti'], label: '장삥', rank: SEOTDA_RANK.JANGPPING },
+  { months: [4, 10], cards: ['yeol', 'yeol'], label: '장사', rank: SEOTDA_RANK.JANGSA },
+  { months: [4, 6], cards: ['yeol', 'yeol'], label: '세륙', rank: SEOTDA_RANK.SERYUK },
 ])
 
 export const SEOTDA_TRAIT_COMBOS: ReadonlyArray<{

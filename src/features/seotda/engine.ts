@@ -51,7 +51,15 @@ function gradeHand(a: HwatuCard, b: HwatuCard): HandGrade {
 
   const lo = Math.min(a.month, b.month)
   const hi = Math.max(a.month, b.month)
-  const special = SEOTDA_SPECIALS.find((s) => s.months[0] === lo && s.months[1] === hi)
+  // 특수패는 정해진 두 종류의 카드 조합이다 — 같은 월 조합이라도 종류가 다르면 특수패가
+  // 아니다. 종류를 보지 않으면 1월 광 + 9월 청단(구삥) · 1월 광 + 2월 매조 새(알리) ·
+  // 1월 광 + 4월 흑싸리 새(독사)가 특수패로 판정돼 끗 계산이 밀린다.
+  const special = SEOTDA_SPECIALS.find((s) => {
+    if (s.months[0] !== lo || s.months[1] !== hi) return false
+    const lowCard = a.month === lo ? a : b
+    const highCard = a.month === lo ? b : a
+    return lowCard.kind === s.cards[0] && highCard.kind === s.cards[1]
+  })
   if (special) {
     return { category: 'special', label: special.label, rank: special.rank }
   }
