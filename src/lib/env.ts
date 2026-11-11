@@ -49,7 +49,7 @@ export class EnvironmentConfigurationError extends Error {
   }
 }
 
-function invalidKeys(result: z.SafeParseError<unknown>): readonly string[] {
+function invalidKeys(result: z.ZodSafeParseError<unknown>): readonly string[] {
   return result.error.issues.map((issue) => issue.path.join('.'))
 }
 

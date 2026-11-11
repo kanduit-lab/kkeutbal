@@ -126,6 +126,8 @@ export function parseEvent<K extends EventName>(
   const result = schema.safeParse(raw)
   if (!result.success) return null
 
-  const { payload, ...envelope } = result.data
-  return { envelope, payload: payload as z.infer<(typeof eventPayloads)[K]> }
+  const { payload, ...envelope } = result.data as {
+    payload: unknown
+  } & Record<string, unknown>
+  return { envelope: envelope as Envelope, payload: payload as z.infer<(typeof eventPayloads)[K]> }
 }
